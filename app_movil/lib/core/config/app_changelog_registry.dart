@@ -22,39 +22,39 @@ class AppChangelogRegistry {
   static const String currentVersion = OwnerLegalIdentity.currentAppVersionWithBuild;
 
   // =========================================================================
-  // 🚀 NOVEDADES ACTIVAS DE LA VERSIÓN ACTUAL (v9.34.0+78)
-  // Plan Maestro 13: EULA Definitivo, Drive Reactivo, Semáforo y Blindaje Comercial
+  // 🚀 NOVEDADES ACTIVAS DE LA VERSIÓN ACTUAL (v9.35.0+79)
+  // Plan Maestro 15: Bonos IA Personalizados, Migración Segura y Control de Licencias
   // =========================================================================
   static const List<AppChangelogItem> activeChangelog = [
     AppChangelogItem(
-      icon: Icons.gavel_rounded,
-      title: "EULA Definitivo y Autorreparable",
+      icon: Icons.auto_awesome_rounded,
+      title: "Bono y Recarga IA Personalizada",
       description:
-          "Los Términos de Licencia se aceptan una sola vez. Al restaurar copias de seguridad de cualquier versión, la app se autorrepara en silencio y no vuelve a pedir el EULA.",
+          "Canjea bonos y recargas de inteligencia artificial con cantidades a tu medida sin alterar la fecha de vencimiento de tu suscripción ni de tu período de prueba.",
+    ),
+    AppChangelogItem(
+      icon: Icons.phonelink_setup_rounded,
+      title: "Migración Segura de Dispositivo",
+      description:
+          "Reactivación fluida al cambiar de celular o restaurar copias de seguridad de Google Drive: cero duplicación de días y preservación íntegra de tu saldo IA.",
+    ),
+    AppChangelogItem(
+      icon: Icons.receipt_long_rounded,
+      title: "Comprobantes y Boletas Oficiales",
+      description:
+          "Soporte administrativo optimizado para control de licencias, renovaciones preventivas y respaldo contable local.",
+    ),
+    AppChangelogItem(
+      icon: Icons.security_rounded,
+      title: "Blindaje Criptográfico Anti-Clonación",
+      description:
+          "Verificación Ed25519 con control de nonces estrictos y protección contra alteración de hora del sistema.",
     ),
     AppChangelogItem(
       icon: Icons.cloud_download_rounded,
       title: "Google Drive en Pantalla Inicial",
       description:
           "Vincula tu cuenta de Google y restaura tus respaldos en la nube directamente desde la pantalla de perfiles inicial, sin crear negocios ficticios.",
-    ),
-    AppChangelogItem(
-      icon: Icons.speed_rounded,
-      title: "Respaldo Reactivo y Fluido en RAM",
-      description:
-          "Carga instantánea de copias en memoria y patrón Stale-While-Revalidate: navegación suave sin recargas destructivas ni saltos visuales al hacer scroll.",
-    ),
-    AppChangelogItem(
-      icon: Icons.visibility_rounded,
-      title: "Historial Nítido y Fechas Locales",
-      description:
-          "Barra de estado superior perfectamente legible en cualquier tema, fechas y horas locales completas en tu zona horaria y correo visible al 100%.",
-    ),
-    AppChangelogItem(
-      icon: Icons.touch_app_rounded,
-      title: "Solicitud de Planes con Foco Inteligente",
-      description:
-          "Modal de pedido optimizado con chips compactos, redacción comercial exacta y desenfoque automático al tocar cualquier botón interactivo.",
     ),
     AppChangelogItem(
       icon: Icons.verified_user_rounded,
@@ -82,6 +82,44 @@ class AppChangelogRegistry {
   // En cada nueva compilación de release, mover aquí el bloque anterior.
   // =========================================================================
   static final Map<String, List<AppChangelogItem>> _historicalChangelogs = {
+    '9.34.0+78': const [
+      AppChangelogItem(
+        icon: Icons.gavel_rounded,
+        title: "EULA Definitivo y Autorreparable",
+        description:
+            "Los Términos de Licencia se aceptan una sola vez. Al restaurar copias de seguridad de cualquier versión, la app se autorrepara en silencio y no vuelve a pedir el EULA.",
+      ),
+      AppChangelogItem(
+        icon: Icons.cloud_download_rounded,
+        title: "Google Drive en Pantalla Inicial",
+        description:
+            "Vincula tu cuenta de Google y restaura tus respaldos en la nube directamente desde la pantalla de perfiles inicial, sin crear negocios ficticios.",
+      ),
+      AppChangelogItem(
+        icon: Icons.speed_rounded,
+        title: "Respaldo Reactivo y Fluido en RAM",
+        description:
+            "Carga instantánea de copias en memoria y patrón Stale-While-Revalidate: navegación suave sin recargas destructivas ni saltos visuales al hacer scroll.",
+      ),
+      AppChangelogItem(
+        icon: Icons.visibility_rounded,
+        title: "Historial Nítido y Fechas Locales",
+        description:
+            "Barra de estado superior perfectamente legible en cualquier tema, fechas y horas locales completas en tu zona horaria y correo visible al 100%.",
+      ),
+      AppChangelogItem(
+        icon: Icons.touch_app_rounded,
+        title: "Solicitud de Planes con Foco Inteligente",
+        description:
+            "Modal de pedido optimizado con chips compactos, redacción comercial exacta y desenfoque automático al tocar cualquier botón interactivo.",
+      ),
+      AppChangelogItem(
+        icon: Icons.verified_user_rounded,
+        title: "Semáforo de Respaldo y Blindaje SHA-256",
+        description:
+            "Indicador visual de salud de tus copias (Al día / Atención / Sin copias) y endurecimiento Anti-Tampering con certificado comercial RSA-4096.",
+      ),
+    ],
     '9.33.0+77': const [
       AppChangelogItem(
         icon: Icons.system_update_rounded,

@@ -116,6 +116,7 @@ class LicenseSigner {
     String? businessTag,
     int aiExtraCredits = 0,
     bool addPrefix = true,
+    bool isMigration = false,
   }) async {
     if (_keyPair == null) {
       await loadMasterKey();
@@ -131,6 +132,10 @@ class LicenseSigner {
       'v': maxMajorVersion,
       'iat': DateTime.now().toUtc().toIso8601String(),
     };
+
+    if (isMigration) {
+      payload['m'] = 1;
+    }
 
     // Regla anti-doble conteo en claim c:
     // Para RECARGA_IA_150, debe llevar mínimo 150 si aiExtraCredits <= 0
@@ -253,8 +258,8 @@ class LicenseSigner {
 
       final cleanPlan = normalizePlanSlug((payload['p'] as String? ?? '').toUpperCase());
       final planBaseAi = getCumulativeScansForPlan(cleanPlan);
-      final totalAiReceived = cleanPlan == 'RECARGA_IA_150'
-          ? (extraCredits > 0 ? extraCredits : 150)
+      final totalAiReceived = (cleanPlan == 'RECARGA_IA_150' || cleanPlan == 'BONO_IA_PERSONALIZADO')
+          ? (extraCredits > 0 ? extraCredits : (cleanPlan == 'RECARGA_IA_150' ? 150 : 0))
           : (planBaseAi + extraCredits);
 
       return {

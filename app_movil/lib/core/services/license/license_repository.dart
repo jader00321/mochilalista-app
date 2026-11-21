@@ -252,13 +252,18 @@ class LicenseRepository {
       return updated;
     }
 
-    // 4. Si estaba desajustado o pendiente de migración y ya no lo está
+    // 4. Si estaba desajustado y ya no lo está
     if (model.estadoActual == 'RELOJ_DESAJUSTADO') {
       // El reloj volvió a ser consistente
       AppLogger.i(
         'LicenseRepository',
         'Reloj resincronizado. Restaurando evaluación normal.',
       );
+    }
+
+    // Si la licencia está en PENDIENTE_MIGRACION, solo puede salir de ese estado canjeando un código de migración válido
+    if (model.estadoActual == 'PENDIENTE_MIGRACION') {
+      return model;
     }
 
     String nuevoEstado = model.estadoActual;
@@ -391,7 +396,8 @@ class LicenseRepository {
     final now = overrideNow ?? DateTime.now();
     final db = await _localDb.database;
 
-    final isOnlyAiRecharge = validation.plan == 'RECARGA_IA_150';
+    final isOnlyAiRecharge = validation.plan == 'RECARGA_IA_150' ||
+        validation.plan == 'BONO_IA_PERSONALIZADO';
     final isMigrationReactivation =
         currentLicense.estadoActual == 'PENDIENTE_MIGRACION';
     final updatedPlan = isOnlyAiRecharge
@@ -410,12 +416,16 @@ class LicenseRepository {
     // Si la reactivación proviene de PENDIENTE_MIGRACION (restauración en teléfono nuevo),
     // la base de datos ya recuperó el saldo IA acumulado histórico; no se vuelve a sumar
     // la cuota base del plan para evitar doble conteo. Solo se añaden bonos extra si existieran.
+    // Si es BONO_IA_PERSONALIZADO, suma exactamente validation.aiExtraCredits (sin forzar 150).
+    // Si es RECARGA_IA_150 legacy, mantiene el piso math.max(150, validation.aiExtraCredits).
     final addedCumulativeScans = isMigrationReactivation
         ? validation.aiExtraCredits
-        : (isOnlyAiRecharge
-              ? math.max(150, validation.aiExtraCredits)
-              : (LicenseModel.getCumulativeScansForPlan(validation.plan) +
-                    validation.aiExtraCredits));
+        : (validation.plan == 'BONO_IA_PERSONALIZADO'
+            ? validation.aiExtraCredits
+            : (validation.plan == 'RECARGA_IA_150'
+                ? math.max(150, validation.aiExtraCredits)
+                : (LicenseModel.getCumulativeScansForPlan(validation.plan) +
+                    validation.aiExtraCredits)));
     final updatedAccumulatedScans =
         currentLicense.aiAccumulatedScans + addedCumulativeScans;
     final updatedExtraCredits =
@@ -427,6 +437,7 @@ class LicenseRepository {
           ? 'ACTIVA'
           : (isOnlyAiRecharge ? currentLicense.estadoActual : 'ACTIVA'),
       fechaExpiracion: updatedExpiration,
+      deviceFingerprint: validation.deviceFingerprint,
       ultimoNonce: validation.nonce,
       ultimoCodigoUsado: validation.cleanCode,
       updatesUntil: validation.updatesUntil ?? currentLicense.updatesUntil,
@@ -444,6 +455,7 @@ class LicenseRepository {
         'tipo_plan': updatedPlan,
         'estado_actual': updatedModel.estadoActual,
         'fecha_expiracion': updatedExpiration.toIso8601String(),
+        'device_fingerprint': validation.deviceFingerprint,
         'ultimo_nonce': validation.nonce,
         'ultimo_codigo_usado': validation.cleanCode,
         'updates_until': updatedModel.updatesUntil?.toIso8601String(),

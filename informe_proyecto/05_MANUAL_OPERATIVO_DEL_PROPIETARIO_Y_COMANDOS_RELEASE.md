@@ -117,6 +117,12 @@ Salida esperada en consola:
 ================================================================
 ```
 
+#### Método 3: Apagado Seguro y Limpio del Servidor desde el Sidebar Footer
+En la esquina inferior izquierda del Sidebar (Sidebar Footer), junto al indicador de entorno y perfil, se ubica el botón **`[⏻ Apagar Servidor]`** (`#btnShutdownServer`):
+1. Al pulsarlo, el sistema despliega un diálogo de confirmación `showConfirmModal` alertando que la plataforma cerrará el proceso `server.dart` y liberará el socket del puerto 8080.
+2. Si la bóveda está protegida por PIN local y la sesión no está autenticada, el endpoint `POST /api/system/shutdown` responde `HTTP 423 Locked`, impidiendo el apagado no autorizado.
+3. Al confirmar con sesión válida, el servidor responde confirmación `HTTP 200 OK`, la interfaz muestra una pantalla limpia de desconexión informando que el servicio fue detenido y el backend ejecuta un apagado limpio (`exit(0)`) tras 250ms de gracia para asegurar la entrega de la respuesta HTTP.
+
 ---
 
 ### 1.3. Navegación por las 8 Pestañas Oficiales (`http://localhost:8080`)
@@ -157,21 +163,24 @@ Abre tu navegador web en `http://localhost:8080`. Dispones de **8 módulos de co
      - **`PROSPECTO`:** Contacto comercial en prospección sin licencia generada ni expiración ficticia (`license_expires = null`).
      - **`TRIAL GRATUITO (Días Reales)`:** Permite ingresar los días exactos que le restan al comerciante en su teléfono (`trial_days_remaining`, ej. `17 días`). No impone ventana artificial de actualización (`updates_until = null`), respetando la naturaleza Offline-First de la app móvil.
      - **`CON LICENCIA ACTIVA`:** Planes comerciales tarifados (`MENSUAL`, `TRIMESTRAL`, `SEMESTRAL`, `ANUAL`, `PERPETUO`).
-   * **Versión de App Instalada:** (por defecto: `9.34.0` — Esquema SQLite `v36`).
+   * **Versión de App Instalada:** (por defecto: `9.35.0` — Esquema SQLite `v36`).
    * **Gestión de Créditos IA:**
-     - **Saldo IA Reportado en Celular:** Créditos que el cliente indica tener disponibles en su app móvil.
-     - **Bonos IA Pendientes por Emitir:** Escaneos adicionales que se incorporarán en la próxima emisión de token criptográfico Ed25519.
+     - **Saldo IA Reportado en Celular:** Créditos que el cliente indica tener disponibles en su app móvil (ej. `49 IA`).
+     - **Bonos IA Pendientes por Emitir:** Escaneos adicionales que se incorporarán en la próxima emisión de token criptográfico Ed25519 (ej. `+20 IA`). Ambos valores se muestran desacoplados de forma transparente, previniendo falsas sumas anticipadas en el CRM.
 3. Presiona **"Guardar Cliente"** o **"Guardar y Emitir Licencia"**.
 
 #### B. Compositor Universal de WhatsApp (`#modalWaComposer`):
-Accesible con 1 clic desde el botón verde de WhatsApp de la Cartera CRM y desde la Ficha 360°:
-- **Plantillas Predefinidas Asistidas:**
-  1. *Bienvenida y Entrega:* Incluye saludo personalizado, nombre de negocio, titular, Hardware ID y código de licencia Ed25519 con instrucciones claras de pegado en la app móvil.
-  2. *Vencimiento Próximo:* Alerta preventiva indicando los días exactos restantes y métodos de pago (Yape/Plin/Transferencia).
-  3. *Cotización para Prospecto:* Información comercial del sistema y propuesta de valor.
-  4. *Mensaje Personalizado:* Editor libre con previsualización en vivo.
-- **Sustitución Automática de Variables:** `{NEGOCIO}`, `{TITULAR}`, `{DIAS}`, `{TOKEN}` se reemplazan en caliente según el cliente seleccionado.
-- **Acceso Rápido:** Botón **`[Copiar Mensaje]`**, botón **`[Abrir Chat Vacío]`** (para soporte directo sin plantilla predeterminada) y botón **`[Abrir en WhatsApp]`** enlazado a `https://wa.me/51...`.
+Accesible con 1 clic desde el botón verde de WhatsApp de la Cartera CRM y desde la Ficha 360° (con gestor de capas `z-index: 3000` y reapertura automática en la misma pestaña):
+- **6 Plantillas Predefinidas de 1 Clic:**
+  1. *Saludo y Bienvenida:* Presentación cordial del equipo y plataforma.
+  2. *Renovación Preventiva:* Notificación de días por vencer y cuentas oficiales.
+  3. *Seguimiento Prospecto:* Mensaje consultivo para negocios en evaluación.
+  4. *Entrega de Licencia:* Envío formateado con token `ML9-...`, vigencia y pasos guiados.
+  5. *Nueva Versión APK:* Aviso de release con novedades y recordatorio de actualización.
+  6. *Chat Vacío:* Abre la conversación sin mensaje predeterminado.
+- **Barra de Inserción Rápida:** Chips interactivos para insertar con 1 clic variables en la posición del cursor: `{NEGOCIO}`, `{TITULAR}`, `{TOKEN}`, `{VENCIMIENTO}`, `{HARDWARE_ID}`.
+- **Guardado de Plantillas:** Botón **`[Guardar Plantilla]`** para persistir en caliente el texto en `owner_config.json` sin alterar el código fuente.
+- **Acceso Rápido:** Botón **`[Copiar Mensaje]`**, botón **`[Abrir Chat Vacío]`** y botón **`[Abrir en WhatsApp]`** enlazado a `https://wa.me/51...`.
 
 #### C. Buscador Omnicanal Reactivo:
 En la parte superior de la tabla, escribe en la caja de búsqueda cualquier fragmento de negocio, dueño, DNI, teléfono, Hardware ID o versión. La tabla filtrará en tiempo real sin recargar la página.
@@ -191,17 +200,14 @@ Toca el botón de edición para modificar libremente los datos del cliente, o ac
 ### 1.5. Generador de Licencias Ed25519 con Resumen Ejecutivo y Ajustes Personalizados
 
 1. En la pestaña **Generador de Licencias**, selecciona al comerciante en el menú desplegable.
-2. **Tarjeta Ejecutiva de Resumen:** Se desplegará inmediatamente un cuadro con su negocio, titular, Device ID, plan actual, días remanentes, fecha de expiración, créditos IA y versión instalada.
-3. Elige el **Plan Oficial** tarifado o abre el acordeón:
-   ```
-   [⚙️ Habilitar Ajustes Comerciales Personalizados]
-   ```
-   * **Días a Otorgar Personalizados:** Especifica libremente `15`, `45`, `60` o la cantidad que desees.
-   * **Bono de Créditos IA de Regalo:** Añade escaneos extra sin vencimiento (`+X escaneos`).
-   * **Modo de Cómputo de Caducidad:** Elige entre *Regla Acumulativa* (suma a su saldo remanente) o *Reiniciar Vigencia* (comienza a contar desde hoy).
-   * **Sobrescribir Fecha de Expiración:** Calendario interactivo que ajusta la fecha exacta deseada.
-4. Presiona **`[⚡ Firmar Criptográficamente y Emitir Licencia]`**.
-5. **Panel de Entrega Multiformato:**
+2. **Columna Derecha Reactiva (Sin Estado Pegado):** Muestra de inmediato la Licencia Activa vigente destacada y el Historial completo de emisiones previas del cliente. Al cambiar de cliente, la credencial previa se limpia automáticamente.
+3. Elige el **Plan Oficial** tarifado o selecciona la modalidad:
+   - **`Bono / Recarga IA Personalizada (0 días)`:** Emite recargas de escaneos IA sin alterar la fecha de caducidad (`y=0`, claim `c=X`). Cuenta con conmutador para:
+     * *Cortesía / Gratuito (S/ 0.00):* Desacopla el cobro y no genera asientos contables ficticios.
+     * *Cobrado:* Sugiere el tarifario comercial oficial e integra el medio de pago.
+4. **Proyección Reactiva en Vivo (`Antes → Después`):** Previsualiza en tiempo real cómo impactará la licencia en los días remanentes, fecha proyectada y saldo IA, actualizándose instantáneamente al alternar opciones del acordeón de **Ajustes Comerciales Personalizados** (días libres, créditos de regalo, regla acumulativa vs reinicio, o sobreescritura de fecha).
+5. Presiona **`[⚡ Firmar Criptográficamente y Emitir Licencia]`**.
+6. **Panel de Entrega Multiformato:**
    - **Código `ML9-...`:** Con botón para copiar al portapapeles.
    - **Credencial Oficial PNG en Alta Definición (@2x / 900x520 px):** Renderizada con degradado ejecutivo, sellos legales INDECOPI / D.L. 822 y código QR incrustado. Puedes presionar **`[Descargar PNG]`** o **`[Copiar Credencial]`** (para pegarla directo en WhatsApp Web con `Ctrl + V`).
    - **Botón `[📲 Enviar por WhatsApp]`:** Dispara el mensaje preformateado.
@@ -255,42 +261,71 @@ Si un comerciante desea recargar su saldo de escaneos IA o agota su bolsa inicia
 
 ---
 
-### 1.9. Reasignación Técnica de Dispositivo por Cambio o Pérdida de Celular
-1. Solicita al comerciante el nuevo Device ID que muestra su teléfono (`Perfil > Licencia`).
-2. En Cartera de Clientes, presiona el botón **`[🔄]`** (Migrar Teléfono).
-3. Ingresa el nuevo Device ID, la tarifa técnica (oficial: **S/ 40.00**; o S/ 0.00 en garantía) y el motivo.
-4. Confirma la migración. El sistema archivará el teléfono anterior, actualizará el `current_device_id`, incrementará el `nonce` y te llevará al Generador para emitir la nueva licencia con el 100% de los días y créditos preservados.
+### 1.9. Reasignación Técnica de Dispositivo y Migración Segura (`#modalMigrateDevice`)
+Cuando un comerciante cambia de celular, se le extravía o restaura una copia de seguridad en un nuevo terminal:
+1. Solicita al comerciante el nuevo Hardware ID (`ANDROID_ID`) que muestra su nuevo teléfono (`Perfil > Licencia`).
+2. En Cartera de Clientes, presiona el botón **`[🔄]`** (Migrar Teléfono) o accede desde la pestaña *Hardware* de la Ficha 360°.
+3. **Selector de Escenario Técnico:**
+   - **`Restauración de Copia de Seguridad (.mlbg / Google Drive):`**
+     El cliente ya restauró sus datos en el nuevo celular. La app móvil se encuentra en estado `PENDIENTE_MIGRACION` y ya contiene la fecha de vencimiento legítima en SQLite. El sistema genera un token de reactivación con `y = 0`, evitando que el cliente duplique días de suscripción al reactivarse.
+   - **`Instalación Limpia (Sin Backup):`**
+     El cliente instaló la app desde cero. El sistema transfiere exactamente los días remanentes calculados (`y = Días restantes`) para que la nueva app herede el período suscrito.
+4. **Tarjeta Resumen de Preservación:** Previsualiza en tiempo real el Hardware ID anterior que se archivará, el nuevo Hardware ID que se vinculará, los días a transferir, el saldo IA preservado y el incremento automático de `nonce`.
+5. **Modalidades de Tarifa Técnica:**
+   - *Estándar (S/ 40.00):* Precio oficial de reasignación con registro automático en finanzas.
+   - *Traslado Gratuito / Cortesía (S/ 0.00):* Para garantías comerciales o cambios de equipo sin costo. No genera cobros ficticios en el libro contable.
+   - *Personalizada:* Permite ajustar un monto especial acordado.
+6. **Emisión en 1 Solo Paso:** Casilla para firmar criptográficamente el token Ed25519 de inmediato e insertarlo en el historial de licencias del cliente con claim `m: 1` para certificar la migración legítima.
 
 ---
 
 ### 1.10. Ficha 360° del Cliente y Gestión Integral (5 Pestañas Especializadas)
-En **Cartera de Clientes**, presiona el botón **`[👁️]`** (Ficha 360°) o **`[🪟]`** (QR Directo) para abrir el Drawer lateral deslizable de alta precisión con sus 5 pestañas de control:
+En **Cartera de Clientes**, presiona el botón **`[👁️]`** (Ficha 360°) o **`[🪟]`** (QR Directo) para abrir el Drawer lateral deslizable con gestor inteligente de capas (`z-index: 3000` con auto-retorno exacto a la pestaña activa):
 
 1. **Pestaña 1 — Resumen Ejecutivo:**
-   - Métricas clave en tiempo real: Plan Actual, Vencimiento, Créditos IA Acumulados y Versión APK Instalada.
-   - Resumen financiero de cobros acumulados y saldo pendiente.
-   - **Botón `[📱 Sincronizar Estado Reportado del Celular]`:** Abre `#modalSyncReported` para registrar en caliente Hardware ID, modelo de teléfono, versión real instalada, saldo IA y días restantes reportados por el usuario mediante WhatsApp, sin requerir internet en la app móvil.
+   - Métricas clave en tiempo real: Plan Actual con badge `Trial (Xd)` en ámbar si aplica, Vencimiento, Créditos IA Desacoplados (`Reportado en Celular` y `Bono Pendiente`), Total Recaudado y Versión APK.
+   - **Botón `[📱 Sincronizar Estado Reportado del Celular]` (`#modalSyncReported`):** Permite registrar en caliente Hardware ID, modelo, versión, saldo IA y días restantes reportados por el comerciante vía WhatsApp, actualizando de forma bidireccional los formularios de la plataforma sin requerir internet en el móvil.
 
 2. **Pestaña 2 — QR & Credencial Oficial:**
-   - Visualización garantizada del código QR en alta definición mediante `renderSafeQrCode()` (resolviendo cualquier incompatibilidad con librerías QR).
-   - **Selector Histórico de Licencias Emitidas:** Menú desplegable dinámico para alternar entre licencias anteriores y la más reciente, actualizando el QR y credencial al instante.
-   - *Empty State* asistido para clientes sin licencias emitidas (ofreciendo botón directo de emisión para evitar códigos ficticios).
-   - Botones rápidos: **`[Copiar Código]`**, **`[Descargar QR]`** y **`[WhatsApp]`** (conectado al Compositor Universal).
+   - Visualización garantizada del código QR en alta definición mediante `renderSafeQrCode()`.
+   - **Metadatos Sincronizados en Tiempo Real:** Refleja con exactitud `Plan`, `Emisión`, `Vigencia`, `Nonce`, `Créditos IA` y `Dispositivo` de la licencia seleccionada en el histórico.
+   - **Acciones Rápidas:**
+     * **`[Copiar Código]`:** Copia la cadena `ML9-...`.
+     * **`[Descargar Tarjeta (@2x)]`:** Descarga la credencial gráfica PNG en 900x520 px.
+     * **`[Copiar Imagen Credencial]`:** Copia el mapa de bits al portapapeles (`Ctrl+V`) para pegado instantáneo en WhatsApp Web.
+     * **`[Descargar Solo QR]`:** Descarga el archivo de imagen PNG del código óptico.
+     * **`[Auditar en Inspector]`** y **`[WhatsApp]`** contextual.
 
-3. **Pestaña 3 — Pagos y Finanzas (CRUD Dinámico Completo):**
-   - Historial detallado de pagos manuales y suscripciones del cliente.
-   - **Registro de Nuevos Cobros:** Formulario en línea para ingresar monto en soles (`S/`), plan o concepto, medio de pago (Yape/Plin/BCP/Efectivo) y número de operación.
-   - **Edición en Caliente:** Permite modificar montos, medios o referencias de cualquier pago previo.
-   - **Eliminación Segura:** Borra pagos erróneos con recálculo automático instantáneo de los totales del cliente y del Dashboard.
+3. **Pestaña 3 — Pagos y Finanzas (CRUD Dinámico y Boletas):**
+   - Tarjetas compactas adaptativas (eliminando scrolls horizontales y dobles botones `++`).
+   - Muestra fecha, concepto, monto en soles (`S/`), medio de pago y referencia.
+   - Botón **`[🧾 Boleta]`** en cada registro para abrir el Generador de Boletas de Pago.
+   - Botón **`[➕ Registrar Pago Manual]` (`#modalManualPayment`):** Permite registrar cobros con presets de tarifas oficiales extraídos en caliente de `owner_config.json`.
 
 4. **Pestaña 4 — Hardware y Dispositivos:**
-   - Visualización del Hardware ID actual (`ANDROID_ID`) y modelo de celular reportado.
-   - Tabla histórica de migraciones y cambios de equipo con fecha, hardware anterior, hardware nuevo, tarifa técnica aplicada y motivo registrado.
-   - Botón directo **`[🔄 Migrar Teléfono]`** para reasignaciones técnicas inmediatas.
+   - Visualización del Hardware ID actual con píldora interactiva **`[📋 Copiar ID]`** para portapapeles en 1 clic.
+   - Historial de cambios de equipo con fecha, hardware anterior, hardware nuevo, tarifa técnica y motivo registrado.
+   - **Edición Rápida de Modelo y Motivo:** Permite actualizar el modelo del celular (ej. `Samsung Galaxy A54 5G`) y el motivo de la migración directamente en el historial técnico (`PUT /api/clients/:id/device-history/:index`).
+   - Botón directo **`[🔄 Migrar Teléfono]`** conectado a `#modalMigrateDevice`.
 
 5. **Pestaña 5 — Edición Rápida y Zona de Peligro:**
-   - Modificación directa de titular, negocio, teléfono, documento de identidad y notas comerciales.
-   - **Zona de Peligro (`#drawerDangerZone`):** Botón **`[🗑️ Eliminar Cliente Definitivamente]`** con validación estricta de dos pasos para remover registros obsoletos con respaldo previo automático.
+   - Modificación inmediata de titular, negocio, teléfono, documento de identidad y notas comerciales.
+   - Campo *Ventana Updates* condicional (solo visible si el cliente posee un plan Perpetuo).
+   - **Zona de Peligro:** Botón **`[🗑️ Eliminar Cliente Definitivamente]`** con diseño de advertencia en rojo y diálogo de confirmación estricto de dos pasos con respaldo preventivo automático.
+
+---
+
+### 1.10.1. Generador y Personalizador de Boletas de Pago (`BOL-XXXX`) 100% Offline
+Accesible desde el botón **`[🧾 Boleta]`** de cualquier pago registrado en la Ficha 360°:
+- **Correlativo Permanente por Pago:** Cada boleta recibe un número correlativo oficial irreversible (ej. `BOL-0001`, `BOL-0002`) asignado de forma atómica en disco (`DatabaseService.issueOrGetPaymentReceipt`), preservando la trazabilidad contable.
+- **Personalizador en Tiempo Real:** Permite editar razón social del emisor, RUC/DNI, teléfono, ciudad/dirección (por defecto: `Piura, Perú`), notas legales y pie de página comercial.
+- **Vista Previa en Vivo:** Renderizado inmediato de la boleta estilo punto de venta con tipografía monoespaciada, membrete ejecutivo, detalle del plan suscrito, subtotal, total e impuestos (exonerado/incluido).
+- **Guardado de Plantilla como Predeterminada:** Botón para guardar las personalizaciones en `owner_config.json` (`receipt_config`) para que todas las futuras emisiones hereden tu formato corporativo.
+- **Entrega Multiformato en 1 Clic:**
+  1. **`[Descargar PNG (@2x)]`:** Exporta una imagen nítida en alta densidad lista para enviar como archivo adjunto.
+  2. **`[Copiar al Portapapeles]`:** Copia la imagen al búfer del sistema para pegarla directamente en WhatsApp Desktop o Web con `Ctrl + V`.
+  3. **`[Imprimir / PDF]`:** Abre el cuadro nativo de impresión de Windows para imprimir en impresora térmica o guardar como documento PDF.
+  4. **`[Compartir por WhatsApp]`:** Envía un resumen textual estructurado con el número de boleta, monto y confirmación de vigencia al número del cliente.
 
 ---
 

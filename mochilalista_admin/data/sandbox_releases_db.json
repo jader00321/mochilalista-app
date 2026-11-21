@@ -1,12 +1,12 @@
 [
   {
-    "version_name": "9.30.0",
-    "version_code": 74,
+    "version_name": "9.34.0",
+    "version_code": 78,
     "db_schema_version": 36,
-    "release_date": "2026-11-19T10:00:00.000Z",
+    "release_date": "2026-11-20T10:00:00.000Z",
     "type": "FEATURE_RELEASE",
     "apk_file_path": "",
-    "apk_download_url": "https://drive.google.com/file/d/mochilalista-v9.30.0/view",
+    "apk_download_url": "https://drive.google.com/file/d/mochilalista-v9.34.0/view",
     "apk_sha256": "4a5b6c7d8e9f0123456789abcdef0123456789abcdef0123456789abcdef0123",
     "file_size_mb": "28.40 MB",
     "changelog": "• Activación 100% Offline con Hardware ID (Settings.Secure.ANDROID_ID) y EULA oficial.\n• Cuota IA 100% Acumulativa sin reseteo mensual y arquitectura Multi-Perfil con bolsa compartida.\n• Bóveda de Claves BYOK (Google Gemini) y Respaldo Blindado en Google Drive (.mlbg).\n• Esquema SQLite v36 con sincronización de perfiles y trazabilidad de inventario.",

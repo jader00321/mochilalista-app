@@ -122,6 +122,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   initModalConfirm();
   initDashboardKpiClickEvents();
   initDrawerEvents();
+  initReceiptModalEvents();
   initSettingsEvents();
   initExcelExportEvents();
   initVaultEvents();
@@ -129,8 +130,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   await loadConfig();
   await loadSystemMode();
   await loadDashboard();
-  await loadClients();
   await loadReleases();
+  await loadClients();
   await loadReleaseMatrix();
   initLicenseStudioEvents();
   initModalEvents();
@@ -335,6 +336,68 @@ function initNavigation() {
   window.addEventListener('resize', () => {
     if (floatingTooltip) floatingTooltip.classList.remove('visible');
   });
+
+  // 5. Botón Discreto "Apagar Servidor" en Sidebar Footer (Plan Maestro 15 - Fase 7)
+  const btnShutdown = document.getElementById('btnShutdownServer');
+  if (btnShutdown) {
+    btnShutdown.addEventListener('mouseenter', () => {
+      if (!sidebar?.classList.contains('collapsed') || !floatingTooltip) return;
+      floatingTooltip.textContent = 'Apagar Servidor Local';
+      const rect = btnShutdown.getBoundingClientRect();
+      const top = rect.top + (rect.height / 2) - 14;
+      const left = rect.right + 10;
+      floatingTooltip.style.top = `${Math.max(8, top)}px`;
+      floatingTooltip.style.left = `${left}px`;
+      floatingTooltip.classList.add('visible');
+    });
+
+    btnShutdown.addEventListener('mouseleave', () => {
+      if (floatingTooltip) floatingTooltip.classList.remove('visible');
+    });
+
+    btnShutdown.addEventListener('click', () => {
+      showConfirmModal(
+        'Apagar Servidor Local',
+        '¿Deseas detener el servidor local de MochilaLista Admin? Podrás volver a abrirlo en 1 clic desde tu Escritorio.',
+        async () => {
+          try {
+            const res = await fetch('/api/system/shutdown', { method: 'POST' });
+            if (res.status === 423) {
+              showToast('La sesión está bloqueada con PIN. Desbloquea la consola para apagar.', 'error');
+              return;
+            }
+            if (res.ok) {
+              renderShutdownSuccessScreen();
+            } else {
+              const err = await res.text();
+              showToast('No se pudo apagar el servidor: ' + err, 'error');
+            }
+          } catch (_) {
+            // El proceso local cierra el socket al apagarse; esto confirma detención exitosa
+            renderShutdownSuccessScreen();
+          }
+        },
+        true
+      );
+    });
+  }
+}
+
+function renderShutdownSuccessScreen() {
+  document.body.innerHTML = `
+    <div style="min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; background: #0b0f19; color: #f8fafc; font-family: system-ui, -apple-system, sans-serif; text-align: center; padding: 24px;">
+      <div style="width: 64px; height: 64px; border-radius: 50%; background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.3); display: flex; align-items: center; justify-content: center; margin-bottom: 20px;">
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M18.36 6.64a9 9 0 1 1-12.73 0"></path>
+          <line x1="12" y1="2" x2="12" y2="12"></line>
+        </svg>
+      </div>
+      <h2 style="font-size: 22px; font-weight: 700; margin-bottom: 8px;">Servidor administrativo detenido con éxito</h2>
+      <p style="font-size: 14px; color: #94a3b8; max-width: 440px; line-height: 1.6; margin-bottom: 24px;">El proceso local se ha apagado de forma segura y todos los datos han sido preservados en disco. Ya puedes cerrar esta pestaña del navegador.</p>
+      <button onclick="try { window.close(); } catch(e) {}" style="background: #1e293b; color: #e2e8f0; border: 1px solid #334155; padding: 10px 22px; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s ease;">Cerrar Pestaña</button>
+    </div>
+  `;
+  try { window.close(); } catch (_) {}
 }
 
 // =================== TEMA OSCURO / CLARO & EXPORTAR ===================
@@ -419,6 +482,7 @@ async function switchMode(newMode) {
 
   try {
     // 1. Limpieza atómica de drawers, modales y referencias del entorno previo
+    drawerReturnState = null;
     closeClient360Drawer();
     closeModal('modalWaComposer');
     currentWaComposerClientId = null;
@@ -427,6 +491,12 @@ async function switchMode(newMode) {
     currentDrawerClientId = null;
     currentQuickQrClientId = null;
     currentHistoryClientId = null;
+
+    const licClientSel = document.getElementById('licClientSelect');
+    if (licClientSel) licClientSel.value = '';
+    updateGeneratorRightColumn(null);
+    updateClientSummaryCard();
+    updateLiveLicenseProjection();
 
     currentSearchQuery = '';
     const searchInput = document.getElementById('searchClientsInput');
@@ -459,10 +529,11 @@ async function switchMode(newMode) {
     );
 
     // 3. Recarga limpia coordinada de todos los datos del entorno activo
+    // Cargar releases primero para sincronización inmediata de semver y contadores CRM
+    await loadReleases();
     await Promise.allSettled([
       loadDashboard(),
       loadClients(),
-      loadReleases(),
       loadReleaseMatrix(),
       loadFinances(),
       loadBackups(),
@@ -887,7 +958,9 @@ async function loadClients() {
     updateFilterCounts();
     renderClientsTable();
     updateClientSummaryCard();
-    updatePlanImpactAndProjection();
+    updateLiveLicenseProjection();
+    const activeClient = globalClients.find(c => c.id === licSelect?.value);
+    updateGeneratorRightColumn(activeClient || null);
   } catch (e) {
     console.error('Error al cargar clientes:', e);
   }
@@ -980,6 +1053,56 @@ function updateFilterCounts() {
   setTxt('countOutdated', countOutdated);
 }
 
+// =================== HELPER CENTRALIZADO: BADGE DE ESTADO DEL CLIENTE ===================
+function getClientStatusBadge(client, options = {}) {
+  const asObject = options.asObject || false;
+  if (!client) {
+    return asObject
+      ? { className: 'badge badge-outline', text: '-', isProspect: false, isTrial: false, isPerp: false, diffDays: 0 }
+      : '<span class="badge badge-outline">-</span>';
+  }
+
+  const plan = (client.license_type || 'MENSUAL').toUpperCase();
+  const status = (client.license_status || '').toUpperCase();
+  const isProspect = plan === 'PROSPECTO' || status === 'PROSPECTO';
+  const isTrial = plan === 'TRIAL';
+  const isPerp = plan === 'PERPETUO_LIBERADO' || plan === 'PERPETUO';
+  const now = new Date();
+  const expDate = client.license_expires ? new Date(client.license_expires) : null;
+  const diffDays = expDate ? Math.ceil((expDate - now) / (1000 * 60 * 60 * 24)) : 999;
+
+  let className = 'badge badge-green';
+  let text = 'Activa';
+
+  if (isProspect) {
+    className = 'badge badge-prospect';
+    text = 'Prospecto';
+  } else if (isTrial) {
+    className = 'badge badge-yellow';
+    const trialDays = (client.trial_days_remaining !== undefined && client.trial_days_remaining !== null)
+      ? client.trial_days_remaining
+      : (diffDays >= 0 ? diffDays : 0);
+    text = `Trial (${trialDays}d)`;
+  } else if (isPerp) {
+    className = 'badge badge-purple';
+    text = 'Perpetua';
+  } else if (diffDays < 0) {
+    className = 'badge badge-red';
+    text = 'Vencida';
+  } else if (diffDays <= 7) {
+    className = 'badge badge-yellow';
+    text = `Vence en ${diffDays}d`;
+  } else {
+    className = 'badge badge-green';
+    text = 'Activa';
+  }
+
+  if (asObject) {
+    return { className, text, isProspect, isTrial, isPerp, diffDays };
+  }
+  return `<span class="${className}">${text}</span>`;
+}
+
 function renderClientsTable() {
   const tbody = document.getElementById('clientsTableBody');
   tbody.innerHTML = '';
@@ -1039,23 +1162,14 @@ function renderClientsTable() {
 
   filtered.forEach(c => {
     const tr = document.createElement('tr');
-    let statusBadge = '<span class="badge badge-green">Activa</span>';
-    const plan = (c.license_type || 'MENSUAL').toUpperCase();
-    const status = (c.license_status || '').toUpperCase();
-    const isProspect = plan === 'PROSPECTO' || status === 'PROSPECTO';
-    const isPerp = plan === 'PERPETUO_LIBERADO' || plan === 'PERPETUO';
-    const expDate = c.license_expires ? new Date(c.license_expires) : null;
-    const diffDays = expDate ? Math.ceil((expDate - now) / (1000 * 60 * 60 * 24)) : 999;
+    const badgeInfo = getClientStatusBadge(c, { asObject: true });
+    const statusBadge = `<span class="${badgeInfo.className}">${escapeHtml(badgeInfo.text)}</span>`;
 
-    if (isProspect) {
-      statusBadge = '<span class="badge badge-prospect">Prospecto</span>';
-    } else if (isPerp) {
-      statusBadge = '<span class="badge badge-purple">Perpetua</span>';
-    } else if (diffDays < 0) {
-      statusBadge = '<span class="badge badge-red">Vencida</span>';
-    } else if (diffDays <= 7) {
-      statusBadge = `<span class="badge badge-yellow">Vence en ${diffDays}d</span>`;
-    }
+    const plan = (c.license_type || 'MENSUAL').toUpperCase();
+    const isProspect = badgeInfo.isProspect;
+    const isTrial = badgeInfo.isTrial;
+    const isPerp = badgeInfo.isPerp;
+    const expDate = c.license_expires ? new Date(c.license_expires) : null;
 
     const expText = isProspect
       ? (c.expected_subscription_date ? `Seguim: ${escapeHtml(c.expected_subscription_date)}` : 'Sin vencimiento')
@@ -1089,6 +1203,19 @@ function renderClientsTable() {
       ? `<div class="badge-pending-bonus" title="Bono acordado pendiente de emitir en token Ed25519">+${c.ai_pending_bonus} IA por emitir</div>`
       : '';
 
+    // Saldo real en celular vs Bono pendiente
+    const realAiBalance = (c.ai_reported_balance !== undefined && c.ai_reported_balance !== null)
+      ? c.ai_reported_balance
+      : (c.ai_accumulated_credits ?? c.ai_extra_credits ?? 0);
+    const hasAiCredits = realAiBalance > 0 || (c.ai_extra_credits || 0) > 0;
+    const aiDisplay = (c.ai_reported_balance !== undefined && c.ai_reported_balance !== null)
+      ? `${c.ai_reported_balance} IA`
+      : ((c.ai_extra_credits || 0) > 0 ? `+${c.ai_extra_credits} IA` : '0 IA');
+
+    const planSuffix = (!isProspect && !isTrial)
+      ? `<small style="font-weight:700; color:var(--text-secondary);">(${escapeHtml(c.license_type || 'MENSUAL')})</small>`
+      : '';
+
     tr.innerHTML = `
       <td style="white-space: nowrap; font-family: var(--font-mono);"><strong>${escapeHtml(c.id)}</strong></td>
       <td>
@@ -1101,7 +1228,7 @@ function renderClientsTable() {
       <td>
         <div style="display:flex; align-items:center; gap:0.35rem; flex-wrap:wrap;">
           ${statusBadge}
-          ${!isProspect ? `<small style="font-weight:700; color:var(--text-secondary);">(${escapeHtml(c.license_type || 'MENSUAL')})</small>` : ''}
+          ${planSuffix}
         </div>
         <div style="font-size:0.78rem; color:var(--text-secondary); margin-top:3px; font-family:var(--font-mono);">
           ${expText}
@@ -1115,8 +1242,8 @@ function renderClientsTable() {
         ${verBadge}
       </td>
       <td>
-        ${(c.ai_extra_credits || 0) > 0
-        ? `<span class="badge badge-purple">+${c.ai_extra_credits} IA</span>`
+        ${hasAiCredits
+        ? `<span class="badge badge-purple">${aiDisplay}</span>`
         : '<span class="badge badge-outline" style="color:var(--text-muted); border:1px solid var(--border-color);">0 IA</span>'}
         ${pendingBonusBadge}
       </td>
@@ -1149,7 +1276,8 @@ function copyDeviceIdToClipboard(deviceId) {
   });
 }
 
-function selectClientForLicense(clientId) {
+function selectClientForLicense(clientId, options = {}) {
+  drawerReturnState = null;
   const tabs = document.querySelectorAll('.nav-tab');
   tabs.forEach(t => t.classList.remove('active'));
   document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
@@ -1161,32 +1289,92 @@ function selectClientForLicense(clientId) {
   const licSelect = document.getElementById('licClientSelect');
   if (licSelect) {
     licSelect.value = clientId;
-    updateClientSummaryCard();
-    updatePlanImpactAndProjection();
-
-    // Precargar bono IA acordado pendiente de emitir si existe
     const client = globalClients.find(c => c.id === clientId);
-    if (client && (client.ai_pending_bonus || 0) > 0) {
+
+    // Si el cliente tiene bono IA acordado pendiente de emitir o se solicitó preferBonus
+    if (options.preferBonus && client && (client.ai_pending_bonus || 0) > 0) {
+      const planSel = document.getElementById('licPlanSelect');
+      if (planSel) planSel.value = 'BONO_IA_PERSONALIZADO';
+      const aiInput = document.getElementById('licCustomAiAmount');
+      if (aiInput) aiInput.value = client.ai_pending_bonus;
+      updateEcoModeUI('free');
+    } else if (client && (client.ai_pending_bonus || 0) > 0) {
       const bonusInput = document.getElementById('licCustomAiBonus');
       if (bonusInput) {
         bonusInput.value = client.ai_pending_bonus;
       }
     }
+
+    updateClientSummaryCard();
+    updateLiveLicenseProjection();
+    updateGeneratorRightColumn(client || null);
   }
 }
 
-// =================== 3. GENERADOR DE LICENCIAS ED25519 & MODO PERSONALIZADO ===================
+// =================== 3. GENERADOR DE LICENCIAS ED25519 & ESTUDIO INTERACTIVO ===================
 function initLicenseStudioEvents() {
   const planSelect = document.getElementById('licPlanSelect');
   const clientSelect = document.getElementById('licClientSelect');
 
   planSelect?.addEventListener('change', () => {
-    updatePlanImpactAndProjection();
+    updateLiveLicenseProjection();
   });
 
   clientSelect?.addEventListener('change', () => {
     updateClientSummaryCard();
-    updatePlanImpactAndProjection();
+    updateLiveLicenseProjection();
+    const activeClient = globalClients.find(c => c.id === clientSelect.value);
+    updateGeneratorRightColumn(activeClient || null);
+  });
+
+  // Modalidad económica de Bono IA (Gratis vs Cobro)
+  document.getElementById('ecoModeFree')?.addEventListener('change', () => {
+    updateEcoModeUI('free');
+    updateLiveLicenseProjection();
+  });
+  document.getElementById('ecoModePaid')?.addEventListener('change', () => {
+    updateEcoModeUI('paid');
+    updateLiveLicenseProjection();
+  });
+
+  // Chips rápidos de escaneos IA (+20, +50, +100, +150)
+  document.querySelectorAll('.ai-chip-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const val = parseInt(btn.getAttribute('data-ai')) || 20;
+      const input = document.getElementById('licCustomAiAmount');
+      if (input) {
+        input.value = val;
+        document.querySelectorAll('.ai-chip-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        updateSuggestedPrice();
+        updateLiveLicenseProjection();
+      }
+    });
+  });
+
+  // Input manual de escaneos IA
+  document.getElementById('licCustomAiAmount')?.addEventListener('input', () => {
+    const val = parseInt(document.getElementById('licCustomAiAmount')?.value) || 0;
+    document.querySelectorAll('.ai-chip-btn').forEach(b => {
+      if (parseInt(b.getAttribute('data-ai')) === val) {
+        b.classList.add('active');
+      } else {
+        b.classList.remove('active');
+      }
+    });
+    updateSuggestedPrice();
+    updateLiveLicenseProjection();
+  });
+
+  // Botón aplicar precio sugerido
+  document.getElementById('btnApplySuggestedPrice')?.addEventListener('click', () => {
+    const suggested = updateSuggestedPrice();
+    const amountInput = document.getElementById('licPaymentAmount');
+    if (amountInput) {
+      amountInput.value = suggested.toFixed(2);
+      showToast(`Precio sugerido aplicado: S/ ${suggested.toFixed(2)}`, 'info');
+      updateLiveLicenseProjection();
+    }
   });
 
   // Acordeón de ajustes comerciales personalizados
@@ -1199,10 +1387,12 @@ function initLicenseStudioEvents() {
     if (accordionArrow) accordionArrow.textContent = isOpen ? '▲' : '▼';
   });
 
-  // Escuchar inputs personalizados para recalcular proyección en vivo
-  document.getElementById('licCustomDays')?.addEventListener('input', updatePlanImpactAndProjection);
-  document.getElementById('licCustomAiBonus')?.addEventListener('input', updatePlanImpactAndProjection);
-  document.getElementById('licCustomComputationMode')?.addEventListener('change', updatePlanImpactAndProjection);
+  // Escuchar inputs para recalcular proyección en vivo
+  document.getElementById('licCustomDays')?.addEventListener('input', updateLiveLicenseProjection);
+  document.getElementById('licCustomAiBonus')?.addEventListener('input', updateLiveLicenseProjection);
+  document.getElementById('licCustomComputationMode')?.addEventListener('change', updateLiveLicenseProjection);
+  document.getElementById('licPaymentAmount')?.addEventListener('input', updateLiveLicenseProjection);
+  document.getElementById('licPaymentMethod')?.addEventListener('change', updateLiveLicenseProjection);
   document.getElementById('licCustomExactDate')?.addEventListener('change', () => {
     const exactDateVal = document.getElementById('licCustomExactDate').value;
     if (exactDateVal) {
@@ -1211,38 +1401,52 @@ function initLicenseStudioEvents() {
       const diff = Math.max(1, Math.ceil((targetDate - now) / (1000 * 60 * 60 * 24)));
       document.getElementById('licCustomDays').value = diff;
     }
-    updatePlanImpactAndProjection();
+    updateLiveLicenseProjection();
   });
 
+  // Botón de emisión
   document.getElementById('btnGenerateLicense')?.addEventListener('click', generateLicense);
 
+  // Botones de acción sobre la licencia emitida / activa
   document.getElementById('btnCopyCode')?.addEventListener('click', () => {
-    const code = document.getElementById('generatedCodeDisplay').textContent;
+    const code = document.getElementById('generatedCodeDisplay')?.textContent?.trim();
+    if (!code) return;
     navigator.clipboard.writeText(code).then(() => {
       showToast('¡Código copiado al portapapeles!', 'success');
     });
   });
 
-  document.getElementById('btnDownloadQr')?.addEventListener('click', () => {
-    if (lastGeneratedQr) {
-      const url = lastGeneratedQr.toDataURL();
-      const a = document.createElement('a');
-      a.download = `QR_MochilaLista_${Date.now()}.png`;
-      a.href = url;
-      a.click();
-      showToast('QR descargado correctamente.', 'success');
-    }
-  });
-
+  document.getElementById('btnDownloadQr')?.addEventListener('click', downloadQrCode);
   document.getElementById('btnDownloadCredential')?.addEventListener('click', downloadCredential);
   document.getElementById('btnCopyCredentialImage')?.addEventListener('click', copyCredentialToClipboard);
 
+  document.getElementById('btnSendWa')?.addEventListener('click', () => {
+    const clientId = document.getElementById('licClientSelect')?.value;
+    const client = globalClients.find(c => c.id === clientId);
+    const token = document.getElementById('generatedCodeDisplay')?.textContent?.trim();
+    if (!client || !token) {
+      showToast('No hay una licencia activa seleccionada para enviar.', 'warning');
+      return;
+    }
+    const cleanPhone = (client.phone || '').replace(/[^0-9]/g, '');
+    const msgText = renderConfigTemplate('license_issued', {
+      titular: client.owner_name || 'Comerciante',
+      negocio: client.business_name || 'tu negocio',
+      plan: document.getElementById('metaGenPlan')?.textContent || client.license_type || 'Licencia',
+      dias: '-',
+      vencimiento: document.getElementById('metaGenExpires')?.textContent || client.license_expires || 'Activa',
+      creditos_ia: document.getElementById('metaGenAi')?.textContent || client.ai_reported_balance || 0,
+      codigo: token,
+      device_id: client.current_device_id || 'ML-0000',
+    });
+    window.open(`https://api.whatsapp.com/send?phone=${cleanPhone}&text=${encodeURIComponent(msgText)}`, '_blank');
+  });
+
   // Botón Auditar en el Inspector
   document.getElementById('btnAuditInInspector')?.addEventListener('click', () => {
-    const token = document.getElementById('generatedCodeDisplay').textContent.trim();
+    const token = document.getElementById('generatedCodeDisplay')?.textContent?.trim();
     if (!token) return;
 
-    // Cambiar a la pestaña Inspector
     const tabs = document.querySelectorAll('.nav-tab');
     tabs.forEach(t => t.classList.remove('active'));
     document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
@@ -1251,7 +1455,6 @@ function initLicenseStudioEvents() {
     inspectTab?.classList.add('active');
     document.getElementById('tabInspector')?.classList.add('active');
 
-    // Pasar token y auditar
     const inspectInput = document.getElementById('inspectTokenInput');
     if (inspectInput) {
       inspectInput.value = token;
@@ -1259,6 +1462,66 @@ function initLicenseStudioEvents() {
       showToast('Token transferido al Inspector Forense.', 'info');
     }
   });
+}
+
+function updateEcoModeUI(mode) {
+  const isFree = mode === 'free';
+  const freeRadio = document.getElementById('ecoModeFree');
+  const paidRadio = document.getElementById('ecoModePaid');
+  const lblFree = document.getElementById('lblEcoModeFree');
+  const lblPaid = document.getElementById('lblEcoModePaid');
+  const boxSuggested = document.getElementById('boxSuggestedPrice');
+  const grpAmount = document.getElementById('grpLicPaymentAmount');
+  const grpMethod = document.getElementById('grpLicPaymentMethod');
+  const grpRef = document.getElementById('grpLicPaymentRef');
+  const amountInput = document.getElementById('licPaymentAmount');
+
+  if (freeRadio) freeRadio.checked = isFree;
+  if (paidRadio) paidRadio.checked = !isFree;
+
+  if (lblFree) {
+    lblFree.style.borderColor = isFree ? 'var(--primary)' : 'var(--border-color)';
+    lblFree.style.background = isFree ? 'rgba(37,99,235,0.1)' : 'var(--bg-secondary)';
+  }
+  if (lblPaid) {
+    lblPaid.style.borderColor = !isFree ? 'var(--primary)' : 'var(--border-color)';
+    lblPaid.style.background = !isFree ? 'rgba(37,99,235,0.1)' : 'var(--bg-secondary)';
+  }
+
+  if (isFree) {
+    if (amountInput) amountInput.value = '0.00';
+    if (grpAmount) grpAmount.style.opacity = '0.5';
+    if (grpMethod) grpMethod.style.opacity = '0.5';
+    if (grpRef) grpRef.style.opacity = '0.5';
+    if (boxSuggested) boxSuggested.style.display = 'none';
+  } else {
+    if (grpAmount) grpAmount.style.opacity = '1';
+    if (grpMethod) grpMethod.style.opacity = '1';
+    if (grpRef) grpRef.style.opacity = '1';
+    if (boxSuggested) boxSuggested.style.display = 'block';
+    updateSuggestedPrice();
+  }
+}
+
+function updateSuggestedPrice() {
+  const scans = parseInt(document.getElementById('licCustomAiAmount')?.value) || 20;
+  const cfgRecarga = ownerConfig?.catalog?.RECARGA_IA_150;
+  const basePrice = (cfgRecarga?.price !== undefined) ? cfgRecarga.price : 20.0;
+  const baseScans = (cfgRecarga?.ai_credits !== undefined) ? cfgRecarga.ai_credits : 150;
+
+  const unitRate = basePrice / baseScans;
+  let suggested = scans * unitRate;
+
+  // Redondeo comercial al medio punto más cercano (piso S/ 1.00)
+  suggested = Math.round(suggested * 2) / 2;
+  if (suggested < 1.0) suggested = 1.0;
+
+  const txtCalc = document.getElementById('txtSuggestedCalc');
+  const valPrice = document.getElementById('valSuggestedPrice');
+  if (txtCalc) txtCalc.textContent = `Tasa base: S/ ${basePrice.toFixed(2)} por ${baseScans} IA (${scans} × S/ ${unitRate.toFixed(3)})`;
+  if (valPrice) valPrice.textContent = `S/ ${suggested.toFixed(2)}`;
+
+  return suggested;
 }
 
 function updateClientSummaryCard() {
@@ -1276,63 +1539,95 @@ function updateClientSummaryCard() {
   document.getElementById('sumBizName').textContent = client.business_name || 'Negocio Sin Nombre';
   document.getElementById('sumOwnerName').textContent = `• Titular: ${client.owner_name || '-'}`;
   document.getElementById('sumDeviceId').textContent = client.current_device_id || 'ML-0000';
-  document.getElementById('sumPlanNonce').textContent = `${client.license_type || 'MENSUAL'} (Nonce #${client.next_nonce || 1})`;
+  document.getElementById('sumPlanNonce').textContent = `${(client.license_type || 'MENSUAL').replace(/_/g, ' ')} (Nonce #${client.next_nonce || 1})`;
 
   const now = new Date();
   const expDate = client.license_expires ? new Date(client.license_expires) : null;
-  const isPerp = (client.license_type || '').toUpperCase().includes('PERPETU');
-  const isProspect = (client.license_type || '').toUpperCase() === 'PROSPECTO' || (client.license_status || '').toUpperCase() === 'PROSPECTO';
+  const badgeInfo = getClientStatusBadge(client, { asObject: true });
+  const isPerp = badgeInfo.isPerp;
+  const isProspect = badgeInfo.isProspect;
+  const isTrial = badgeInfo.isTrial;
+
+  const sumStatusBadge = document.getElementById('sumStatusBadge');
+  if (sumStatusBadge) {
+    sumStatusBadge.className = badgeInfo.className;
+    sumStatusBadge.textContent = badgeInfo.text.toUpperCase();
+  }
 
   if (isProspect) {
     document.getElementById('sumExpiresDate').textContent = client.expected_subscription_date
       ? `Seguimiento: ${client.expected_subscription_date}`
       : 'Sin vencimiento (Prospecto)';
-    document.getElementById('sumStatusBadge').className = 'badge badge-prospect';
-    document.getElementById('sumStatusBadge').textContent = 'PROSPECTO';
+  } else if (isTrial) {
+    const trialDays = (client.trial_days_remaining !== undefined && client.trial_days_remaining !== null)
+      ? client.trial_days_remaining
+      : (badgeInfo.diffDays >= 0 ? badgeInfo.diffDays : 0);
+    document.getElementById('sumExpiresDate').textContent = `${client.license_expires ? client.license_expires.substring(0, 10) : 'Trial'} (${trialDays}d restantes)`;
   } else if (isPerp) {
     document.getElementById('sumExpiresDate').textContent = 'Vitalicia (De por Vida)';
-    document.getElementById('sumStatusBadge').className = 'badge badge-purple';
-    document.getElementById('sumStatusBadge').textContent = 'PERPETUA';
   } else if (expDate) {
     const diff = Math.ceil((expDate - now) / (1000 * 60 * 60 * 24));
     document.getElementById('sumExpiresDate').textContent = `${client.license_expires.substring(0, 10)} (${diff}d restantes)`;
-    if (diff < 0) {
-      document.getElementById('sumStatusBadge').className = 'badge badge-red';
-      document.getElementById('sumStatusBadge').textContent = 'VENCIDA';
-    } else if (diff <= 7) {
-      document.getElementById('sumStatusBadge').className = 'badge badge-yellow';
-      document.getElementById('sumStatusBadge').textContent = `POR VENCER (${diff}d)`;
-    } else {
-      document.getElementById('sumStatusBadge').className = 'badge badge-green';
-      document.getElementById('sumStatusBadge').textContent = 'ACTIVA';
-    }
   } else {
     document.getElementById('sumExpiresDate').textContent = 'Sin fecha';
   }
 
-  const aiExtra = client.ai_extra_credits || 0;
-  document.getElementById('sumAiCredits').textContent = `+${aiExtra} escaneos IA vitalicios`;
-  document.getElementById('sumInstalledVersion').textContent = `v${client.installed_version || '9.34.0'}`;
+  const realAi = (client.ai_reported_balance !== undefined && client.ai_reported_balance !== null)
+    ? client.ai_reported_balance
+    : (client.ai_accumulated_credits ?? client.ai_extra_credits ?? 0);
+  const pendingAi = client.ai_pending_bonus || 0;
+  let aiText = `${realAi} IA en celular`;
+  if (pendingAi > 0) {
+    aiText += ` (+${pendingAi} IA pendientes de emitir)`;
+  } else if ((client.ai_extra_credits || 0) > 0) {
+    aiText = `+${client.ai_extra_credits} escaneos IA vitalicios`;
+  }
+  document.getElementById('sumAiCredits').textContent = aiText;
+  document.getElementById('sumInstalledVersion').textContent = `v${client.installed_version || '9.35.0'}`;
   document.getElementById('sumUpdatesUntil').textContent = client.updates_until ? client.updates_until.substring(0, 10) : 'No configurada';
 }
 
-function updatePlanImpactAndProjection() {
+function updateLiveLicenseProjection() {
   const planSelect = document.getElementById('licPlanSelect');
   const clientSelect = document.getElementById('licClientSelect');
   const amountInput = document.getElementById('licPaymentAmount');
   const impactBadge = document.getElementById('licPlanImpactBadge');
   const projectionText = document.getElementById('licPlanProjection');
+  const panelCustomAi = document.getElementById('panelCustomAiBonus');
 
-  if (!planSelect || !amountInput || !impactBadge || !projectionText) return;
+  if (!planSelect || !impactBadge || !projectionText) return;
+
+  const plan = planSelect.value;
+  const clientId = clientSelect?.value;
+  const client = globalClients.find(c => c.id === clientId);
+
+  // Mostrar / Ocultar panel interactivo de Bono IA Personalizado
+  if (plan === 'BONO_IA_PERSONALIZADO') {
+    if (panelCustomAi) panelCustomAi.style.display = 'block';
+  } else {
+    if (panelCustomAi) panelCustomAi.style.display = 'none';
+  }
 
   const selectedOpt = planSelect.options[planSelect.selectedIndex];
-  const plan = planSelect.value;
   const cfgPlan = ownerConfig?.catalog?.[plan];
-  const defaultPrice = (cfgPlan?.price !== undefined) ? cfgPlan.price.toFixed(2) : (selectedOpt.getAttribute('data-price') || '35.00');
-  amountInput.value = defaultPrice;
 
-  const clientId = clientSelect.value;
-  const client = globalClients.find(c => c.id === clientId);
+  if (plan !== 'BONO_IA_PERSONALIZADO') {
+    const defaultPrice = (cfgPlan?.price !== undefined) ? cfgPlan.price.toFixed(2) : (selectedOpt?.getAttribute('data-price') || '35.00');
+    if (amountInput && document.activeElement !== amountInput) {
+      amountInput.value = defaultPrice;
+    }
+    const grpAmount = document.getElementById('grpLicPaymentAmount');
+    const grpMethod = document.getElementById('grpLicPaymentMethod');
+    const grpRef = document.getElementById('grpLicPaymentRef');
+    if (grpAmount) grpAmount.style.opacity = '1';
+    if (grpMethod) grpMethod.style.opacity = '1';
+    if (grpRef) grpRef.style.opacity = '1';
+  } else {
+    const isFree = document.getElementById('ecoModeFree')?.checked ?? true;
+    if (isFree && amountInput) {
+      amountInput.value = '0.00';
+    }
+  }
 
   impactBadge.style.display = 'block';
   projectionText.style.display = 'block';
@@ -1359,56 +1654,306 @@ function updatePlanImpactAndProjection() {
     return `${day}/${m}/${y}`;
   };
 
-  // Si hay días personalizados configurados
-  if (customDaysVal > 0) {
-    impactBadge.innerHTML = `⚙️ <strong>Ajuste Personalizado:</strong> Se otorgarán <strong>+${customDaysVal} días</strong> directos (${customMode === 'from_today' ? 'contando desde hoy' : 'acumulativos'}).` +
-      (customAiBonus > 0 ? ` + <strong>${customAiBonus} escaneos IA de regalo</strong>.` : '');
-    const projCustom = new Date(baseDate.getTime() + customDaysVal * 24 * 60 * 60 * 1000);
-    projectionText.innerHTML = `📅 <strong>Nueva expiración proyectada:</strong> ${formatDateStr(projCustom)}.`;
+  const currentAi = (client?.ai_reported_balance !== undefined && client?.ai_reported_balance !== null)
+    ? client.ai_reported_balance
+    : (client?.ai_accumulated_credits ?? client?.ai_extra_credits ?? 0);
+  const currentNonce = client?.next_nonce || 1;
+
+  // 1. Proyección de Bono IA Personalizado (0 días)
+  if (plan === 'BONO_IA_PERSONALIZADO') {
+    impactBadge.classList.add('recharge');
+    const customScans = parseInt(document.getElementById('licCustomAiAmount')?.value) || 20;
+    const isFree = document.getElementById('ecoModeFree')?.checked ?? true;
+    const paymentAmt = parseFloat(amountInput?.value) || 0;
+    const paymentMth = document.getElementById('licPaymentMethod')?.value || 'Yape';
+
+    impactBadge.innerHTML = `💡 <strong>Bono / Recarga IA Personalizada:</strong> Otorga <strong>+${customScans} créditos de escaneos IA</strong> vitalicios directos al celular sin alterar días ni suscripción.`;
+
+    const clientExpStr = client?.license_expires ? client.license_expires.substring(0, 10) : 'Sin fecha';
+    const isTrial = client?.license_type === 'TRIAL' || client?.trial_days_remaining !== null;
+    const trialDays = client?.trial_days_remaining ?? '-';
+    const vigenciaTxt = isTrial ? `Trial (${trialDays}d restantes)` : clientExpStr;
+
+    const projectedAi = currentAi + customScans;
+    const financeTxt = isFree
+      ? 'Cortesía / Sin costo (S/ 0.00) — No afectará ingresos contables'
+      : `Cobro acordado: S/ ${paymentAmt.toFixed(2)} vía ${escapeHtml(paymentMth)}`;
+
+    projectionText.innerHTML = `
+      <div style="margin-bottom:0.35rem;">📅 <strong>Vigencia:</strong> Mantiene fecha actual (${vigenciaTxt}) (Sin cambios de días).</div>
+      <div style="margin-bottom:0.35rem;">⚡ <strong>Créditos IA:</strong> Saldo celular (${currentAi} IA) + Esta emisión (+${customScans} IA) = <strong>Total proyectado (${projectedAi} IA)</strong>.</div>
+      <div style="margin-bottom:0.35rem;">🔐 <strong>Nonce Criptográfico:</strong> Nonce actual (#${currentNonce}) → <strong>Siguiente (#${currentNonce + 1})</strong>.</div>
+      <div style="font-size:0.82rem; color:var(--text-secondary);">💰 <strong>Impacto Financiero:</strong> ${financeTxt}.</div>
+    `;
     return;
   }
 
+  // 2. Si hay días personalizados configurados en el acordeón
+  if (customDaysVal > 0) {
+    impactBadge.innerHTML = `⚙️ <strong>Ajuste Personalizado:</strong> Se otorgarán <strong>+${customDaysVal} días</strong> directos (${customMode === 'from_today' ? 'contando desde hoy' : 'acumulativos'})` +
+      (customAiBonus > 0 ? ` + <strong>${customAiBonus} escaneos IA de regalo</strong>.` : '.');
+    const projCustom = new Date(baseDate.getTime() + customDaysVal * 24 * 60 * 60 * 1000);
+    const projAi = currentAi + customAiBonus;
+    projectionText.innerHTML = `
+      <div style="margin-bottom:0.35rem;">📅 <strong>Nueva expiración proyectada:</strong> ${formatDateStr(projCustom)}.</div>
+      ${customAiBonus > 0 ? `<div style="margin-bottom:0.35rem;">⚡ <strong>Créditos IA:</strong> ${currentAi} IA + ${customAiBonus} IA = <strong>${projAi} IA</strong> proyectados.</div>` : ''}
+      <div>🔐 <strong>Nonce Criptográfico:</strong> Nonce #${currentNonce} → <strong>Nonce #${currentNonce + 1}</strong>.</div>
+    `;
+    return;
+  }
+
+  // 3. Proyección según planes de catálogo
   switch (plan) {
-    case 'RECARGA_IA_150':
+    case 'RECARGA_IA_150': {
       const aiCredits = (cfgPlan?.ai_credits !== undefined) ? cfgPlan.ai_credits : 150;
       impactBadge.classList.add('recharge');
       impactBadge.innerHTML = `💡 <strong>Impacto:</strong> Conservará su plan actual y su fecha de vigencia. Se sumarán <strong>+${aiCredits} créditos de escaneos IA</strong> acumulativos sin fecha de caducidad.`;
-      projectionText.innerHTML = client
-        ? `📅 <strong>Vigencia:</strong> Mantiene su fecha actual (${client.license_expires ? client.license_expires.substring(0, 10) : 'Activa'}).`
-        : '📅 <strong>Vigencia:</strong> Sin alteración en la suscripción.';
+      const projAi = currentAi + aiCredits;
+      projectionText.innerHTML = `
+        <div style="margin-bottom:0.35rem;">📅 <strong>Vigencia:</strong> Mantiene su fecha actual (${client?.license_expires ? client.license_expires.substring(0, 10) : 'Activa'}) (Sin alteración de suscripción).</div>
+        <div style="margin-bottom:0.35rem;">⚡ <strong>Créditos IA:</strong> Saldo celular (${currentAi} IA) + Recarga (+${aiCredits} IA) = <strong>${projAi} IA</strong> proyectados.</div>
+        <div>🔐 <strong>Nonce Criptográfico:</strong> Nonce #${currentNonce} → <strong>Nonce #${currentNonce + 1}</strong>.</div>
+      `;
       break;
-
-    case 'PERPETUO_LIBERADO':
+    }
+    case 'PERPETUO_LIBERADO': {
       const updateMonths = (cfgPlan?.updates_window_months !== undefined) ? cfgPlan.updates_window_months : 12;
       impactBadge.classList.add('perpetual');
       impactBadge.innerHTML = `⭐ <strong>Impacto:</strong> Licencia Perpetua Liberada. Acceso ilimitado de por vida (+99,999 días) con ${updateMonths} meses de actualizaciones de funciones incluidas.`;
       const updatesTarget = new Date(now.getTime() + updateMonths * 30 * 24 * 60 * 60 * 1000);
-      projectionText.innerHTML = `📅 <strong>Vigencia:</strong> Vitalicia de por vida • <strong>Pase de Updates hasta:</strong> ${formatDateStr(updatesTarget)}.`;
+      projectionText.innerHTML = `
+        <div style="margin-bottom:0.35rem;">📅 <strong>Vigencia:</strong> Vitalicia de por vida • <strong>Pase de Updates hasta:</strong> ${formatDateStr(updatesTarget)}.</div>
+        <div>🔐 <strong>Nonce Criptográfico:</strong> Nonce #${currentNonce} → <strong>Nonce #${currentNonce + 1}</strong>.</div>
+      `;
       break;
-
-    case 'PASE_ACTUALIZACION_ANUAL':
+    }
+    case 'PASE_ACTUALIZACION_ANUAL': {
       const passDays = (cfgPlan?.days !== undefined && cfgPlan.days > 0) ? cfgPlan.days : 365;
       impactBadge.classList.add('perpetual');
       impactBadge.innerHTML = `🔄 <strong>Impacto:</strong> Extiende por <strong>+${passDays} días adicionales</strong> la ventana de nuevas versiones y herramientas para clientes perpetuos.`;
       const currentUpdates = client && client.updates_until ? new Date(client.updates_until) : now;
       const baseUp = currentUpdates > now ? currentUpdates : now;
       const newUpdates = new Date(baseUp.getTime() + passDays * 24 * 60 * 60 * 1000);
-      projectionText.innerHTML = `📅 <strong>Nueva Ventana de Updates:</strong> Hasta el ${formatDateStr(newUpdates)} (+${passDays} días).`;
+      projectionText.innerHTML = `
+        <div style="margin-bottom:0.35rem;">📅 <strong>Nueva Ventana de Updates:</strong> Hasta el ${formatDateStr(newUpdates)} (+${passDays} días).</div>
+        <div>🔐 <strong>Nonce Criptográfico:</strong> Nonce #${currentNonce} → <strong>Nonce #${currentNonce + 1}</strong>.</div>
+      `;
       break;
-
-    case 'EXTENSION_CORTESIA':
+    }
+    case 'EXTENSION_CORTESIA': {
       const cortesiaDays = (cfgPlan?.days !== undefined && cfgPlan.days > 0) ? cfgPlan.days : 7;
       impactBadge.innerHTML = `⏳ <strong>Impacto:</strong> Otorga <strong>+${cortesiaDays} días de gracia temporal</strong> (S/ 0.00) para resolver cobranza en trámite o emergencias operativas.`;
       const projCortesia = new Date(baseDate.getTime() + cortesiaDays * 24 * 60 * 60 * 1000);
-      projectionText.innerHTML = `📅 <strong>Nueva expiración proyectada:</strong> ${formatDateStr(projCortesia)} (+${cortesiaDays} días de gracia).`;
+      projectionText.innerHTML = `
+        <div style="margin-bottom:0.35rem;">📅 <strong>Nueva expiración proyectada:</strong> ${formatDateStr(projCortesia)} (+${cortesiaDays} días de gracia).</div>
+        <div>🔐 <strong>Nonce Criptográfico:</strong> Nonce #${currentNonce} → <strong>Nonce #${currentNonce + 1}</strong>.</div>
+      `;
       break;
-
-    default: // MENSUAL (30), TRIMESTRAL (90), SEMESTRAL (180), ANUAL (365)
-      const days = (cfgPlan?.days !== undefined) ? cfgPlan.days : (parseInt(selectedOpt.getAttribute('data-days')) || 30);
+    }
+    default: {
+      const days = (cfgPlan?.days !== undefined) ? cfgPlan.days : (parseInt(selectedOpt?.getAttribute('data-days')) || 30);
       impactBadge.innerHTML = `📅 <strong>Impacto:</strong> Renovación acumulativa sin pérdida de días. Se sumarán <strong>+${days} días</strong> directos al saldo remanente.`;
       const projRegular = new Date(baseDate.getTime() + days * 24 * 60 * 60 * 1000);
-      projectionText.innerHTML = `📅 <strong>Nueva expiración proyectada:</strong> ${formatDateStr(projRegular)} (Cero pérdida de días).`;
+
+      const basePlanAi = (cfgPlan?.ai_credits !== undefined)
+        ? cfgPlan.ai_credits
+        : (plan === 'TRIMESTRAL' ? 180 : (plan === 'SEMESTRAL' ? 450 : (plan === 'ANUAL' ? 1200 : 50)));
+      const totalToAdd = basePlanAi + customAiBonus;
+      const projAi = currentAi + totalToAdd;
+      const aiBreakdown = customAiBonus > 0
+        ? `Saldo celular (${currentAi} IA) + Plan (+${basePlanAi} IA) + Regalo (+${customAiBonus} IA) = <strong>${projAi} IA</strong> proyectados.`
+        : `Saldo celular (${currentAi} IA) + Cuota del plan (+${basePlanAi} IA) = <strong>${projAi} IA</strong> proyectados.`;
+
+      projectionText.innerHTML = `
+        <div style="margin-bottom:0.35rem;">📅 <strong>Nueva expiración proyectada:</strong> ${formatDateStr(projRegular)} (Cero pérdida de días).</div>
+        <div style="margin-bottom:0.35rem;">⚡ <strong>Créditos IA:</strong> ${aiBreakdown}</div>
+        <div>🔐 <strong>Nonce Criptográfico:</strong> Nonce #${currentNonce} → <strong>Nonce #${currentNonce + 1}</strong>.</div>
+      `;
       break;
+    }
+  }
+}
+
+const updatePlanImpactAndProjection = updateLiveLicenseProjection;
+
+function renderSelectedGeneratorLicense(code, client, isLatest = true) {
+  if (!code) return;
+
+  const placeholder = document.getElementById('resultPlaceholder');
+  const content = document.getElementById('resultContent');
+  const badgeStatus = document.getElementById('licResultBadgeStatus');
+  const displayCode = document.getElementById('generatedCodeDisplay');
+
+  if (placeholder) placeholder.style.display = 'none';
+  if (content) content.style.display = 'flex';
+
+  if (badgeStatus) {
+    badgeStatus.style.display = 'inline-flex';
+    if (isLatest) {
+      badgeStatus.className = 'badge badge-green';
+      badgeStatus.textContent = 'ACTIVA / VIGENTE';
+    } else {
+      badgeStatus.className = 'badge badge-gray';
+      badgeStatus.textContent = 'HISTÓRICA / REEMPLAZADA';
+    }
+  }
+
+  const token = code.token || '';
+  if (displayCode) displayCode.textContent = token;
+
+  // Actualizar metadatos en grid
+  const metaPlan = document.getElementById('metaGenPlan');
+  const metaNonce = document.getElementById('metaGenNonce');
+  const metaEmitted = document.getElementById('metaGenEmitted');
+  const metaExpires = document.getElementById('metaGenExpires');
+  const metaAi = document.getElementById('metaGenAi');
+  const metaDevice = document.getElementById('metaGenDeviceId');
+
+  const pPlan = code.plan || client?.license_type || 'MENSUAL';
+  if (metaPlan) metaPlan.textContent = pPlan.replace(/_/g, ' ');
+  if (metaNonce) metaNonce.textContent = code.nonce !== undefined ? `#${code.nonce}` : '-';
+
+  const emittedDate = code.emitted_at || code.created_at;
+  if (metaEmitted) {
+    metaEmitted.textContent = emittedDate ? emittedDate.substring(0, 10) : new Date().toISOString().substring(0, 10);
+  }
+
+  if (metaExpires) {
+    if (pPlan === 'PERPETUO_LIBERADO') {
+      metaExpires.textContent = 'Vitalicia';
+    } else if (pPlan === 'BONO_IA_PERSONALIZADO' || pPlan === 'RECARGA_IA_150') {
+      metaExpires.textContent = client?.license_expires ? client.license_expires.substring(0, 10) : 'Sin alteración';
+    } else if (code.expires_at) {
+      metaExpires.textContent = code.expires_at.substring(0, 10);
+    } else if (code.expires_result) {
+      metaExpires.textContent = code.expires_result.substring(0, 10);
+    } else if (client?.license_expires) {
+      metaExpires.textContent = client.license_expires.substring(0, 10);
+    } else {
+      metaExpires.textContent = '-';
+    }
+  }
+
+  const aiCreds = code.ai_credits ?? code.ai_extra_credits ?? 0;
+  if (metaAi) metaAi.textContent = `+${aiCreds} IA`;
+  if (metaDevice) metaDevice.textContent = code.device_id || client?.current_device_id || 'ML-0000';
+
+  // Renderizar QR Code
+  const qrContainer = document.getElementById('qrContainer');
+  lastGeneratedQr = renderSafeQrCode(qrContainer, token, 230);
+
+  // Renderizar Canvas PNG de Alta Resolución tras render del QR
+  setTimeout(() => {
+    renderCredentialCanvas(code, client);
+  }, 150);
+}
+
+function updateGeneratorRightColumn(client) {
+  const resultPlaceholder = document.getElementById('resultPlaceholder');
+  const resultContent = document.getElementById('resultContent');
+  const historySec = document.getElementById('genHistorySection');
+  const badgeStatus = document.getElementById('licResultBadgeStatus');
+  const historyList = document.getElementById('genHistoryList');
+  const historyCount = document.getElementById('genHistoryCount');
+
+  if (!client) {
+    if (resultPlaceholder) {
+      resultPlaceholder.innerHTML = 'Selecciona un cliente y presiona <strong>Firmar y Emitir Licencia</strong> para generar el código, el QR y la credencial oficial.';
+      resultPlaceholder.style.display = 'block';
+    }
+    if (resultContent) resultContent.style.display = 'none';
+    if (historySec) historySec.style.display = 'none';
+    if (badgeStatus) badgeStatus.style.display = 'none';
+    return;
+  }
+
+  const history = client.generated_codes_history || [];
+  if (history.length === 0) {
+    if (resultPlaceholder) {
+      resultPlaceholder.innerHTML = `El cliente <strong>${escapeHtml(client.business_name)}</strong> aún no tiene licencias Ed25519 emitidas.<br><span style="font-size:0.85rem; color:var(--text-secondary); margin-top:0.4rem; display:inline-block;">Configura un plan a la izquierda y presiona <strong>Firmar Criptográficamente y Emitir Licencia</strong> para emitir su primera credencial oficial.</span>`;
+      resultPlaceholder.style.display = 'block';
+    }
+    if (resultContent) resultContent.style.display = 'none';
+    if (historySec) historySec.style.display = 'none';
+    if (badgeStatus) badgeStatus.style.display = 'none';
+    return;
+  }
+
+  // Ordenar historial: el más reciente primero (mayor nonce o timestamp descendente)
+  const sorted = [...history].sort((a, b) => {
+    const nA = a.nonce !== undefined ? a.nonce : 0;
+    const nB = b.nonce !== undefined ? b.nonce : 0;
+    if (nB !== nA) return nB - nA;
+    const tA = new Date(a.emitted_at || a.created_at || 0).getTime();
+    const tB = new Date(b.emitted_at || b.created_at || 0).getTime();
+    return tB - tA;
+  });
+
+  // Mostrar la licencia más reciente como activa/vigente
+  renderSelectedGeneratorLicense(sorted[0], client, true);
+
+  // Renderizar la lista histórica debajo
+  if (historySec) historySec.style.display = 'block';
+  if (historyCount) historyCount.textContent = sorted.length;
+  if (historyList) {
+    historyList.innerHTML = '';
+    sorted.forEach((item, idx) => {
+      const isVigente = idx === 0;
+      const itemEl = document.createElement('div');
+      itemEl.className = `gen-history-item ${isVigente ? 'active' : ''}`;
+      const dateStr = (item.emitted_at || item.created_at || '').substring(0, 10) || '-';
+      const planStr = (item.plan || 'MENSUAL').replace(/_/g, ' ');
+      const nonceStr = item.nonce !== undefined ? `#${item.nonce}` : '';
+      const aiVal = item.ai_credits ?? item.ai_extra_credits ?? 0;
+      const aiBadge = aiVal > 0 ? `<span class="badge badge-purple" style="font-size:0.7rem; padding:1px 6px; margin-left:0.4rem;">+${aiVal} IA</span>` : '';
+
+      itemEl.innerHTML = `
+        <div style="display:flex; justify-content:space-between; align-items:center; width:100%;">
+          <div>
+            <strong style="color:var(--text-primary); font-size:0.85rem;">${escapeHtml(planStr)} ${nonceStr}</strong>
+            <span style="font-size:0.75rem; color:var(--text-muted); margin-left:0.4rem;">${dateStr}</span>
+            ${aiBadge}
+          </div>
+          <span class="badge ${isVigente ? 'badge-green' : 'badge-gray'}" style="font-size:0.72rem;">
+            ${isVigente ? 'Vigente' : 'Histórica'}
+          </span>
+        </div>
+      `;
+
+      itemEl.addEventListener('click', () => {
+        document.querySelectorAll('.gen-history-item').forEach(el => el.classList.remove('active'));
+        itemEl.classList.add('active');
+        renderSelectedGeneratorLicense(item, client, isVigente);
+      });
+
+      historyList.appendChild(itemEl);
+    });
+  }
+}
+
+function downloadQrCode() {
+  const qrImg = document.querySelector('#qrContainer img') || document.querySelector('#qrContainer canvas');
+  if (qrImg) {
+    let url;
+    if (qrImg.tagName.toLowerCase() === 'canvas') {
+      url = qrImg.toDataURL('image/png');
+    } else {
+      url = qrImg.src;
+    }
+    const a = document.createElement('a');
+    a.download = `QR_MochilaLista_${Date.now()}.png`;
+    a.href = url;
+    a.click();
+    showToast('QR descargado correctamente.', 'success');
+  } else if (lastGeneratedQr) {
+    const url = lastGeneratedQr.toDataURL();
+    const a = document.createElement('a');
+    a.download = `QR_MochilaLista_${Date.now()}.png`;
+    a.href = url;
+    a.click();
+    showToast('QR descargado correctamente.', 'success');
+  } else {
+    showToast('No hay código QR disponible para descargar.', 'warning');
   }
 }
 
@@ -1421,13 +1966,31 @@ async function generateLicense() {
 
   const client = globalClients.find(c => c.id === clientId);
   const plan = document.getElementById('licPlanSelect').value;
-  const paymentAmount = parseFloat(document.getElementById('licPaymentAmount').value) || 0;
-  const paymentMethod = document.getElementById('licPaymentMethod').value;
-  const paymentRef = document.getElementById('licPaymentRef').value.trim() || 'Op. Generada';
+  const isBonoIa = plan === 'BONO_IA_PERSONALIZADO';
+
+  let paymentAmount = parseFloat(document.getElementById('licPaymentAmount').value) || 0;
+  let paymentMethod = document.getElementById('licPaymentMethod').value;
+  let paymentRef = document.getElementById('licPaymentRef').value.trim() || 'Op. Generada';
+
+  let customAiBonus = parseInt(document.getElementById('licCustomAiBonus')?.value) || 0;
+
+  if (isBonoIa) {
+    const customAiAmount = parseInt(document.getElementById('licCustomAiAmount')?.value) || 20;
+    if (customAiAmount <= 0) {
+      showToast('La cantidad de escaneos IA debe ser mayor a 0.', 'warning');
+      return;
+    }
+    customAiBonus = customAiAmount;
+    const isFree = document.getElementById('ecoModeFree')?.checked ?? true;
+    if (isFree) {
+      paymentAmount = 0.0;
+      paymentMethod = 'Cortesia / Promocion';
+      paymentRef = 'Bono Gratuito';
+    }
+  }
 
   // Parámetros de personalización libre
   const customDaysVal = parseInt(document.getElementById('licCustomDays')?.value) || null;
-  const customAiBonus = parseInt(document.getElementById('licCustomAiBonus')?.value) || 0;
   const computationMode = document.getElementById('licCustomComputationMode')?.value || 'cumulative';
   const customExactDate = document.getElementById('licCustomExactDate')?.value || null;
 
@@ -1443,6 +2006,7 @@ async function generateLicense() {
         payment_ref: paymentRef,
         custom_days: customDaysVal,
         custom_ai_bonus: customAiBonus,
+        ai_extra_credits: isBonoIa ? customAiBonus : undefined,
         computation_mode: computationMode,
         custom_exact_expiration: customExactDate,
       }),
@@ -1455,42 +2019,17 @@ async function generateLicense() {
 
     const data = await res.json();
 
-    // Mostrar resultados
-    document.getElementById('resultPlaceholder').style.display = 'none';
-    const resultBox = document.getElementById('resultContent');
-    resultBox.style.display = 'flex';
-
-    document.getElementById('generatedCodeDisplay').textContent = data.token;
-
-    // Enlace de WhatsApp
-    const cleanPhone = (client?.phone || data.client?.phone || '').replace(/[^0-9]/g, '');
-    const targetClient = client || data.client;
-    const msgText = renderConfigTemplate('license_issued', {
-      titular: targetClient?.owner_name || 'Comerciante',
-      negocio: targetClient?.business_name || 'tu negocio',
-      plan: data.plan,
-      dias: data.days_added,
-      vencimiento: data.expires_result ? data.expires_result.substring(0, 10) : 'Activa',
-      creditos_ia: data.ai_extra_credits || targetClient?.ai_extra_credits || 0,
-      codigo: data.token,
-      device_id: data.device_id,
-    });
-    document.getElementById('btnSendWa').href = `https://api.whatsapp.com/send?phone=${cleanPhone}&text=${encodeURIComponent(msgText)}`;
-
-    // Renderizar QR Code
-    const qrContainer = document.getElementById('qrContainer');
-    lastGeneratedQr = renderSafeQrCode(qrContainer, data.token, 230);
-
-    // Renderizar Credencial PNG de Alta Resolución tras render del QR
-    setTimeout(() => {
-      renderCredentialCanvas(data, client || data.client);
-    }, 200);
-
-    showToast('¡Licencia Ed25519 emitida y firmada con éxito!', 'success');
-
-    // Refrescar clientes y dashboard
+    // Actualizar clientes y dashboard
     await loadClients();
     await loadDashboard();
+
+    const updatedClient = globalClients.find(c => c.id === clientId) || client || data.client;
+
+    // Renderizar la licencia emitida como activa / vigente en la columna derecha
+    renderSelectedGeneratorLicense(data, updatedClient, true);
+    updateGeneratorRightColumn(updatedClient);
+
+    showToast('¡Licencia Ed25519 emitida y firmada con éxito!', 'success');
   } catch (e) {
     showToast('Error al emitir licencia: ' + e.message, 'error');
   }
@@ -1564,6 +2103,7 @@ function renderCredentialCanvas(licenseData, client, targetCanvasId = 'credentia
   let vigencia = '30 días de vigencia';
   if (plan === 'PERPETUO_LIBERADO') vigencia = 'Vitalicia (De por Vida)';
   else if (plan === 'RECARGA_IA_150') vigencia = 'Sin vencimiento (Acumulativo)';
+  else if (plan === 'BONO_IA_PERSONALIZADO') vigencia = 'Sin alterar suscripción (0 días)';
   else if (licenseData.client && licenseData.client.license_expires) {
     vigencia = `Vence: ${licenseData.client.license_expires.substring(0, 10)}`;
   } else if (licenseData.expires_result) {
@@ -1599,7 +2139,7 @@ function renderCredentialCanvas(licenseData, client, targetCanvasId = 'credentia
   ctx.font = '11px -apple-system, sans-serif';
   ctx.fillText('PLAN Y ESTADO:', 36, 264);
 
-  ctx.fillStyle = plan === 'PERPETUO_LIBERADO' ? '#c084fc' : (plan === 'RECARGA_IA_150' ? '#34d399' : '#60a5fa');
+  ctx.fillStyle = plan === 'PERPETUO_LIBERADO' ? '#c084fc' : ((plan === 'RECARGA_IA_150' || plan === 'BONO_IA_PERSONALIZADO') ? '#34d399' : '#60a5fa');
   ctx.font = 'bold 18px -apple-system, sans-serif';
   ctx.fillText(plan.replace(/_/g, ' '), 36, 288);
 
@@ -1617,15 +2157,19 @@ function renderCredentialCanvas(licenseData, client, targetCanvasId = 'credentia
     PERPETUO_LIBERADO: 200,
     PASE_ACTUALIZACION_ANUAL: 100,
     RECARGA_IA_150: 150,
+    BONO_IA_PERSONALIZADO: 0,
     EXTENSION_CORTESIA: 0,
   };
   const cfgPlan = ownerConfig?.catalog?.[plan];
   const baseScans = cfgPlan?.ai_credits !== undefined ? cfgPlan.ai_credits : (baseScansMap[plan] !== undefined ? baseScansMap[plan] : 50);
-  const extraCredits = licenseData.ai_extra_credits || (client ? client.ai_extra_credits : 0) || 0;
+  const extraCredits = licenseData.ai_extra_credits || licenseData.ai_credits || (client ? client.ai_extra_credits : 0) || 0;
   const totalScans = plan === 'RECARGA_IA_150' ? 150 : (baseScans + extraCredits);
-  const aiText = plan === 'RECARGA_IA_150'
-    ? '+150 escaneos IA sin vencimiento (Bolsa Acumulativa)'
-    : `+${totalScans} escaneos IA acumulativos vitalicios (o BYOK)`;
+  let aiText = `+${totalScans} escaneos IA acumulativos vitalicios (o BYOK)`;
+  if (plan === 'BONO_IA_PERSONALIZADO') {
+    aiText = `+${extraCredits} escaneos IA sin caducidad (Bono)`;
+  } else if (plan === 'RECARGA_IA_150') {
+    aiText = '+150 escaneos IA sin vencimiento (Bolsa Acumulativa)';
+  }
   ctx.fillStyle = '#94a3b8';
   ctx.font = '12px -apple-system, sans-serif';
   ctx.fillText(`⚡ Escáner IA: ${aiText}`, 36, 338);
@@ -1854,6 +2398,640 @@ async function openQuickQrModal(clientId) {
 }
 
 // =================== DRAWER LATERAL: FICHA 360° DEL CLIENTE (FASE 4A + FASE 5) ===================
+let drawerReturnState = null;
+let currentDrawerTab = 'drawerTabOverview';
+
+/**
+ * Control inteligente del campo Ventana Updates en la Ficha 360°
+ */
+function updateDrawerEditPlanFields(plan) {
+  const p = (plan || '').toUpperCase();
+  const updatesInput = document.getElementById('drawerEditUpdates');
+  if (!updatesInput) return;
+  const isNoUpdates = (p === 'PROSPECTO' || p === 'TRIAL');
+  if (isNoUpdates) {
+    updatesInput.disabled = true;
+    updatesInput.style.opacity = '0.5';
+    updatesInput.style.cursor = 'not-allowed';
+    updatesInput.title = 'No aplica para Trial o Prospecto';
+    updatesInput.value = '';
+  } else {
+    updatesInput.disabled = false;
+    updatesInput.style.opacity = '1';
+    updatesInput.style.cursor = 'auto';
+    updatesInput.title = '';
+  }
+}
+
+/**
+ * ==========================================================================
+ * GENERADOR Y PERSONALIZADOR DE BOLETAS DE PAGO BOL-XXXX (FASE 5)
+ * ==========================================================================
+ */
+let currentReceiptData = null;
+
+function closeReceiptModal() {
+  closeModal('modalPaymentReceipt');
+}
+
+/**
+ * Resuelve y abre la Boleta de Pago con correlativo persistente (idempotente)
+ */
+async function openPaymentReceiptModal(clientId, paymentId) {
+  try {
+    const res = await fetch(`/api/clients/${clientId}/payments/${paymentId}/receipt`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({}),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'No se pudo resolver la boleta de pago.');
+    }
+    const data = await res.json();
+    currentReceiptData = data;
+    populateReceiptUI(data);
+    openModal('modalPaymentReceipt');
+  } catch (e) {
+    showToast('Error al abrir boleta: ' + e.message, 'error');
+  }
+}
+
+function populateReceiptUI(data) {
+  if (!data) return;
+  const rc = data.receipt_config || {};
+  const payment = data.payment || {};
+
+  const titleInp = document.getElementById('rcInputTitle');
+  if (titleInp) titleInp.value = rc.title || 'BOLETA DE PAGO ADMINISTRATIVA';
+  const commInp = document.getElementById('rcInputCommercialName');
+  if (commInp) commInp.value = rc.commercial_name || 'MochilaLista';
+  const issuerInp = document.getElementById('rcInputIssuerName');
+  if (issuerInp) issuerInp.value = rc.issuer_name || 'Julio Angello Vasquez Navarro';
+  const docInp = document.getElementById('rcInputIssuerDoc');
+  if (docInp) docInp.value = rc.issuer_doc || 'D.N.I. / R.U.C. Registrado';
+  const phoneInp = document.getElementById('rcInputIssuerPhone');
+  if (phoneInp) phoneInp.value = rc.issuer_phone || '+51 922 836 879';
+  const cityInp = document.getElementById('rcInputIssuerCity');
+  if (cityInp) cityInp.value = rc.issuer_city || 'Piura, Perú';
+
+  const logoChk = document.getElementById('rcCheckShowLogo');
+  if (logoChk) logoChk.checked = rc.show_logo !== false;
+
+  const colorInp = document.getElementById('rcInputAccentColor');
+  if (colorInp) colorInp.value = rc.accent_color || '#2563eb';
+
+  const noteInp = document.getElementById('rcInputCustomNote');
+  if (noteInp) noteInp.value = payment.receipt_custom_note || '';
+
+  const footInp = document.getElementById('rcInputFooterNotes');
+  if (footInp) footInp.value = rc.footer_notes || 'Software de Punto de Venta Offline. Comprobante de control administrativo y soporte técnico.';
+
+  const signInp = document.getElementById('rcInputSignature');
+  if (signInp) signInp.value = rc.signature_text || 'Administración Comercial — MochilaLista';
+
+  const badge = document.getElementById('receiptModalBadge');
+  if (badge) badge.textContent = data.receipt_number || 'BOL-0001';
+
+  renderReceiptPreviewAndCanvas();
+}
+
+function renderReceiptPreviewAndCanvas() {
+  if (!currentReceiptData) return;
+  const payment = currentReceiptData.payment || {};
+  const client = currentReceiptData.client || {};
+
+  const title = document.getElementById('rcInputTitle')?.value.trim() || 'BOLETA DE PAGO ADMINISTRATIVA';
+  const commercial = document.getElementById('rcInputCommercialName')?.value.trim() || 'MochilaLista';
+  const issuer = document.getElementById('rcInputIssuerName')?.value.trim() || 'Julio Angello Vasquez Navarro';
+  const issuerDoc = document.getElementById('rcInputIssuerDoc')?.value.trim() || 'D.N.I. / R.U.C. Registrado';
+  const issuerPhone = document.getElementById('rcInputIssuerPhone')?.value.trim() || '+51 922 836 879';
+  const issuerCity = document.getElementById('rcInputIssuerCity')?.value.trim() || 'Piura, Perú';
+  const showLogo = document.getElementById('rcCheckShowLogo')?.checked !== false;
+  const accentColor = document.getElementById('rcInputAccentColor')?.value || '#2563eb';
+  const customNote = document.getElementById('rcInputCustomNote')?.value.trim() || '';
+  const footerNotes = document.getElementById('rcInputFooterNotes')?.value.trim() || '';
+  const signatureText = document.getElementById('rcInputSignature')?.value.trim() || '';
+
+  const correlative = currentReceiptData.receipt_number || 'BOL-0001';
+  const rawDate = currentReceiptData.receipt_issued_at || payment.date || new Date().toISOString();
+  let dateFormatted = rawDate.substring(0, 10);
+  try {
+    const d = new Date(rawDate);
+    dateFormatted = d.toLocaleDateString('es-PE', { day: '2-digit', month: '2-digit', year: 'numeric' }) + ' ' + d.toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' });
+  } catch (_) {}
+
+  // Actualizar DOM
+  const rdocTitle = document.getElementById('rdocDocTitle');
+  if (rdocTitle) rdocTitle.textContent = title;
+  const rdocComm = document.getElementById('rdocCommercialName');
+  if (rdocComm) {
+    rdocComm.textContent = commercial;
+    rdocComm.style.color = accentColor;
+  }
+  const rdocCorr = document.getElementById('rdocCorrelativeNum');
+  if (rdocCorr) {
+    rdocCorr.textContent = correlative;
+    rdocCorr.style.color = accentColor;
+  }
+  const rdocDateTime = document.getElementById('rdocDateTime');
+  if (rdocDateTime) rdocDateTime.textContent = dateFormatted;
+
+  const rdocDiv = document.getElementById('rdocDivider');
+  if (rdocDiv) rdocDiv.style.backgroundColor = accentColor;
+
+  const rdocLogoWrap = document.getElementById('rdocLogoWrap');
+  if (rdocLogoWrap) rdocLogoWrap.style.display = showLogo ? 'flex' : 'none';
+
+  const rdocIssuer = document.getElementById('rdocIssuerName');
+  if (rdocIssuer) rdocIssuer.textContent = issuer;
+  const rdocDoc = document.getElementById('rdocIssuerDoc');
+  if (rdocDoc) rdocDoc.textContent = issuerDoc;
+  const rdocPhone = document.getElementById('rdocIssuerPhone');
+  if (rdocPhone) rdocPhone.textContent = issuerPhone;
+  const rdocCity = document.getElementById('rdocIssuerCity');
+  if (rdocCity) rdocCity.textContent = issuerCity;
+
+  const rdocClientBiz = document.getElementById('rdocClientBiz');
+  if (rdocClientBiz) rdocClientBiz.textContent = client.business_name || 'Cliente Registrado';
+  const rdocClientOwner = document.getElementById('rdocClientOwner');
+  if (rdocClientOwner) rdocClientOwner.textContent = client.owner_name || '-';
+  const rdocClientDoc = document.getElementById('rdocClientDoc');
+  if (rdocClientDoc) rdocClientDoc.textContent = client.document_number || '-';
+  const rdocClientDevId = document.getElementById('rdocClientDevId');
+  if (rdocClientDevId) rdocClientDevId.textContent = client.current_device_id || '-';
+
+  const rdocConcept = document.getElementById('rdocPaymentConcept');
+  if (rdocConcept) rdocConcept.textContent = payment.plan || 'Pago Registrado';
+  const rdocNote = document.getElementById('rdocPaymentCustomNote');
+  if (rdocNote) {
+    rdocNote.textContent = customNote;
+    rdocNote.style.display = customNote ? 'block' : 'none';
+  }
+  const rdocMethod = document.getElementById('rdocPaymentMethod');
+  if (rdocMethod) rdocMethod.textContent = payment.method || 'Yape';
+  const rdocRef = document.getElementById('rdocPaymentRef');
+  if (rdocRef) rdocRef.textContent = payment.reference || '-';
+  const rdocPayDate = document.getElementById('rdocPaymentDate');
+  if (rdocPayDate) rdocPayDate.textContent = payment.date ? payment.date.substring(0, 10) : '-';
+
+  const amountVal = (parseFloat(payment.amount) || 0).toFixed(2);
+  const rdocRowAmt = document.getElementById('rdocPaymentRowAmount');
+  if (rdocRowAmt) rdocRowAmt.textContent = `S/ ${amountVal}`;
+
+  const rdocTotalBox = document.querySelector('.rdoc-total-box');
+  if (rdocTotalBox) rdocTotalBox.style.borderColor = accentColor;
+  const rdocTotal = document.getElementById('rdocPaymentTotal');
+  if (rdocTotal) {
+    rdocTotal.textContent = `S/ ${amountVal}`;
+    rdocTotal.style.color = accentColor;
+  }
+
+  const rdocFoot = document.getElementById('rdocFooterNotes');
+  if (rdocFoot) rdocFoot.textContent = footerNotes;
+  const rdocSign = document.getElementById('rdocSignatureText');
+  if (rdocSign) rdocSign.textContent = signatureText;
+
+  drawReceiptOnCanvas();
+}
+
+function drawReceiptOnCanvas() {
+  const canvas = document.getElementById('receiptExportCanvas');
+  if (!canvas || !currentReceiptData) return;
+
+  const payment = currentReceiptData.payment || {};
+  const client = currentReceiptData.client || {};
+
+  const title = document.getElementById('rcInputTitle')?.value.trim() || 'BOLETA DE PAGO ADMINISTRATIVA';
+  const commercial = document.getElementById('rcInputCommercialName')?.value.trim() || 'MochilaLista';
+  const issuer = document.getElementById('rcInputIssuerName')?.value.trim() || 'Julio Angello Vasquez Navarro';
+  const issuerDoc = document.getElementById('rcInputIssuerDoc')?.value.trim() || 'D.N.I. / R.U.C. Registrado';
+  const issuerPhone = document.getElementById('rcInputIssuerPhone')?.value.trim() || '+51 922 836 879';
+  const issuerCity = document.getElementById('rcInputIssuerCity')?.value.trim() || 'Piura, Perú';
+  const showLogo = document.getElementById('rcCheckShowLogo')?.checked !== false;
+  const accentColor = document.getElementById('rcInputAccentColor')?.value || '#2563eb';
+  const customNote = document.getElementById('rcInputCustomNote')?.value.trim() || '';
+  const footerNotes = document.getElementById('rcInputFooterNotes')?.value.trim() || 'Software de Punto de Venta Offline. Comprobante de control administrativo y soporte técnico.';
+  const signatureText = document.getElementById('rcInputSignature')?.value.trim() || 'Administración Comercial — MochilaLista';
+
+  const correlative = currentReceiptData.receipt_number || 'BOL-0001';
+  const rawDate = currentReceiptData.receipt_issued_at || payment.date || new Date().toISOString();
+  let dateFormatted = rawDate.substring(0, 10);
+  try {
+    const d = new Date(rawDate);
+    dateFormatted = d.toLocaleDateString('es-PE', { day: '2-digit', month: '2-digit', year: 'numeric' }) + ' ' + d.toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' });
+  } catch (_) {}
+
+  const width = 1200;
+  const height = 940;
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return;
+
+  // Fondo blanco y marco sutil
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, width, height);
+  ctx.strokeStyle = '#cbd5e1';
+  ctx.lineWidth = 2;
+  ctx.strokeRect(10, 10, width - 20, height - 20);
+
+  // Cabecera
+  let startX = 60;
+  if (showLogo) {
+    const img = document.getElementById('rdocLogoImg');
+    if (img && img.complete && img.naturalWidth > 0) {
+      try {
+        ctx.drawImage(img, 60, 48, 72, 72);
+      } catch (_) {
+        drawFallbackLogo(ctx, 60, 48, 72, 72, accentColor);
+      }
+    } else {
+      drawFallbackLogo(ctx, 60, 48, 72, 72, accentColor);
+    }
+    startX = 150;
+  }
+
+  ctx.fillStyle = '#0f172a';
+  ctx.font = 'bold 30px sans-serif';
+  ctx.textAlign = 'left';
+  ctx.fillText(title, startX, 80);
+
+  ctx.fillStyle = accentColor;
+  ctx.font = 'bold 22px sans-serif';
+  ctx.fillText(commercial, startX, 112);
+
+  // Caja de correlativo
+  ctx.fillStyle = '#f8fafc';
+  ctx.strokeStyle = '#e2e8f0';
+  ctx.lineWidth = 2;
+  roundRect(ctx, width - 360, 42, 300, 88, 10, true, true);
+
+  ctx.fillStyle = '#64748b';
+  ctx.font = 'bold 14px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('COMPROBANTE N.°', width - 210, 68);
+
+  ctx.fillStyle = accentColor;
+  ctx.font = 'bold 28px monospace';
+  ctx.fillText(correlative, width - 210, 98);
+
+  ctx.fillStyle = '#64748b';
+  ctx.font = '500 14px sans-serif';
+  ctx.fillText(dateFormatted, width - 210, 120);
+
+  // Línea divisoria
+  ctx.fillStyle = accentColor;
+  ctx.fillRect(60, 145, width - 120, 4);
+
+  // Cajas de Emisor y Cliente
+  const colW = (width - 150) / 2;
+  ctx.fillStyle = '#f8fafc';
+  ctx.strokeStyle = '#e2e8f0';
+  ctx.lineWidth = 2;
+  roundRect(ctx, 60, 165, colW, 160, 8, true, true);
+
+  ctx.fillStyle = '#64748b';
+  ctx.font = 'bold 14px sans-serif';
+  ctx.textAlign = 'left';
+  ctx.fillText('EMISOR DEL COMPROBANTE', 80, 192);
+
+  ctx.fillStyle = '#0f172a';
+  ctx.font = 'bold 20px sans-serif';
+  ctx.fillText(issuer, 80, 222);
+
+  ctx.fillStyle = '#475569';
+  ctx.font = '16px sans-serif';
+  ctx.fillText(`Documento: ${issuerDoc}`, 80, 252);
+  ctx.fillText(`WhatsApp: ${issuerPhone}`, 80, 280);
+  ctx.fillText(`Ciudad: ${issuerCity}`, 80, 308);
+
+  // Cliente
+  roundRect(ctx, 60 + colW + 30, 165, colW, 160, 8, true, true);
+
+  ctx.fillStyle = '#64748b';
+  ctx.font = 'bold 14px sans-serif';
+  ctx.fillText('DATOS DEL CLIENTE', 90 + colW, 192);
+
+  ctx.fillStyle = '#0f172a';
+  ctx.font = 'bold 20px sans-serif';
+  ctx.fillText(client.business_name || 'Cliente Registrado', 90 + colW, 222);
+
+  ctx.fillStyle = '#475569';
+  ctx.font = '16px sans-serif';
+  ctx.fillText(`Titular: ${client.owner_name || '-'}`, 90 + colW, 252);
+  ctx.fillText(`RUC / DNI: ${client.document_number || '-'}`, 90 + colW, 280);
+  ctx.fillText(`Hardware ID: ${client.current_device_id || '-'}`, 90 + colW, 308);
+
+  // Tabla de Cobro
+  const tableY = 350;
+  const tableW = width - 120;
+  ctx.fillStyle = '#f1f5f9';
+  ctx.fillRect(60, tableY, tableW, 44);
+  ctx.strokeStyle = '#cbd5e1';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(60, tableY, tableW, 44);
+
+  ctx.fillStyle = '#334155';
+  ctx.font = 'bold 16px sans-serif';
+  ctx.fillText('Descripción / Concepto', 80, tableY + 28);
+  ctx.fillText('Medio', 550, tableY + 28);
+  ctx.fillText('N.° Operación', 700, tableY + 28);
+  ctx.fillText('Fecha', 880, tableY + 28);
+  ctx.textAlign = 'right';
+  ctx.fillText('Total (S/)', 60 + tableW - 20, tableY + 28);
+
+  // Fila tabla
+  const rowY = tableY + 44;
+  const rowH = 75;
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(60, rowY, tableW, rowH);
+  ctx.strokeStyle = '#e2e8f0';
+  ctx.strokeRect(60, rowY, tableW, rowH);
+
+  ctx.textAlign = 'left';
+  ctx.fillStyle = '#0f172a';
+  ctx.font = 'bold 18px sans-serif';
+  ctx.fillText(payment.plan || 'Pago Registrado', 80, rowY + 30);
+
+  if (customNote) {
+    ctx.fillStyle = '#64748b';
+    ctx.font = '14px sans-serif';
+    ctx.fillText(customNote, 80, rowY + 54);
+  }
+
+  ctx.fillStyle = '#334155';
+  ctx.font = '16px sans-serif';
+  ctx.fillText(payment.method || 'Yape', 550, rowY + 35);
+  ctx.fillText(payment.reference || '-', 700, rowY + 35);
+  ctx.fillText(payment.date ? payment.date.substring(0, 10) : '-', 880, rowY + 35);
+
+  const amountVal = (parseFloat(payment.amount) || 0).toFixed(2);
+  ctx.textAlign = 'right';
+  ctx.fillStyle = '#0f172a';
+  ctx.font = 'bold 20px sans-serif';
+  ctx.fillText(`S/ ${amountVal}`, 60 + tableW - 20, rowY + 38);
+
+  // Caja Total
+  const totalBoxY = 490;
+  ctx.fillStyle = '#f8fafc';
+  ctx.strokeStyle = accentColor;
+  ctx.lineWidth = 3;
+  roundRect(ctx, width - 420, totalBoxY, 360, 75, 10, true, true);
+
+  ctx.fillStyle = '#1e293b';
+  ctx.font = 'bold 18px sans-serif';
+  ctx.textAlign = 'left';
+  ctx.fillText('TOTAL RECIBIDO:', width - 395, totalBoxY + 45);
+
+  ctx.fillStyle = accentColor;
+  ctx.font = '900 32px sans-serif';
+  ctx.textAlign = 'right';
+  ctx.fillText(`S/ ${amountVal}`, width - 85, totalBoxY + 47);
+
+  // Línea divisoria pie
+  ctx.strokeStyle = '#cbd5e1';
+  ctx.lineWidth = 2;
+  ctx.setLineDash([6, 6]);
+  ctx.beginPath();
+  ctx.moveTo(60, 680);
+  ctx.lineTo(width - 60, 680);
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  // Notas al pie
+  ctx.textAlign = 'left';
+  ctx.fillStyle = '#64748b';
+  ctx.font = '15px sans-serif';
+  wrapText(ctx, footerNotes, 60, 725, width - 460, 22);
+
+  // Firma
+  const signX = width - 250;
+  ctx.strokeStyle = '#64748b';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(signX - 120, 770);
+  ctx.lineTo(signX + 120, 770);
+  ctx.stroke();
+
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#334155';
+  ctx.font = 'bold 15px sans-serif';
+  ctx.fillText(signatureText, signX, 795);
+}
+
+function drawFallbackLogo(ctx, x, y, w, h, color) {
+  ctx.fillStyle = color;
+  roundRect(ctx, x, y, w, h, 12, true, false);
+  ctx.fillStyle = '#ffffff';
+  ctx.font = 'bold 36px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('M', x + w / 2, y + h / 2 + 12);
+}
+
+function roundRect(ctx, x, y, w, h, r, fill, stroke) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+  if (fill) ctx.fill();
+  if (stroke) ctx.stroke();
+}
+
+function wrapText(ctx, text, x, y, maxWidth, lineHeight) {
+  if (!text) return;
+  const words = text.split(' ');
+  let line = '';
+  for (let n = 0; n < words.length; n++) {
+    const testLine = line + words[n] + ' ';
+    const metrics = ctx.measureText(testLine);
+    if (metrics.width > maxWidth && n > 0) {
+      ctx.fillText(line, x, y);
+      line = words[n] + ' ';
+      y += lineHeight;
+    } else {
+      line = testLine;
+    }
+  }
+  ctx.fillText(line, x, y);
+}
+
+function downloadReceiptPng() {
+  const canvas = document.getElementById('receiptExportCanvas');
+  if (!canvas) return;
+  const correlative = currentReceiptData?.receipt_number || 'BOL-0001';
+  const biz = (currentReceiptData?.client?.business_name || 'Cliente').replace(/[^a-zA-Z0-9_-]/g, '_');
+  const link = document.createElement('a');
+  link.download = `Boleta_${correlative}_${biz}.png`;
+  link.href = canvas.toDataURL('image/png');
+  link.click();
+  showToast(`Boleta ${correlative} descargada con éxito.`, 'success');
+}
+
+async function copyReceiptToClipboard() {
+  const canvas = document.getElementById('receiptExportCanvas');
+  if (!canvas) return;
+  const correlative = currentReceiptData?.receipt_number || 'BOL-0001';
+  try {
+    canvas.toBlob(async (blob) => {
+      if (!blob) {
+        showToast('No se pudo generar la imagen para el portapapeles.', 'error');
+        return;
+      }
+      try {
+        await navigator.clipboard.write([
+          new ClipboardItem({ 'image/png': blob })
+        ]);
+        showToast(`Boleta ${correlative} copiada al portapapeles. ¡Lista para pegar con Ctrl+V en WhatsApp!`, 'success');
+      } catch (err) {
+        console.warn('Clipboard write error:', err);
+        downloadReceiptPng();
+        showToast(`Portapapeles no disponible en este navegador. Se descargó el archivo PNG ${correlative}.`, 'info');
+      }
+    }, 'image/png');
+  } catch (e) {
+    showToast('Error al copiar al portapapeles: ' + e.message, 'error');
+  }
+}
+
+function printReceiptPdf() {
+  window.print();
+}
+
+function sendReceiptViaWhatsapp() {
+  if (!currentReceiptData) return;
+  const client = currentReceiptData.client;
+  const payment = currentReceiptData.payment;
+  const correlative = currentReceiptData.receipt_number || 'BOL-0001';
+  const amount = (parseFloat(payment.amount) || 0).toFixed(2);
+  const titular = client.owner_name || client.business_name || 'Estimado cliente';
+  const concept = payment.plan || 'Servicio MochilaLista';
+
+  const msg = `¡Hola, ${titular}! Te saluda el equipo de MochilaLista.\n\n` +
+    `Te hacemos entrega de tu *Boleta de Pago Oficial N.° ${correlative}* por el monto de *S/ ${amount}* correspondiente a *${concept}*.\n\n` +
+    `📌 Hemos adjuntado el comprobante digital para tu control contable.\n\n` +
+    `¡Muchas gracias por tu confianza y preferencia!`;
+
+  closeReceiptModal();
+  if (typeof openWaComposerForClient === 'function' && client.id) {
+    openWaComposerForClient(client.id, {
+      customMessage: msg,
+      templateKey: 'custom'
+    });
+  } else {
+    const phone = (client.phone || '').replace(/[^0-9]/g, '');
+    const url = `https://wa.me/${phone}?text=${encodeURIComponent(msg)}`;
+    window.open(url, '_blank');
+  }
+}
+
+async function saveReceiptDefaultDesign() {
+  const title = document.getElementById('rcInputTitle')?.value.trim() || 'BOLETA DE PAGO ADMINISTRATIVA';
+  const commercial = document.getElementById('rcInputCommercialName')?.value.trim() || 'MochilaLista';
+  const issuer = document.getElementById('rcInputIssuerName')?.value.trim() || 'Julio Angello Vasquez Navarro';
+  const issuerDoc = document.getElementById('rcInputIssuerDoc')?.value.trim() || 'D.N.I. / R.U.C. Registrado';
+  const issuerPhone = document.getElementById('rcInputIssuerPhone')?.value.trim() || '+51 922 836 879';
+  const issuerCity = document.getElementById('rcInputIssuerCity')?.value.trim() || 'Piura, Perú';
+  const showLogo = document.getElementById('rcCheckShowLogo')?.checked !== false;
+  const accentColor = document.getElementById('rcInputAccentColor')?.value || '#2563eb';
+  const footerNotes = document.getElementById('rcInputFooterNotes')?.value.trim() || '';
+  const signatureText = document.getElementById('rcInputSignature')?.value.trim() || '';
+
+  const newRc = {
+    title,
+    commercial_name: commercial,
+    issuer_name: issuer,
+    issuer_doc: issuerDoc,
+    issuer_phone: issuerPhone,
+    issuer_city: issuerCity,
+    show_logo: showLogo,
+    accent_color: accentColor,
+    footer_notes: footerNotes,
+    signature_text: signatureText,
+  };
+
+  try {
+    const cfgRes = await fetch('/api/config');
+    const currentCfg = cfgRes.ok ? await cfgRes.json() : {};
+    currentCfg.receipt_config = Object.assign({}, currentCfg.receipt_config || {}, newRc);
+
+    const saveRes = await fetch('/api/config', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(currentCfg),
+    });
+
+    if (!saveRes.ok) throw new Error('Error al guardar configuración');
+    const saved = await saveRes.json();
+    ownerConfig = saved;
+    if (currentReceiptData) {
+      currentReceiptData.receipt_config = saved.receipt_config;
+    }
+    showToast('Diseño de boleta guardado como predeterminado con éxito.', 'success');
+  } catch (e) {
+    showToast('Error al guardar diseño: ' + e.message, 'error');
+  }
+}
+
+function resetReceiptDefaultDesign() {
+  const defaultRc = {
+    title: 'BOLETA DE PAGO ADMINISTRATIVA',
+    commercial_name: 'MochilaLista',
+    issuer_name: 'Julio Angello Vasquez Navarro',
+    issuer_doc: 'D.N.I. / R.U.C. Registrado',
+    issuer_phone: '+51 922 836 879',
+    issuer_city: 'Piura, Perú',
+    show_logo: true,
+    accent_color: '#2563eb',
+    footer_notes: 'Software de Punto de Venta Offline. Comprobante de control administrativo y soporte técnico.',
+    signature_text: 'Administración Comercial — MochilaLista',
+  };
+  if (currentReceiptData) {
+    currentReceiptData.receipt_config = defaultRc;
+    populateReceiptUI(currentReceiptData);
+  }
+  showToast('Plantilla restablecida a valores de fábrica.', 'info');
+}
+
+function initReceiptModalEvents() {
+  const inputs = [
+    'rcInputTitle', 'rcInputCommercialName', 'rcInputIssuerName',
+    'rcInputIssuerDoc', 'rcInputIssuerPhone', 'rcInputIssuerCity',
+    'rcInputAccentColor', 'rcInputCustomNote', 'rcInputFooterNotes',
+    'rcInputSignature'
+  ];
+  inputs.forEach(id => {
+    document.getElementById(id)?.addEventListener('input', () => {
+      renderReceiptPreviewAndCanvas();
+    });
+  });
+
+  document.getElementById('rcCheckShowLogo')?.addEventListener('change', () => {
+    renderReceiptPreviewAndCanvas();
+  });
+
+  document.querySelectorAll('.rc-swatch').forEach(swatch => {
+    swatch.addEventListener('click', () => {
+      const col = swatch.getAttribute('data-color');
+      const inp = document.getElementById('rcInputAccentColor');
+      if (inp && col) {
+        inp.value = col;
+        renderReceiptPreviewAndCanvas();
+      }
+    });
+  });
+
+  document.getElementById('btnRcSaveDefault')?.addEventListener('click', saveReceiptDefaultDesign);
+  document.getElementById('btnRcResetDefault')?.addEventListener('click', resetReceiptDefaultDesign);
+  document.getElementById('btnRcDownloadPng')?.addEventListener('click', downloadReceiptPng);
+  document.getElementById('btnRcCopyClipboard')?.addEventListener('click', copyReceiptToClipboard);
+  document.getElementById('btnRcPrintPdf')?.addEventListener('click', printReceiptPdf);
+  document.getElementById('btnRcSendWhatsapp')?.addEventListener('click', sendReceiptViaWhatsapp);
+}
+
 function initDrawerEvents() {
   const dtabs = document.querySelectorAll('.drawer-tab-btn');
   dtabs.forEach(btn => {
@@ -1862,9 +3040,66 @@ function initDrawerEvents() {
       document.querySelectorAll('.drawer-tab-pane').forEach(p => p.classList.remove('active'));
 
       btn.classList.add('active');
+      currentDrawerTab = btn.dataset.dtab;
       const targetPane = document.getElementById(btn.dataset.dtab);
       if (targetPane) targetPane.classList.add('active');
     });
+  });
+
+  // Control inteligente de Ventana Updates en cambio de plan
+  document.getElementById('drawerEditPlanSelect')?.addEventListener('change', (e) => {
+    updateDrawerEditPlanFields(e.target.value);
+  });
+
+  // Edición rápida inline de Modelo Celular en pestaña Hardware
+  const btnEditModel = document.getElementById('btnDrawerEditModelInline');
+  const modelRow = document.getElementById('drawerHwModelRow');
+  const modelForm = document.getElementById('drawerHwModelInlineForm');
+  const modelInput = document.getElementById('inputDrawerModelInline');
+  const btnSaveModel = document.getElementById('btnSaveDrawerModelInline');
+  const btnCancelModel = document.getElementById('btnCancelDrawerModelInline');
+
+  btnEditModel?.addEventListener('click', () => {
+    const client = globalClients.find(c => c.id === currentDrawerClientId);
+    if (modelInput) modelInput.value = client?.device_model || '';
+    if (modelRow) modelRow.style.display = 'none';
+    if (modelForm) modelForm.style.display = 'flex';
+    modelInput?.focus();
+  });
+
+  btnCancelModel?.addEventListener('click', () => {
+    if (modelForm) modelForm.style.display = 'none';
+    if (modelRow) modelRow.style.display = 'flex';
+  });
+
+  btnSaveModel?.addEventListener('click', async () => {
+    if (!currentDrawerClientId || !modelInput) return;
+    const newModel = modelInput.value.trim();
+    try {
+      const res = await fetch(`/api/clients/${currentDrawerClientId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ device_model: newModel }),
+      });
+      if (!res.ok) throw new Error('Error al actualizar modelo');
+      const target = globalClients.find(c => c.id === currentDrawerClientId);
+      if (target) target.device_model = newModel;
+
+      const disp = document.getElementById('drawerHwModelDisplay');
+      if (disp) disp.textContent = newModel || 'No registrado';
+      const disp2 = document.getElementById('drawerDeviceModel');
+      if (disp2) disp2.textContent = newModel || 'No registrado';
+      const editInp = document.getElementById('drawerEditDeviceModel');
+      if (editInp) editInp.value = newModel;
+
+      if (modelForm) modelForm.style.display = 'none';
+      if (modelRow) modelRow.style.display = 'flex';
+      showToast('Modelo de celular actualizado.', 'success');
+      await loadClients();
+      await loadDashboard();
+    } catch (err) {
+      showToast('Error: ' + err.message, 'error');
+    }
   });
 
   document.getElementById('formDrawerEditClient')?.addEventListener('submit', async (e) => {
@@ -1922,6 +3157,7 @@ function initDrawerEvents() {
   document.getElementById('btnDrawerEmitLicense')?.addEventListener('click', () => {
     if (!currentDrawerClientId) return;
     const cid = currentDrawerClientId;
+    drawerReturnState = null;
     closeClient360Drawer();
     selectClientForLicense(cid);
   });
@@ -1929,7 +3165,6 @@ function initDrawerEvents() {
   document.getElementById('btnDrawerMigrateDev')?.addEventListener('click', () => {
     if (!currentDrawerClientId) return;
     const cid = currentDrawerClientId;
-    closeClient360Drawer();
     openMigrateModal(cid);
   });
 
@@ -1971,17 +3206,37 @@ function initDrawerEvents() {
         throw new Error(errData.error || 'Error al sincronizar datos reportados');
       }
 
-      closeModal('modalSyncReported');
-      showToast('Datos del celular sincronizados con éxito.', 'success');
       await loadClients();
       await loadDashboard();
-      if (currentDrawerClientId === clientId) {
-        openClient360Drawer(clientId, 'drawerTabOverview');
-      }
+      closeModal('modalSyncReported');
+      showToast('Datos del celular sincronizados con éxito.', 'success');
     } catch (e) {
       showToast('Error: ' + e.message, 'error');
     }
   });
+
+  // Bidireccionalidad reactiva en Modal Sincronizar Datos Reportados
+  const syncDaysInput = document.getElementById('syncRepTrialDays');
+  const syncExpInput = document.getElementById('syncRepExpires');
+  if (syncDaysInput && syncExpInput) {
+    syncDaysInput.addEventListener('input', () => {
+      const days = parseInt(syncDaysInput.value);
+      if (!isNaN(days) && days >= 0) {
+        const d = new Date();
+        d.setDate(d.getDate() + days);
+        syncExpInput.value = d.toISOString().substring(0, 10);
+      }
+    });
+    syncExpInput.addEventListener('change', () => {
+      if (syncExpInput.value) {
+        const target = new Date(syncExpInput.value + 'T00:00:00');
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const diff = Math.max(0, Math.ceil((target - today) / (1000 * 60 * 60 * 24)));
+        syncDaysInput.value = diff;
+      }
+    });
+  }
 }
 
 async function openClient360Drawer(clientId) {
@@ -1992,6 +3247,7 @@ async function openClient360Drawer(clientId) {
 
   // Activar pestaña solicitada de inmediato (con soporte para alias drawerTabSummary)
   const targetTabId = (initialTab === 'drawerTabSummary') ? 'drawerTabOverview' : initialTab;
+  currentDrawerTab = targetTabId;
   const dtabs = document.querySelectorAll('.drawer-tab-btn');
   dtabs.forEach(b => {
     if (b.dataset.dtab === targetTabId) {
@@ -2014,45 +3270,33 @@ async function openClient360Drawer(clientId) {
   document.getElementById('drawerDeviceId').textContent = client.current_device_id || 'PENDIENTE';
 
   const statusBadge = document.getElementById('drawerStatusBadge');
-  const plan = (client.license_type || 'MENSUAL').toUpperCase();
-  const status = (client.license_status || '').toUpperCase();
-  const isProspect = plan === 'PROSPECTO' || status === 'PROSPECTO';
-  const isTrial = plan === 'TRIAL';
-  const isPerp = plan === 'PERPETUO_LIBERADO' || plan === 'PERPETUO';
-  const now = new Date();
-  const expDate = client.license_expires ? new Date(client.license_expires) : null;
-  const diffDays = expDate ? Math.ceil((expDate - now) / (1000 * 60 * 60 * 24)) : 999;
-
-  if (isProspect) {
-    statusBadge.className = 'badge badge-prospect';
-    statusBadge.textContent = 'Prospecto';
-  } else if (isTrial) {
-    statusBadge.className = 'badge badge-yellow';
-    const trialDays = client.trial_days_remaining !== undefined && client.trial_days_remaining !== null
-      ? client.trial_days_remaining
-      : (diffDays >= 0 ? diffDays : 0);
-    statusBadge.textContent = `Trial (${trialDays}d)`;
-  } else if (isPerp) {
-    statusBadge.className = 'badge badge-purple';
-    statusBadge.textContent = 'Perpetua';
-  } else if (diffDays < 0) {
-    statusBadge.className = 'badge badge-red';
-    statusBadge.textContent = 'Vencida';
-  } else if (diffDays <= 7) {
-    statusBadge.className = 'badge badge-yellow';
-    statusBadge.textContent = `Vence en ${diffDays}d`;
-  } else {
-    statusBadge.className = 'badge badge-green';
-    statusBadge.textContent = 'Activa';
+  const badgeInfo = getClientStatusBadge(client, { asObject: true });
+  if (statusBadge) {
+    statusBadge.className = badgeInfo.className;
+    statusBadge.textContent = badgeInfo.text;
   }
+  const isProspect = badgeInfo.isProspect;
+  const isTrial = badgeInfo.isTrial;
+  const isPerp = badgeInfo.isPerp;
+  const plan = (client.license_type || 'MENSUAL').toUpperCase();
 
   // Pestaña 1: Resumen y Licencia
   document.getElementById('drawerKpiPlan').textContent = isProspect ? 'PROSPECTO' : plan.replace(/_/g, ' ');
   document.getElementById('drawerKpiExpires').textContent = isProspect
     ? (client.expected_subscription_date ? `Seguimiento: ${client.expected_subscription_date}` : 'Sin vencimiento')
     : (isPerp ? 'De por Vida' : (client.license_expires ? client.license_expires.substring(0, 10) : 'Sin fecha'));
-  document.getElementById('drawerKpiAiCredits').textContent = `+${client.ai_extra_credits || 0} IA`;
-  document.getElementById('drawerKpiVersion').textContent = `v${client.installed_version || '9.34.0'}`;
+
+  const realAi = (client.ai_reported_balance !== undefined && client.ai_reported_balance !== null)
+    ? client.ai_reported_balance
+    : (client.ai_accumulated_credits ?? client.ai_extra_credits ?? 0);
+  const pendingAi = client.ai_pending_bonus || 0;
+
+  if (isTrial || client.ai_reported_balance !== undefined) {
+    document.getElementById('drawerKpiAiCredits').textContent = `${realAi} IA`;
+  } else {
+    document.getElementById('drawerKpiAiCredits').textContent = (client.ai_extra_credits || 0) > 0 ? `+${client.ai_extra_credits} IA` : '0 IA';
+  }
+  document.getElementById('drawerKpiVersion').textContent = `v${client.installed_version || '9.35.0'}`;
   
   const drawerKpiUpdates = document.getElementById('drawerBoxUpdates')?.querySelector('.drawer-kpi-val') || document.getElementById('drawerKpiUpdates');
   if (drawerKpiUpdates) {
@@ -2071,7 +3315,7 @@ async function openClient360Drawer(clientId) {
   }
   const drawerAiBreakdown = document.getElementById('drawerAiBreakdown');
   if (drawerAiBreakdown) {
-    drawerAiBreakdown.textContent = `Reportado: ${client.ai_reported_balance || 0} IA | Bono: +${client.ai_pending_bonus || 0} IA`;
+    drawerAiBreakdown.textContent = `En celular: ${realAi} IA | Bono pendiente: +${pendingAi} IA`;
   }
   document.getElementById('drawerNotes').textContent = client.notes || 'Sin observaciones registradas.';
 
@@ -2095,7 +3339,7 @@ async function openClient360Drawer(clientId) {
     } else {
       badgeHtml = '<span class="badge badge-green" style="font-size:0.68rem; padding:1px 6px; margin-left:4px;">Al día</span>';
     }
-    drawerHwVersionDisplay.innerHTML = `<code>v${escapeHtml(client.installed_version || '9.34.0')}</code> ${badgeHtml}`;
+    drawerHwVersionDisplay.innerHTML = `<code>v${escapeHtml(client.installed_version || '9.35.0')}</code> ${badgeHtml}`;
   }
   const drawerHwNonceDisplay = document.getElementById('drawerHwNonceDisplay');
   if (drawerHwNonceDisplay) {
@@ -2117,7 +3361,8 @@ async function openClient360Drawer(clientId) {
   if (editDevModel) editDevModel.value = client.device_model || '';
   const editPlanSel = document.getElementById('drawerEditPlanSelect');
   if (editPlanSel) editPlanSel.value = client.license_type || 'MENSUAL';
-  document.getElementById('drawerEditInstalledVersion').value = client.installed_version || '9.34.0';
+  updateDrawerEditPlanFields(client.license_type);
+  document.getElementById('drawerEditInstalledVersion').value = client.installed_version || '9.35.0';
   const editExpires = document.getElementById('drawerEditExpires');
   if (editExpires) editExpires.value = client.license_expires ? client.license_expires.substring(0, 10) : '';
   const editUpdates = document.getElementById('drawerEditUpdates');
@@ -2133,15 +3378,15 @@ async function openClient360Drawer(clientId) {
     if (res.ok) {
       const history = await res.json();
 
-      // --- PESTAÑA 3: PAGOS & FINANZAS ---
+      // --- PESTAÑA 3: PAGOS & FINANZAS (Tarjetas Compactas - Cero Scroll Horizontal) ---
       let totalPaid = 0;
       const methodCounts = {};
       let lastDate = '-';
       const paymentsBody = document.getElementById('drawerPaymentsBody');
-      paymentsBody.innerHTML = '';
+      if (paymentsBody) paymentsBody.innerHTML = '';
 
       const payments = history.payments || [];
-      if (payments.length > 0) {
+      if (payments.length > 0 && paymentsBody) {
         payments.forEach(p => {
           const amt = parseFloat(p.amount) || 0;
           totalPaid += amt;
@@ -2152,27 +3397,47 @@ async function openClient360Drawer(clientId) {
             lastDate = pDate;
           }
 
-          const tr = document.createElement('tr');
-          const safePaymentJson = JSON.stringify(p).replace(/'/g, '&#39;');
-          tr.innerHTML = `
-            <td>${pDate}</td>
-            <td><span class="badge badge-mono">${escapeHtml(p.plan || '-')}</span></td>
-            <td><strong style="color:var(--success);">S/ ${amt.toFixed(2)}</strong></td>
-            <td>${escapeHtml(p.method || '-')}</td>
-            <td>${escapeHtml(p.reference || '-')}</td>
-            <td style="text-align: center; white-space: nowrap;">
-              <button type="button" class="btn-table-action" title="Editar Pago" onclick='openEditPaymentModal("${clientId}", ${safePaymentJson})'>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" style="width:13px; height:13px;"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+          const card = document.createElement('div');
+          card.className = 'drawer-payment-card';
+          card.innerHTML = `
+            <div class="dpc-row-top">
+              <div class="dpc-concept-wrap">
+                <span class="dpc-date">${escapeHtml(pDate)}</span>
+                <span class="badge badge-mono">${escapeHtml(p.plan || '-')}</span>
+              </div>
+              <div class="dpc-amount">S/ ${amt.toFixed(2)}</div>
+            </div>
+            <div class="dpc-row-mid">
+              <span class="dpc-method">${escapeHtml(p.method || 'Medio no esp.')}</span>
+              <span class="dpc-ref">${escapeHtml(p.reference || p.notes || '-')}</span>
+            </div>
+            <div class="dpc-row-actions">
+              <button type="button" class="btn btn-outline btn-xs btn-pay-receipt" title="Emitir Boleta de Pago">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" style="width:12px; height:12px; margin-right:3px;"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+                Boleta
               </button>
-              <button type="button" class="btn-table-action danger" title="Eliminar Pago" onclick='confirmDeletePayment("${clientId}", "${p.id}")'>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" style="width:13px; height:13px;"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+              <button type="button" class="btn btn-outline btn-xs btn-pay-edit" title="Editar Pago">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" style="width:12px; height:12px; margin-right:3px;"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                Editar
               </button>
-            </td>
+              <button type="button" class="btn btn-outline btn-xs btn-action-danger btn-pay-delete" title="Eliminar Pago">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" style="width:12px; height:12px; margin-right:3px;"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                Eliminar
+              </button>
+            </div>
           `;
-          paymentsBody.appendChild(tr);
+
+          card.querySelector('.btn-pay-receipt').onclick = () => openPaymentReceiptModal(clientId, p.id);
+          card.querySelector('.btn-pay-edit').onclick = () => openEditPaymentModal(clientId, p);
+          card.querySelector('.btn-pay-delete').onclick = () => confirmDeletePayment(clientId, p.id);
+          paymentsBody.appendChild(card);
         });
-      } else {
-        paymentsBody.innerHTML = '<tr><td colspan="6" style="text-align:center; color:var(--text-muted); padding:1rem;">Sin pagos registrados</td></tr>';
+      } else if (paymentsBody) {
+        paymentsBody.innerHTML = `
+          <div class="drawer-payment-card" style="text-align:center; padding:1.5rem; color:var(--text-muted); font-size:0.85rem;">
+            Sin pagos registrados para este cliente.
+          </div>
+        `;
       }
 
       // Calcular medio más frecuente
@@ -2209,41 +3474,70 @@ async function openClient360Drawer(clientId) {
         if (emptyState) emptyState.style.display = 'none';
         if (qrContent) qrContent.style.display = 'flex';
 
-        const renderSelectedDrawerLicense = (selectedCode) => {
+        const renderSelectedDrawerLicense = (selectedCode, selectedIdx) => {
           const token = selectedCode.token;
           document.getElementById('drawerCodeDisplay').textContent = token;
           renderSafeQrCode('drawerQrContainer', token, 196);
 
-          // Metadatos
+          // Metadatos precisos sin desincronización (Directo del objeto emitido)
           const metaPlan = document.getElementById('drawerQrMetaPlan');
-          if (metaPlan) metaPlan.textContent = selectedCode.plan || client.license_type || 'MENSUAL';
+          if (metaPlan) metaPlan.textContent = (selectedCode.plan || client.license_type || 'MENSUAL').replace(/_/g, ' ');
+
+          const codeDate = selectedCode.created_at || selectedCode.emitted_at;
           const metaEmitted = document.getElementById('drawerQrMetaEmitted');
-          if (metaEmitted) metaEmitted.textContent = selectedCode.created_at ? selectedCode.created_at.substring(0, 10) : '-';
+          if (metaEmitted) metaEmitted.textContent = codeDate ? codeDate.substring(0, 10) : '-';
+
+          const codeExp = selectedCode.expires_at || selectedCode.expires_result;
           const metaExpires = document.getElementById('drawerQrMetaExpires');
-          if (metaExpires) metaExpires.textContent = selectedCode.expires_at ? selectedCode.expires_at.substring(0, 10) : (client.license_expires ? client.license_expires.substring(0, 10) : 'Activa');
+          if (metaExpires) metaExpires.textContent = codeExp ? codeExp.substring(0, 10) : (client.license_expires ? client.license_expires.substring(0, 10) : 'Activa');
+
+          const codeNonce = selectedCode.nonce ?? selectedCode.n ?? (selectedIdx !== undefined ? selectedIdx + 1 : (codes.indexOf(selectedCode) + 1));
           const metaNonce = document.getElementById('drawerQrMetaNonce');
-          if (metaNonce) metaNonce.textContent = selectedCode.nonce || client.next_nonce || 1;
+          if (metaNonce) metaNonce.textContent = codeNonce;
+
+          const codeAi = selectedCode.ai_credits ?? selectedCode.total_ai_credited ?? selectedCode.base_ai_credits ?? 0;
           const metaAi = document.getElementById('drawerQrMetaAi');
-          if (metaAi) metaAi.textContent = `+${selectedCode.ai_credits ?? client.ai_extra_credits ?? 0} IA`;
+          if (metaAi) metaAi.textContent = `+${codeAi} IA`;
+
           const metaDevice = document.getElementById('drawerQrMetaDevice');
           if (metaDevice) metaDevice.textContent = selectedCode.device_id || client.current_device_id || '-';
 
-          // 5 Botones Vectoriales
+          // Botones de acción en QR & Credencial
           document.getElementById('btnDrawerCopyCode').onclick = () => {
             navigator.clipboard.writeText(token).then(() => showToast('¡Código copiado al portapapeles!', 'success'));
           };
 
-          document.getElementById('btnDrawerDownloadQr').onclick = () => {
-            const qrBox = document.getElementById('drawerQrContainer');
-            const qrCanvas = qrBox?.querySelector('canvas') || qrBox?.querySelector('img');
-            if (qrCanvas) {
-              const a = document.createElement('a');
-              a.download = `QR_${client.current_device_id}_N${selectedCode.nonce || 1}.png`;
-              a.href = qrCanvas.toDataURL ? qrCanvas.toDataURL('image/png') : qrCanvas.src;
-              a.click();
-              showToast('QR descargado correctamente.', 'success');
-            }
-          };
+          const btnCopyCred = document.getElementById('btnDrawerCopyCredential');
+          if (btnCopyCred) {
+            btnCopyCred.onclick = () => {
+              renderCredentialCanvas({
+                token: selectedCode.token,
+                plan: selectedCode.plan || client.license_type,
+                device_id: selectedCode.device_id || client.current_device_id,
+                days_added: selectedCode.days_added,
+                expires_result: selectedCode.expires_at || selectedCode.expires_result || client.license_expires,
+                client: client,
+              }, client, 'historyCredentialCanvas', 'drawerQrContainer');
+
+              const canvas = document.getElementById('historyCredentialCanvas');
+              if (canvas && canvas.toBlob) {
+                canvas.toBlob(async (blob) => {
+                  if (!blob) {
+                    showToast('Error al generar imagen de la credencial', 'error');
+                    return;
+                  }
+                  try {
+                    await navigator.clipboard.write([
+                      new ClipboardItem({ 'image/png': blob })
+                    ]);
+                    showToast('¡Imagen de la credencial copiada! Pégala en WhatsApp con Ctrl+V.', 'success');
+                  } catch (err) {
+                    showToast('Tu navegador no permite copiar imágenes al portapapeles. Usa "Descargar Tarjeta".', 'warning');
+                  }
+                }, 'image/png');
+              }
+            };
+          }
 
           document.getElementById('btnDrawerDownloadCredential').onclick = () => {
             renderCredentialCanvas({
@@ -2251,7 +3545,7 @@ async function openClient360Drawer(clientId) {
               plan: selectedCode.plan || client.license_type,
               device_id: selectedCode.device_id || client.current_device_id,
               days_added: selectedCode.days_added,
-              expires_result: selectedCode.expires_at || client.license_expires,
+              expires_result: selectedCode.expires_at || selectedCode.expires_result || client.license_expires,
               client: client,
             }, client, 'historyCredentialCanvas', 'drawerQrContainer');
 
@@ -2266,6 +3560,18 @@ async function openClient360Drawer(clientId) {
             }
           };
 
+          document.getElementById('btnDrawerDownloadQr').onclick = () => {
+            const qrBox = document.getElementById('drawerQrContainer');
+            const qrCanvas = qrBox?.querySelector('canvas') || qrBox?.querySelector('img');
+            if (qrCanvas) {
+              const a = document.createElement('a');
+              a.download = `QR_${client.current_device_id}_N${codeNonce}.png`;
+              a.href = qrCanvas.toDataURL ? qrCanvas.toDataURL('image/png') : qrCanvas.src;
+              a.click();
+              showToast('QR descargado correctamente.', 'success');
+            }
+          };
+
           document.getElementById('btnDrawerAuditInspector').onclick = () => {
             auditTokenInInspector(token);
           };
@@ -2273,24 +3579,38 @@ async function openClient360Drawer(clientId) {
           document.getElementById('btnDrawerSendWa').onclick = () => {
             openWhatsAppComposer(client.id, 'license');
           };
+
+          const btnQrNew = document.getElementById('btnDrawerQrNewLicense');
+          if (btnQrNew) {
+            btnQrNew.onclick = () => {
+              drawerReturnState = null;
+              closeClient360Drawer();
+              selectClientForLicense(client.id);
+            };
+          }
         };
 
-        // Configurar selector histórico si hay más de 1
+        // Configurar selector histórico ordenado de la más reciente a la más antigua
         if (codes.length > 1) {
           if (selectorContainer) selectorContainer.style.display = 'block';
           if (codeSelector) {
             codeSelector.innerHTML = '';
-            codes.forEach((c, idx) => {
+            const reversed = codes.map((c, originalIdx) => ({ c, originalIdx })).reverse();
+            reversed.forEach(({ c, originalIdx }) => {
               const opt = document.createElement('option');
-              opt.value = idx;
-              const cDate = c.created_at ? c.created_at.substring(0, 10) : '';
-              opt.textContent = `${c.plan || 'LICENCIA'} • Nonce #${c.nonce || 1} • ${cDate}`;
-              if (idx === codes.length - 1) opt.selected = true;
+              opt.value = originalIdx;
+              const cDate = (c.created_at || c.emitted_at) ? (c.created_at || c.emitted_at).substring(0, 10) : '';
+              const nonceVal = c.nonce ?? c.n ?? (originalIdx + 1);
+              const isLatest = (originalIdx === codes.length - 1);
+              const vigTag = isLatest ? ' [Vigente]' : '';
+              const planName = (c.plan || 'LICENCIA').replace(/_/g, ' ');
+              opt.textContent = `${planName} • Nonce #${nonceVal} • ${cDate}${vigTag}`;
+              if (isLatest) opt.selected = true;
               codeSelector.appendChild(opt);
             });
             codeSelector.onchange = () => {
               const selectedIdx = parseInt(codeSelector.value);
-              if (codes[selectedIdx]) renderSelectedDrawerLicense(codes[selectedIdx]);
+              if (codes[selectedIdx]) renderSelectedDrawerLicense(codes[selectedIdx], selectedIdx);
             };
           }
         } else {
@@ -2298,27 +3618,79 @@ async function openClient360Drawer(clientId) {
         }
 
         // Renderizar la última licencia por defecto
-        renderSelectedDrawerLicense(codes[codes.length - 1]);
+        renderSelectedDrawerLicense(codes[codes.length - 1], codes.length - 1);
       }
 
-      // --- PESTAÑA 4: HARDWARE & MIGRACIONES ---
+      // --- PESTAÑA 4: HARDWARE & MIGRACIONES (Edición interactiva de Motivo) ---
       const hwBody = document.getElementById('drawerHardwareBody');
-      hwBody.innerHTML = '';
-      const migrations = history.device_history || history.hardware || [];
-      if (migrations && migrations.length > 0) {
-        migrations.forEach(h => {
-          const tr = document.createElement('tr');
-          tr.innerHTML = `
-            <td>${h.migrated_at ? h.migrated_at.substring(0, 10) : '-'}</td>
-            <td><code style="font-family:var(--font-mono);">${escapeHtml(h.old_device_id)}</code></td>
-            <td><strong style="font-family:var(--font-mono); color:var(--primary);">${escapeHtml(h.new_device_id)}</strong></td>
-            <td>S/ ${(h.fee_amount || h.fee_charged || 0).toFixed(2)}</td>
-            <td>${escapeHtml(h.reason || '-')}</td>
-          `;
-          hwBody.appendChild(tr);
-        });
-      } else {
-        hwBody.innerHTML = '<tr><td colspan="5" style="text-align:center; color:var(--text-muted); padding:1rem;">Sin migraciones registradas.</td></tr>';
+      if (hwBody) {
+        hwBody.innerHTML = '';
+        const migrations = history.device_history || history.hardware || [];
+        if (migrations && migrations.length > 0) {
+          migrations.forEach((h, hIdx) => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+              <td>${h.migrated_at ? h.migrated_at.substring(0, 10) : '-'}</td>
+              <td><code style="font-family:var(--font-mono); font-size:0.78rem;">${escapeHtml(h.old_device_id)}</code></td>
+              <td><strong style="font-family:var(--font-mono); color:var(--primary); font-size:0.78rem;">${escapeHtml(h.new_device_id)}</strong></td>
+              <td>S/ ${(h.fee_amount || h.fee_charged || 0).toFixed(2)}</td>
+              <td class="mig-reason-cell">
+                <div class="reason-display-wrap" style="display:flex; align-items:center; justify-content:space-between; gap:0.35rem;">
+                  <span class="reason-text" style="font-size:0.8rem;">${escapeHtml(h.reason || '-')}</span>
+                  <button type="button" class="btn-micro btn-edit-reason" title="Editar motivo de migración">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" style="width:11px; height:11px;"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                  </button>
+                </div>
+                <div class="reason-edit-wrap" style="display:none; align-items:center; gap:0.25rem;">
+                  <input type="text" class="form-control reason-input" style="font-size:0.75rem; padding:2px 4px; height:24px; min-width:120px;" value="${escapeHtml(h.reason || '')}">
+                  <button type="button" class="btn btn-primary btn-xs btn-save-reason" style="padding:2px 5px;">✓</button>
+                  <button type="button" class="btn btn-outline btn-xs btn-cancel-reason" style="padding:2px 5px;">✕</button>
+                </div>
+              </td>
+            `;
+
+            const dispWrap = tr.querySelector('.reason-display-wrap');
+            const editWrap = tr.querySelector('.reason-edit-wrap');
+            const btnEditReason = tr.querySelector('.btn-edit-reason');
+            const btnCancelReason = tr.querySelector('.btn-cancel-reason');
+            const btnSaveReason = tr.querySelector('.btn-save-reason');
+            const inputReason = tr.querySelector('.reason-input');
+
+            btnEditReason.onclick = () => {
+              dispWrap.style.display = 'none';
+              editWrap.style.display = 'flex';
+              inputReason.focus();
+            };
+
+            btnCancelReason.onclick = () => {
+              editWrap.style.display = 'none';
+              dispWrap.style.display = 'flex';
+            };
+
+            btnSaveReason.onclick = async () => {
+              const newReason = inputReason.value.trim();
+              try {
+                const updateRes = await fetch(`/api/clients/${clientId}/device-history/${hIdx}`, {
+                  method: 'PUT',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ reason: newReason }),
+                });
+                if (!updateRes.ok) throw new Error('Error al actualizar motivo');
+                h.reason = newReason;
+                tr.querySelector('.reason-text').textContent = newReason || '-';
+                editWrap.style.display = 'none';
+                dispWrap.style.display = 'flex';
+                showToast('Motivo de migración actualizado con éxito.', 'success');
+              } catch (err) {
+                showToast('Error: ' + err.message, 'error');
+              }
+            };
+
+            hwBody.appendChild(tr);
+          });
+        } else {
+          hwBody.innerHTML = '<tr><td colspan="5" style="text-align:center; color:var(--text-muted); padding:1rem;">Sin migraciones registradas.</td></tr>';
+        }
       }
     }
   } catch (err) {
@@ -2330,6 +3702,7 @@ async function openClient360Drawer(clientId) {
 }
 
 function closeClient360Drawer() {
+  drawerReturnState = null;
   document.getElementById('drawerClient360Backdrop')?.classList.remove('open');
   document.getElementById('drawerClient360')?.classList.remove('open');
   currentDrawerClientId = null;
@@ -2340,6 +3713,7 @@ function closeClient360Drawer() {
  */
 function deleteClientFromDrawer() {
   if (!currentDrawerClientId) return;
+  drawerReturnState = null;
   const clientId = currentDrawerClientId;
   const client = globalClients.find(c => c.id === clientId);
   const name = client ? client.business_name : clientId;
@@ -2371,6 +3745,9 @@ function deleteClientFromDrawer() {
 /**
  * Apertura de Modal para Registrar Pago Manual
  */
+/**
+ * Apertura de Modal para Registrar Pago Manual (Fase 5)
+ */
 function openAddPaymentModal(clientId) {
   const client = globalClients.find(c => c.id === clientId);
   if (!client) return;
@@ -2378,33 +3755,132 @@ function openAddPaymentModal(clientId) {
   const payId = document.getElementById('manualPayId');
   if (payId) payId.value = '';
   const payTitle = document.getElementById('manualPayTitle');
-  if (payTitle) payTitle.textContent = 'Registrar Pago Manual';
+  if (payTitle) payTitle.textContent = 'Registrar Pago';
+
+  // Resumen del Cliente en Cabecera
+  const bizEl = document.getElementById('manualPayBizName');
+  if (bizEl) bizEl.textContent = client.business_name || 'Sin negocio';
+  const ownerEl = document.getElementById('manualPayOwnerName');
+  if (ownerEl) ownerEl.textContent = client.owner_name || 'Sin propietario';
+  const devEl = document.getElementById('manualPayDevId');
+  if (devEl) devEl.textContent = client.current_device_id || '-';
+  const statusBadge = document.getElementById('manualPayStatusBadge');
+  if (statusBadge) {
+    statusBadge.outerHTML = `<span id="manualPayStatusBadge">${getClientStatusBadge(client)}</span>`;
+  }
+  const expEl = document.getElementById('manualPayExpiresText');
+  if (expEl) expEl.textContent = client.license_expires ? client.license_expires.substring(0, 10) : 'No configurada';
+
+  // Total recaudado
+  let totalPaid = 0;
+  if (Array.isArray(client.payment_history)) {
+    client.payment_history.forEach(p => totalPaid += (parseFloat(p.amount) || 0));
+  }
+  const totalPaidEl = document.getElementById('manualPayTotalPaid');
+  if (totalPaidEl) totalPaidEl.textContent = `S/ ${totalPaid.toFixed(2)}`;
+
   const payDate = document.getElementById('manualPayDate');
   if (payDate) payDate.value = new Date().toISOString().substring(0, 10);
-  document.getElementById('manualPayAmount').value = '35.00';
+
+  // Preset inteligente
+  const presetSel = document.getElementById('manualPayPlanPreset');
+  const customConcept = document.getElementById('manualPayCustomConcept');
+  if (presetSel) {
+    presetSel.value = 'Renovación Mensual';
+    if (customConcept) {
+      customConcept.value = '';
+      customConcept.style.display = 'none';
+    }
+  }
+
+  const defaultPrice = ownerConfig?.catalog?.['MENSUAL']?.price ?? 35.0;
+  document.getElementById('manualPayAmount').value = defaultPrice.toFixed(2);
   document.getElementById('manualPayPlan').value = 'Renovación Mensual';
   document.getElementById('manualPayMethod').value = 'Yape';
   document.getElementById('manualPayRef').value = '';
   document.getElementById('manualPayNotes').value = '';
+
+  const genReceiptChk = document.getElementById('manualPayGenerateReceipt');
+  if (genReceiptChk) genReceiptChk.checked = true;
+
   openModal('modalManualPayment');
 }
+
+const openManualPaymentModal = openAddPaymentModal;
 
 /**
  * Apertura de Modal para Editar Pago Registrado
  */
 function openEditPaymentModal(clientId, payment) {
+  const client = globalClients.find(c => c.id === clientId);
   document.getElementById('manualPayClientId').value = clientId;
   const payId = document.getElementById('manualPayId');
   if (payId) payId.value = payment.id || '';
   const payTitle = document.getElementById('manualPayTitle');
   if (payTitle) payTitle.textContent = 'Editar Pago Registrado';
+
+  // Resumen del Cliente en Cabecera
+  if (client) {
+    const bizEl = document.getElementById('manualPayBizName');
+    if (bizEl) bizEl.textContent = client.business_name || 'Sin negocio';
+    const ownerEl = document.getElementById('manualPayOwnerName');
+    if (ownerEl) ownerEl.textContent = client.owner_name || 'Sin propietario';
+    const devEl = document.getElementById('manualPayDevId');
+    if (devEl) devEl.textContent = client.current_device_id || '-';
+    const statusBadge = document.getElementById('manualPayStatusBadge');
+    if (statusBadge) {
+      statusBadge.outerHTML = `<span id="manualPayStatusBadge">${getClientStatusBadge(client)}</span>`;
+    }
+    const expEl = document.getElementById('manualPayExpiresText');
+    if (expEl) expEl.textContent = client.license_expires ? client.license_expires.substring(0, 10) : 'No configurada';
+
+    let totalPaid = 0;
+    if (Array.isArray(client.payment_history)) {
+      client.payment_history.forEach(p => totalPaid += (parseFloat(p.amount) || 0));
+    }
+    const totalPaidEl = document.getElementById('manualPayTotalPaid');
+    if (totalPaidEl) totalPaidEl.textContent = `S/ ${totalPaid.toFixed(2)}`;
+  }
+
   const payDate = document.getElementById('manualPayDate');
   if (payDate) payDate.value = payment.date ? payment.date.substring(0, 10) : new Date().toISOString().substring(0, 10);
   document.getElementById('manualPayAmount').value = payment.amount || 0;
-  document.getElementById('manualPayPlan').value = payment.plan || '';
+
+  // Matching preset o fallback a CUSTOM preservando concepto original
+  const presetSel = document.getElementById('manualPayPlanPreset');
+  const customConcept = document.getElementById('manualPayCustomConcept');
+  const planVal = payment.plan || '';
+  let matched = false;
+  if (presetSel) {
+    for (const opt of presetSel.options) {
+      if (opt.value !== 'CUSTOM' && (opt.value === planVal || planVal.toLowerCase() === opt.value.toLowerCase())) {
+        presetSel.value = opt.value;
+        matched = true;
+        break;
+      }
+    }
+    if (!matched) {
+      presetSel.value = 'CUSTOM';
+      if (customConcept) {
+        customConcept.value = planVal;
+        customConcept.style.display = 'block';
+      }
+    } else {
+      if (customConcept) {
+        customConcept.value = '';
+        customConcept.style.display = 'none';
+      }
+    }
+  }
+
+  document.getElementById('manualPayPlan').value = planVal;
   document.getElementById('manualPayMethod').value = payment.method || 'Yape';
   document.getElementById('manualPayRef').value = payment.reference || '';
   document.getElementById('manualPayNotes').value = payment.notes || '';
+
+  const genReceiptChk = document.getElementById('manualPayGenerateReceipt');
+  if (genReceiptChk) genReceiptChk.checked = false;
+
   openModal('modalManualPayment');
 }
 
@@ -2449,11 +3925,35 @@ function openSyncReportedModal(clientId) {
   const client = globalClients.find(c => c.id === clientId);
   if (!client) return;
   document.getElementById('syncRepClientId').value = clientId;
+
+  const bizEl = document.getElementById('syncRepBizName');
+  if (bizEl) bizEl.textContent = client.business_name || 'Sin negocio';
+  const ownerEl = document.getElementById('syncRepOwnerName');
+  if (ownerEl) ownerEl.textContent = client.owner_name || 'Sin titular';
+  const devEl = document.getElementById('syncRepCurrentDevId');
+  if (devEl) devEl.textContent = (client.current_device_id && client.current_device_id !== 'PENDIENTE') ? client.current_device_id : 'PENDIENTE';
+
+  const badgeEl = document.getElementById('syncRepStatusBadge');
+  if (badgeEl) {
+    const badgeInfo = getClientStatusBadge(client, { asObject: true });
+    badgeEl.className = badgeInfo.className;
+    badgeEl.textContent = badgeInfo.text;
+  }
+
   document.getElementById('syncRepDeviceId').value = (client.current_device_id && client.current_device_id !== 'PENDIENTE') ? client.current_device_id : '';
   document.getElementById('syncRepDeviceModel').value = client.device_model || '';
   document.getElementById('syncRepVersion').value = client.installed_version || '';
   document.getElementById('syncRepAiBalance').value = client.ai_reported_balance || 0;
-  document.getElementById('syncRepTrialDays').value = (client.trial_days_remaining !== undefined && client.trial_days_remaining !== null) ? client.trial_days_remaining : '';
+
+  let trialDaysVal = '';
+  if (client.trial_days_remaining !== undefined && client.trial_days_remaining !== null) {
+    trialDaysVal = client.trial_days_remaining;
+  } else if (client.license_expires) {
+    const expD = new Date(client.license_expires);
+    const nowD = new Date();
+    trialDaysVal = Math.max(0, Math.ceil((expD - nowD) / (1000 * 60 * 60 * 24)));
+  }
+  document.getElementById('syncRepTrialDays').value = trialDaysVal;
   document.getElementById('syncRepExpires').value = client.license_expires ? client.license_expires.substring(0, 10) : '';
   document.getElementById('syncRepNotes').value = '';
   openModal('modalSyncReported');
@@ -2463,6 +3963,7 @@ function openSyncReportedModal(clientId) {
  * Transferir token al Inspector Forense de inmediato
  */
 function auditTokenInInspector(token) {
+  drawerReturnState = null;
   closeClient360Drawer();
   const tabs = document.querySelectorAll('.nav-tab');
   tabs.forEach(t => t.classList.remove('active'));
@@ -2511,6 +4012,8 @@ const WA_TEMPLATES = {
   }
 };
 
+const DEFAULT_WA_TEMPLATES = JSON.parse(JSON.stringify(WA_TEMPLATES));
+
 function formatPlanLabel(plan) {
   if (!plan) return 'MENSUAL';
   const p = plan.toUpperCase();
@@ -2546,32 +4049,16 @@ async function openWhatsAppComposer(clientId, defaultTemplateKey = null) {
   if (ownerNameEl) ownerNameEl.textContent = client.owner_name || 'Sin titular';
   if (devIdEl) devIdEl.textContent = client.current_device_id || 'PENDIENTE';
 
-  const plan = (client.license_type || 'MENSUAL').toUpperCase();
-  const status = (client.license_status || '').toUpperCase();
-  const isProspect = plan === 'PROSPECTO' || status === 'PROSPECTO';
-  const isPerp = plan === 'PERPETUO_LIBERADO' || plan === 'PERPETUO';
-  const now = new Date();
-  const expDate = client.license_expires ? new Date(client.license_expires) : null;
-  const diffDays = expDate ? Math.ceil((expDate - now) / (1000 * 60 * 60 * 24)) : 999;
-
+  const badgeInfo = getClientStatusBadge(client, { asObject: true });
   if (planBadgeEl) {
-    if (isProspect) {
-      planBadgeEl.className = 'badge badge-prospect';
-      planBadgeEl.textContent = 'Prospecto';
-    } else if (isPerp) {
-      planBadgeEl.className = 'badge badge-purple';
-      planBadgeEl.textContent = 'Perpetua';
-    } else if (diffDays < 0) {
-      planBadgeEl.className = 'badge badge-red';
-      planBadgeEl.textContent = 'Vencida';
-    } else if (diffDays <= 7) {
-      planBadgeEl.className = 'badge badge-yellow';
-      planBadgeEl.textContent = `Vence en ${diffDays}d`;
-    } else {
-      planBadgeEl.className = 'badge badge-green';
-      planBadgeEl.textContent = 'Activa';
-    }
+    planBadgeEl.className = badgeInfo.className;
+    planBadgeEl.textContent = badgeInfo.text;
   }
+  const isProspect = badgeInfo.isProspect;
+  const isPerp = badgeInfo.isPerp;
+  const expDate = client.license_expires ? new Date(client.license_expires) : null;
+  const now = new Date();
+  const diffDays = expDate ? Math.max(0, Math.ceil((expDate - now) / (1000 * 60 * 60 * 24))) : 0;
 
   let rawPhone = (client.phone || '').trim();
   let cleanDigits = rawPhone.replace(/[^0-9]/g, '');
@@ -2651,7 +4138,9 @@ function selectWaTemplate(tplKey) {
 
   if (!client || !textarea) return;
 
-  const rawTpl = WA_TEMPLATES[tplKey].text;
+  const customText = ownerConfig?.templates?.[tplKey];
+  const rawTpl = (customText !== undefined && customText !== null) ? customText : (WA_TEMPLATES[tplKey]?.text || '');
+
   if (!rawTpl) {
     textarea.value = '';
     updateWaComposerStats();
@@ -2661,7 +4150,13 @@ function selectWaTemplate(tplKey) {
   const now = new Date();
   const expDate = client.license_expires ? new Date(client.license_expires) : null;
   const diffDays = expDate ? Math.max(0, Math.ceil((expDate - now) / (1000 * 60 * 60 * 24))) : 0;
-  const latestVer = getLatestPublishedVersion() || client.installed_version || '9.34.0';
+  const latestVer = getLatestPublishedVersion() || client.installed_version || '9.35.0';
+
+  const pm = ownerConfig?.payment_methods || {};
+  const li = ownerConfig?.legal_identity || {};
+  const yapePhone = pm.yape_plin_phone || '922836879';
+  const yapeTitular = pm.yape_plin_holder || li.author_full_name || 'Julio Angello Vasquez Navarro';
+  const autor = li.author_full_name || 'Julio Angello Vasquez Navarro';
 
   let rendered = rawTpl
     .replace(/\{negocio\}/g, client.business_name || 'su negocio')
@@ -2671,7 +4166,11 @@ function selectWaTemplate(tplKey) {
     .replace(/\{vencimiento\}/g, client.license_expires ? client.license_expires.substring(0, 10) : 'Activa')
     .replace(/\{device_id\}/g, client.current_device_id || 'PENDIENTE')
     .replace(/\{version\}/g, latestVer)
-    .replace(/\{codigo_licencia\}/g, lastToken);
+    .replace(/\{codigo_licencia\}/g, lastToken)
+    .replace(/\{codigo\}/g, lastToken)
+    .replace(/\{yape_phone\}/g, yapePhone)
+    .replace(/\{yape_titular\}/g, yapeTitular)
+    .replace(/\{autor\}/g, autor);
 
   textarea.value = rendered;
   updateWaComposerStats();
@@ -2706,8 +4205,106 @@ function copyWaComposerMessage() {
   });
 }
 
+function insertTextAtCursor(textarea, textToInsert) {
+  if (!textarea) return;
+  const start = textarea.selectionStart ?? textarea.value.length;
+  const end = textarea.selectionEnd ?? textarea.value.length;
+  const current = textarea.value;
+  textarea.value = current.substring(0, start) + textToInsert + current.substring(end);
+  textarea.selectionStart = textarea.selectionEnd = start + textToInsert.length;
+  textarea.focus();
+  updateWaComposerStats();
+}
+
+function insertWaSnippet(type) {
+  const textarea = document.getElementById('waCompMessage');
+  if (!textarea) return;
+  const pm = ownerConfig?.payment_methods || {};
+  const li = ownerConfig?.legal_identity || {};
+  const client = globalClients.find(c => c.id === currentWaComposerClientId);
+  const modalEl = document.getElementById('modalWaComposer');
+  const lastToken = modalEl?.dataset?.lastToken || 'ML9-PENDIENTE';
+
+  let textToInsert = '';
+  if (type === 'payment' || type === 'yape') {
+    const phone = pm.yape_plin_phone || '922836879';
+    const titular = pm.yape_plin_holder || li.author_full_name || 'Julio Angello Vasquez Navarro';
+    textToInsert = `\n📲 *Datos de Pago Yape / Plin:*\n• Número: *${phone}*\n• Titular: *${titular}*\n• Enviar comprobante por este medio.`;
+  } else if (type === 'device' || type === 'hardware') {
+    const devId = client?.current_device_id || 'PENDIENTE';
+    textToInsert = `\n📱 *Hardware ID:* \`${devId}\``;
+  } else if (type === 'expiration' || type === 'vencimiento') {
+    const exp = client?.license_expires ? client.license_expires.substring(0, 10) : 'Activa';
+    textToInsert = `\n📅 *Vencimiento:* ${exp}`;
+  } else if (type === 'token') {
+    textToInsert = `\n🔑 *Código de Licencia:*\n\`${lastToken}\``;
+  }
+
+  if (textToInsert) {
+    insertTextAtCursor(textarea, textToInsert);
+  }
+}
+
+async function saveCurrentWaTemplate() {
+  const textarea = document.getElementById('waCompMessage');
+  if (!textarea) return;
+  const newText = textarea.value;
+
+  if (!ownerConfig) ownerConfig = {};
+  if (!ownerConfig.templates) ownerConfig.templates = {};
+  ownerConfig.templates[currentWaComposerTemplateKey] = newText;
+  if (WA_TEMPLATES[currentWaComposerTemplateKey]) {
+    WA_TEMPLATES[currentWaComposerTemplateKey].text = newText;
+  }
+
+  try {
+    const res = await fetch('/api/config', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(ownerConfig),
+    });
+    if (!res.ok) throw new Error('Error al guardar plantilla');
+    showToast('Plantilla guardada exitosamente.', 'success');
+  } catch (e) {
+    showToast('Error al guardar plantilla: ' + e.message, 'error');
+  }
+}
+
+async function resetCurrentWaTemplate() {
+  const defaultText = DEFAULT_WA_TEMPLATES[currentWaComposerTemplateKey]?.text || '';
+  if (WA_TEMPLATES[currentWaComposerTemplateKey]) {
+    WA_TEMPLATES[currentWaComposerTemplateKey].text = defaultText;
+  }
+
+  if (ownerConfig?.templates) {
+    delete ownerConfig.templates[currentWaComposerTemplateKey];
+    try {
+      await fetch('/api/config', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(ownerConfig),
+      });
+    } catch (_) { }
+  }
+
+  selectWaTemplate(currentWaComposerTemplateKey);
+  showToast('Plantilla restaurada a los valores predeterminados.', 'info');
+}
+
 function initWaComposerEvents() {
   document.getElementById('waCompMessage')?.addEventListener('input', updateWaComposerStats);
+
+  // Botones de selección de plantillas
+  document.querySelectorAll('.wa-template-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      selectWaTemplate(btn.dataset.tpl);
+    });
+  });
+
+  // Botones de acción en compositor
+  document.getElementById('btnWaSaveTemplate')?.addEventListener('click', saveCurrentWaTemplate);
+  document.getElementById('btnWaResetTemplate')?.addEventListener('click', resetCurrentWaTemplate);
+  document.getElementById('btnWaCompCopy')?.addEventListener('click', copyWaComposerMessage);
 }
 
 // =================== 4. RELEASE MANAGER & SUBIDA DE APK DIRECTA ===================
@@ -2724,6 +4321,10 @@ async function loadReleases() {
 
     if (globalReleases.length === 0) {
       tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; padding:1.5rem; color:var(--text-muted);">No hay versiones registradas en este entorno.</td></tr>';
+      if (globalClients && globalClients.length > 0) {
+        updateFilterCounts();
+        renderClientsTable();
+      }
       return;
     }
 
@@ -2765,6 +4366,11 @@ async function loadReleases() {
       `;
       tbody.appendChild(tr);
     });
+
+    if (globalClients && globalClients.length > 0) {
+      updateFilterCounts();
+      renderClientsTable();
+    }
   } catch (e) {
     console.error('Error al cargar releases:', e);
   }
@@ -3417,12 +5023,15 @@ function renderFinancesTable() {
   document.getElementById('finKpiTopMethod').textContent = topMethod;
 
   if (filtered.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center; padding:1.5rem; color:var(--text-muted);">Sin transacciones registradas para este filtro.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="9" style="text-align:center; padding:1.5rem; color:var(--text-muted);">Sin transacciones registradas para este filtro.</td></tr>';
     return;
   }
 
   filtered.forEach(f => {
     const tr = document.createElement('tr');
+    const receiptBadge = f.receipt_number 
+      ? `<span class="badge badge-success" style="font-size:0.75rem; letter-spacing:0.5px; padding:3px 6px;">${escapeHtml(f.receipt_number)}</span>`
+      : `<span style="font-size:0.75rem; color:var(--text-muted);">Sin emitir</span>`;
     tr.innerHTML = `
       <td>${f.date ? f.date.substring(0, 10) : '-'}</td>
       <td><strong>${escapeHtml(f.client_id)}</strong></td>
@@ -3432,6 +5041,12 @@ function renderFinancesTable() {
       <td>${escapeHtml(f.method)}</td>
       <td>${escapeHtml(f.reference)}</td>
       <td><strong style="color:var(--success);">S/ ${(f.amount || 0).toFixed(2)}</strong></td>
+      <td style="text-align:center;">
+        <button type="button" class="btn btn-secondary btn-xs btn-fin-receipt" title="Generar o Ver Boleta Oficial" onclick="openPaymentReceiptModal('${escapeHtml(f.client_id)}', '${escapeHtml(f.id)}')">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:4px;"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+          ${f.receipt_number ? escapeHtml(f.receipt_number) : 'Boleta'}
+        </button>
+      </td>
     `;
     tbody.appendChild(tr);
   });
@@ -3515,6 +5130,31 @@ function restoreBackup(filename) {
 
 // =================== 7. MODALES Y CRUD ===================
 function initModalEvents() {
+  // Cierre de modales al hacer clic en el backdrop exterior
+  document.querySelectorAll('.modal-overlay').forEach(modal => {
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) {
+        closeModal(modal.id);
+      }
+    });
+  });
+
+  // Listener global de tecla Escape para modales y drawer
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      const openModals = document.querySelectorAll('.modal-overlay.open');
+      if (openModals.length > 0) {
+        const topModal = openModals[openModals.length - 1];
+        closeModal(topModal.id);
+      } else {
+        const drawer = document.getElementById('drawerClient360');
+        if (drawer && drawer.classList.contains('open')) {
+          closeClient360Drawer();
+        }
+      }
+    }
+  });
+
   // Filtros de cartera
   document.querySelectorAll('.filter-chip').forEach(chip => {
     chip.addEventListener('click', () => {
@@ -3540,7 +5180,7 @@ function initModalEvents() {
     if (sit === 'PROSPECTO') {
       if (grpPlan) grpPlan.style.display = 'none';
       if (grpTrial) grpTrial.style.display = 'none';
-      if (grpSubDate) grpSubDate.style.display = 'block';
+      if (grpSubDate) grpSubDate.style.display = 'flex';
       if (lblDevice) lblDevice.innerHTML = 'Hardware ID (Opcional — PENDIENTE):';
       if (reqDevice) reqDevice.style.display = 'none';
       if (inputDevice) {
@@ -3550,7 +5190,7 @@ function initModalEvents() {
       if (aiReported && !aiReported.dataset.manual) aiReported.value = 0;
     } else if (sit === 'TRIAL') {
       if (grpPlan) grpPlan.style.display = 'none';
-      if (grpTrial) grpTrial.style.display = 'block';
+      if (grpTrial) grpTrial.style.display = 'flex';
       if (grpSubDate) grpSubDate.style.display = 'none';
       if (lblDevice) lblDevice.innerHTML = 'Hardware ID del Celular (ML-XXXX): <span class="required-star">*</span>';
       if (reqDevice) reqDevice.style.display = 'inline';
@@ -3560,7 +5200,7 @@ function initModalEvents() {
       }
       if (aiReported && !aiReported.dataset.manual) aiReported.value = 50;
     } else { // COMMERCIAL
-      if (grpPlan) grpPlan.style.display = 'block';
+      if (grpPlan) grpPlan.style.display = 'flex';
       if (grpTrial) grpTrial.style.display = 'none';
       if (grpSubDate) grpSubDate.style.display = 'none';
       if (lblDevice) lblDevice.innerHTML = 'Hardware ID del Celular (ML-XXXX): <span class="required-star">*</span>';
@@ -3611,8 +5251,15 @@ function initModalEvents() {
     }
   });
 
+  const aiRepInput = document.getElementById('newAiReportedBalance');
+  aiRepInput?.addEventListener('input', () => {
+    aiRepInput.dataset.manual = 'true';
+  });
+
   document.getElementById('btnOpenCreateClient')?.addEventListener('click', () => {
     document.getElementById('formCreateClient')?.reset();
+    const aiRep = document.getElementById('newAiReportedBalance');
+    if (aiRep) delete aiRep.dataset.manual;
     const notice = document.getElementById('noticeAiBonus');
     if (notice) notice.style.display = 'none';
     updateSituationFields();
@@ -3707,6 +5354,49 @@ function initModalEvents() {
   // Modal Migrar Dispositivo
   document.getElementById('btnSubmitMigrateDevice')?.addEventListener('click', handleMigrateDeviceSubmit);
 
+  document.getElementById('migFeeMode')?.addEventListener('change', (e) => {
+    const mode = e.target.value;
+    const feeInput = document.getElementById('migFee');
+    const customGroup = document.getElementById('migCustomFeeGroup');
+    const paymentGroup = document.getElementById('migPaymentFieldsGroup');
+    const reasonInput = document.getElementById('migReason');
+    const defaultFee = (ownerConfig?.catalog?.HARDWARE_MIGRATION_FEE?.price !== undefined)
+      ? ownerConfig.catalog.HARDWARE_MIGRATION_FEE.price
+      : (ownerConfig?.migration_fee || 40.0);
+
+    if (mode === 'FREE') {
+      if (feeInput) feeInput.value = '0.00';
+      if (customGroup) customGroup.style.display = 'none';
+      if (paymentGroup) paymentGroup.style.display = 'none';
+      if (reasonInput && !reasonInput.value) {
+        reasonInput.value = 'Garantía de equipo / Traslado gratuito por cortesía';
+      }
+    } else if (mode === 'CUSTOM') {
+      if (customGroup) customGroup.style.display = 'block';
+      if (paymentGroup) paymentGroup.style.display = 'block';
+    } else {
+      // STANDARD
+      if (feeInput) feeInput.value = Number(defaultFee).toFixed(2);
+      if (customGroup) customGroup.style.display = 'none';
+      if (paymentGroup) paymentGroup.style.display = 'block';
+      if (reasonInput && reasonInput.value === 'Garantía de equipo / Traslado gratuito por cortesía') {
+        reasonInput.value = '';
+      }
+    }
+  });
+
+  document.getElementById('migScenario')?.addEventListener('change', (e) => {
+    const scenario = e.target.value;
+    const hint = document.getElementById('migScenarioHint');
+    if (hint) {
+      if (scenario === 'RESTORED_BACKUP') {
+        hint.textContent = 'Recomendado si el cliente restauró su copia de Google Drive o .mlbg: reactiva el nuevo equipo preservando exactamente su vencimiento con cero duplicación de días.';
+      } else {
+        hint.textContent = 'Instalación limpia desde cero: el token transferirá exactamente los días restantes hasta la fecha de expiración.';
+      }
+    }
+  });
+
   // Modal Crear Release
   document.getElementById('btnOpenCreateRelease')?.addEventListener('click', () => {
     openModal('modalCreateRelease');
@@ -3788,21 +5478,58 @@ function initModalEvents() {
   // Modal Registrar Pago Manual (Abrir y Guardar)
   document.getElementById('btnOpenManualPayment')?.addEventListener('click', () => {
     if (!currentHistoryClientId) return;
-    document.getElementById('manualPayClientId').value = currentHistoryClientId;
-    document.getElementById('manualPayAmount').value = '35.00';
-    document.getElementById('manualPayPlan').value = 'Renovación Mensual';
-    openModal('modalManualPayment');
+    openAddPaymentModal(currentHistoryClientId);
+  });
+
+  // Cambio reactivo de preset de concepto en modal de pago
+  document.getElementById('manualPayPlanPreset')?.addEventListener('change', (e) => {
+    const val = e.target.value;
+    const customConcept = document.getElementById('manualPayCustomConcept');
+    const amountInput = document.getElementById('manualPayAmount');
+    const planInput = document.getElementById('manualPayPlan');
+    const paymentId = document.getElementById('manualPayId')?.value?.trim();
+
+    if (val === 'CUSTOM') {
+      if (customConcept) {
+        customConcept.style.display = 'block';
+        customConcept.focus();
+      }
+    } else {
+      if (customConcept) {
+        customConcept.style.display = 'none';
+        customConcept.value = '';
+      }
+      if (planInput) planInput.value = val;
+      const selectedOpt = e.target.selectedOptions?.[0];
+      const price = selectedOpt?.dataset?.price;
+      if (price && !paymentId && amountInput) {
+        amountInput.value = parseFloat(price).toFixed(2);
+      }
+    }
   });
 
   document.getElementById('btnSubmitManualPayment')?.addEventListener('click', async () => {
     const clientId = document.getElementById('manualPayClientId').value;
     const paymentId = document.getElementById('manualPayId')?.value?.trim();
     const amount = parseFloat(document.getElementById('manualPayAmount').value) || 0;
-    const plan = document.getElementById('manualPayPlan').value.trim();
+    
+    // Resolver concepto según preset o personalizado
+    let plan = '';
+    const presetSelect = document.getElementById('manualPayPlanPreset');
+    const customConceptInput = document.getElementById('manualPayCustomConcept');
+    if (presetSelect && presetSelect.value === 'CUSTOM') {
+      plan = customConceptInput?.value?.trim() || '';
+    } else if (presetSelect && presetSelect.value) {
+      plan = presetSelect.value;
+    } else {
+      plan = document.getElementById('manualPayPlan')?.value?.trim() || '';
+    }
+
     const method = document.getElementById('manualPayMethod').value;
     const ref = document.getElementById('manualPayRef').value.trim();
     const notes = document.getElementById('manualPayNotes').value.trim();
     const date = document.getElementById('manualPayDate')?.value || new Date().toISOString().substring(0, 10);
+    const shouldGenerateReceipt = document.getElementById('manualPayGenerateReceipt')?.checked ?? false;
 
     if (!amount || !plan) {
       showToast('Por favor completa el monto y concepto.', 'warning');
@@ -3846,8 +5573,18 @@ function initModalEvents() {
         throw new Error(errData.error || 'Error al procesar registro de pago');
       }
 
+      const updatedClient = await res.json();
       closeModal('modalManualPayment');
       showToast(paymentId ? 'Pago actualizado con éxito.' : 'Pago manual registrado con éxito.', 'success');
+
+      // Si se marcó emitir boleta de inmediato al registrar un nuevo pago
+      if (shouldGenerateReceipt && !paymentId && updatedClient && Array.isArray(updatedClient.payment_history)) {
+        const newPayment = updatedClient.payment_history[updatedClient.payment_history.length - 1];
+        if (newPayment && newPayment.id) {
+          openPaymentReceiptModal(clientId, newPayment.id);
+        }
+      }
+
       if (currentHistoryClientId === clientId) {
         await openClientHistoryModal(clientId);
       }
@@ -4096,7 +5833,8 @@ async function handleCreateClient(andEmit = false) {
   const rawPhone = document.getElementById('newPhone').value.trim();
   const phone = normalizePeruPhone(rawPhone);
   let device = document.getElementById('newDeviceId').value.trim().toUpperCase();
-  const installedVer = document.getElementById('newInstalledVersion').value.trim() || '9.34.0';
+  const deviceModel = document.getElementById('newDeviceModel')?.value.trim() || '';
+  const installedVer = document.getElementById('newInstalledVersion').value.trim() || '9.35.0';
   const aiReported = parseInt(document.getElementById('newAiReportedBalance').value) || 0;
   const aiBonus = parseInt(document.getElementById('newAiPendingBonus').value) || 0;
   const trialDays = parseInt(document.getElementById('newTrialDaysRemaining')?.value) || 30;
@@ -4134,12 +5872,13 @@ async function handleCreateClient(andEmit = false) {
         document_id: doc,
         phone: phone,
         current_device_id: device,
+        device_model: deviceModel,
         license_type: plan,
         license_status: situation === 'PROSPECTO' ? 'PROSPECTO' : (plan.includes('PERPETU') ? 'PERPETUA' : 'ACTIVA'),
         installed_version: installedVer,
         ai_reported_balance: aiReported,
         ai_pending_bonus: aiBonus,
-        ai_extra_credits: aiBonus,
+        ai_extra_credits: 0,
         trial_days_remaining: situation === 'TRIAL' ? trialDays : null,
         expected_subscription_date: situation === 'PROSPECTO' ? expectedSubDate : null,
         notes: notes,
@@ -4162,7 +5901,8 @@ async function handleCreateClient(andEmit = false) {
 
     if (andEmit && createdClient && createdClient.id) {
       showToast(`¡Cliente "${biz}" guardado! Abriendo Generador de Licencias...`, 'success');
-      selectClientForLicense(createdClient.id);
+      const hasBonus = (createdClient.ai_pending_bonus || 0) > 0;
+      selectClientForLicense(createdClient.id, { preferBonus: hasBonus });
       const curView = document.getElementById('currentViewName');
       if (curView) curView.textContent = 'Generar Licencia';
     } else {
@@ -4176,10 +5916,15 @@ async function handleCreateClient(andEmit = false) {
 async function handleMigrateDeviceSubmit() {
   const clientId = document.getElementById('migClientId').value;
   const newDeviceId = document.getElementById('migNewDeviceId').value.trim().toUpperCase();
-  const fee = parseFloat(document.getElementById('migFee').value) || 0;
-  const method = document.getElementById('migPaymentMethod').value;
+  const newDeviceModel = document.getElementById('migNewDeviceModel')?.value.trim() || '';
+  const scenario = document.getElementById('migScenario')?.value || 'RESTORED_BACKUP';
+  const feeMode = document.getElementById('migFeeMode')?.value || 'STANDARD';
+  const fee = feeMode === 'FREE' ? 0.0 : (parseFloat(document.getElementById('migFee').value) || 0);
+  const method = feeMode === 'FREE' ? 'Gratuito / Cortesía' : document.getElementById('migPaymentMethod').value;
+  const ref = document.getElementById('migPaymentRef')?.value.trim() || '';
   const reason = document.getElementById('migReason').value.trim();
   const emitImmediately = document.getElementById('migEmitImmediately')?.checked ?? true;
+  const shouldGenReceipt = document.getElementById('migGenerateReceipt')?.checked ?? false;
 
   if (!newDeviceId) {
     showToast('Por favor ingresa el nuevo Hardware ID (ML-YYYY).', 'warning');
@@ -4192,10 +5937,14 @@ async function handleMigrateDeviceSubmit() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         new_device_id: newDeviceId,
+        device_model: newDeviceModel,
+        fee_mode: feeMode,
         fee_amount: fee,
         payment_method: method,
+        payment_reference: ref,
         reason: reason,
         emit_immediately: emitImmediately,
+        migration_scenario: scenario,
       }),
     });
 
@@ -4216,7 +5965,7 @@ async function handleMigrateDeviceSubmit() {
       if (form) form.style.display = 'none';
 
       const successBox = document.getElementById('migSuccessInline');
-      if (successBox) successBox.style.display = 'flex';
+      if (successBox) successBox.style.display = 'block';
 
       const devEl = document.getElementById('migSuccessNewDev');
       if (devEl) devEl.textContent = newDeviceId;
@@ -4246,6 +5995,17 @@ async function handleMigrateDeviceSubmit() {
       });
       document.getElementById('btnMigSendWa').href = `https://api.whatsapp.com/send?phone=${cleanPhone}&text=${encodeURIComponent(msgText)}`;
 
+      // Botón para generar boleta si se registró cobro de tarifa
+      const receiptBtn = document.getElementById('btnMigViewReceipt');
+      if (data.payment_id && receiptBtn) {
+        receiptBtn.style.display = 'inline-flex';
+        receiptBtn.onclick = () => {
+          openPaymentReceiptModal(clientId, data.payment_id);
+        };
+      } else if (receiptBtn) {
+        receiptBtn.style.display = 'none';
+      }
+
       const footer = document.getElementById('migModalFooter');
       if (footer) {
         footer.innerHTML = `
@@ -4257,6 +6017,9 @@ async function handleMigrateDeviceSubmit() {
       closeModal('modalMigrateDevice');
       showToast(`¡Dispositivo migrado a ${newDeviceId}! Emite ahora su licencia en el Generador.`, 'success');
       selectClientForLicense(clientId);
+      if (shouldGenReceipt && data.payment_id) {
+        openPaymentReceiptModal(clientId, data.payment_id);
+      }
     }
   } catch (e) {
     showToast('Error: ' + e.message, 'error');
@@ -4269,14 +6032,67 @@ function openMigrateModal(clientId) {
 
   document.getElementById('migClientId').value = client.id;
   document.getElementById('migClientName').value = `${client.business_name} (${client.owner_name})`;
-  document.getElementById('migOldDeviceId').value = client.current_device_id;
+  document.getElementById('migOldDeviceId').value = client.current_device_id || '';
   document.getElementById('migNewDeviceId').value = '';
+  document.getElementById('migNewDeviceModel').value = '';
+
+  // Poblar Tarjeta Resumen de Preservación
+  const planEl = document.getElementById('migPreservePlan');
+  if (planEl) planEl.textContent = client.license_type || 'MENSUAL';
+
+  const expEl = document.getElementById('migPreserveExpires');
+  if (expEl) {
+    if (client.license_expires) {
+      const expDate = new Date(client.license_expires);
+      const now = new Date();
+      const days = Math.max(0, Math.ceil((expDate - now) / 86400000));
+      expEl.textContent = `${client.license_expires.substring(0, 10)} • ${days} días restantes`;
+    } else {
+      expEl.textContent = 'Sin vencimiento';
+    }
+  }
+
+  const aiEl = document.getElementById('migPreserveAi');
+  if (aiEl) {
+    const totalAi = (client.ai_reported_balance || 0) + (client.ai_extra_bonus || 0);
+    aiEl.textContent = `+${totalAi} escaneos`;
+  }
+
+  const updatesWrapper = document.getElementById('migPreserveUpdatesWrapper');
+  const updatesEl = document.getElementById('migPreserveUpdates');
+  if (client.updates_until && updatesWrapper && updatesEl) {
+    updatesWrapper.style.display = 'flex';
+    updatesEl.textContent = client.updates_until.substring(0, 10);
+  } else if (updatesWrapper) {
+    updatesWrapper.style.display = 'none';
+  }
+
+  // Escenario por defecto
+  const scenarioSel = document.getElementById('migScenario');
+  if (scenarioSel) scenarioSel.value = 'RESTORED_BACKUP';
+  const hint = document.getElementById('migScenarioHint');
+  if (hint) {
+    hint.textContent = 'Recomendado si el cliente restauró su copia de Google Drive o .mlbg: reactiva el nuevo equipo preservando exactamente su vencimiento con cero duplicación de días.';
+  }
+
+  // Modalidad de cobro
+  const feeModeSel = document.getElementById('migFeeMode');
+  if (feeModeSel) feeModeSel.value = 'STANDARD';
+  const customFeeGroup = document.getElementById('migCustomFeeGroup');
+  if (customFeeGroup) customFeeGroup.style.display = 'none';
+  const payGroup = document.getElementById('migPaymentFieldsGroup');
+  if (payGroup) payGroup.style.display = 'block';
+
   const migDefault = (ownerConfig?.catalog?.HARDWARE_MIGRATION_FEE?.price !== undefined)
     ? ownerConfig.catalog.HARDWARE_MIGRATION_FEE.price
     : (ownerConfig?.migration_fee || 40.0);
   document.getElementById('migFee').value = Number(migDefault).toFixed(2);
-  document.getElementById('migReason').value = '';
   document.getElementById('migPaymentMethod').value = 'Yape';
+  document.getElementById('migPaymentRef').value = '';
+  document.getElementById('migReason').value = '';
+
+  const genReceiptChk = document.getElementById('migGenerateReceipt');
+  if (genReceiptChk) genReceiptChk.checked = true;
 
   const emitCb = document.getElementById('migEmitImmediately');
   if (emitCb) emitCb.checked = true;
@@ -4289,6 +6105,9 @@ function openMigrateModal(clientId) {
 
   const qrBox = document.getElementById('migSuccessQrContainer');
   if (qrBox) qrBox.innerHTML = '';
+
+  const receiptBtn = document.getElementById('btnMigViewReceipt');
+  if (receiptBtn) receiptBtn.style.display = 'none';
 
   const footer = document.getElementById('migModalFooter');
   if (footer) {
@@ -4304,11 +6123,31 @@ function openMigrateModal(clientId) {
 
 // =================== UTILIDADES GENÉRICAS ===================
 function openModal(id) {
+  const drawer = document.getElementById('drawerClient360');
+  const isDrawerOpen = drawer && drawer.classList.contains('open');
+  if (isDrawerOpen && currentDrawerClientId) {
+    drawerReturnState = {
+      clientId: currentDrawerClientId,
+      tabId: currentDrawerTab || 'drawerTabOverview',
+    };
+    drawer.classList.remove('open');
+    document.getElementById('drawerClient360Backdrop')?.classList.remove('open');
+  }
   document.getElementById(id)?.classList.add('open');
+}
+
+function openModalFromDrawer(modalId) {
+  openModal(modalId);
 }
 
 function closeModal(id) {
   document.getElementById(id)?.classList.remove('open');
+  const remainingModals = document.querySelectorAll('.modal-overlay.open');
+  if (remainingModals.length === 0 && drawerReturnState) {
+    const returnInfo = drawerReturnState;
+    drawerReturnState = null;
+    openClient360Drawer(returnInfo.clientId, returnInfo.tabId);
+  }
 }
 
 function escapeHtml(str) {
@@ -4447,11 +6286,11 @@ async function renderTemplatePreview() {
           vencimiento: '2026-12-31',
           creditos_ia: '100',
           codigo: 'ML9-DEMO-ACTIVATION-TOKEN-XXXXX',
-          version: '9.34.0',
+          version: '9.35.0',
           version_actual: '9.32.0',
           device_id: 'ML-9K4B',
           changelog: 'Mejoras en el escáner IA y velocidad.',
-          link_descarga: 'http://localhost:8080/api/releases/download/9.34.0',
+          link_descarga: 'http://localhost:8080/api/releases/download/9.35.0',
           precio_pase: '150.00',
         },
       }),

@@ -415,6 +415,9 @@ void main() {
 
     setUp(() async {
       tempDir = Directory.systemTemp.createTempSync('admin_crm_test_');
+      final sandboxClients = File('${tempDir.path}/sandbox_clients_db.json');
+      await sandboxClients.create(recursive: true);
+      await sandboxClients.writeAsString('[]');
       dbService = DatabaseService(dataDir: tempDir.path, backupDir: '${tempDir.path}/backups');
       await dbService.init();
     });
@@ -506,6 +509,9 @@ void main() {
 
     setUp(() async {
       tempDir = Directory.systemTemp.createTempSync('ml_custom_license_test_');
+      final sandboxClients = File('${tempDir.path}/data/sandbox_clients_db.json');
+      await sandboxClients.create(recursive: true);
+      await sandboxClients.writeAsString('[]');
       dbService = DatabaseService(
         dataDir: '${tempDir.path}/data',
         backupDir: '${tempDir.path}/backups',

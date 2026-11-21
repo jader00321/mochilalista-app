@@ -333,6 +333,7 @@ class ExcelExportService {
       'ANUAL',
       'PERPETUO_LIBERADO',
       'PASE_ACTUALIZACION_ANUAL',
+      'BONO_IA_PERSONALIZADO',
     ];
     for (final p in plans) {
       final price = configService.getPlanPrice(p);
@@ -385,6 +386,8 @@ class ExcelExportService {
 
     for (final client in clients) {
       final plan = (client['license_type'] as String? ?? 'TRIAL').toUpperCase();
+      final isProspect = plan == 'PROSPECTO' ||
+          (client['license_status'] as String? ?? '').toUpperCase() == 'PROSPECTO';
       final isPerpetual = plan.contains('PERPETU');
       final expStr = client['license_expires'] as String?;
       final expDate = expStr != null ? DateTime.tryParse(expStr) : null;
@@ -392,7 +395,10 @@ class ExcelExportService {
       String normalizedStatus = 'ACTIVA';
       int daysRemaining = 0;
 
-      if (isPerpetual) {
+      if (isProspect) {
+        normalizedStatus = 'PROSPECTO';
+        daysRemaining = 0;
+      } else if (isPerpetual) {
         normalizedStatus = 'PERPETUA';
         daysRemaining = 99999;
       } else if (expDate != null) {
@@ -409,6 +415,9 @@ class ExcelExportService {
       // Estilo semántico según estado
       CellStyle statusStyle;
       switch (normalizedStatus) {
+        case 'PROSPECTO':
+          statusStyle = _statusProspectStyle();
+          break;
         case 'ACTIVA':
           statusStyle = _statusActiveStyle();
           break;
@@ -436,9 +445,23 @@ class ExcelExportService {
       final tokens = (client['generated_codes_history'] as List? ?? []).cast<Map<String, dynamic>>();
       final lastToken = tokens.isNotEmpty ? (tokens.last['token'] as String? ?? '') : '';
 
-      final aiCredits = (client['ai_accumulated_credits'] as num?)?.toInt() ??
-          (client['ai_extra_credits'] as num?)?.toInt() ??
-          0;
+      final reportedBalance = (client['ai_reported_balance'] as num?)?.toInt();
+      final extraCredits = (client['ai_extra_credits'] as num?)?.toInt() ?? 0;
+      final aiCredits = reportedBalance != null
+          ? (reportedBalance + extraCredits)
+          : ((client['ai_accumulated_credits'] as num?)?.toInt() ?? extraCredits);
+
+      final hwId = client['current_device_id'] as String? ?? '';
+      final model = (client['device_model'] as String?)?.trim() ?? '';
+      final hwDisplay = model.isNotEmpty ? '$hwId ($model)' : hwId;
+
+      final pendingBonus = (client['ai_pending_bonus'] as num?)?.toInt() ?? 0;
+      var notes = client['notes'] as String? ?? '';
+      if (pendingBonus > 0) {
+        notes = notes.isNotEmpty
+            ? '$notes | [Bono IA pendiente: +$pendingBonus]'
+            : '[Bono IA pendiente: +$pendingBonus]';
+      }
 
       sheet.cell(CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: row))
         ..value = TextCellValue(client['id'] as String? ?? '');
@@ -451,7 +474,7 @@ class ExcelExportService {
       sheet.cell(CellIndex.indexByColumnRow(columnIndex: 4, rowIndex: row))
         ..value = TextCellValue(client['phone'] as String? ?? '');
       sheet.cell(CellIndex.indexByColumnRow(columnIndex: 5, rowIndex: row))
-        ..value = TextCellValue(client['current_device_id'] as String? ?? '');
+        ..value = TextCellValue(hwDisplay);
       sheet.cell(CellIndex.indexByColumnRow(columnIndex: 6, rowIndex: row))
         ..value = TextCellValue(plan);
       sheet.cell(CellIndex.indexByColumnRow(columnIndex: 7, rowIndex: row))
@@ -474,7 +497,7 @@ class ExcelExportService {
       sheet.cell(CellIndex.indexByColumnRow(columnIndex: 15, rowIndex: row))
         ..value = TextCellValue(lastToken);
       sheet.cell(CellIndex.indexByColumnRow(columnIndex: 16, rowIndex: row))
-        ..value = TextCellValue(client['notes'] as String? ?? '');
+        ..value = TextCellValue(notes);
 
       row++;
     }
@@ -545,10 +568,14 @@ class ExcelExportService {
         ..value = IntCellValue(days);
       sheet.cell(CellIndex.indexByColumnRow(columnIndex: 7, rowIndex: row))
         ..value = IntCellValue(ai);
+      final ref = p['reference'] as String? ?? '-';
+      final receiptNum = p['receipt_number'] as String?;
+      final refDisplay = (receiptNum != null && receiptNum.isNotEmpty) ? '$ref | $receiptNum' : ref;
+
       sheet.cell(CellIndex.indexByColumnRow(columnIndex: 8, rowIndex: row))
         ..value = TextCellValue(p['method'] as String? ?? 'Yape');
       sheet.cell(CellIndex.indexByColumnRow(columnIndex: 9, rowIndex: row))
-        ..value = TextCellValue(p['reference'] as String? ?? '-');
+        ..value = TextCellValue(refDisplay);
       sheet.cell(CellIndex.indexByColumnRow(columnIndex: 10, rowIndex: row))
         ..value = DoubleCellValue(amount);
 
@@ -606,6 +633,14 @@ class ExcelExportService {
         final fee = (item['fee_charged'] as num?)?.toDouble() ?? 40.0;
         final dateStr = item['migrated_at'] as String? ?? '';
 
+        final scenario = item['scenario'] as String?;
+        final reason = item['reason'] as String? ?? 'Cambio de teléfono';
+        final fullReason = (scenario != null && scenario.isNotEmpty) ? '[$scenario] $reason' : reason;
+
+        final model = (item['device_model'] as String?)?.trim();
+        final newHw = item['new_device_id'] as String? ?? '';
+        final newHwDisplay = (model != null && model.isNotEmpty) ? '$newHw ($model)' : newHw;
+
         sheet.cell(CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: row))
           ..value = TextCellValue(dateStr.isNotEmpty ? dateStr.replaceFirst('T', ' ').split('.').first : '-');
         sheet.cell(CellIndex.indexByColumnRow(columnIndex: 1, rowIndex: row))
@@ -615,13 +650,13 @@ class ExcelExportService {
         sheet.cell(CellIndex.indexByColumnRow(columnIndex: 3, rowIndex: row))
           ..value = TextCellValue(item['old_device_id'] as String? ?? '');
         sheet.cell(CellIndex.indexByColumnRow(columnIndex: 4, rowIndex: row))
-          ..value = TextCellValue(item['new_device_id'] as String? ?? '');
+          ..value = TextCellValue(newHwDisplay);
         sheet.cell(CellIndex.indexByColumnRow(columnIndex: 5, rowIndex: row))
           ..value = DoubleCellValue(fee);
         sheet.cell(CellIndex.indexByColumnRow(columnIndex: 6, rowIndex: row))
           ..value = TextCellValue(item['payment_method'] as String? ?? 'Yape');
         sheet.cell(CellIndex.indexByColumnRow(columnIndex: 7, rowIndex: row))
-          ..value = TextCellValue(item['reason'] as String? ?? 'Cambio de teléfono');
+          ..value = TextCellValue(fullReason);
         sheet.cell(CellIndex.indexByColumnRow(columnIndex: 8, rowIndex: row))
           ..value = IntCellValue(nonce);
 
@@ -864,6 +899,15 @@ class ExcelExportService {
     return CellStyle(
       fontColorHex: ExcelColor.fromHexString('FF581C87'), // Purple 800
       backgroundColorHex: ExcelColor.fromHexString('FFF3E8FF'), // Purple 100
+      bold: true,
+      horizontalAlign: HorizontalAlign.Center,
+    );
+  }
+
+  CellStyle _statusProspectStyle() {
+    return CellStyle(
+      fontColorHex: ExcelColor.fromHexString('FF1E40AF'), // Blue 800
+      backgroundColorHex: ExcelColor.fromHexString('FFDBEAFE'), // Blue 100
       bold: true,
       horizontalAlign: HorizontalAlign.Center,
     );

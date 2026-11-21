@@ -103,8 +103,9 @@ Future<void> handleRequest(
   LicenseSigner signer,
   ConfigService configService,
   ExcelExportService excelService,
-  VaultStorageService vaultStorage,
-) async {
+  VaultStorageService vaultStorage, {
+  void Function(int code)? onExitOverride,
+}) async {
   final path = request.uri.path;
   final method = request.method;
 
@@ -133,7 +134,8 @@ Future<void> handleRequest(
     // Endpoints REST de la API
     if (path.startsWith('/api/')) {
       await _handleApiRoute(request, path, method, dbService, signer,
-          configService, excelService, vaultStorage);
+          configService, excelService, vaultStorage,
+          onExitOverride: onExitOverride);
       return;
     }
 
@@ -164,8 +166,9 @@ Future<void> _handleApiRoute(
   LicenseSigner signer,
   ConfigService configService,
   ExcelExportService excelService,
-  VaultStorageService vaultStorage,
-) async {
+  VaultStorageService vaultStorage, {
+  void Function(int code)? onExitOverride,
+}) async {
   request.response.headers.contentType = ContentType.json;
 
   // =================== MIDDLEWARE DE BLOQUEO PIN REAL (HTTP 423 LOCKED) ===================
@@ -528,6 +531,28 @@ Future<void> _handleApiRoute(
     return;
   }
 
+  // Apagado limpio y seguro del servidor: /api/system/shutdown
+  // Protegido por el middleware de bloqueo PIN real (HTTP 423 si la sesión está bloqueada)
+  if (path == '/api/system/shutdown' && method == 'POST') {
+    request.response.statusCode = HttpStatus.ok;
+    request.response.headers.contentType = ContentType.json;
+    request.response.write(jsonEncode({
+      'ok': true,
+      'message': 'Servidor administrativo apagado correctamente.',
+    }));
+    await request.response.close();
+
+    // Invocar el callback de salida inyectable (onExitOverride) o exit(0) tras un breve margen para liberar la conexión HTTP
+    Future.delayed(const Duration(milliseconds: 250), () {
+      if (onExitOverride != null) {
+        onExitOverride(0);
+      } else {
+        exit(0);
+      }
+    });
+    return;
+  }
+
   // =================== 1. DASHBOARD FINANCIERO ===================
   if (path == '/api/dashboard' && method == 'GET') {
     final clients = await dbService.getClients();
@@ -555,8 +580,9 @@ Future<void> _handleApiRoute(
       }
     }
 
-    final hasPublishedReleases =
-        releases.isNotEmpty && latestVersion != null && latestVersion.isNotEmpty;
+    final hasPublishedReleases = releases.isNotEmpty &&
+        latestVersion != null &&
+        latestVersion.isNotEmpty;
 
     for (final c in clients) {
       final payments =
@@ -702,17 +728,28 @@ Future<void> _handleApiRoute(
     final segments = path.split('/');
     if (segments.length == 5) {
       final clientId = segments[3];
-      final bodyStr = await utf8.decodeStream(request);
+      final bodyStr = await _readRequestBody(request);
       final body = jsonDecode(bodyStr) as Map<String, dynamic>;
       final newDeviceId =
           (body['new_device_id'] as String? ?? '').trim().toUpperCase();
-      final feeAmount = (body['fee_amount'] as num?)?.toDouble() ??
+      final feeMode = (body['fee_mode'] as String? ?? 'STANDARD').toUpperCase();
+      double feeAmount = (body['fee_amount'] as num?)?.toDouble() ??
           (body['fee'] as num?)?.toDouble() ??
           configService.migrationFee;
+      if (feeMode == 'FREE') {
+        feeAmount = 0.0;
+      }
       final paymentMethod = body['payment_method'] as String? ?? 'Yape';
       final reason = body['reason'] as String?;
       final emitImmediately =
           body['emit_immediately'] == true || body['emitImmediately'] == true;
+      final migrationScenario = (body['migration_scenario'] as String? ??
+              body['scenario'] as String? ??
+              'RESTORED_BACKUP')
+          .toUpperCase();
+      final newDeviceModel = (body['device_model'] as String? ??
+              body['new_device_model'] as String?)
+          ?.trim();
 
       if (newDeviceId.isEmpty) {
         request.response.statusCode = HttpStatus.badRequest;
@@ -730,6 +767,8 @@ Future<void> _handleApiRoute(
         reason: reason,
         emitImmediately: emitImmediately,
         signer: signer,
+        migrationScenario: migrationScenario,
+        newDeviceModel: newDeviceModel,
       );
 
       if (updated == null) {
@@ -815,6 +854,46 @@ Future<void> _handleApiRoute(
     }
   }
 
+  // Emisión y consulta de Boleta de Pago Oficial: /api/clients/:id/payments/:paymentId/receipt
+  final receiptMatch =
+      RegExp(r'^/api/clients/([^/]+)/payments/([^/]+)/receipt$')
+          .firstMatch(path);
+  if (receiptMatch != null && method == 'POST') {
+    final clientId = receiptMatch.group(1)!;
+    final paymentId = receiptMatch.group(2)!;
+    final bodyStr = await _readRequestBody(request);
+    Map<String, dynamic> body = {};
+    if (bodyStr.isNotEmpty) {
+      try {
+        body = jsonDecode(bodyStr) as Map<String, dynamic>;
+      } catch (_) {}
+    }
+    final customNote = body['custom_note'] as String?;
+
+    try {
+      final receiptData = await dbService.issueOrGetPaymentReceipt(
+        clientId: clientId,
+        paymentId: paymentId,
+        customNote: customNote,
+        configService: configService,
+      );
+
+      if (receiptData == null) {
+        request.response.statusCode = HttpStatus.notFound;
+        request.response
+            .write(jsonEncode({'error': 'Cliente o pago no encontrado'}));
+      } else {
+        request.response.statusCode = HttpStatus.ok;
+        request.response.write(jsonEncode(receiptData));
+      }
+    } catch (e) {
+      request.response.statusCode = HttpStatus.badRequest;
+      request.response.write(jsonEncode({'error': e.toString()}));
+    }
+    await request.response.close();
+    return;
+  }
+
   // Operaciones sobre Cliente Individual: GET, PUT, DELETE
   // Sincronización de datos reales reportados del celular: /api/clients/:id/sync-reported
   final syncReportedMatch =
@@ -841,6 +920,42 @@ Future<void> _handleApiRoute(
       } else {
         request.response.statusCode = HttpStatus.ok;
         request.response.write(jsonEncode(updated));
+      }
+    } catch (e) {
+      request.response.statusCode = HttpStatus.badRequest;
+      request.response.write(jsonEncode({'error': e.toString()}));
+    }
+    await request.response.close();
+    return;
+  }
+
+  // Edición del motivo en historial de migraciones de hardware: /api/clients/:id/device-history/:index
+  final devHistoryMatch =
+      RegExp(r'^/api/clients/([^/]+)/device-history/(\d+)$').firstMatch(path);
+  if (devHistoryMatch != null && method == 'PUT') {
+    final clientId = devHistoryMatch.group(1)!;
+    final historyIndex = int.parse(devHistoryMatch.group(2)!);
+    final bodyStr = await _readRequestBody(request);
+    final body = jsonDecode(bodyStr) as Map<String, dynamic>;
+    final reason = (body['reason'] as String? ?? '').trim();
+
+    try {
+      final updated = await dbService.updateDeviceHistoryReason(
+        clientId: clientId,
+        historyIndex: historyIndex,
+        reason: reason,
+      );
+      if (updated == null) {
+        request.response.statusCode = HttpStatus.notFound;
+        request.response.write(jsonEncode(
+            {'error': 'Cliente o registro de migración no encontrado'}));
+      } else {
+        request.response.statusCode = HttpStatus.ok;
+        request.response.write(jsonEncode({
+          'ok': true,
+          'message': 'Motivo de migración actualizado exitosamente',
+          'client': updated,
+        }));
       }
     } catch (e) {
       request.response.statusCode = HttpStatus.badRequest;
@@ -918,7 +1033,9 @@ Future<void> _handleApiRoute(
     final customDays = (body['custom_days'] as num?)?.toInt();
     final defaultDays = configService.getPlanDays(normPlan, fallback: 30);
     int daysToAdd = customDays ?? defaultDays;
-    final defaultPrice = configService.getPlanPrice(normPlan, fallback: 35.0);
+    final defaultPrice = (normPlan == 'BONO_IA_PERSONALIZADO')
+        ? 0.0
+        : configService.getPlanPrice(normPlan, fallback: 35.0);
     final paymentAmount = (body['payment_amount'] as num?)?.toDouble() ??
         (body['amount'] as num?)?.toDouble() ??
         defaultPrice;
@@ -928,6 +1045,7 @@ Future<void> _handleApiRoute(
         'Pago registrado';
     final aiExtra = (body['custom_ai_bonus'] as num?)?.toInt() ??
         (body['ai_extra_credits'] as num?)?.toInt() ??
+        (body['custom_ai_amount'] as num?)?.toInt() ??
         0;
     final computationMode = body['computation_mode'] as String? ?? 'cumulative';
     final resetFromToday =
@@ -939,7 +1057,18 @@ Future<void> _handleApiRoute(
             ? DateTime.tryParse(customExactExpStr)
             : null;
 
-    if (customDays == null) {
+    if (normPlan == 'BONO_IA_PERSONALIZADO') {
+      daysToAdd = 0;
+      if (aiExtra <= 0) {
+        request.response.statusCode = HttpStatus.badRequest;
+        request.response.write(jsonEncode({
+          'error':
+              'Para la modalidad Bono / Recarga IA Personalizada debes especificar una cantidad de escaneos IA mayor a 0.'
+        }));
+        await request.response.close();
+        return;
+      }
+    } else if (customDays == null) {
       daysToAdd = configService.getPlanDays(normPlan, fallback: 30);
     }
 
@@ -957,6 +1086,7 @@ Future<void> _handleApiRoute(
     // Regla estricta anti-doble conteo en el claim c del token:
     // Para suscripciones comerciales, el token solo lleva el bono extra (0 por defecto)
     // Para RECARGA_IA_150, el token lleva 150 (o el monto configurado)
+    // Para BONO_IA_PERSONALIZADO, el token lleva la cantidad exacta solicitada
     final tokenClaimC =
         normPlan == 'RECARGA_IA_150' ? (aiExtra > 0 ? aiExtra : 150) : aiExtra;
 
@@ -986,8 +1116,10 @@ Future<void> _handleApiRoute(
       resetFromToday: resetFromToday,
     );
 
-    final baseAi = configService.getPlanAiCredits(normPlan,
-        fallback: LicenseSigner.getCumulativeScansForPlan(normPlan));
+    final baseAi = (normPlan == 'BONO_IA_PERSONALIZADO')
+        ? 0
+        : configService.getPlanAiCredits(normPlan,
+            fallback: LicenseSigner.getCumulativeScansForPlan(normPlan));
     final totalCredited = baseAi + aiExtra;
 
     request.response.write(jsonEncode({

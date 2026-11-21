@@ -95,6 +95,13 @@
       </div>
 
       <div class="sidebar-footer">
+        <button type="button" class="btn-shutdown-server" id="btnShutdownServer" title="Apagar Servidor Local" aria-label="Apagar Servidor Local">
+          <svg class="shutdown-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M18.36 6.64a9 9 0 1 1-12.73 0"></path>
+            <line x1="12" y1="2" x2="12" y2="12"></line>
+          </svg>
+          <span class="shutdown-text">Apagar Servidor</span>
+        </button>
         <div class="engine-badge">
           <span class="engine-dot"></span>
           <span class="engine-text">Ed25519 Offline v36</span>
@@ -398,10 +405,68 @@
                 <option value="PERPETUO_LIBERADO" data-days="99999" data-price="850.00">PERPETUO LIBERADO (De por Vida + 12m Updates) — S/ 850.00</option>
                 <option value="PASE_ACTUALIZACION_ANUAL" data-days="0" data-price="150.00">PASE ANUAL DE UPDATES (Clientes Perpetuos) — S/ 150.00</option>
                 <option value="RECARGA_IA_150" data-days="0" data-price="20.00">BOLSA EXTRA IA (+150 escaneos sin vencimiento) — S/ 20.00</option>
+                <option value="BONO_IA_PERSONALIZADO" data-days="0" data-price="0.00">Bono / Recarga IA Personalizada (0 días — Sin alterar suscripción)</option>
                 <option value="EXTENSION_CORTESIA" data-days="7" data-price="0.00">EXTENSIÓN CORTESÍA (+7 días gracia) — S/ 0.00</option>
               </select>
               <div id="licPlanImpactBadge" class="plan-impact-badge" style="display:none; margin-top:0.5rem; padding:0.6rem 0.8rem; border-radius:8px; font-size:0.82rem; font-weight:600; line-height:1.4;"></div>
               <div id="licPlanProjection" class="plan-projection-text" style="display:none; font-size:0.8rem; color:var(--text-secondary); margin-top:0.35rem; font-family:var(--font-mono);"></div>
+
+              <!-- PANEL DEDICADO: BONO / RECARGA IA PERSONALIZADA -->
+              <div id="panelCustomAiBonus" class="custom-ai-panel" style="display:none; margin-top:0.75rem; padding:1rem; background:var(--bg-card); border:1px solid var(--border-color); border-radius:10px;">
+                <div style="font-weight:700; font-size:0.9rem; color:var(--text-primary); margin-bottom:0.6rem; display:flex; align-items:center; gap:0.4rem;">
+                  <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+                  Configuración del Bono o Recarga IA
+                </div>
+                
+                <!-- Chips rápidos de escaneos IA -->
+                <div class="form-group" style="margin-bottom:0.75rem;">
+                  <label style="font-size:0.82rem;">Cantidad de Escaneos IA a Otorgar:</label>
+                  <div class="ai-chips-bar" style="display:flex; gap:0.4rem; flex-wrap:wrap; margin-bottom:0.5rem;">
+                    <button type="button" class="btn btn-outline btn-sm ai-chip-btn" data-ai="20">+20 IA</button>
+                    <button type="button" class="btn btn-outline btn-sm ai-chip-btn" data-ai="50">+50 IA</button>
+                    <button type="button" class="btn btn-outline btn-sm ai-chip-btn" data-ai="100">+100 IA</button>
+                    <button type="button" class="btn btn-outline btn-sm ai-chip-btn" data-ai="150">+150 IA</button>
+                  </div>
+                  <div style="display:flex; align-items:center; gap:0.5rem;">
+                    <input type="number" id="licCustomAiAmount" value="20" min="1" step="1" style="max-width:140px; font-weight:700; font-size:1rem;" placeholder="Ej: 20">
+                    <span style="font-size:0.85rem; color:var(--text-secondary);">escaneos acumulativos vitalicios</span>
+                  </div>
+                </div>
+
+                <!-- Selector de Modalidad Económica (2 opciones en 1 clic) -->
+                <div class="form-group" style="margin-bottom:0.75rem;">
+                  <label style="font-size:0.82rem;">Modalidad Comercial de Entrega:</label>
+                  <div class="economic-mode-switch" style="display:flex; gap:0.5rem;">
+                    <label class="radio-chip" id="lblEcoModeFree" style="flex:1; cursor:pointer; padding:0.6rem; border:1px solid var(--primary); border-radius:8px; background:rgba(37,99,235,0.1); font-size:0.85rem; font-weight:600; display:flex; align-items:center; gap:0.4rem;">
+                      <input type="radio" name="licEcoMode" id="ecoModeFree" value="free" checked style="accent-color:var(--primary);">
+                      <span>Entrega Gratuita / Cortesía (S/ 0.00)</span>
+                    </label>
+                    <label class="radio-chip" id="lblEcoModePaid" style="flex:1; cursor:pointer; padding:0.6rem; border:1px solid var(--border-color); border-radius:8px; background:var(--bg-secondary); font-size:0.85rem; font-weight:600; display:flex; align-items:center; gap:0.4rem;">
+                      <input type="radio" name="licEcoMode" id="ecoModePaid" value="paid" style="accent-color:var(--primary);">
+                      <span>Con Cobro Personalizado</span>
+                    </label>
+                  </div>
+                </div>
+
+                <!-- Calculadora de Precio Sugerido (Visible sólo con Cobro) -->
+                <div id="boxSuggestedPrice" style="display:none; padding:0.75rem; background:var(--bg-secondary); border-radius:8px; border:1px dashed var(--border-color); margin-bottom:0.75rem;">
+                  <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.5rem;">
+                    <div>
+                      <span id="txtSuggestedCalc" style="font-size:0.82rem; color:var(--text-secondary); display:block;">Calculando precio sugerido...</span>
+                      <strong id="valSuggestedPrice" style="font-size:1.05rem; color:var(--primary);">S/ 0.00</strong>
+                    </div>
+                    <button type="button" class="btn btn-outline btn-sm" id="btnApplySuggestedPrice" style="border-color:var(--primary); color:var(--primary);">
+                      Aplicar sugerido
+                    </button>
+                  </div>
+                </div>
+
+                <!-- Nota informativa v9.35+ -->
+                <div style="font-size:0.78rem; color:var(--text-muted); line-height:1.4; display:flex; gap:0.35rem; align-items:flex-start;">
+                  <svg style="width:14px; height:14px; min-width:14px; margin-top:2px;" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+                  <span>Los tokens de bono puro (0 días) se acreditan con total compatibilidad en la app móvil v9.35+ sumando créditos a su celular sin alterar la suscripción vigente ni los días de Trial.</span>
+                </div>
+              </div>
             </div>
 
             <!-- ACORDEÓN: AJUSTES COMERCIALES PERSONALIZADOS -->
@@ -436,12 +501,12 @@
               </div>
             </div>
 
-            <div class="form-group">
+            <div class="form-group" id="grpLicPaymentAmount">
               <label for="licPaymentAmount">Monto Cobrado (S/):</label>
               <input type="number" id="licPaymentAmount" step="0.5" value="35.00">
             </div>
 
-            <div class="form-group">
+            <div class="form-group" id="grpLicPaymentMethod">
               <label for="licPaymentMethod">Medio de Pago:</label>
               <select id="licPaymentMethod">
                 <option value="Yape">Yape</option>
@@ -453,7 +518,7 @@
               </select>
             </div>
 
-            <div class="form-group">
+            <div class="form-group" id="grpLicPaymentRef">
               <label for="licPaymentRef">N° de Operación / Referencia:</label>
               <input type="text" id="licPaymentRef" placeholder="Ej: Op. 849201">
             </div>
@@ -466,28 +531,68 @@
 
           <!-- Columna Resultado de Código & QR -->
           <div class="license-result-box" id="licenseResultContainer">
-            <h3 style="font-size:1.1rem; color:var(--text-primary); border-bottom:1px solid var(--border-color); padding-bottom:0.6rem;">
-              Licencia Emitida & Credencial Oficial
-            </h3>
-            <p style="font-size:0.85rem; color:var(--text-secondary);">
+            <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid var(--border-color); padding-bottom:0.6rem;">
+              <h3 style="font-size:1.1rem; color:var(--text-primary); margin:0;">
+                Licencia Emitida & Credencial Oficial
+              </h3>
+              <span id="licResultBadgeStatus" class="badge badge-green" style="display:none;">ACTIVA / VIGENTE</span>
+            </div>
+            <p id="licResultSubtext" style="font-size:0.85rem; color:var(--text-secondary); margin:0.4rem 0;">
               El código y QR generado se firman con tu clave privada maestra Ed25519 y son válidos exclusivamente para el teléfono del cliente.
             </p>
 
             <div id="resultContent" style="display:none; flex-direction:column; gap:1rem;">
               <div class="code-display" id="generatedCodeDisplay">ML9-...</div>
 
+              <!-- Metadatos de la licencia seleccionada / activa -->
+              <div id="genLicenseMetaGrid" class="client-summary-grid" style="grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); margin-top:0.25rem;">
+                <div class="client-summary-item">
+                  <span class="client-summary-label">Plan</span>
+                  <span class="client-summary-val" id="metaGenPlan">-</span>
+                </div>
+                <div class="client-summary-item">
+                  <span class="client-summary-label">Nonce</span>
+                  <span class="client-summary-val" id="metaGenNonce">-</span>
+                </div>
+                <div class="client-summary-item">
+                  <span class="client-summary-label">Emisión</span>
+                  <span class="client-summary-val" id="metaGenEmitted">-</span>
+                </div>
+                <div class="client-summary-item">
+                  <span class="client-summary-label">Vigencia</span>
+                  <span class="client-summary-val" id="metaGenExpires">-</span>
+                </div>
+                <div class="client-summary-item">
+                  <span class="client-summary-label">Créditos IA</span>
+                  <span class="client-summary-val" id="metaGenAi">-</span>
+                </div>
+                <div class="client-summary-item">
+                  <span class="client-summary-label">Device ID</span>
+                  <span class="client-summary-val" id="metaGenDeviceId" style="font-family:var(--font-mono); color:var(--primary);">-</span>
+                </div>
+              </div>
+
               <div style="display:flex; gap:0.5rem; flex-wrap:wrap;">
-                <button class="btn btn-outline btn-sm" id="btnCopyCode">
+                <button class="btn btn-outline btn-sm" id="btnCopyCode" title="Copiar código Ed25519">
                   <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
                   Copiar Código
                 </button>
-                <button class="btn btn-outline btn-sm" id="btnDownloadQr">
+                <button class="btn btn-outline btn-sm" id="btnDownloadQr" title="Descargar solo la imagen del QR">
                   <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                  Descargar Imagen QR
+                  Descargar Solo QR
                 </button>
-                <a class="btn btn-wa btn-sm" id="btnSendWa" target="_blank" href="#">
-                  <span>📲 Enviar por WhatsApp</span>
-                </a>
+                <button class="btn btn-outline btn-sm" id="btnCopyCredentialImage" title="Copiar imagen para pegar directamente con Ctrl+V en WhatsApp">
+                  <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                  Copiar Imagen Credencial
+                </button>
+                <button class="btn btn-primary btn-sm" id="btnDownloadCredential" title="Descargar archivo PNG">
+                  <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                  Descargar Tarjeta PNG @2x
+                </button>
+                <button class="btn btn-wa btn-sm" id="btnSendWa" title="Enviar licencia por WhatsApp">
+                  <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+                  Enviar por WhatsApp
+                </button>
                 <button class="btn btn-outline btn-sm" id="btnAuditInInspector" title="Auditar en el Inspector Forense en 1 clic">
                   <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
                   Auditar en Inspector
@@ -497,26 +602,23 @@
               <div class="qr-container" id="qrContainer"></div>
 
               <!-- CREDENCIAL OFICIAL EN CANVAS PNG DE ALTA RESOLUCIÓN (@2x / 900x520) -->
-              <div class="credential-box" style="margin-top:1rem; border-top:1px solid var(--border-color); padding-top:1rem;">
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.75rem; flex-wrap:wrap; gap:0.5rem;">
-                  <h4 style="font-size:0.95rem; font-weight:700; color:var(--text-primary); display:flex; align-items:center; gap:0.4rem;">
-                    Credencial Oficial de Licencia (Alta Resolución @2x)
-                  </h4>
-                  <div style="display:flex; gap:0.5rem;">
-                    <button class="btn btn-outline btn-sm" id="btnCopyCredentialImage" title="Copiar imagen para pegar directamente con Ctrl+V en WhatsApp">
-                      <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-                      Copiar Credencial
-                    </button>
-                    <button class="btn btn-primary btn-sm" id="btnDownloadCredential" title="Descargar archivo PNG">
-                      <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                      Descargar PNG
-                    </button>
-                  </div>
-                </div>
+              <div class="credential-box" style="margin-top:0.5rem; border-top:1px solid var(--border-color); padding-top:0.75rem;">
                 <div style="display:flex; justify-content:center; background:rgba(0,0,0,0.25); border-radius:12px; padding:0.75rem; overflow-x:auto;">
                   <canvas id="credentialCanvas" width="900" height="520" style="width:100%; max-width:540px; border-radius:8px; display:block; box-shadow:0 6px 18px rgba(0,0,0,0.3);"></canvas>
                 </div>
               </div>
+            </div>
+
+            <!-- HISTORIAL DE LICENCIAS EMITIDAS DEL CLIENTE SELECCIONADO -->
+            <div id="genHistorySection" style="display:none; margin-top:1.25rem; border-top:1px solid var(--border-color); padding-top:1rem;">
+              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.6rem;">
+                <h4 style="font-size:0.92rem; font-weight:700; color:var(--text-primary); margin:0; display:flex; align-items:center; gap:0.4rem;">
+                  <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                  Historial de Licencias Emitidas (<span id="genHistoryCount">0</span>)
+                </h4>
+                <small style="font-size:0.75rem; color:var(--text-muted);">Clic para visualizar QR / Credencial</small>
+              </div>
+              <div id="genHistoryList" style="display:flex; flex-direction:column; gap:0.5rem; max-height:260px; overflow-y:auto; padding-right:0.25rem;"></div>
             </div>
 
             <div id="resultPlaceholder" style="text-align:center; padding:3rem 1rem; color:var(--text-muted);">
@@ -758,10 +860,11 @@
                 <th>Medio</th>
                 <th>Referencia</th>
                 <th>Monto</th>
+                <th>Comprobante</th>
               </tr>
             </thead>
             <tbody id="financesTableBody">
-              <tr><td colspan="8" style="text-align:center;">Cargando transacciones contables...</td></tr>
+              <tr><td colspan="9" style="text-align:center;">Cargando transacciones contables...</td></tr>
             </tbody>
           </table>
         </div>
@@ -1496,10 +1599,18 @@
             <small class="field-hint">Fecha límite para contactar o cerrar acuerdo comercial.</small>
           </div>
 
+          <!-- MODELO DEL CELULAR (OPCIONAL) -->
+          <div class="form-group" id="grpNewDeviceModel">
+            <label for="newDeviceModel">Modelo del Celular (Opcional):</label>
+            <input type="text" id="newDeviceModel" placeholder="Ej: Samsung Galaxy A54 5G">
+            <small class="field-hint">Referencia física del equipo del cliente.</small>
+          </div>
+
           <!-- VERSIÓN DE APP INSTALADA -->
           <div class="form-group" id="grpInstalledVersion">
             <label for="newInstalledVersion">Versión de App Instalada:</label>
-            <input type="text" id="newInstalledVersion" value="9.34.0" placeholder="9.34.0">
+            <input type="text" id="newInstalledVersion" value="9.35.0" placeholder="9.35.0">
+            <small class="field-hint">Versión APK reportada o instalada.</small>
           </div>
 
           <!-- BLOQUE DE CRÉDITOS IA TRANSPARENTE -->
@@ -1740,25 +1851,65 @@
     </div>
   </div>
 
-  <!-- MODAL: REGISTRAR / EDITAR PAGO MANUAL -->
+  <!-- MODAL: REGISTRAR / EDITAR PAGO MANUAL (FASE 5) -->
   <div class="modal-overlay" id="modalManualPayment">
-    <div class="modal-dialog">
+    <div class="modal-dialog" style="max-width: 580px;">
       <div class="modal-header">
-        <h3 id="manualPayTitle">Registrar Pago Manual</h3>
+        <div style="display:flex; align-items:center; gap:0.5rem;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" style="width:20px; height:20px; color:var(--primary);"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
+          <h3 id="manualPayTitle" style="margin:0;">Registrar Pago</h3>
+        </div>
         <button class="btn btn-outline btn-sm" onclick="closeModal('modalManualPayment')">✕</button>
       </div>
       <div class="modal-body">
+        <!-- Tarjeta Resumen del Cliente en Cabecera -->
+        <div class="modal-client-summary-card" id="manualPayClientSummary" style="margin-bottom:1rem; padding:0.75rem 1rem; border-radius:10px; background:var(--bg-secondary); border:1px solid var(--border-color);">
+          <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:0.5rem;">
+            <div>
+              <div style="display:flex; align-items:center; gap:0.5rem;">
+                <strong id="manualPayBizName" style="font-size:1.05rem;">-</strong>
+                <span id="manualPayStatusBadge" class="badge badge-green">Activa</span>
+              </div>
+              <div style="font-size:0.83rem; color:var(--text-secondary); margin-top:3px;">
+                <span id="manualPayOwnerName">-</span> • <code id="manualPayDevId" style="font-family:var(--font-mono); color:var(--primary); font-weight:700;">-</code>
+              </div>
+            </div>
+            <div style="text-align:right;">
+              <div style="font-size:0.75rem; text-transform:uppercase; color:var(--text-muted); font-weight:600;">Vencimiento Vigente</div>
+              <div id="manualPayExpiresText" style="font-size:0.88rem; font-weight:600; color:var(--text-primary);">-</div>
+              <div style="font-size:0.75rem; color:var(--text-muted); margin-top:2px;">Recaudado: <strong id="manualPayTotalPaid" style="color:var(--success);">S/ 0.00</strong></div>
+            </div>
+          </div>
+        </div>
+
         <form id="formManualPayment" class="form-grid">
           <input type="hidden" id="manualPayClientId">
           <input type="hidden" id="manualPayId">
+          <input type="hidden" id="manualPayPlan">
+
+          <div class="form-group" style="grid-column: 1 / -1;">
+            <label for="manualPayPlanPreset">Concepto / Plan Oficial:</label>
+            <select id="manualPayPlanPreset" style="width: 100%;">
+              <option value="Renovación Mensual" data-price="35.00">Renovación Mensual (S/ 35.00)</option>
+              <option value="Renovación Trimestral" data-price="90.00">Renovación Trimestral (S/ 90.00)</option>
+              <option value="Renovación Semestral" data-price="160.00">Renovación Semestral (S/ 160.00)</option>
+              <option value="Renovación Anual" data-price="280.00">Renovación Anual (S/ 280.00)</option>
+              <option value="Licencia Perpetua Liberada" data-price="850.00">Licencia Perpetua Liberada (S/ 850.00)</option>
+              <option value="Pase Anual de Updates" data-price="150.00">Pase Anual de Updates (S/ 150.00)</option>
+              <option value="Recarga Extra IA (+150 escaneos)" data-price="20.00">Recarga Extra IA (+150 escaneos) (S/ 20.00)</option>
+              <option value="Bono IA Personalizado" data-price="0.00">Bono IA Personalizado</option>
+              <option value="Servicio Técnico de Migración de Celular" data-price="40.00">Servicio Técnico de Migración de Celular (S/ 40.00)</option>
+              <option value="Abono / Pago Parcial" data-price="0.00">Abono / Pago Parcial</option>
+              <option value="CUSTOM">Otro Concepto Personalizado...</option>
+            </select>
+            <input type="text" id="manualPayCustomConcept" placeholder="Describe el concepto personalizado..." style="display:none; margin-top:0.5rem; width:100%;">
+          </div>
+
           <div class="form-group">
             <label for="manualPayAmount">Monto Cobrado (S/):</label>
             <input type="number" id="manualPayAmount" step="0.5" required placeholder="35.00">
           </div>
-          <div class="form-group">
-            <label for="manualPayPlan">Concepto / Plan:</label>
-            <input type="text" id="manualPayPlan" required placeholder="Ej: Renovación Mensual, Pase Anual">
-          </div>
+
           <div class="form-group">
             <label for="manualPayMethod">Medio de Pago:</label>
             <select id="manualPayMethod">
@@ -1770,23 +1921,257 @@
               <option value="Otro">Otro</option>
             </select>
           </div>
+
           <div class="form-group">
             <label for="manualPayRef">N° de Operación / Referencia:</label>
             <input type="text" id="manualPayRef" placeholder="Ej: Op. 849201">
           </div>
+
           <div class="form-group">
             <label for="manualPayDate">Fecha del Pago:</label>
             <input type="date" id="manualPayDate">
           </div>
+
           <div class="form-group" style="grid-column: 1 / -1;">
             <label for="manualPayNotes">Notas Adicionales:</label>
             <textarea id="manualPayNotes" rows="2" placeholder="Detalle contable o acuerdo..."></textarea>
+          </div>
+
+          <div class="form-group" style="grid-column: 1 / -1; display:flex; align-items:center; gap:0.6rem; padding:0.6rem 0.8rem; border-radius:8px; background:var(--bg-secondary); border:1px solid var(--border-color); margin-top:0.25rem;">
+            <input type="checkbox" id="manualPayGenerateReceipt" style="width:18px; height:18px; cursor:pointer;" checked>
+            <label for="manualPayGenerateReceipt" style="margin:0; cursor:pointer; font-size:0.88rem; font-weight:600; color:var(--text-primary);">
+              Generar Boleta de Pago al guardar (Abre comprobante BOL-XXXX de inmediato)
+            </label>
           </div>
         </form>
       </div>
       <div class="modal-footer">
         <button class="btn btn-outline" onclick="closeModal('modalManualPayment')">Cancelar</button>
         <button class="btn btn-primary" id="btnSubmitManualPayment">Guardar Pago</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: GENERADOR Y PERSONALIZADOR DE BOLETAS DE PAGO (FASE 5) -->
+  <div class="modal-overlay" id="modalPaymentReceipt">
+    <div class="modal-dialog modal-receipt-dialog" style="max-width: 1040px; width: 95%;">
+      <div class="modal-header">
+        <div style="display:flex; align-items:center; gap:0.6rem;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" style="width:22px; height:22px; color:var(--primary);"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+          <h3 style="margin:0;">Generador de Boleta de Pago</h3>
+          <span id="receiptModalBadge" class="badge badge-blue" style="font-family:var(--font-mono); font-size:0.85rem; padding:0.25rem 0.6rem;">BOL-0001</span>
+        </div>
+        <button class="btn btn-outline btn-sm" onclick="closeReceiptModal()">✕</button>
+      </div>
+      <div class="modal-body" style="padding: 1.25rem;">
+        <div class="receipt-split-container">
+          <!-- Columna Izquierda: Vista Previa Real y Documento Imprimible -->
+          <div class="receipt-preview-pane">
+            <div class="receipt-preview-header">
+              <span style="font-size:0.8rem; font-weight:600; color:var(--text-muted); text-transform:uppercase;">Vista Previa • Alta Resolución @2x</span>
+              <span id="receiptIssuedNotice" class="badge badge-mono" style="font-size:0.75rem;">Modo Offline</span>
+            </div>
+            <div class="receipt-doc-wrapper" id="receiptDocWrapper">
+              <!-- Documento Renderizado Imprimible -->
+              <div class="receipt-doc-paper" id="receiptPrintableDoc">
+                <!-- Cabecera del Documento -->
+                <div class="rdoc-header" id="rdocHeader">
+                  <div class="rdoc-logo-wrap" id="rdocLogoWrap">
+                    <img src="/icon_192.png" alt="MochilaLista" class="rdoc-logo-img" id="rdocLogoImg" onerror="this.style.display='none'; document.getElementById('rdocLogoSvgFallback').style.display='block';">
+                    <svg id="rdocLogoSvgFallback" style="display:none; width:44px; height:44px; color:var(--primary);" viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/><circle cx="7" cy="15" r="1"/></svg>
+                  </div>
+                  <div class="rdoc-title-wrap">
+                    <h2 class="rdoc-doc-title" id="rdocDocTitle">BOLETA DE PAGO ADMINISTRATIVA</h2>
+                    <div class="rdoc-commercial" id="rdocCommercialName">MochilaLista</div>
+                  </div>
+                  <div class="rdoc-correlative-box">
+                    <div class="rdoc-correlative-label">COMPROBANTE N.°</div>
+                    <div class="rdoc-correlative-num" id="rdocCorrelativeNum">BOL-0001</div>
+                    <div class="rdoc-date-time" id="rdocDateTime">21/11/2026 13:00</div>
+                  </div>
+                </div>
+
+                <div class="rdoc-divider" id="rdocDivider"></div>
+
+                <!-- Emisor y Cliente en dos columnas -->
+                <div class="rdoc-parties-grid">
+                  <div class="rdoc-party-box">
+                    <div class="rdoc-party-tag">EMISOR DEL COMPROBANTE</div>
+                    <div class="rdoc-party-name" id="rdocIssuerName">Julio Angello Vasquez Navarro</div>
+                    <div class="rdoc-party-meta"><span class="rdoc-lbl">Documento:</span> <span id="rdocIssuerDoc">D.N.I. / R.U.C. Registrado</span></div>
+                    <div class="rdoc-party-meta"><span class="rdoc-lbl">WhatsApp:</span> <span id="rdocIssuerPhone">+51 922 836 879</span></div>
+                    <div class="rdoc-party-meta"><span class="rdoc-lbl">Ciudad:</span> <span id="rdocIssuerCity">Piura, Perú</span></div>
+                  </div>
+                  <div class="rdoc-party-box">
+                    <div class="rdoc-party-tag">DATOS DEL CLIENTE</div>
+                    <div class="rdoc-party-name" id="rdocClientBiz">Comercial Luzam</div>
+                    <div class="rdoc-party-meta"><span class="rdoc-lbl">Titular:</span> <span id="rdocClientOwner">Angello Vasquez</span></div>
+                    <div class="rdoc-party-meta"><span class="rdoc-lbl">RUC / DNI:</span> <span id="rdocClientDoc">-</span></div>
+                    <div class="rdoc-party-meta"><span class="rdoc-lbl">Hardware ID:</span> <code id="rdocClientDevId" class="rdoc-dev-code">ML-379E</code></div>
+                  </div>
+                </div>
+
+                <!-- Tabla de Detalle del Pago -->
+                <div class="rdoc-table-wrap">
+                  <table class="rdoc-table">
+                    <thead>
+                      <tr>
+                        <th>Descripción / Concepto</th>
+                        <th>Medio</th>
+                        <th>N.° Operación</th>
+                        <th>Fecha</th>
+                        <th style="text-align:right;">Total (S/)</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr>
+                        <td>
+                          <strong id="rdocPaymentConcept">Renovación Mensual</strong>
+                          <div id="rdocPaymentCustomNote" style="font-size:0.75rem; color:#64748b; margin-top:2px;"></div>
+                        </td>
+                        <td id="rdocPaymentMethod">Yape</td>
+                        <td id="rdocPaymentRef">Op. 849201</td>
+                        <td id="rdocPaymentDate">21/11/2026</td>
+                        <td style="text-align:right;"><strong id="rdocPaymentRowAmount">S/ 35.00</strong></td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+
+                <!-- Total Callout Box -->
+                <div class="rdoc-total-section">
+                  <div class="rdoc-total-box">
+                    <span class="rdoc-total-label">TOTAL RECIBIDO:</span>
+                    <span class="rdoc-total-value" id="rdocPaymentTotal">S/ 35.00</span>
+                  </div>
+                </div>
+
+                <!-- Pie Legal y Firma -->
+                <div class="rdoc-footer">
+                  <div class="rdoc-legal-notes" id="rdocFooterNotes">
+                    Software de Punto de Venta Offline. Comprobante de control administrativo y soporte técnico.
+                  </div>
+                  <div class="rdoc-signature-wrap">
+                    <div class="rdoc-signature-line"></div>
+                    <div class="rdoc-signature-text" id="rdocSignatureText">Administración Comercial — MochilaLista</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <!-- Canvas Oculto para Generación @2x -->
+            <canvas id="receiptExportCanvas" style="display:none;"></canvas>
+          </div>
+
+          <!-- Columna Derecha: Panel de Personalización y Acciones -->
+          <div class="receipt-controls-pane">
+            <div class="rc-section-title">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" style="width:16px; height:16px; color:var(--primary);"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+              <span>Personalizar Diseño de Boleta</span>
+            </div>
+
+            <div class="rc-form-group">
+              <label for="rcInputTitle">Título del Comprobante:</label>
+              <input type="text" id="rcInputTitle" value="BOLETA DE PAGO ADMINISTRATIVA">
+            </div>
+
+            <div class="rc-form-row">
+              <div class="rc-form-group">
+                <label for="rcInputCommercialName">Nombre Comercial:</label>
+                <input type="text" id="rcInputCommercialName" value="MochilaLista">
+              </div>
+              <div class="rc-form-group">
+                <label for="rcInputIssuerCity">Ciudad:</label>
+                <input type="text" id="rcInputIssuerCity" value="Piura, Perú">
+              </div>
+            </div>
+
+            <div class="rc-form-row">
+              <div class="rc-form-group">
+                <label for="rcInputIssuerName">Titular Emisor:</label>
+                <input type="text" id="rcInputIssuerName" value="Julio Angello Vasquez Navarro">
+              </div>
+              <div class="rc-form-group">
+                <label for="rcInputIssuerPhone">WhatsApp / Soporte:</label>
+                <input type="text" id="rcInputIssuerPhone" value="+51 922 836 879">
+              </div>
+            </div>
+
+            <div class="rc-form-row">
+              <div class="rc-form-group">
+                <label for="rcInputIssuerDoc">RUC / DNI Emisor:</label>
+                <input type="text" id="rcInputIssuerDoc" value="D.N.I. / R.U.C. Registrado">
+              </div>
+              <div class="rc-form-group">
+                <label>Color de Acento:</label>
+                <div style="display:flex; align-items:center; gap:0.5rem;">
+                  <input type="color" id="rcInputAccentColor" value="#2563eb" style="width:36px; height:32px; padding:0; border:none; border-radius:6px; cursor:pointer;">
+                  <div class="rc-swatches">
+                    <span class="rc-swatch" data-color="#2563eb" style="background:#2563eb;"></span>
+                    <span class="rc-swatch" data-color="#059669" style="background:#059669;"></span>
+                    <span class="rc-swatch" data-color="#7c3aed" style="background:#7c3aed;"></span>
+                    <span class="rc-swatch" data-color="#dc2626" style="background:#dc2626;"></span>
+                    <span class="rc-swatch" data-color="#0284c7" style="background:#0284c7;"></span>
+                    <span class="rc-swatch" data-color="#1e293b" style="background:#1e293b;"></span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="rc-form-group" style="display:flex; align-items:center; gap:0.5rem; margin-top:0.25rem;">
+              <input type="checkbox" id="rcCheckShowLogo" checked style="width:16px; height:16px; cursor:pointer;">
+              <label for="rcCheckShowLogo" style="margin:0; cursor:pointer; font-size:0.85rem; font-weight:600;">Mostrar Logotipo Oficial</label>
+            </div>
+
+            <div class="rc-form-group">
+              <label for="rcInputCustomNote">Observación o Detalle para esta Boleta:</label>
+              <input type="text" id="rcInputCustomNote" placeholder="Ej: Pago adelantado con descuento promocional...">
+            </div>
+
+            <div class="rc-form-group">
+              <label for="rcInputFooterNotes">Nota Legal / Soporte al Pie:</label>
+              <textarea id="rcInputFooterNotes" rows="2">Software de Punto de Venta Offline. Comprobante de control administrativo y soporte técnico.</textarea>
+            </div>
+
+            <div class="rc-form-group">
+              <label for="rcInputSignature">Texto de Firma:</label>
+              <input type="text" id="rcInputSignature" value="Administración Comercial — MochilaLista">
+            </div>
+
+            <div style="display:flex; gap:0.5rem; margin-top:0.5rem; margin-bottom:1rem;">
+              <button type="button" class="btn btn-outline btn-sm" id="btnRcSaveDefault" style="flex:1;">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" style="width:14px; height:14px;"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+                Guardar Diseño Predeterminado
+              </button>
+              <button type="button" class="btn btn-outline btn-sm" id="btnRcResetDefault">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" style="width:14px; height:14px;"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
+                Restaurar
+              </button>
+            </div>
+
+            <!-- 4 Acciones de Entrega Inmediata (SVG Vectoriales) -->
+            <div class="rc-actions-container">
+              <div style="font-size:0.8rem; font-weight:700; text-transform:uppercase; color:var(--text-muted); margin-bottom:0.4rem;">Acciones de Entrega</div>
+              <button type="button" class="btn btn-primary" id="btnRcDownloadPng" style="width:100%; margin-bottom:0.5rem; justify-content:center;">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" style="width:16px; height:16px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                Descargar Boleta PNG (@2x)
+              </button>
+              <button type="button" class="btn btn-secondary" id="btnRcCopyClipboard" style="width:100%; margin-bottom:0.5rem; justify-content:center;">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" style="width:16px; height:16px;"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                Copiar Imagen al Portapapeles (Ctrl+V)
+              </button>
+              <div style="display:flex; gap:0.5rem;">
+                <button type="button" class="btn btn-outline" id="btnRcPrintPdf" style="flex:1; justify-content:center;">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" style="width:16px; height:16px;"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+                  Imprimir / PDF
+                </button>
+                <button type="button" class="btn btn-success" id="btnRcSendWhatsapp" style="flex:1; justify-content:center;">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" style="width:16px; height:16px;"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+                  WhatsApp
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -1802,6 +2187,21 @@
         <button class="btn btn-outline btn-sm" onclick="closeModal('modalSyncReported')">✕</button>
       </div>
       <div class="modal-body">
+        <!-- Tarjeta de Identidad del Cliente en Sincronización -->
+        <div class="wa-client-card" id="syncRepClientCard" style="margin-bottom:1rem; padding:0.75rem 1rem; border-radius:10px; background:var(--bg-secondary); border:1px solid var(--border-color);">
+          <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:0.5rem;">
+            <div>
+              <div style="display:flex; align-items:center; gap:0.5rem;">
+                <strong id="syncRepBizName" style="font-size:1.05rem;">-</strong>
+                <span id="syncRepStatusBadge" class="badge badge-green">Activa</span>
+              </div>
+              <div style="font-size:0.83rem; color:var(--text-secondary); margin-top:3px;">
+                <span id="syncRepOwnerName">-</span> • <code id="syncRepCurrentDevId" style="font-family:var(--font-mono); color:var(--primary); font-weight:700;">-</code>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <p style="font-size:0.83rem; color:var(--text-secondary); margin-bottom:1rem;">
           Actualiza los datos reales que la aplicación móvil ha reportado en el teléfono (Hardware ID, saldo de créditos IA, versión APK, modelo de celular y días de evaluación).
         </p>
@@ -1846,50 +2246,128 @@
 
   <!-- MODAL: MIGRAR DISPOSITIVO POR CAMBIO DE TELÉFONO -->
   <div class="modal-overlay" id="modalMigrateDevice">
-    <div class="modal-dialog">
+    <div class="modal-dialog" style="max-width:580px;">
       <div class="modal-header">
-        <h3>Migrar Dispositivo / Cambio de Celular</h3>
+        <h3 style="display:flex; align-items:center; gap:8px;">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>
+          Migrar Dispositivo / Cambio de Celular
+        </h3>
         <button class="btn btn-outline btn-sm" onclick="closeModal('modalMigrateDevice')">✕</button>
       </div>
       <div class="modal-body">
-        <p style="font-size:0.88rem; color:var(--text-secondary); margin-bottom:1rem;">
-          Esta función vincula la licencia del cliente a su nuevo teléfono y archiva el identificador anterior en su historial de equipos para prevenir clonaciones no autorizadas.
+        <p style="font-size:0.84rem; color:var(--text-secondary); margin-bottom:0.75rem; line-height:1.4;">
+          Esta función transfiere de forma segura la licencia del cliente a su nuevo teléfono y archiva el identificador anterior en el historial para prevenir clonaciones no autorizadas.
         </p>
-        <form id="formMigrateDevice" style="display:flex; flex-direction:column; gap:1rem;">
+
+        <!-- TARJETA RESUMEN DE PRESERVACIÓN -->
+        <div class="mig-preservation-card" id="migPreservationSummary">
+          <div class="mig-pres-title">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+            Garantía de Preservación de Derechos del Cliente
+          </div>
+          <div class="mig-pres-grid">
+            <div class="mig-pres-item">
+              <span class="mig-pres-label">Plan a Transferir:</span>
+              <span class="mig-pres-val" id="migPreservePlan">-</span>
+            </div>
+            <div class="mig-pres-item">
+              <span class="mig-pres-label">Vigencia & Días:</span>
+              <span class="mig-pres-val" id="migPreserveExpires">-</span>
+            </div>
+            <div class="mig-pres-item">
+              <span class="mig-pres-label">Créditos IA Totales:</span>
+              <span class="mig-pres-val" id="migPreserveAi" style="color:var(--primary); font-weight:700;">-</span>
+            </div>
+            <div class="mig-pres-item" id="migPreserveUpdatesWrapper" style="display:none;">
+              <span class="mig-pres-label">Ventana Updates:</span>
+              <span class="mig-pres-val" id="migPreserveUpdates">-</span>
+            </div>
+          </div>
+        </div>
+
+        <form id="formMigrateDevice" style="display:flex; flex-direction:column; gap:0.9rem; margin-top:0.75rem;">
           <input type="hidden" id="migClientId">
           <div class="form-group">
-            <label>Cliente:</label>
-            <input type="text" id="migClientName" readonly style="opacity:0.8;">
+            <label>Cliente Titular:</label>
+            <input type="text" id="migClientName" readonly style="opacity:0.85;">
           </div>
+
+          <!-- SELECTOR DE ESCENARIO DE MIGRACIÓN -->
           <div class="form-group">
-            <label>Hardware ID Anterior (ANDROID_ID — se archivará):</label>
-            <input type="text" id="migOldDeviceId" readonly style="font-family:var(--font-mono); opacity:0.8;">
+            <label for="migScenario">Escenario de Migración:</label>
+            <select id="migScenario">
+              <option value="RESTORED_BACKUP" selected>Reactivación de Hardware (Backup restaurado — 0 días extra)</option>
+              <option value="CLEAN_INSTALL">Transferencia Integral (Instalación limpia — transfiere X días restantes)</option>
+            </select>
+            <small id="migScenarioHint" style="display:block; margin-top:4px; font-size:0.78rem; color:var(--text-muted); line-height:1.3;">
+              Recomendado si el cliente restauró su copia de Google Drive o .mlbg: reactiva el nuevo equipo preservando exactamente su vencimiento con cero duplicación de días.
+            </small>
           </div>
-          <div class="form-group">
-            <label for="migNewDeviceId">Nuevo Hardware ID del Teléfono (ML-YYYY — ANDROID_ID):</label>
-            <input type="text" id="migNewDeviceId" required placeholder="Ej: ML-7H2R" style="font-family:var(--font-mono); text-transform:uppercase;">
+
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.75rem;">
+            <div class="form-group">
+              <label>Hardware ID Anterior (Archivar):</label>
+              <input type="text" id="migOldDeviceId" readonly style="font-family:var(--font-mono); opacity:0.8;">
+            </div>
+            <div class="form-group">
+              <label for="migNewDeviceId">Nuevo Hardware ID (ML-YYYY): *</label>
+              <input type="text" id="migNewDeviceId" required placeholder="Ej: ML-7H2R" style="font-family:var(--font-mono); text-transform:uppercase;">
+            </div>
           </div>
+
           <div class="form-group">
-            <label for="migFee">Tarifa de Reasignación de Licencia (S/):</label>
-            <input type="number" id="migFee" value="40.00" step="1.0">
+            <label for="migNewDeviceModel">Modelo del Nuevo Celular (Opcional):</label>
+            <input type="text" id="migNewDeviceModel" placeholder="Ej: Xiaomi Redmi Note 13 / Samsung Galaxy A54 5G">
           </div>
+
+          <!-- 3 MODALIDADES DE COBRO -->
           <div class="form-group">
-            <label for="migPaymentMethod">Medio de Pago:</label>
-            <select id="migPaymentMethod">
-              <option value="Yape">Yape</option>
-              <option value="Plin">Plin</option>
-              <option value="Transferencia BCP">Transferencia BCP</option>
-              <option value="Efectivo">Efectivo</option>
-              <option value="Cortesia (Garantia)">Cortesía (Garantía de equipo)</option>
+            <label for="migFeeMode">Modalidad de Cobro:</label>
+            <select id="migFeeMode">
+              <option value="STANDARD" selected>Tarifa Estándar de Reasignación (S/ 40.00)</option>
+              <option value="FREE">Traslado Gratuito / Cortesía (S/ 0.00 — Garantía)</option>
+              <option value="CUSTOM">Tarifa Personalizada</option>
             </select>
           </div>
-          <div class="form-group">
-            <label for="migReason">Motivo de la Migración:</label>
-            <input type="text" id="migReason" placeholder="Ej: Renovó equipo a Xiaomi Redmi Note 13">
+
+          <div class="form-group" id="migCustomFeeGroup" style="display:none;">
+            <label for="migFee">Monto a Cobrar (S/):</label>
+            <input type="number" id="migFee" value="40.00" step="1.0" min="0">
           </div>
-          <div class="form-group" style="display:flex; flex-direction:row; align-items:center; gap:0.6rem; margin-top:0.25rem;">
+
+          <!-- CAMPOS DE PAGO (OCULTOS SI FREE) -->
+          <div id="migPaymentFieldsGroup">
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.75rem;">
+              <div class="form-group">
+                <label for="migPaymentMethod">Medio de Pago:</label>
+                <select id="migPaymentMethod">
+                  <option value="Yape">Yape</option>
+                  <option value="Plin">Plin</option>
+                  <option value="Transferencia BCP">Transferencia BCP</option>
+                  <option value="Efectivo">Efectivo</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label for="migPaymentRef">N.° de Operación / Ref:</label>
+                <input type="text" id="migPaymentRef" placeholder="Ej: Op. 849201">
+              </div>
+            </div>
+            <div class="form-group" style="display:flex; flex-direction:row; align-items:center; gap:0.6rem; margin-top:0.25rem;">
+              <input type="checkbox" id="migGenerateReceipt" checked style="width:17px; height:17px; cursor:pointer;">
+              <label for="migGenerateReceipt" style="cursor:pointer; font-weight:600; margin:0; font-size:0.86rem;">
+                Generar Boleta de Pago por la Migración al confirmar
+              </label>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="migReason">Motivo u Observación de la Migración:</label>
+            <input type="text" id="migReason" placeholder="Ej: Renovó equipo por rotura de pantalla">
+          </div>
+
+          <div class="form-group" style="display:flex; flex-direction:row; align-items:center; gap:0.6rem; margin-top:0.1rem;">
             <input type="checkbox" id="migEmitImmediately" checked style="width:18px; height:18px; cursor:pointer;">
-            <label for="migEmitImmediately" style="cursor:pointer; font-weight:600; margin:0; color:var(--primary); font-size:0.88rem;">
+            <label for="migEmitImmediately" style="cursor:pointer; font-weight:600; margin:0; color:var(--primary); font-size:0.86rem;">
               Emitir licencia para el nuevo teléfono de inmediato (1 solo paso)
             </label>
           </div>
@@ -1898,7 +2376,7 @@
         <!-- RESULTADO DE EMISIÓN INMEDIATA EN 1 PASO -->
         <div id="migSuccessInline" class="migration-success-box" style="display:none; margin-top:1rem;">
           <div style="font-weight:700; color:var(--success); font-size:0.95rem; display:flex; align-items:center; gap:0.4rem;">
-            <svg style="width:20px; height:20px;" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+            <svg style="width:20px; height:20px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
             ¡Migración Completada y Licencia Emitida!
           </div>
           <p style="font-size:0.84rem; color:var(--text-secondary); margin:0;">
@@ -1907,12 +2385,17 @@
           <div class="code-display" id="migSuccessCode" style="font-size:0.85rem; padding:0.6rem;">ML9-...</div>
           <div style="display:flex; gap:0.5rem; flex-wrap:wrap; justify-content:center;">
             <button type="button" class="btn btn-outline btn-sm" id="btnMigCopyCode">
-              <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+              <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
               Copiar Código
             </button>
             <a class="btn btn-wa btn-sm" id="btnMigSendWa" target="_blank" href="#">
-              <span>📲 Enviar por WhatsApp</span>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style="margin-right:4px;"><path d="M12.04 2c-5.46 0-9.91 4.45-9.91 9.91 0 1.75.46 3.45 1.32 4.95L2.05 22l5.25-1.38c1.45.79 3.08 1.21 4.74 1.21 5.46 0 9.91-4.45 9.91-9.91 0-2.65-1.03-5.14-2.9-7.01A9.816 9.816 0 0 0 12.04 2z"/></svg>
+              Enviar por WhatsApp
             </a>
+            <button type="button" class="btn btn-secondary btn-sm" id="btnMigViewReceipt" style="display:none;">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:4px;"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+              Generar Boleta
+            </button>
           </div>
           <div id="migSuccessQrContainer" style="display:flex; justify-content:center; background:#ffffff; padding:10px; border-radius:10px; width:190px; height:190px; margin:0 auto; box-shadow:0 4px 12px rgba(0,0,0,0.15);"></div>
         </div>
@@ -1965,7 +2448,7 @@
         <form id="formCreateRelease" class="form-grid">
           <div class="form-group">
             <label for="relVersionName">Versión (Version Name):</label>
-            <input type="text" id="relVersionName" required placeholder="Ej: 9.34.0">
+            <input type="text" id="relVersionName" required placeholder="Ej: 9.35.0">
           </div>
           <div class="form-group">
             <label for="relVersionCode">Código de Build (Version Code):</label>
@@ -2115,41 +2598,77 @@
           </label>
           <div class="wa-templates-bar">
             <button type="button" class="wa-template-btn active" data-tpl="welcome" onclick="selectWaTemplate('welcome')">
-              <span>👋 Saludo y Bienvenida</span>
+              <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+              <span>Saludo y Bienvenida</span>
             </button>
             <button type="button" class="wa-template-btn" data-tpl="expiring" onclick="selectWaTemplate('expiring')">
-              <span>⏳ Renovación Preventiva</span>
+              <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+              <span>Renovación Preventiva</span>
             </button>
             <button type="button" class="wa-template-btn" data-tpl="prospect" onclick="selectWaTemplate('prospect')">
-              <span>🎯 Seguimiento Prospecto</span>
+              <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
+              <span>Seguimiento Prospecto</span>
             </button>
             <button type="button" class="wa-template-btn" data-tpl="license" onclick="selectWaTemplate('license')">
-              <span>🔑 Entrega de Licencia</span>
+              <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>
+              <span>Entrega de Licencia</span>
             </button>
             <button type="button" class="wa-template-btn" data-tpl="update" onclick="selectWaTemplate('update')">
-              <span>🚀 Nueva Versión APK</span>
+              <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"/><path d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"/><path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0"/><path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"/></svg>
+              <span>Nueva Versión APK</span>
             </button>
             <button type="button" class="wa-template-btn" data-tpl="empty" onclick="selectWaTemplate('empty')">
-              <span>💬 Chat Vacío</span>
+              <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+              <span>Chat Vacío</span>
             </button>
           </div>
         </div>
 
         <!-- Editor de Mensaje -->
         <div>
-          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.35rem;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.35rem; flex-wrap:wrap; gap:0.4rem;">
             <label for="waCompMessage" style="font-size:0.82rem; font-weight:700; color:var(--text-secondary); text-transform:uppercase;">
               Mensaje Personalizado
             </label>
-            <span id="waCompCharCounter" style="font-size:0.75rem; color:var(--text-muted); font-family:var(--font-mono);">0 caracteres</span>
+            <div style="display:flex; align-items:center; gap:0.5rem;">
+              <button type="button" class="btn btn-outline btn-xs" id="btnWaSaveTemplate" onclick="saveCurrentWaTemplate()" title="Guardar este texto como plantilla oficial en la configuración del propietario" style="font-size:0.75rem; padding:2px 8px;">
+                <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" style="width:12px; height:12px;"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+                Guardar plantilla
+              </button>
+              <button type="button" class="btn btn-outline btn-xs" id="btnWaResetTemplate" onclick="resetCurrentWaTemplate()" title="Restablecer plantilla a su contenido original por defecto" style="font-size:0.75rem; padding:2px 8px;">
+                Restaurar por defecto
+              </button>
+              <span id="waCompCharCounter" style="font-size:0.75rem; color:var(--text-muted); font-family:var(--font-mono); margin-left:0.25rem;">0 caracteres</span>
+            </div>
           </div>
-          <textarea id="waCompMessage" class="form-control" rows="8" placeholder="Escribe el mensaje o selecciona una plantilla..." style="font-size:0.88rem; line-height:1.5; resize:vertical; font-family:inherit;"></textarea>
+          <textarea id="waCompMessage" rows="7" placeholder="Escribe el mensaje o selecciona una plantilla..."></textarea>
+
+          <!-- Barra de Inserción Rápida en 1 Clic -->
+          <div class="wa-quick-insert-bar">
+            <span style="font-size:0.75rem; color:var(--text-muted); font-weight:700; margin-right:0.25rem;">Insertar:</span>
+            <button type="button" class="wa-insert-chip" onclick="insertWaSnippet('payment')" title="Insertar cuentas de cobro Yape / Plin configuradas">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
+              + Datos Yape / Plin
+            </button>
+            <button type="button" class="wa-insert-chip" onclick="insertWaSnippet('device')" title="Insertar Hardware ID del cliente">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>
+              + Hardware ID
+            </button>
+            <button type="button" class="wa-insert-chip" onclick="insertWaSnippet('expiration')" title="Insertar fecha y días de vencimiento">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+              + Vencimiento
+            </button>
+            <button type="button" class="wa-insert-chip" onclick="insertWaSnippet('token')" title="Insertar último código de licencia emitido">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>
+              + Último Token
+            </button>
+          </div>
         </div>
       </div>
 
-      <div class="modal-footer" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.5rem;">
+      <div class="modal-footer" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:nowrap; gap:0.75rem;">
         <button type="button" class="btn btn-outline" onclick="closeModal('modalWaComposer')">Cancelar</button>
-        <div style="display:flex; gap:0.5rem; align-items:center; flex-wrap:wrap;">
+        <div style="display:flex; gap:0.5rem; align-items:center; flex-wrap:nowrap;">
           <button type="button" class="btn btn-outline" id="btnWaCompCopy" onclick="copyWaComposerMessage()" title="Copiar texto al portapapeles">
             <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
             Copiar Mensaje
@@ -2610,11 +3129,11 @@
         <!-- Contenido activo cuando sí tiene licencias -->
         <div id="drawerQrContent" style="display:flex; flex-direction:column; gap:0.85rem;">
           <!-- Selector histórico de licencias si hay más de 1 -->
-          <div id="drawerQrSelectorContainer" style="display:none;">
+          <div id="drawerQrSelectorContainer" style="display:none; width:100%; margin-bottom:0.25rem;">
             <label for="drawerQrCodeSelector" style="font-size:0.75rem; font-weight:700; text-transform:uppercase; color:var(--text-muted); display:block; margin-bottom:0.25rem;">
               Seleccionar Licencia Emitida del Histórico:
             </label>
-            <select id="drawerQrCodeSelector" class="form-control" style="font-size:0.85rem; font-family:inherit;"></select>
+            <select id="drawerQrCodeSelector" class="form-control" style="width:100%; font-size:0.85rem; font-family:inherit;"></select>
           </div>
 
           <div style="display:flex; flex-direction:column; align-items:center; background:var(--bg-card); border:1px solid var(--border-color); border-radius:12px; padding:1.25rem; gap:0.75rem;">
@@ -2632,11 +3151,15 @@
             <div><span style="color:var(--text-muted); font-size:0.72rem; text-transform:uppercase; display:block;">Dispositivo:</span> <code id="drawerQrMetaDevice" style="font-family:var(--font-mono); color:var(--primary); font-weight:700;">-</code></div>
           </div>
 
-          <!-- 5 Botones Vectoriales Oficiales (Cero Emojis) -->
+          <!-- Botones Vectoriales Oficiales (Cero Emojis) -->
           <div style="display:flex; gap:0.45rem; flex-wrap:wrap; justify-content:center;">
             <button type="button" class="btn btn-outline btn-sm" id="btnDrawerCopyCode" title="Copiar código al portapapeles">
               <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
               Copiar Código
+            </button>
+            <button type="button" class="btn btn-outline btn-sm" id="btnDrawerCopyCredential" title="Copiar imagen PNG oficial al portapapeles para pegar en WhatsApp">
+              <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+              Copiar Imagen
             </button>
             <button type="button" class="btn btn-primary btn-sm" id="btnDrawerDownloadCredential" title="Descargar credencial oficial en alta resolución @2x">
               <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
@@ -2653,6 +3176,10 @@
             <button type="button" class="btn btn-wa btn-sm" id="btnDrawerSendWa" title="Enviar Licencia por WhatsApp">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" style="width:14px; height:14px; margin-right:4px;"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
               WhatsApp
+            </button>
+            <button type="button" class="btn btn-outline btn-sm" id="btnDrawerQrNewLicense" title="Emitir una nueva licencia para este cliente en el Estudio Generador">
+              <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+              Emitir Nueva Licencia
             </button>
           </div>
         </div>
@@ -2680,52 +3207,52 @@
           </div>
         </div>
 
-        <div style="display:flex; justify-content:space-between; align-items:center;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.6rem;">
           <h4 style="font-size:0.95rem; font-weight:700; color:var(--text-primary); margin:0;">Historial de Cobros</h4>
           <button type="button" class="btn btn-outline btn-sm" id="btnDrawerAddPayment">
             <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-            + Registrar Pago Manual
+            Registrar Pago
           </button>
         </div>
-        <div class="table-responsive" style="max-height:280px; overflow-y:auto;">
-          <table class="data-table" style="font-size:0.82rem;">
-            <thead>
-              <tr>
-                <th>Fecha</th>
-                <th>Concepto</th>
-                <th>Monto</th>
-                <th>Medio</th>
-                <th>Referencia</th>
-                <th style="width: 75px; text-align: center;">Acciones</th>
-              </tr>
-            </thead>
-            <tbody id="drawerPaymentsBody">
-              <tr><td colspan="6" style="text-align:center;">Sin pagos registrados</td></tr>
-            </tbody>
-          </table>
+        <div id="drawerPaymentsBody" class="drawer-payments-container">
+          <!-- Tarjetas compactas inyectadas dinámicamente -->
         </div>
       </div>
 
       <!-- PESTAÑA 4: HARDWARE Y MIGRACIONES -->
       <div class="drawer-tab-pane" id="drawerTabHardware">
         <div id="drawerHardwareCurrentBox" style="padding:0.85rem 1rem; background:rgba(37,99,235,0.08); border:1px solid rgba(37,99,235,0.25); border-radius:10px;">
-          <div style="display:flex; justify-content:space-between; align-items:center;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.35rem;">
             <div style="font-size:0.72rem; color:var(--text-muted); font-weight:700; text-transform:uppercase;">Hardware ID Actual (ANDROID_ID)</div>
-            <button type="button" class="btn-micro" onclick="copyDeviceIdToClipboard(document.getElementById('drawerCurrentDevIdDisplay').textContent)" title="Copiar Hardware ID">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" style="width:13px; height:13px;"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+            <button type="button" class="btn-copy-pill" id="btnDrawerCopyCurrentDevId" onclick="copyDeviceIdToClipboard(document.getElementById('drawerCurrentDevIdDisplay').textContent)" title="Copiar Hardware ID">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+              <span>Copiar ID</span>
             </button>
           </div>
           <div id="drawerCurrentDevIdDisplay" style="font-family:var(--font-mono); font-size:1.15rem; font-weight:800; color:var(--primary); margin-top:2px;">-</div>
 
           <div class="drawer-hw-info-grid">
-            <div><span style="color:var(--text-muted); font-size:0.72rem; text-transform:uppercase; display:block;">Modelo Celular:</span> <strong id="drawerHwModelDisplay">No registrado</strong></div>
+            <div>
+              <span style="color:var(--text-muted); font-size:0.72rem; text-transform:uppercase; display:block;">Modelo Celular:</span>
+              <div id="drawerHwModelRow" style="display:flex; align-items:center; gap:0.35rem; margin-top:2px;">
+                <strong id="drawerHwModelDisplay">No registrado</strong>
+                <button type="button" class="btn-micro" id="btnDrawerEditModelInline" title="Editar modelo inline">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" style="width:12px; height:12px;"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                </button>
+              </div>
+              <div id="drawerHwModelInlineForm" style="display:none; align-items:center; gap:0.3rem; margin-top:4px;">
+                <input type="text" id="inputDrawerModelInline" class="form-control" style="font-size:0.78rem; padding:2px 6px; height:26px; width:140px;" placeholder="Ej: Galaxy A54">
+                <button type="button" class="btn btn-primary btn-xs" id="btnSaveDrawerModelInline" style="padding:2px 6px;">✓</button>
+                <button type="button" class="btn btn-outline btn-xs" id="btnCancelDrawerModelInline" style="padding:2px 6px;">✕</button>
+              </div>
+            </div>
             <div><span style="color:var(--text-muted); font-size:0.72rem; text-transform:uppercase; display:block;">Versión APK:</span> <span id="drawerHwVersionDisplay">-</span></div>
             <div><span style="color:var(--text-muted); font-size:0.72rem; text-transform:uppercase; display:block;">Next Nonce:</span> <code id="drawerHwNonceDisplay" style="font-family:var(--font-mono); font-weight:700;">1</code></div>
             <div><span style="color:var(--text-muted); font-size:0.72rem; text-transform:uppercase; display:block;">Vinculado el:</span> <span id="drawerHwLinkedDateDisplay">-</span></div>
           </div>
         </div>
 
-        <div style="display:flex; justify-content:space-between; align-items:center;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-top:0.85rem; margin-bottom:0.4rem;">
           <h4 style="font-size:0.95rem; font-weight:700; color:var(--text-primary); margin:0;">Historial de Migraciones</h4>
           <button type="button" class="btn btn-outline btn-sm" id="btnDrawerMigrateDev">
             <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/></svg>
@@ -2733,14 +3260,14 @@
           </button>
         </div>
         <div class="table-responsive" style="max-height:260px; overflow-y:auto;">
-          <table class="data-table" style="font-size:0.82rem;">
+          <table class="data-table" style="font-size:0.82rem; width:100%;">
             <thead>
               <tr>
-                <th>Fecha</th>
+                <th style="width:85px;">Fecha</th>
                 <th>Anterior</th>
                 <th>Nuevo</th>
-                <th>Tarifa</th>
-                <th>Motivo</th>
+                <th style="width:70px;">Tarifa</th>
+                <th>Motivo / Observación</th>
               </tr>
             </thead>
             <tbody id="drawerHardwareBody">

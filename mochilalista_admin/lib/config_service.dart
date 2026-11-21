@@ -29,6 +29,7 @@ class ConfigService {
   Map<String, dynamic> get paymentMethods => (_config['payment_methods'] as Map<String, dynamic>?) ?? {};
   Map<String, dynamic> get catalog => (_config['catalog'] as Map<String, dynamic>?) ?? {};
   Map<String, dynamic> get templates => (_config['templates'] as Map<String, dynamic>?) ?? {};
+  Map<String, dynamic> get receiptConfig => (_config['receipt_config'] as Map<String, dynamic>?) ?? {};
 
   /// Tarifa técnica oficial de migración de hardware
   double get migrationFee =>
@@ -204,7 +205,41 @@ class ConfigService {
             '{codigo}\n\n'
             'Actívalo en tu nuevo teléfono para continuar operando sin contratiempos.',
       },
+      'receipt_config': {
+        'title': 'BOLETA DE PAGO ADMINISTRATIVA',
+        'commercial_name': 'MochilaLista',
+        'issuer_name': 'Julio Angello Vasquez Navarro',
+        'issuer_doc': 'D.N.I. / R.U.C. Registrado',
+        'issuer_phone': '+51 922 836 879',
+        'issuer_city': 'Piura, Perú',
+        'show_logo': true,
+        'accent_color': '#2563eb',
+        'footer_notes':
+            'Software de Punto de Venta Offline. Comprobante de control administrativo y soporte técnico.',
+        'signature_text': 'Administración Comercial — MochilaLista',
+        'next_correlative': 1,
+        'sandbox_next_correlative': 1,
+      },
     };
+  }
+
+  /// Retorna el siguiente número correlativo disponible según el modo activo
+  int getNextReceiptCorrelative({required bool isSandbox}) {
+    final rc = receiptConfig;
+    final key = isSandbox ? 'sandbox_next_correlative' : 'next_correlative';
+    return (rc[key] as num?)?.toInt() ?? 1;
+  }
+
+  /// Consume atómicamente el correlativo actual para emitir una boleta y lo incrementa en +1
+  Future<int> consumeReceiptCorrelative({required bool isSandbox}) async {
+    final rc = Map<String, dynamic>.from(receiptConfig);
+    final key = isSandbox ? 'sandbox_next_correlative' : 'next_correlative';
+    final current = (rc[key] as num?)?.toInt() ?? 1;
+    rc[key] = current + 1;
+    final newConfig = Map<String, dynamic>.from(_config);
+    newConfig['receipt_config'] = rc;
+    await saveConfig(newConfig);
+    return current;
   }
 
   /// Consulta la configuración de un plan específico del catálogo
@@ -463,6 +498,20 @@ class ConfigService {
       }
     });
     merged['catalog'] = catalogMap;
+
+    // Sanitizar receipt_config
+    if (merged.containsKey('receipt_config') && merged['receipt_config'] is Map) {
+      final rc = Map<String, dynamic>.from(merged['receipt_config'] as Map);
+      if (rc.containsKey('next_correlative')) {
+        final nc = (rc['next_correlative'] as num?)?.toInt() ?? 1;
+        rc['next_correlative'] = nc < 1 ? 1 : nc;
+      }
+      if (rc.containsKey('sandbox_next_correlative')) {
+        final snc = (rc['sandbox_next_correlative'] as num?)?.toInt() ?? 1;
+        rc['sandbox_next_correlative'] = snc < 1 ? 1 : snc;
+      }
+      merged['receipt_config'] = rc;
+    }
 
     return merged;
   }

@@ -249,8 +249,26 @@ class Ed25519LicenseValidator {
     }
 
     // 6. Cálculo de Expiración con Protección Anti-Replay y Renovación Anticipada
+    final isPureAiRecharge =
+        plan == 'RECARGA_IA_150' || plan == 'BONO_IA_PERSONALIZADO';
+    if (plan == 'BONO_IA_PERSONALIZADO' && extraCredits <= 0) {
+      throw Exception(
+        'El bono de IA personalizado debe especificar una cantidad de escaneos mayor a 0.',
+      );
+    }
+
+    // Detectar reactivación de hardware por migración (backup restaurado donde SQLite ya trae la fecha intacta y daysToAdd == 0)
+    final isMigrationHardwareReactivation = (currentLicense.estadoActual ==
+                'PENDIENTE_MIGRACION' ||
+            (daysToAdd == 0 && currentLicense.fechaExpiracion.isAfter(now))) &&
+        !isPureAiRecharge;
+
     DateTime newExpiration;
-    if (plan == 'RECARGA_IA_150') {
+    if (isPureAiRecharge) {
+      newExpiration = currentLicense.fechaExpiracion;
+    } else if (isMigrationHardwareReactivation) {
+      // En reactivación de migración con backup restaurado (y = 0), se preserva exactamente
+      // la fecha de expiración que ya tiene registrada en su SQLite local sin duplicar días.
       newExpiration = currentLicense.fechaExpiracion;
     } else if (plan == 'PERPETUO_LIBERADO' || plan == 'PERPETUO') {
       newExpiration = now.add(const Duration(days: 99999));
@@ -274,7 +292,13 @@ class Ed25519LicenseValidator {
         newExpiration = baseDate.add(Duration(days: daysToAdd));
       } else {
         // Usuario en TRIAL o TRIAL_VENCIDO (instalación limpia tras desinstalar) o licencia expirada
-        if (iat != null) {
+        final isMigrationToken = payload['m'] == 1 ||
+            payload['is_migration'] == true ||
+            payload['m'] == true;
+        if (isMigrationToken) {
+          // Transferencia de licencia en instalación limpia: transfiere exactamente los días restantes solicitados
+          newExpiration = now.add(Duration(days: daysToAdd));
+        } else if (iat != null) {
           final maxExpirationFromIat = iat.add(Duration(days: daysToAdd));
           if (now.isAfter(maxExpirationFromIat)) {
             throw Exception(

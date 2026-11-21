@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
 import 'license_signer.dart';
+import 'config_service.dart';
 
 /// Servicio de Persistencia Real en Disco Duro con Arquitectura de Doble Estado
 /// Soporta 'sandbox' (Modo Pruebas) y 'prod' (Modo Producción Real)
@@ -312,11 +313,39 @@ class DatabaseService {
     }
 
     // 4. Créditos IA: saldo reportado en celular vs bono pendiente en token
-    final reportedAi = (clientData['ai_reported_balance'] as num?)?.toInt() ?? (isProspect ? 0 : 50);
+    final hasReportedBalance = clientData.containsKey('ai_reported_balance') && clientData['ai_reported_balance'] != null;
+    final reportedAi = hasReportedBalance
+        ? (clientData['ai_reported_balance'] as num).toInt()
+        : (isProspect ? 0 : 50);
     final pendingBonusAi = (clientData['ai_pending_bonus'] as num?)?.toInt() ?? 0;
     final baseAi = isProspect ? 0 : getCumulativeScansForPlan(plan);
-    final userExtraAi = (clientData['ai_extra_credits'] as num?)?.toInt() ?? pendingBonusAi;
-    final totalAi = baseAi + userExtraAi;
+
+    int finalExtraAi;
+    int accumulatedAi;
+
+    if (isProspect) {
+      finalExtraAi = 0;
+      accumulatedAi = 0;
+    } else if (plan == 'TRIAL') {
+      if (hasReportedBalance || pendingBonusAi > 0) {
+        // Alta con datos reales desde UI / móvil:
+        // ai_extra_credits es 0 porque aún no se emite el token
+        // ai_accumulated_credits es reportedAi (lo que realmente tiene el celular, ej. 49)
+        finalExtraAi = (clientData.containsKey('ai_extra_credits') && clientData['ai_extra_credits'] != null && pendingBonusAi == 0)
+            ? (clientData['ai_extra_credits'] as num).toInt()
+            : 0;
+        accumulatedAi = reportedAi;
+      } else {
+        // Alta legacy sin especificar reported_balance ni pending_bonus:
+        finalExtraAi = (clientData['ai_extra_credits'] as num?)?.toInt() ?? baseAi;
+        accumulatedAi = finalExtraAi;
+      }
+    } else {
+      // Clientes comerciales
+      final explicitExtra = (clientData['ai_extra_credits'] as num?)?.toInt();
+      finalExtraAi = explicitExtra ?? baseAi;
+      accumulatedAi = hasReportedBalance ? reportedAi : (baseAi + (explicitExtra ?? 0));
+    }
 
     final phone = normalizePeruPhone(clientData['phone'] as String? ?? '');
 
@@ -327,6 +356,7 @@ class DatabaseService {
       'document_id': clientData['document_id'] ?? '',
       'phone': phone,
       'current_device_id': rawDeviceId,
+      'device_model': (clientData['device_model'] as String?)?.trim() ?? '',
       'device_history': [],
       'installed_version': clientData['installed_version'] ?? '9.34.0',
       'license_type': plan,
@@ -340,8 +370,8 @@ class DatabaseService {
       'updates_until': updatesUntil,
       'ai_reported_balance': reportedAi,
       'ai_pending_bonus': pendingBonusAi,
-      'ai_extra_credits': totalAi,
-      'ai_accumulated_credits': totalAi,
+      'ai_extra_credits': finalExtraAi,
+      'ai_accumulated_credits': accumulatedAi,
       'notes': clientData['notes'] ?? '',
       'created_at': now.toIso8601String(),
       'payment_history': clientData['payment_history'] ?? [],
@@ -461,6 +491,8 @@ class DatabaseService {
   /// Reasignación de Dispositivo por Cambio o Pérdida de Celular
   /// Soporta [emitImmediately]: genera y firma en el mismo paso el nuevo token Ed25519 para el nuevo ANDROID_ID,
   /// preservando el 100% de los días restantes y la cuota IA sin duplicaciones (c = 0).
+  /// Soporta [migrationScenario]: 'RESTORED_BACKUP' (y = 0 días extra) vs 'CLEAN_INSTALL' (transfiere días restantes).
+  /// Soporta [newDeviceModel]: actualiza el modelo físico del equipo.
   Future<Map<String, dynamic>?> migrateDevice({
     required String clientId,
     required String newDeviceId,
@@ -469,6 +501,8 @@ class DatabaseService {
     String? reason,
     bool emitImmediately = false,
     LicenseSigner? signer,
+    String migrationScenario = 'RESTORED_BACKUP',
+    String? newDeviceModel,
   }) async {
     final clients = await getClients();
     final index = clients.indexWhere((c) => c['id'] == clientId);
@@ -478,6 +512,19 @@ class DatabaseService {
     final oldDeviceId = client['current_device_id'] as String;
     final cleanNewId = newDeviceId.trim().toUpperCase();
 
+    // Actualizar modelo del teléfono si se suministró
+    if (newDeviceModel != null && newDeviceModel.trim().isNotEmpty) {
+      client['device_model'] = newDeviceModel.trim();
+    }
+
+    final isFreeMigration = feeAmount <= 0;
+    final effectiveMethod = isFreeMigration ? 'Gratuito / Cortesía' : paymentMethod;
+    final effectiveReason = reason?.trim().isNotEmpty == true
+        ? reason!.trim()
+        : (isFreeMigration
+            ? 'Garantía de equipo / Traslado gratuito por cortesía'
+            : 'Cambio o pérdida de teléfono');
+
     // Guardar en historial de hardware
     final history = (client['device_history'] as List? ?? []).cast<Map<String, dynamic>>();
     history.add({
@@ -485,8 +532,11 @@ class DatabaseService {
       'new_device_id': cleanNewId,
       'migrated_at': DateTime.now().toUtc().toIso8601String(),
       'fee_charged': feeAmount,
-      'payment_method': paymentMethod,
-      'reason': reason ?? 'Cambio o pérdida de teléfono',
+      'payment_method': effectiveMethod,
+      'reason': effectiveReason,
+      'scenario': migrationScenario,
+      if (newDeviceModel != null && newDeviceModel.trim().isNotEmpty)
+        'device_model': newDeviceModel.trim(),
     });
     client['device_history'] = history;
     client['current_device_id'] = cleanNewId;
@@ -496,16 +546,19 @@ class DatabaseService {
     final migrationNonce = currentNonce + 1;
     client['next_nonce'] = migrationNonce;
 
-    // Si se cobró tarifa técnica, registrar en pagos
+    // Si se cobró tarifa técnica (> 0), registrar en libro de pagos; si fue gratuito, cero pagos ficticios
+    String? generatedPaymentId;
     if (feeAmount > 0) {
+      generatedPaymentId = 'MIG-${DateTime.now().millisecondsSinceEpoch}';
       final payments = (client['payment_history'] as List? ?? []).cast<Map<String, dynamic>>();
       payments.add({
-        'id': 'MIG-${DateTime.now().millisecondsSinceEpoch}',
+        'id': generatedPaymentId,
         'date': DateTime.now().toUtc().toIso8601String(),
         'amount': feeAmount,
         'plan': 'SERVICIO_MIGRACION',
         'method': paymentMethod,
         'reference': 'Migración de $oldDeviceId a $cleanNewId',
+        'notes': effectiveReason,
       });
       client['payment_history'] = payments;
     }
@@ -520,11 +573,20 @@ class DatabaseService {
       final currentExp = currentExpStr != null ? DateTime.tryParse(currentExpStr) : null;
       final now = DateTime.now();
 
-      int daysToAdd = 30;
-      if (isPerpetual) {
-        daysToAdd = 99999;
-      } else if (currentExp != null && currentExp.isAfter(now)) {
-        daysToAdd = math.max(1, currentExp.difference(now).inDays);
+      int daysToAdd = 0;
+      if (migrationScenario == 'RESTORED_BACKUP') {
+        // En backup restaurado (Google Drive o .mlbg), SQLite ya tiene la fecha de expiración intacta.
+        // Se emite y = 0 para reactivar la licencia sin sumar ni duplicar días.
+        daysToAdd = 0;
+      } else {
+        // Instalación limpia desde cero: transfiere exactamente los días restantes
+        if (isPerpetual) {
+          daysToAdd = 99999;
+        } else if (currentExp != null && currentExp.isAfter(now)) {
+          daysToAdd = math.max(1, currentExp.difference(now).inDays);
+        } else {
+          daysToAdd = 30;
+        }
       }
 
       DateTime? updatesUntil;
@@ -532,7 +594,7 @@ class DatabaseService {
         updatesUntil = DateTime.tryParse(client['updates_until']);
       }
 
-      // El token de migración lleva c = 0 para no inflar la cuota IA ya restaurada
+      // El token de migración lleva c = 0 para no inflar la cuota IA ya existente
       emittedToken = await signer.generateLicenseToken(
         deviceFingerprint: cleanNewId,
         plan: plan,
@@ -541,6 +603,7 @@ class DatabaseService {
         updatesUntil: updatesUntil,
         businessTag: client['business_name'] as String?,
         aiExtraCredits: 0,
+        isMigration: true,
       );
 
       final codes = (client['generated_codes_history'] as List? ?? []).cast<Map<String, dynamic>>();
@@ -548,13 +611,18 @@ class DatabaseService {
         'token': emittedToken,
         'plan': plan,
         'days_added': daysToAdd,
+        'nonce': migrationNonce,
+        'created_at': now.toUtc().toIso8601String(),
         'emitted_at': now.toUtc().toIso8601String(),
         'device_id': cleanNewId,
+        'expires_at': client['license_expires'],
         'expires_result': client['license_expires'],
         'is_migration_token': true,
+        'migration_scenario': migrationScenario,
         'base_ai_credits': 0,
         'bonus_ai_credits': 0,
         'total_ai_credited': 0,
+        'ai_credits': 0,
       });
       client['generated_codes_history'] = codes;
 
@@ -566,19 +634,43 @@ class DatabaseService {
         'days_retained': daysToAdd,
         'expires_date': client['license_expires'],
         'is_migration': true,
+        'migration_scenario': migrationScenario,
       };
     }
 
     clients[index] = client;
     await saveClients(clients, reason: 'migrate_device_$clientId');
 
-    if (emittedToken != null) {
-      return {
-        ...client,
-        'emitted_migration_token': emittedToken,
-        'migration_token_info': migrationTokenInfo,
-      };
+    final resultMap = Map<String, dynamic>.from(client);
+    if (generatedPaymentId != null) {
+      resultMap['payment_id'] = generatedPaymentId;
     }
+    if (emittedToken != null) {
+      resultMap['emitted_migration_token'] = emittedToken;
+      resultMap['migration_token_info'] = migrationTokenInfo;
+    }
+    return resultMap;
+  }
+
+  /// Actualización del motivo u observación de una migración en el historial de hardware
+  Future<Map<String, dynamic>?> updateDeviceHistoryReason({
+    required String clientId,
+    required int historyIndex,
+    required String reason,
+  }) async {
+    final clients = await getClients();
+    final index = clients.indexWhere((c) => c['id'] == clientId);
+    if (index == -1) return null;
+
+    final client = clients[index];
+    final history = (client['device_history'] as List? ?? []).cast<Map<String, dynamic>>();
+    if (historyIndex < 0 || historyIndex >= history.length) return null;
+
+    history[historyIndex]['reason'] = reason.trim();
+    client['device_history'] = history;
+    clients[index] = client;
+
+    await saveClients(clients, reason: 'update_migration_reason_${clientId}_$historyIndex');
     return client;
   }
 
@@ -615,13 +707,17 @@ class DatabaseService {
       baseDate = now;
     }
 
-    final basePlanCredits = normPlan == 'RECARGA_IA_150' ? 150 : getCumulativeScansForPlan(normPlan);
-    final totalCreditsToAdd = basePlanCredits + aiExtraCredits;
+    final basePlanCredits = (normPlan == 'RECARGA_IA_150')
+        ? 150
+        : (normPlan == 'BONO_IA_PERSONALIZADO' ? 0 : getCumulativeScansForPlan(normPlan));
+    final totalCreditsToAdd = (normPlan == 'BONO_IA_PERSONALIZADO')
+        ? aiExtraCredits
+        : (basePlanCredits + aiExtraCredits);
 
     DateTime newExpiration;
     if (customExactExpiration != null) {
       newExpiration = customExactExpiration;
-    } else if (normPlan == 'RECARGA_IA_150') {
+    } else if (normPlan == 'RECARGA_IA_150' || normPlan == 'BONO_IA_PERSONALIZADO') {
       newExpiration = currentExp ?? now;
     } else if (normPlan == 'PERPETUO_LIBERADO') {
       newExpiration = DateTime(2299, 12, 31);
@@ -639,19 +735,24 @@ class DatabaseService {
       final currentCredits = (client['ai_extra_credits'] as num?)?.toInt() ?? 0;
       final updatedCredits = currentCredits + totalCreditsToAdd;
       client['ai_extra_credits'] = updatedCredits;
-      client['ai_accumulated_credits'] = updatedCredits;
+
+      final curReported = (client['ai_reported_balance'] as num?)?.toInt() ?? 50;
+      client['ai_reported_balance'] = curReported + totalCreditsToAdd;
+      client['ai_accumulated_credits'] = (client['ai_reported_balance'] as num).toInt();
     }
 
     // Descontar bono pendiente de emitir si se entregaron créditos adicionales
-    if (aiExtraCredits > 0) {
+    if (aiExtraCredits > 0 || normPlan == 'BONO_IA_PERSONALIZADO') {
+      final creditsDiscounted = (normPlan == 'BONO_IA_PERSONALIZADO') ? totalCreditsToAdd : aiExtraCredits;
       final currentPending = (client['ai_pending_bonus'] as num?)?.toInt() ?? 0;
       if (currentPending > 0) {
-        final remainingPending = (currentPending - aiExtraCredits).clamp(0, 99999);
+        final remainingPending = (currentPending - creditsDiscounted).clamp(0, 99999);
         client['ai_pending_bonus'] = remainingPending;
       }
     }
 
-    client['next_nonce'] = ((client['next_nonce'] as num?)?.toInt() ?? 1) + 1;
+    final currentNonce = (client['next_nonce'] as num?)?.toInt() ?? 1;
+    client['next_nonce'] = currentNonce + 1;
 
     if (updatesUntil != null) {
       client['updates_until'] = updatesUntil.toUtc().toIso8601String();
@@ -663,12 +764,16 @@ class DatabaseService {
       'token': token,
       'plan': normPlan,
       'days_added': daysToAdd,
+      'nonce': currentNonce,
+      'created_at': now.toUtc().toIso8601String(),
       'emitted_at': now.toUtc().toIso8601String(),
       'device_id': client['current_device_id'],
+      'expires_at': newExpiration.toUtc().toIso8601String(),
       'expires_result': newExpiration.toUtc().toIso8601String(),
       'base_ai_credits': basePlanCredits,
       'bonus_ai_credits': aiExtraCredits,
       'total_ai_credited': totalCreditsToAdd,
+      'ai_credits': totalCreditsToAdd,
     });
     client['generated_codes_history'] = codes;
 
@@ -772,6 +877,75 @@ class DatabaseService {
   Future<Map<String, dynamic>?> addPayment(String clientId, Map<String, dynamic> paymentData) =>
       addManualPayment(clientId, paymentData);
 
+  /// Emite o recupera la boleta de pago oficial (BOL-XXXX) de forma atómica e idempotente
+  Future<Map<String, dynamic>?> issueOrGetPaymentReceipt({
+    required String clientId,
+    required String paymentId,
+    required ConfigService configService,
+    String? customNote,
+  }) async {
+    final clients = await getClients();
+    final index = clients.indexWhere((c) => c['id'] == clientId);
+    if (index == -1) return null;
+
+    final client = clients[index];
+    final payments = (client['payment_history'] as List? ?? [])
+        .map((p) => Map<String, dynamic>.from(p as Map))
+        .toList();
+    final pIndex = payments.indexWhere((p) => p['id'] == paymentId);
+    if (pIndex == -1) return null;
+
+    final payment = payments[pIndex];
+    final existingReceipt = payment['receipt_number'] as String?;
+    final bool alreadyIssued = existingReceipt != null && existingReceipt.trim().isNotEmpty;
+
+    if (!alreadyIssued) {
+      final isSandbox = currentMode == 'sandbox';
+      final correlative = await configService.consumeReceiptCorrelative(isSandbox: isSandbox);
+      final receiptNumber = 'BOL-${correlative.toString().padLeft(4, '0')}';
+      final issuedAt = DateTime.now().toUtc().toIso8601String();
+
+      payment['receipt_number'] = receiptNumber;
+      payment['receipt_issued_at'] = issuedAt;
+      if (customNote != null && customNote.trim().isNotEmpty) {
+        payment['receipt_custom_note'] = customNote.trim();
+      }
+
+      payments[pIndex] = payment;
+      client['payment_history'] = payments;
+      clients[index] = client;
+      await saveClients(clients, reason: 'issue_receipt_${receiptNumber}_$paymentId');
+    } else {
+      if (customNote != null && customNote.trim() != (payment['receipt_custom_note'] ?? '')) {
+        payment['receipt_custom_note'] = customNote.trim();
+        payments[pIndex] = payment;
+        client['payment_history'] = payments;
+        clients[index] = client;
+        await saveClients(clients, reason: 'update_receipt_note_${payment['receipt_number']}_$paymentId');
+      }
+    }
+
+    return {
+      'ok': true,
+      'receipt_number': payment['receipt_number'],
+      'receipt_issued_at': payment['receipt_issued_at'],
+      'already_issued': alreadyIssued,
+      'payment': payment,
+      'client': {
+        'id': client['id'],
+        'business_name': client['business_name'] ?? '',
+        'owner_name': client['owner_name'] ?? '',
+        'document_number': client['document_id'] ?? client['document_number'] ?? client['ruc_dni'] ?? '',
+        'phone': client['phone'] ?? '',
+        'current_device_id': client['current_device_id'] ?? '',
+        'license_type': client['license_type'] ?? '',
+        'license_status': client['license_status'] ?? '',
+        'license_expires': client['license_expires'] ?? '',
+      },
+      'receipt_config': configService.receiptConfig,
+    };
+  }
+
   // =================== FINANZAS Y LIBRO CONTABLE ===================
 
   /// Obtiene la lista consolidada de cobros/transacciones financieras del entorno activo
@@ -788,6 +962,8 @@ class DatabaseService {
           'plan': p['plan'] ?? '-',
           'method': p['method'] ?? '-',
           'reference': p['reference'] ?? '-',
+          'receipt_number': p['receipt_number'] ?? '',
+          'receipt_issued_at': p['receipt_issued_at'] ?? '',
           'client_id': c['id'],
           'business_name': c['business_name'] ?? '',
           'owner_name': c['owner_name'] ?? '',
