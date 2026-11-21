@@ -180,4 +180,89 @@ void main() {
       expect(result['ai_extra_credits'], equals(client['ai_extra_credits']));
     });
   });
+
+  group('5. FASE 5: CRUD de Pagos en Ficha 360°, Historial de Hardware y Datos Reportados', () {
+    test('updatePayment modifica un registro de pago existente y getClientHistory expone alias hardware', () async {
+      final client = await dbService.createClient({
+        'business_name': 'Bodega San Martín',
+        'owner_name': 'Carlos Rivera',
+        'phone': '+51977777777',
+        'current_device_id': 'ML-PAY1',
+        'license_type': 'MENSUAL',
+      });
+      final cId = client['id'] as String;
+
+      // Registrar un pago
+      final added = await dbService.addPayment(cId, {
+        'amount': 35.0,
+        'plan': 'Renovación Mensual',
+        'method': 'Yape',
+        'reference': 'OP-123456',
+        'notes': 'Cobro en ventanilla',
+      });
+      expect(added, isNotNull);
+      final payments = (added!['payment_history'] as List).cast<Map<String, dynamic>>();
+      expect(payments.length, equals(1));
+      final paymentId = payments.first['id'] as String;
+
+      // Actualizar el pago (PUT)
+      final updated = await dbService.updatePayment(cId, paymentId, {
+        'amount': 40.0,
+        'plan': 'Renovación Mensual Especial',
+        'method': 'BCP',
+        'reference': 'OP-999999',
+        'notes': 'Corrección de importe por voucher BCP',
+        'date': '2026-11-20',
+      });
+
+      expect(updated, isNotNull);
+      final updatedPayments = (updated!['payment_history'] as List).cast<Map<String, dynamic>>();
+      final p = updatedPayments.firstWhere((item) => item['id'] == paymentId);
+      expect(p['amount'], equals(40.0));
+      expect(p['plan'], equals('Renovación Mensual Especial'));
+      expect(p['method'], equals('BCP'));
+      expect(p['reference'], equals('OP-999999'));
+      expect(p['date'], equals('2026-11-20'));
+
+      // Verificar que getClientHistory expone tanto hardware como device_history
+      final history = await dbService.getClientHistory(cId);
+      expect(history, isNotNull);
+      expect(history!.containsKey('device_history'), isTrue);
+      expect(history.containsKey('hardware'), isTrue);
+      expect(history['payments'].length, equals(1));
+
+      // Eliminar pago (DELETE)
+      final deleted = await dbService.deletePayment(cId, paymentId);
+      expect(deleted, isNotNull);
+      final remPayments = (deleted!['payment_history'] as List).cast<Map<String, dynamic>>();
+      expect(remPayments.isEmpty, isTrue);
+    });
+
+    test('syncClientReportedState sincroniza atómicamente modelo de celular y balance IA', () async {
+      final client = await dbService.createClient({
+        'business_name': 'Librería El Saber',
+        'owner_name': 'Rosa Flores',
+        'phone': '+51988888888',
+        'current_device_id': 'ML-DEV1',
+        'license_type': 'TRIAL',
+      });
+      final cId = client['id'] as String;
+
+      final synced = await dbService.syncClientReportedState(
+        clientId: cId,
+        deviceId: 'ML-DEV1-NEW',
+        deviceModel: 'Samsung Galaxy A54 5G',
+        installedVersion: '9.31.0',
+        aiReportedBalance: 42,
+        trialDaysRemaining: 20,
+      );
+
+      expect(synced, isNotNull);
+      expect(synced!['current_device_id'], equals('ML-DEV1-NEW'));
+      expect(synced['device_model'], equals('Samsung Galaxy A54 5G'));
+      expect(synced['installed_version'], equals('9.31.0'));
+      expect(synced['ai_reported_balance'], equals(42));
+      expect(synced['trial_days_remaining'], equals(20));
+    });
+  });
 }

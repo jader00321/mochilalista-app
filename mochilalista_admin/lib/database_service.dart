@@ -213,47 +213,133 @@ class DatabaseService {
     }
   }
 
+  /// Normalización estándar de teléfonos WhatsApp Perú (+51)
+  static String normalizePeruPhone(String raw) {
+    final trimmed = raw.trim();
+    if (trimmed.isEmpty) return '';
+    final hasPlus = trimmed.startsWith('+');
+    final digits = trimmed.replaceAll(RegExp(r'\D'), '');
+    if (digits.isEmpty) return '';
+
+    if (hasPlus) {
+      return '+$digits';
+    }
+    if (digits.length == 9 && digits.startsWith('9')) {
+      return '+51$digits';
+    }
+    if (digits.length == 11 && digits.startsWith('519')) {
+      return '+$digits';
+    }
+    return digits;
+  }
+
   /// Helper oficial para consultar la cuota IA base acumulativa por plan
   static int getCumulativeScansForPlan(String planName) =>
       LicenseSigner.getCumulativeScansForPlan(planName);
 
   Future<Map<String, dynamic>> createClient(Map<String, dynamic> clientData) async {
     final clients = await getClients();
-    final id = 'CLI-${(clients.length + 1).toString().padLeft(3, '0')}';
+    int maxNum = 0;
+    for (final c in clients) {
+      final cid = c['id'] as String? ?? '';
+      if (cid.startsWith('CLI-')) {
+        final n = int.tryParse(cid.substring(4)) ?? 0;
+        if (n > maxNum) maxNum = n;
+      }
+    }
+    final id = 'CLI-${(maxNum + 1).toString().padLeft(3, '0')}';
     final now = DateTime.now().toUtc();
 
-    final plan = LicenseSigner.normalizePlanSlug(clientData['license_type'] as String? ?? 'TRIAL');
+    final rawPlan = (clientData['license_type'] as String? ?? 'TRIAL').toUpperCase().trim();
+    final rawStatus = (clientData['license_status'] as String? ?? '').toUpperCase().trim();
+    final isProspect = rawPlan == 'PROSPECTO' || rawStatus == 'PROSPECTO';
+    final plan = isProspect ? 'PROSPECTO' : LicenseSigner.normalizePlanSlug(rawPlan);
+
+    // 1. Manejo y validación anti-colisión de Hardware ID
+    var rawDeviceId = (clientData['current_device_id'] ?? '').toString().trim().toUpperCase();
+    if (rawDeviceId.isEmpty || rawDeviceId == 'PENDIENTE') {
+      rawDeviceId = isProspect ? 'PENDIENTE' : 'ML-0000';
+    }
+
+    if (rawDeviceId != 'PENDIENTE' && rawDeviceId != 'ML-0000') {
+      final exists = clients.any((c) =>
+          (c['current_device_id'] as String? ?? '').toUpperCase() == rawDeviceId);
+      if (exists) {
+        throw ArgumentError('El Hardware ID $rawDeviceId ya está asignado a otro cliente.');
+      }
+    }
+
+    // 2. Duración y Expiración según Modo (Soporta días reales de Trial)
     int trialDays = 30;
-    if (plan == 'TRIMESTRAL') trialDays = 90;
-    if (plan == 'SEMESTRAL') trialDays = 180;
-    if (plan == 'ANUAL') trialDays = 365;
-    if (plan.contains('PERPETU')) trialDays = 99999;
-    if (plan == 'PASE_ACTUALIZACION_ANUAL') trialDays = 0;
-    if (plan == 'RECARGA_IA_150') trialDays = 0;
-    if (plan == 'EXTENSION_CORTESIA') trialDays = 7;
+    if (clientData.containsKey('trial_days_remaining') && clientData['trial_days_remaining'] != null) {
+      final customDays = (clientData['trial_days_remaining'] as num).toInt();
+      if (customDays > 0 && customDays <= 365) {
+        trialDays = customDays;
+      }
+    } else if (plan == 'TRIMESTRAL') {
+      trialDays = 90;
+    } else if (plan == 'SEMESTRAL') {
+      trialDays = 180;
+    } else if (plan == 'ANUAL') {
+      trialDays = 365;
+    } else if (plan.contains('PERPETU')) {
+      trialDays = 99999;
+    } else if (plan == 'PASE_ACTUALIZACION_ANUAL') {
+      trialDays = 0;
+    } else if (plan == 'RECARGA_IA_150') {
+      trialDays = 0;
+    } else if (plan == 'EXTENSION_CORTESIA') {
+      trialDays = 7;
+    }
 
-    final expiresAt = plan.contains('PERPETU')
-        ? DateTime(2299, 12, 31).toUtc().toIso8601String()
-        : (clientData['license_expires'] ?? now.add(Duration(days: trialDays)).toIso8601String());
+    String? expiresAt;
+    if (isProspect) {
+      expiresAt = null;
+    } else if (plan.contains('PERPETU')) {
+      expiresAt = DateTime(2299, 12, 31).toUtc().toIso8601String();
+    } else {
+      expiresAt = clientData['license_expires'] ?? now.add(Duration(days: trialDays)).toIso8601String();
+    }
 
-    final baseAi = getCumulativeScansForPlan(plan);
-    final userExtraAi = (clientData['ai_extra_credits'] as num?)?.toInt() ?? 0;
+    // 3. Ventana de Actualización (updates_until)
+    String? updatesUntil;
+    if (clientData.containsKey('updates_until') && clientData['updates_until'] != null) {
+      updatesUntil = clientData['updates_until'] as String?;
+    } else if (plan.contains('PERPETU') || plan == 'PASE_ACTUALIZACION_ANUAL') {
+      updatesUntil = now.add(const Duration(days: 365)).toIso8601String();
+    } else {
+      updatesUntil = null;
+    }
+
+    // 4. Créditos IA: saldo reportado en celular vs bono pendiente en token
+    final reportedAi = (clientData['ai_reported_balance'] as num?)?.toInt() ?? (isProspect ? 0 : 50);
+    final pendingBonusAi = (clientData['ai_pending_bonus'] as num?)?.toInt() ?? 0;
+    final baseAi = isProspect ? 0 : getCumulativeScansForPlan(plan);
+    final userExtraAi = (clientData['ai_extra_credits'] as num?)?.toInt() ?? pendingBonusAi;
     final totalAi = baseAi + userExtraAi;
+
+    final phone = normalizePeruPhone(clientData['phone'] as String? ?? '');
 
     final newClient = {
       'id': id,
       'business_name': clientData['business_name'] ?? 'Negocio Sin Nombre',
       'owner_name': clientData['owner_name'] ?? 'Propietario',
       'document_id': clientData['document_id'] ?? '',
-      'phone': clientData['phone'] ?? '',
-      'current_device_id': (clientData['current_device_id'] ?? 'ML-0000').toString().toUpperCase().trim(),
+      'phone': phone,
+      'current_device_id': rawDeviceId,
       'device_history': [],
       'installed_version': clientData['installed_version'] ?? '9.34.0',
       'license_type': plan,
-      'license_status': plan.contains('PERPETU') ? 'PERPETUA' : 'ACTIVA',
+      'license_status': isProspect
+          ? 'PROSPECTO'
+          : (plan.contains('PERPETU') ? 'PERPETUA' : 'ACTIVA'),
       'license_expires': expiresAt,
+      'expected_subscription_date': clientData['expected_subscription_date'],
+      'trial_days_remaining': (!isProspect && plan == 'TRIAL') ? trialDays : null,
       'next_nonce': 1,
-      'updates_until': clientData['updates_until'] ?? now.add(const Duration(days: 365)).toIso8601String(),
+      'updates_until': updatesUntil,
+      'ai_reported_balance': reportedAi,
+      'ai_pending_bonus': pendingBonusAi,
       'ai_extra_credits': totalAi,
       'ai_accumulated_credits': totalAi,
       'notes': clientData['notes'] ?? '',
@@ -273,6 +359,25 @@ class DatabaseService {
     if (index == -1) return null;
 
     final client = clients[index];
+
+    // Normalizar teléfono si viene en updates
+    if (updates.containsKey('phone')) {
+      updates['phone'] = normalizePeruPhone(updates['phone'] as String? ?? '');
+    }
+
+    // Si viene current_device_id, validar unicidad
+    if (updates.containsKey('current_device_id')) {
+      final cleanDev = (updates['current_device_id'] as String? ?? '').trim().toUpperCase();
+      if (cleanDev.isNotEmpty && cleanDev != 'PENDIENTE' && cleanDev != 'ML-0000') {
+        final exists = clients.any((c) => c['id'] != id &&
+            (c['current_device_id'] as String? ?? '').toUpperCase() == cleanDev);
+        if (exists) {
+          throw ArgumentError('El Hardware ID $cleanDev ya está asignado a otro cliente.');
+        }
+      }
+      updates['current_device_id'] = cleanDev.isEmpty ? 'PENDIENTE' : cleanDev;
+    }
+
     updates.forEach((key, value) {
       if (key != 'id') {
         client[key] = value;
@@ -281,6 +386,64 @@ class DatabaseService {
 
     clients[index] = client;
     await saveClients(clients, reason: 'update_client_$id');
+    return client;
+  }
+
+  /// Sincronización atómica de datos reales reportados en el celular del cliente
+  Future<Map<String, dynamic>?> syncClientReportedState({
+    required String clientId,
+    String? deviceId,
+    String? installedVersion,
+    int? aiReportedBalance,
+    int? trialDaysRemaining,
+    String? expirationDate,
+    String? deviceModel,
+    String? notes,
+  }) async {
+    final clients = await getClients();
+    final index = clients.indexWhere((c) => c['id'] == clientId);
+    if (index == -1) return null;
+
+    final client = clients[index];
+
+    if (deviceId != null && deviceId.trim().isNotEmpty) {
+      final cleanDev = deviceId.trim().toUpperCase();
+      if (cleanDev != 'PENDIENTE' && cleanDev != (client['current_device_id'] as String? ?? '')) {
+        final exists = clients.any((c) => c['id'] != clientId &&
+            (c['current_device_id'] as String? ?? '').toUpperCase() == cleanDev &&
+            cleanDev != 'PENDIENTE' && cleanDev != 'ML-0000');
+        if (exists) {
+          throw ArgumentError('El Hardware ID $cleanDev ya está asignado a otro cliente.');
+        }
+      }
+      client['current_device_id'] = cleanDev;
+    }
+
+    if (installedVersion != null && installedVersion.trim().isNotEmpty) {
+      client['installed_version'] = installedVersion.trim();
+    }
+
+    if (aiReportedBalance != null) {
+      client['ai_reported_balance'] = aiReportedBalance;
+    }
+
+    if (trialDaysRemaining != null && trialDaysRemaining > 0) {
+      client['trial_days_remaining'] = trialDaysRemaining;
+      client['license_expires'] = DateTime.now().toUtc().add(Duration(days: trialDaysRemaining)).toIso8601String();
+    } else if (expirationDate != null && expirationDate.trim().isNotEmpty) {
+      client['license_expires'] = expirationDate.trim();
+    }
+
+    if (deviceModel != null && deviceModel.trim().isNotEmpty) {
+      client['device_model'] = deviceModel.trim();
+    }
+
+    if (notes != null) {
+      client['notes'] = notes;
+    }
+
+    clients[index] = client;
+    await saveClients(clients, reason: 'sync_reported_$clientId');
     return client;
   }
 
@@ -479,6 +642,15 @@ class DatabaseService {
       client['ai_accumulated_credits'] = updatedCredits;
     }
 
+    // Descontar bono pendiente de emitir si se entregaron créditos adicionales
+    if (aiExtraCredits > 0) {
+      final currentPending = (client['ai_pending_bonus'] as num?)?.toInt() ?? 0;
+      if (currentPending > 0) {
+        final remainingPending = (currentPending - aiExtraCredits).clamp(0, 99999);
+        client['ai_pending_bonus'] = remainingPending;
+      }
+    }
+
     client['next_nonce'] = ((client['next_nonce'] as num?)?.toInt() ?? 1) + 1;
 
     if (updatesUntil != null) {
@@ -540,6 +712,39 @@ class DatabaseService {
     return client;
   }
 
+  /// Editar un pago existente en el historial del cliente
+  Future<Map<String, dynamic>?> updatePayment(
+      String clientId, String paymentId, Map<String, dynamic> paymentData) async {
+    final clients = await getClients();
+    final index = clients.indexWhere((c) => c['id'] == clientId);
+    if (index == -1) return null;
+
+    final client = clients[index];
+    final payments = (client['payment_history'] as List? ?? [])
+        .map((p) => Map<String, dynamic>.from(p as Map))
+        .toList();
+    final pIndex = payments.indexWhere((p) => p['id'] == paymentId);
+    if (pIndex == -1) return null;
+
+    final oldPayment = payments[pIndex];
+    if (paymentData.containsKey('date')) oldPayment['date'] = paymentData['date'];
+    if (paymentData.containsKey('amount')) {
+      oldPayment['amount'] = (paymentData['amount'] as num?)?.toDouble() ?? 0.0;
+    }
+    if (paymentData.containsKey('plan')) oldPayment['plan'] = paymentData['plan'];
+    if (paymentData.containsKey('concept')) oldPayment['plan'] = paymentData['concept'];
+    if (paymentData.containsKey('method')) oldPayment['method'] = paymentData['method'];
+    if (paymentData.containsKey('payment_method')) oldPayment['method'] = paymentData['payment_method'];
+    if (paymentData.containsKey('reference')) oldPayment['reference'] = paymentData['reference'];
+    if (paymentData.containsKey('notes')) oldPayment['notes'] = paymentData['notes'];
+
+    payments[pIndex] = oldPayment;
+    client['payment_history'] = payments;
+    clients[index] = client;
+    await saveClients(clients, reason: 'update_payment_${clientId}_$paymentId');
+    return client;
+  }
+
   /// Agregar un pago manual al historial del cliente
   Future<Map<String, dynamic>?> addManualPayment(String clientId, Map<String, dynamic> paymentData) async {
     final clients = await getClients();
@@ -562,6 +767,10 @@ class DatabaseService {
     await saveClients(clients, reason: 'add_manual_payment_$clientId');
     return client;
   }
+
+  /// Alias de addManualPayment
+  Future<Map<String, dynamic>?> addPayment(String clientId, Map<String, dynamic> paymentData) =>
+      addManualPayment(clientId, paymentData);
 
   // =================== FINANZAS Y LIBRO CONTABLE ===================
 
@@ -888,6 +1097,7 @@ class DatabaseService {
       'payments': payments,
       'codes': codes,
       'device_history': devices,
+      'hardware': devices,
     };
   }
 

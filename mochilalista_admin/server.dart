@@ -41,10 +41,13 @@ Future<void> main(List<String> args) async {
   await vaultStorage.initialize();
   final health = await vaultStorage.checkStorageHealth();
   if (health['recovery_available'] == true) {
-    print('⚠️ [VaultStorage] ATENCIÓN: Modo Asistencia de Recuperación Activo.');
-    print('⚠️ [VaultStorage] Espejo disponible en ${health['mirror']['mirror_dir']} para restaurar datos locales.');
+    print(
+        '⚠️ [VaultStorage] ATENCIÓN: Modo Asistencia de Recuperación Activo.');
+    print(
+        '⚠️ [VaultStorage] Espejo disponible en ${health['mirror']['mirror_dir']} para restaurar datos locales.');
   } else {
-    print('🛡️ [VaultStorage] Bóveda Cifrada Activa. Espejo en: ${health['mirror']['mirror_dir']}');
+    print(
+        '🛡️ [VaultStorage] Bóveda Cifrada Activa. Espejo en: ${health['mirror']['mirror_dir']}');
   }
 
   final server = await HttpServer.bind(InternetAddress.anyIPv4, port);
@@ -57,7 +60,8 @@ Future<void> main(List<String> args) async {
   print('================================================================');
 
   await for (HttpRequest request in server) {
-    handleRequest(request, dbService, signer, configService, excelService, vaultStorage);
+    handleRequest(
+        request, dbService, signer, configService, excelService, vaultStorage);
   }
 }
 
@@ -65,6 +69,32 @@ Future<String> _readRequestBody(HttpRequest request) async {
   final bytes =
       await request.fold<List<int>>([], (prev, chunk) => prev..addAll(chunk));
   return utf8.decode(bytes, allowMalformed: true);
+}
+
+/// Comparador SemVer riguroso (major.minor.patch)
+int compareSemVer(String v1, String v2) {
+  List<int> parse(String v) {
+    final clean = v
+        .trim()
+        .replaceFirst(RegExp(r'^[vV]'), '')
+        .split('+')
+        .first
+        .split('-')
+        .first;
+    final parts = clean.split('.');
+    return [
+      parts.isNotEmpty ? (int.tryParse(parts[0]) ?? 0) : 0,
+      parts.length > 1 ? (int.tryParse(parts[1]) ?? 0) : 0,
+      parts.length > 2 ? (int.tryParse(parts[2]) ?? 0) : 0,
+    ];
+  }
+
+  final p1 = parse(v1);
+  final p2 = parse(v2);
+  for (int i = 0; i < 3; i++) {
+    if (p1[i] != p2[i]) return p1[i].compareTo(p2[i]);
+  }
+  return 0;
 }
 
 Future<void> handleRequest(
@@ -82,8 +112,8 @@ Future<void> handleRequest(
   request.response.headers.add('Access-Control-Allow-Origin', '*');
   request.response.headers
       .add('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  request.response.headers.add(
-      'Access-Control-Allow-Headers', 'Content-Type, X-App-Mode, X-File-Name, X-Vault-Session-Token');
+  request.response.headers.add('Access-Control-Allow-Headers',
+      'Content-Type, X-App-Mode, X-File-Name, X-Vault-Session-Token');
 
   if (method == 'OPTIONS') {
     request.response.statusCode = HttpStatus.ok;
@@ -150,7 +180,8 @@ Future<void> _handleApiRoute(
       final token = request.headers.value('X-Vault-Session-Token') ??
           request.cookies
               .cast<Cookie?>()
-              .firstWhere((c) => c?.name == 'vault_session_token', orElse: () => null)
+              .firstWhere((c) => c?.name == 'vault_session_token',
+                  orElse: () => null)
               ?.value;
 
       if (!vaultStorage.isSessionValid(token)) {
@@ -216,7 +247,8 @@ Future<void> _handleApiRoute(
               if (secret != null) cred = VaultUnlockCredential.mlKey(secret);
               break;
             case 'rescue_code':
-              if (secret != null) cred = VaultUnlockCredential.rescueCode(secret);
+              if (secret != null)
+                cred = VaultUnlockCredential.rescueCode(secret);
               break;
             case 'qr_key':
               if (secret != null) cred = VaultUnlockCredential.qrKey(secret);
@@ -249,10 +281,13 @@ Future<void> _handleApiRoute(
         }
       } catch (_) {}
     }
-    final vaultJson = await vaultStorage.exportPortableVault(includeMasterKey: includeMasterKey);
-    final timestamp = DateTime.now().toUtc().toIso8601String().replaceAll(':', '-');
+    final vaultJson = await vaultStorage.exportPortableVault(
+        includeMasterKey: includeMasterKey);
+    final timestamp =
+        DateTime.now().toUtc().toIso8601String().replaceAll(':', '-');
     final filename = 'mochilalista_vault_$timestamp.mlvault';
-    request.response.headers.add('Content-Disposition', 'attachment; filename="$filename"');
+    request.response.headers
+        .add('Content-Disposition', 'attachment; filename="$filename"');
     request.response.write(jsonEncode({
       'ok': true,
       'filename': filename,
@@ -286,15 +321,18 @@ Future<void> _handleApiRoute(
     VaultUnlockCredential cred;
     switch (typeStr) {
       case 'mlkey':
-        if (secret == null) throw VaultAuthException('Se requiere el archivo .mlkey.');
+        if (secret == null)
+          throw VaultAuthException('Se requiere el archivo .mlkey.');
         cred = VaultUnlockCredential.mlKey(secret);
         break;
       case 'rescue_code':
-        if (secret == null) throw VaultAuthException('Se requiere el Código de Rescate.');
+        if (secret == null)
+          throw VaultAuthException('Se requiere el Código de Rescate.');
         cred = VaultUnlockCredential.rescueCode(secret);
         break;
       case 'qr_key':
-        if (secret == null) throw VaultAuthException('Se requiere la clave QR.');
+        if (secret == null)
+          throw VaultAuthException('Se requiere la clave QR.');
         cred = VaultUnlockCredential.qrKey(secret);
         break;
       case 'pin':
@@ -315,7 +353,8 @@ Future<void> _handleApiRoute(
 
     request.response.write(jsonEncode({
       'ok': true,
-      'message': 'Bóveda importada exitosamente y servicios recargados en caliente.',
+      'message':
+          'Bóveda importada exitosamente y servicios recargados en caliente.',
       'manifest': importResult.internalManifest,
     }));
     await request.response.close();
@@ -336,7 +375,8 @@ Future<void> _handleApiRoute(
   if (path == '/api/vault/download-mlkey' && method == 'GET') {
     final mlKeyJson = await vaultStorage.downloadMlKey();
     const filename = 'llave_maestra_mochilalista.mlkey';
-    request.response.headers.add('Content-Disposition', 'attachment; filename="$filename"');
+    request.response.headers
+        .add('Content-Disposition', 'attachment; filename="$filename"');
     request.response.write(jsonEncode({
       'ok': true,
       'filename': filename,
@@ -350,7 +390,8 @@ Future<void> _handleApiRoute(
     final token = request.headers.value('X-Vault-Session-Token') ??
         request.cookies
             .cast<Cookie?>()
-            .firstWhere((c) => c?.name == 'vault_session_token', orElse: () => null)
+            .firstWhere((c) => c?.name == 'vault_session_token',
+                orElse: () => null)
             ?.value;
     final pinEnabled = vaultStorage.isPinEnabled();
     final locked = pinEnabled && !vaultStorage.isSessionValid(token);
@@ -366,7 +407,8 @@ Future<void> _handleApiRoute(
     final token = request.headers.value('X-Vault-Session-Token') ??
         request.cookies
             .cast<Cookie?>()
-            .firstWhere((c) => c?.name == 'vault_session_token', orElse: () => null)
+            .firstWhere((c) => c?.name == 'vault_session_token',
+                orElse: () => null)
             ?.value;
     vaultStorage.revokeSession(token);
     request.response.write(jsonEncode({
@@ -387,7 +429,9 @@ Future<void> _handleApiRoute(
     request.response.write(jsonEncode({
       'ok': true,
       'pin_enabled': vaultStorage.isPinEnabled(),
-      'message': enabled ? 'PIN local activado exitosamente.' : 'PIN local desactivado exitosamente.',
+      'message': enabled
+          ? 'PIN local activado exitosamente.'
+          : 'PIN local desactivado exitosamente.',
     }));
     await request.response.close();
     return;
@@ -417,16 +461,19 @@ Future<void> _handleApiRoute(
         cred = VaultUnlockCredential.dpapi();
         break;
       case 'rescue_code':
-        if (secret == null) throw VaultAuthException('Se requiere el Código de Rescate.');
+        if (secret == null)
+          throw VaultAuthException('Se requiere el Código de Rescate.');
         cred = VaultUnlockCredential.rescueCode(secret);
         break;
       case 'qr_key':
-        if (secret == null) throw VaultAuthException('Se requiere la clave QR.');
+        if (secret == null)
+          throw VaultAuthException('Se requiere la clave QR.');
         cred = VaultUnlockCredential.qrKey(secret);
         break;
       case 'mlkey':
       default:
-        if (secret == null) throw VaultAuthException('Se requiere el archivo .mlkey.');
+        if (secret == null)
+          throw VaultAuthException('Se requiere el archivo .mlkey.');
         cred = VaultUnlockCredential.mlKey(secret);
         break;
     }
@@ -442,9 +489,10 @@ Future<void> _handleApiRoute(
   }
 
   // =================== 0. CONTROL DE SISTEMA Y MODO DUAL ===================
-  if (path == '/api/system/mode') {
+  if (path == '/api/system/mode' || path == '/api/mode') {
     if (method == 'GET') {
       request.response.write(jsonEncode({
+        'ok': true,
         'mode': dbService.currentMode,
         'label': dbService.currentMode == 'sandbox'
             ? 'Modo Pruebas (Sandbox)'
@@ -453,7 +501,7 @@ Future<void> _handleApiRoute(
       await request.response.close();
       return;
     } else if (method == 'POST') {
-      final bodyStr = await utf8.decodeStream(request);
+      final bodyStr = await _readRequestBody(request);
       final body = jsonDecode(bodyStr) as Map<String, dynamic>;
       final targetMode = body['mode'] as String? ?? 'sandbox';
       dbService.setMode(targetMode);
@@ -492,11 +540,23 @@ Future<void> _handleApiRoute(
     int expiringSoonCount = 0;
     int expiredCount = 0;
     int perpetualCount = 0;
+    int prospectCount = 0;
     int outdatedAppCount = 0;
     final List<Map<String, dynamic>> urgentActions = [];
 
-    final latestVersion =
-        releases.isNotEmpty ? releases.first['version_name'] : '9.34.0';
+    // Determinar la versión máxima publicada usando SemVer riguroso
+    String? latestVersion;
+    for (final r in releases) {
+      final vn = r['version_name'] as String? ?? '';
+      if (vn.trim().isNotEmpty) {
+        if (latestVersion == null || compareSemVer(vn, latestVersion) > 0) {
+          latestVersion = vn.trim();
+        }
+      }
+    }
+
+    final hasPublishedReleases =
+        releases.isNotEmpty && latestVersion != null && latestVersion.isNotEmpty;
 
     for (final c in clients) {
       final payments =
@@ -513,11 +573,15 @@ Future<void> _handleApiRoute(
       }
 
       final plan = (c['license_type'] as String? ?? 'TRIAL').toUpperCase();
+      final status = (c['license_status'] as String? ?? '').toUpperCase();
+      final isProspect = plan == 'PROSPECTO' || status == 'PROSPECTO';
       final isPerpetual = plan == 'PERPETUO_LIBERADO' || plan == 'PERPETUO';
       final expStr = c['license_expires'] as String?;
       final expDate = expStr != null ? DateTime.tryParse(expStr) : null;
 
-      if (isPerpetual) {
+      if (isProspect) {
+        prospectCount++;
+      } else if (isPerpetual) {
         perpetualCount++;
         activeCount++;
       } else if (expDate != null) {
@@ -541,7 +605,11 @@ Future<void> _handleApiRoute(
         }
       }
 
-      if ((c['installed_version'] as String? ?? '') != latestVersion) {
+      final clientVer = (c['installed_version'] as String? ?? '').trim();
+      if (!isProspect &&
+          hasPublishedReleases &&
+          clientVer.isNotEmpty &&
+          compareSemVer(clientVer, latestVersion) < 0) {
         outdatedAppCount++;
       }
     }
@@ -553,11 +621,12 @@ Future<void> _handleApiRoute(
       'totalRevenueMonth': totalRevenueMonth,
       'totalRevenueAccumulated': totalRevenueAccumulated,
       'totalActiveClients': activeCount,
+      'prospectClients': prospectCount,
       'expiringSoonClients': expiringSoonCount,
       'expiredClients': expiredCount,
       'perpetualClients': perpetualCount,
       'outdatedAppClients': outdatedAppCount,
-      'latestAppVersion': latestVersion,
+      'latestAppVersion': latestVersion ?? '0.0.0',
       'urgentActions': urgentActions,
       'currentMode': dbService.currentMode,
     };
@@ -593,9 +662,14 @@ Future<void> _handleApiRoute(
     } else if (method == 'POST') {
       final bodyStr = await utf8.decodeStream(request);
       final data = jsonDecode(bodyStr) as Map<String, dynamic>;
-      final newClient = await dbService.createClient(data);
-      request.response.statusCode = HttpStatus.created;
-      request.response.write(jsonEncode(newClient));
+      try {
+        final newClient = await dbService.createClient(data);
+        request.response.statusCode = HttpStatus.created;
+        request.response.write(jsonEncode(newClient));
+      } catch (e) {
+        request.response.statusCode = HttpStatus.badRequest;
+        request.response.write(jsonEncode({'error': e.toString()}));
+      }
       await request.response.close();
       return;
     }
@@ -701,12 +775,26 @@ Future<void> _handleApiRoute(
 
     if (paymentId == null && method == 'POST') {
       // Registrar pago manual
-      final bodyStr = await utf8.decodeStream(request);
+      final bodyStr = await _readRequestBody(request);
       final body = jsonDecode(bodyStr) as Map<String, dynamic>;
       final updated = await dbService.addManualPayment(clientId, body);
       if (updated == null) {
         request.response.statusCode = HttpStatus.notFound;
         request.response.write(jsonEncode({'error': 'Cliente no encontrado'}));
+      } else {
+        request.response.write(jsonEncode(updated));
+      }
+      await request.response.close();
+      return;
+    } else if (paymentId != null && method == 'PUT') {
+      // Editar pago existente
+      final bodyStr = await _readRequestBody(request);
+      final body = jsonDecode(bodyStr) as Map<String, dynamic>;
+      final updated = await dbService.updatePayment(clientId, paymentId, body);
+      if (updated == null) {
+        request.response.statusCode = HttpStatus.notFound;
+        request.response
+            .write(jsonEncode({'error': 'Pago o cliente no encontrado'}));
       } else {
         request.response.write(jsonEncode(updated));
       }
@@ -728,6 +816,40 @@ Future<void> _handleApiRoute(
   }
 
   // Operaciones sobre Cliente Individual: GET, PUT, DELETE
+  // Sincronización de datos reales reportados del celular: /api/clients/:id/sync-reported
+  final syncReportedMatch =
+      RegExp(r'^/api/clients/([^/]+)/sync-reported$').firstMatch(path);
+  if (syncReportedMatch != null && method == 'POST') {
+    final clientId = syncReportedMatch.group(1)!;
+    final bodyStr = await _readRequestBody(request);
+    final body = jsonDecode(bodyStr) as Map<String, dynamic>;
+    try {
+      final updated = await dbService.syncClientReportedState(
+        clientId: clientId,
+        deviceId: body['device_id'] as String?,
+        installedVersion: body['installed_version'] as String?,
+        aiReportedBalance: (body['ai_reported_balance'] as num?)?.toInt(),
+        trialDaysRemaining: (body['trial_days_remaining'] as num?)?.toInt(),
+        expirationDate: body['expiration_date'] as String?,
+        deviceModel: body['device_model'] as String?,
+        notes: body['notes'] as String?,
+      );
+      if (updated == null) {
+        request.response.statusCode = HttpStatus.notFound;
+        request.response
+            .write(jsonEncode({'error': 'Cliente no encontrado: $clientId'}));
+      } else {
+        request.response.statusCode = HttpStatus.ok;
+        request.response.write(jsonEncode(updated));
+      }
+    } catch (e) {
+      request.response.statusCode = HttpStatus.badRequest;
+      request.response.write(jsonEncode({'error': e.toString()}));
+    }
+    await request.response.close();
+    return;
+  }
+
   final clientSingleMatch = RegExp(r'^/api/clients/([^/]+)$').firstMatch(path);
   if (clientSingleMatch != null) {
     final clientId = clientSingleMatch.group(1)!;
@@ -742,14 +864,20 @@ Future<void> _handleApiRoute(
       await request.response.close();
       return;
     } else if (method == 'PUT') {
-      final bodyStr = await utf8.decodeStream(request);
+      final bodyStr = await _readRequestBody(request);
       final updates = jsonDecode(bodyStr) as Map<String, dynamic>;
-      final updated = await dbService.updateClient(clientId, updates);
-      if (updated == null) {
-        request.response.statusCode = HttpStatus.notFound;
-        request.response.write(jsonEncode({'error': 'Cliente no encontrado'}));
-      } else {
-        request.response.write(jsonEncode(updated));
+      try {
+        final updated = await dbService.updateClient(clientId, updates);
+        if (updated == null) {
+          request.response.statusCode = HttpStatus.notFound;
+          request.response
+              .write(jsonEncode({'error': 'Cliente no encontrado'}));
+        } else {
+          request.response.write(jsonEncode(updated));
+        }
+      } catch (e) {
+        request.response.statusCode = HttpStatus.badRequest;
+        request.response.write(jsonEncode({'error': e.toString()}));
       }
       await request.response.close();
       return;
@@ -1292,7 +1420,7 @@ Future<void> _handleApiRoute(
       await request.response.close();
       return;
     } else if (method == 'POST') {
-      final bodyStr = await utf8.decodeStream(request);
+      final bodyStr = await _readRequestBody(request);
       final body = jsonDecode(bodyStr) as Map<String, dynamic>;
       final newRelease = await dbService.createRelease(body);
       request.response.statusCode = HttpStatus.created;
@@ -1420,6 +1548,9 @@ Future<void> _handleStaticFile(HttpRequest request, String path) async {
         break;
       case 'svg':
         request.response.headers.contentType = ContentType('image', 'svg+xml');
+        break;
+      case 'ico':
+        request.response.headers.contentType = ContentType('image', 'x-icon');
         break;
       default:
         request.response.headers.contentType = ContentType.binary;

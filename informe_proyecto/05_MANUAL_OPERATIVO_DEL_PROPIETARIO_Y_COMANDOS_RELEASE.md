@@ -80,15 +80,25 @@ El cambio entre ambos estados se realiza al instante desde el interruptor lumino
 
 Dispones de dos métodos para encender el servidor administrativo en tu laptop o PC con Windows:
 
-#### Método 1 (Recomendado — 1 Clic): `Iniciar_MochilaLista_Admin.bat`
+#### Método 1 (Recomendado — Experiencia de Escritorio Nativa en 1 Clic): `Iniciar_MochilaLista_Admin.bat`
 Para iniciar la plataforma con un solo clic o desde un acceso directo en tu Escritorio:
-1. **Acceso Directo en el Escritorio (Opcional):** Haz clic derecho sobre `Iniciar_MochilaLista_Admin.bat` (ubicado en la raíz del proyecto) > **Enviar a > Escritorio (crear acceso directo)**.
-2. **Doble Clic:** Ejecuta el archivo `.bat`. El script inteligente realiza automáticamente:
+1. **Acceso Directo Oficial en el Escritorio (Automatizado y Compatible con OneDrive):**
+   - Ejecuta desde PowerShell el script generador oficial:
+     ```powershell
+     powershell -ExecutionPolicy Bypass -File .\Crear_Acceso_Directo_Escritorio.ps1
+     ```
+   - Este script resuelve de manera dinámica la ruta real del Escritorio mediante `[Environment]::GetFolderPath('Desktop')` (garantizando compatibilidad total ante carpetas redirigidas por Microsoft OneDrive o rutas locales estándar).
+   - Crea en tu Escritorio el acceso directo **`MochilaLista Admin.lnk`** enlazado al lanzador `Iniciar_MochilaLista_Admin.bat`, configurado para ejecutarse minimizado (`WindowStyle = 7`) y portando el ícono corporativo oficial multi-resolución de alta definición (`mochilalista_admin\web\app_icon.ico` / `favicon.ico`).
+2. **Doble Clic:** Al ejecutar el acceso directo o el archivo `.bat`, el lanzador inteligente realiza automáticamente:
    - Posicionamiento absoluto seguro en `mochilalista_admin/` (`%~dp0mochilalista_admin`).
    - Validación de la disponibilidad de Dart SDK en el sistema.
    - Verificación precisa de socket en puerto 8080 (`netstat -ano | findstr ":8080 " | findstr "LISTENING"`). Si ya estaba corriendo, evita lanzar procesos duplicados.
    - Si no estaba encendido, levanta `server.dart` en una ventana minimizada dedicada con título `MochilaLista Admin Server` (pudiendo restaurarla y cerrarla con `Ctrl+C` en cualquier momento).
-   - Abre de inmediato tu navegador predeterminado en **`http://localhost:8080`**.
+   - **Modo Ventana Nativa de Escritorio (`--app`):** Mediante un bucle de espera inteligente con sondeo a `http://localhost:8080`, aguarda a que el servidor esté listo para atender peticiones y lanza Microsoft Edge o Google Chrome en modo aplicación limpia:
+     ```cmd
+     start msedge.exe --app=http://localhost:8080
+     ```
+     *(o `chrome.exe --app=http://localhost:8080`)*, desplegando la plataforma en una ventana independiente, sin barra de direcciones ni pestañas de navegación genéricas, operando con la apariencia y fluidez de un software de escritorio empresarial.
 
 #### Método 2: Inicio Manual por Terminal (PowerShell / CMD)
 ```powershell
@@ -133,29 +143,48 @@ Abre tu navegador web en `http://localhost:8080`. Dispones de **8 módulos de co
 
 ### 1.4. Flujo de Alta y Edición Total en Cartera CRM con Buscador Omnicanal
 
-#### A. Registrar Nuevo Cliente (`#modalCreateClient`):
+#### A. Registrar Nuevo Cliente (`#modalCreateClient`) — Modelo 100% Coherente Offline-First:
 1. En **Cartera de Clientes**, haz clic en **`[➕ Registrar Nuevo Cliente]`**.
-2. Rellena los datos comerciales:
+2. Rellena los datos comerciales adaptados a los **3 estados iniciales de negocio**:
    * **Nombre Comercial / Librería:** (ej. `Librería & Bazar San Martín`)
    * **Nombre del Propietario:** (ej. `Carlos Mendoza Quispe`)
    * **RUC o DNI:** (ej. `10458796321`)
-   * **Teléfono WhatsApp:** (ej. `+51987654321`)
-   * **Device ID del Teléfono:** (ej. `ML-9K4B` — 7 caracteres en mayúsculas)
-   * **Plan Inicial:** Selecciona `TRIAL GRATUITO (30 días — S/ 0.00)` (opción por defecto) o el plan contratado.
-   * **Versión de App Instalada:** (por defecto: `9.34.0` — Esquema SQLite `v36`)
-   * **Créditos IA Extra Iniciales:** (por defecto: `0`)
-3. Presiona **"Guardar Cliente"**.
+   * **Teléfono WhatsApp:** (ej. `987654321` — El sistema normaliza automáticamente a formato internacional `+51987654321`).
+   * **Hardware ID del Teléfono (ANDROID_ID):**
+     - **Para Prospectos:** Puede dejarse completamente vacío; el sistema asigna automáticamente `PENDIENTE` sin bloquear el guardado ni provocar colisiones con otros registros.
+     - **Para Trial o Clientes Activos:** Ingresa el identificador de 7 caracteres (ej. `ML-9K4B`).
+   * **Plan Inicial (3 Estados Offline-First):**
+     - **`PROSPECTO`:** Contacto comercial en prospección sin licencia generada ni expiración ficticia (`license_expires = null`).
+     - **`TRIAL GRATUITO (Días Reales)`:** Permite ingresar los días exactos que le restan al comerciante en su teléfono (`trial_days_remaining`, ej. `17 días`). No impone ventana artificial de actualización (`updates_until = null`), respetando la naturaleza Offline-First de la app móvil.
+     - **`CON LICENCIA ACTIVA`:** Planes comerciales tarifados (`MENSUAL`, `TRIMESTRAL`, `SEMESTRAL`, `ANUAL`, `PERPETUO`).
+   * **Versión de App Instalada:** (por defecto: `9.34.0` — Esquema SQLite `v36`).
+   * **Gestión de Créditos IA:**
+     - **Saldo IA Reportado en Celular:** Créditos que el cliente indica tener disponibles en su app móvil.
+     - **Bonos IA Pendientes por Emitir:** Escaneos adicionales que se incorporarán en la próxima emisión de token criptográfico Ed25519.
+3. Presiona **"Guardar Cliente"** o **"Guardar y Emitir Licencia"**.
 
-#### B. Buscador Omnicanal Reactivo:
-En la parte superior de la tabla, escribe en la caja de búsqueda cualquier fragmento de negocio, dueño, DNI, teléfono, Device ID o versión. La tabla filtrará en tiempo real sin recargar la página.
+#### B. Compositor Universal de WhatsApp (`#modalWaComposer`):
+Accesible con 1 clic desde el botón verde de WhatsApp de la Cartera CRM y desde la Ficha 360°:
+- **Plantillas Predefinidas Asistidas:**
+  1. *Bienvenida y Entrega:* Incluye saludo personalizado, nombre de negocio, titular, Hardware ID y código de licencia Ed25519 con instrucciones claras de pegado en la app móvil.
+  2. *Vencimiento Próximo:* Alerta preventiva indicando los días exactos restantes y métodos de pago (Yape/Plin/Transferencia).
+  3. *Cotización para Prospecto:* Información comercial del sistema y propuesta de valor.
+  4. *Mensaje Personalizado:* Editor libre con previsualización en vivo.
+- **Sustitución Automática de Variables:** `{NEGOCIO}`, `{TITULAR}`, `{DIAS}`, `{TOKEN}` se reemplazan en caliente según el cliente seleccionado.
+- **Acceso Rápido:** Botón **`[Copiar Mensaje]`**, botón **`[Abrir Chat Vacío]`** (para soporte directo sin plantilla predeterminada) y botón **`[Abrir en WhatsApp]`** enlazado a `https://wa.me/51...`.
 
-#### C. Edición Total con Zona de Peligro (`#modalEditClient`):
-Toca el botón **`[✏️]`** en cualquier fila para modificar libremente:
-- Plan comercial y estado (`ACTIVE`, `EXPIRING_SOON`, `EXPIRED`, `PERPETUAL`).
-- Fecha exacta de expiración (`type="date"`).
-- Ventana de cobertura de actualizaciones (`updates_until`).
-- Saldo de créditos IA extra y contador `next_nonce`.
-- **Zona de Peligro:** Botón **`[🗑️ Eliminar Cliente]`** protegido por modal de confirmación en dos pasos.
+#### C. Buscador Omnicanal Reactivo:
+En la parte superior de la tabla, escribe en la caja de búsqueda cualquier fragmento de negocio, dueño, DNI, teléfono, Hardware ID o versión. La tabla filtrará en tiempo real sin recargar la página.
+
+#### D. Acciones Clave en 1 Sola Fila Horizontal:
+Cada fila de la tabla CRM presenta sus 4 herramientas alineadas de manera compacta:
+1. **`[👁️]` Ficha 360°:** Despliega el Drawer lateral completo con sus 5 pestañas.
+2. **`[🪟]` QR y Credencial:** Abre directamente la pestaña QR de la Ficha 360°.
+3. **`[💬]` WhatsApp:** Despliega el Compositor Universal con plantilla contextual.
+4. **`[⚡]` Emitir Licencia:** Transfiere al comerciante a la pestaña Generador para firma inmediata.
+
+#### E. Edición Total con Zona de Peligro (`#modalEditClient`):
+Toca el botón de edición para modificar libremente los datos del cliente, o accede al botón **`[🗑️ Eliminar Cliente Definitivamente]`** protegido por confirmación estricta de dos pasos.
 
 ---
 
@@ -234,11 +263,34 @@ Si un comerciante desea recargar su saldo de escaneos IA o agota su bolsa inicia
 
 ---
 
-### 1.10. Re-descarga de Credenciales PNG Históricas desde el Modal de Cliente
-En **Cartera de Clientes**, presiona el botón **`[📜]`** (Ver Historial):
-1. En la Pestaña 1 (Pagos y Licencias), ubica la tabla de **Códigos Ed25519 Emitidos**.
-2. Además del botón `[📋]` para copiar el token, dispones del botón **`[🪪 Tarjeta PNG]`**.
-3. Al pulsarlo, el sistema renderiza la credencial oficial PNG con los datos exactos de esa emisión histórica y descarga automáticamente el archivo gráfico en alta definición.
+### 1.10. Ficha 360° del Cliente y Gestión Integral (5 Pestañas Especializadas)
+En **Cartera de Clientes**, presiona el botón **`[👁️]`** (Ficha 360°) o **`[🪟]`** (QR Directo) para abrir el Drawer lateral deslizable de alta precisión con sus 5 pestañas de control:
+
+1. **Pestaña 1 — Resumen Ejecutivo:**
+   - Métricas clave en tiempo real: Plan Actual, Vencimiento, Créditos IA Acumulados y Versión APK Instalada.
+   - Resumen financiero de cobros acumulados y saldo pendiente.
+   - **Botón `[📱 Sincronizar Estado Reportado del Celular]`:** Abre `#modalSyncReported` para registrar en caliente Hardware ID, modelo de teléfono, versión real instalada, saldo IA y días restantes reportados por el usuario mediante WhatsApp, sin requerir internet en la app móvil.
+
+2. **Pestaña 2 — QR & Credencial Oficial:**
+   - Visualización garantizada del código QR en alta definición mediante `renderSafeQrCode()` (resolviendo cualquier incompatibilidad con librerías QR).
+   - **Selector Histórico de Licencias Emitidas:** Menú desplegable dinámico para alternar entre licencias anteriores y la más reciente, actualizando el QR y credencial al instante.
+   - *Empty State* asistido para clientes sin licencias emitidas (ofreciendo botón directo de emisión para evitar códigos ficticios).
+   - Botones rápidos: **`[Copiar Código]`**, **`[Descargar QR]`** y **`[WhatsApp]`** (conectado al Compositor Universal).
+
+3. **Pestaña 3 — Pagos y Finanzas (CRUD Dinámico Completo):**
+   - Historial detallado de pagos manuales y suscripciones del cliente.
+   - **Registro de Nuevos Cobros:** Formulario en línea para ingresar monto en soles (`S/`), plan o concepto, medio de pago (Yape/Plin/BCP/Efectivo) y número de operación.
+   - **Edición en Caliente:** Permite modificar montos, medios o referencias de cualquier pago previo.
+   - **Eliminación Segura:** Borra pagos erróneos con recálculo automático instantáneo de los totales del cliente y del Dashboard.
+
+4. **Pestaña 4 — Hardware y Dispositivos:**
+   - Visualización del Hardware ID actual (`ANDROID_ID`) y modelo de celular reportado.
+   - Tabla histórica de migraciones y cambios de equipo con fecha, hardware anterior, hardware nuevo, tarifa técnica aplicada y motivo registrado.
+   - Botón directo **`[🔄 Migrar Teléfono]`** para reasignaciones técnicas inmediatas.
+
+5. **Pestaña 5 — Edición Rápida y Zona de Peligro:**
+   - Modificación directa de titular, negocio, teléfono, documento de identidad y notas comerciales.
+   - **Zona de Peligro (`#drawerDangerZone`):** Botón **`[🗑️ Eliminar Cliente Definitivamente]`** con validación estricta de dos pasos para remover registros obsoletos con respaldo previo automático.
 
 ---
 

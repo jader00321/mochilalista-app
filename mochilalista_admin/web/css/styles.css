@@ -82,6 +82,7 @@ body {
   border-bottom: 1px solid var(--border-color);
   height: 64px;
   box-sizing: border-box;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .sidebar-brand {
@@ -91,6 +92,7 @@ body {
   overflow: hidden;
   text-decoration: none;
   white-space: nowrap;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .brand-logo-icon {
@@ -103,6 +105,7 @@ body {
   justify-content: center;
   color: #ffffff;
   flex-shrink: 0;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .brand-logo-icon svg {
@@ -114,6 +117,26 @@ body {
   display: flex;
   flex-direction: column;
   transition: opacity 0.2s ease;
+}
+
+.app-sidebar.collapsed .sidebar-header {
+  padding: 0.6rem 0.35rem;
+  height: 84px;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.app-sidebar.collapsed .sidebar-brand {
+  justify-content: center;
+  gap: 0;
+  width: 100%;
+}
+
+.app-sidebar.collapsed .brand-logo-icon {
+  width: 34px;
+  height: 34px;
 }
 
 .app-sidebar.collapsed .sidebar-brand-text {
@@ -157,6 +180,12 @@ body {
   color: var(--text-primary);
 }
 
+.app-sidebar.collapsed .btn-toggle-sidebar {
+  width: 24px;
+  height: 24px;
+  padding: 0;
+}
+
 .app-sidebar.collapsed .btn-toggle-sidebar svg {
   transform: rotate(180deg);
 }
@@ -189,7 +218,16 @@ body {
 }
 
 .app-sidebar.collapsed .sidebar-group-label {
-  opacity: 0;
+  display: block;
+  font-size: 0;
+  height: 1px;
+  background-color: var(--border-color);
+  margin: 0.5rem 0.5rem;
+  padding: 0;
+  opacity: 0.7;
+}
+
+.app-sidebar.collapsed .sidebar-group:first-child .sidebar-group-label {
   display: none;
 }
 
@@ -285,8 +323,49 @@ body {
   box-shadow: 0 0 6px rgba(16, 185, 129, 0.6);
 }
 
+.app-sidebar.collapsed .sidebar-footer {
+  padding: 0.85rem 0;
+  justify-content: center;
+}
+
+.app-sidebar.collapsed .engine-badge {
+  gap: 0;
+  justify-content: center;
+}
+
 .app-sidebar.collapsed .engine-text {
   display: none;
+}
+
+/* Tooltip flotante para sidebar colapsado (evita recortes por overflow) */
+.sidebar-floating-tooltip {
+  position: fixed;
+  z-index: 9999;
+  pointer-events: none;
+  background-color: #1e293b;
+  color: #f8fafc;
+  font-size: 0.78rem;
+  font-weight: 600;
+  padding: 0.35rem 0.7rem;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+  white-space: nowrap;
+  opacity: 0;
+  transform: translateX(-4px);
+  transition: opacity 0.15s ease, transform 0.15s ease;
+}
+
+[data-theme="light"] .sidebar-floating-tooltip {
+  background-color: #0f172a;
+  color: #ffffff;
+  border-color: rgba(0, 0, 0, 0.15);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.sidebar-floating-tooltip.visible {
+  opacity: 1;
+  transform: translateX(0);
 }
 
 /* ÁREA DE CONTENIDO PRINCIPAL */
@@ -391,12 +470,24 @@ main {
   display: block;
 }
 
-/* Dashboard KPIs Grid */
+/* Dashboard KPIs Grid (Simétrica 4 + 4) */
 .kpi-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 1.25rem;
   margin-bottom: 2rem;
+}
+
+@media (max-width: 1200px) {
+  .kpi-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .kpi-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 .kpi-card {
@@ -425,6 +516,7 @@ main {
 .kpi-card.yellow::before { background-color: var(--warning); }
 .kpi-card.red::before { background-color: var(--danger); }
 .kpi-card.purple::before { background-color: var(--purple); }
+.kpi-card.indigo::before { background-color: #6366f1; }
 
 .kpi-title {
   font-size: 0.85rem;
@@ -595,6 +687,73 @@ table.data-table tr:hover td {
   background-color: var(--bg-secondary);
   border: 1px solid var(--border-color);
   color: var(--text-primary);
+}
+
+.badge-prospect {
+  background-color: rgba(99, 102, 241, 0.15);
+  color: #818cf8;
+  border: 1px solid rgba(99, 102, 241, 0.3);
+}
+
+.badge-unlinked {
+  background-color: rgba(148, 163, 184, 0.12);
+  color: #94a3b8;
+  border: 1px dashed rgba(148, 163, 184, 0.35);
+  font-style: italic;
+  font-size: 0.75rem;
+  padding: 0.2rem 0.5rem;
+  border-radius: 6px;
+}
+
+.badge-pending-bonus {
+  display: inline-block;
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: #a78bfa;
+  background-color: rgba(139, 92, 246, 0.15);
+  border: 1px solid rgba(139, 92, 246, 0.35);
+  padding: 1px 5px;
+  border-radius: 4px;
+  margin-top: 2px;
+}
+
+.form-control-highlight {
+  font-weight: 700;
+  border-color: var(--primary) !important;
+  background-color: rgba(37, 99, 235, 0.08) !important;
+}
+
+.required-star {
+  color: var(--danger);
+  font-weight: 700;
+}
+
+/* FASE 3: Notice Box Offline AI */
+.notice-box {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  background-color: rgba(59, 130, 246, 0.1);
+  border: 1px solid rgba(59, 130, 246, 0.3);
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+  color: var(--text-primary);
+  font-size: 0.82rem;
+  line-height: 1.4;
+}
+
+[data-theme="light"] .notice-box {
+  background-color: #eff6ff;
+  border-color: #bfdbfe;
+  color: #1e3a8a;
+}
+
+.notice-box .notice-icon {
+  width: 18px;
+  height: 18px;
+  color: var(--primary);
+  flex-shrink: 0;
+  margin-top: 2px;
 }
 
 /* Forms */
@@ -835,40 +994,71 @@ footer {
   border: 1px solid var(--border-color);
   border-radius: 9999px;
   padding: 3px;
-  gap: 2px;
+  gap: 4px;
+  position: relative;
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.2);
+  transition: opacity 0.2s ease;
+}
+
+.mode-switcher.switching {
+  pointer-events: none;
+  opacity: 0.65;
+  cursor: wait;
 }
 
 .mode-btn {
   background: transparent;
-  border: none;
-  color: var(--text-secondary);
-  padding: 0.35rem 0.85rem;
+  border: 1px solid transparent;
+  color: var(--text-muted);
+  padding: 0.35rem 0.95rem;
   border-radius: 9999px;
   font-size: 0.8rem;
   font-weight: 600;
   cursor: pointer;
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 0.4rem;
-  transition: all 0.2s ease;
+  gap: 0.45rem;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  user-select: none;
+  opacity: 0.45;
 }
 
-.mode-btn:hover {
+.mode-btn:hover:not(.active) {
+  opacity: 0.8;
   color: var(--text-primary);
 }
 
-.mode-btn.active.mode-sandbox {
-  background-color: rgba(245, 158, 11, 0.2);
-  color: #f59e0b;
-  box-shadow: 0 0 10px rgba(245, 158, 11, 0.3);
-  border: 1px solid rgba(245, 158, 11, 0.4);
+.mode-btn.active {
+  opacity: 1 !important;
+  font-weight: 700;
 }
 
-.mode-btn.active.mode-prod {
-  background-color: rgba(16, 185, 129, 0.2);
+.mode-btn.mode-sandbox.active {
+  background-color: rgba(245, 158, 11, 0.22);
+  color: #f59e0b;
+  border-color: rgba(245, 158, 11, 0.55);
+  box-shadow: 0 0 12px rgba(245, 158, 11, 0.32), inset 0 1px 2px rgba(255, 255, 255, 0.1);
+}
+
+.mode-btn.mode-prod.active {
+  background-color: rgba(16, 185, 129, 0.22);
   color: #10b981;
-  box-shadow: 0 0 10px rgba(16, 185, 129, 0.3);
-  border: 1px solid rgba(16, 185, 129, 0.4);
+  border-color: rgba(16, 185, 129, 0.55);
+  box-shadow: 0 0 12px rgba(16, 185, 129, 0.32), inset 0 1px 2px rgba(255, 255, 255, 0.1);
+}
+
+[data-theme="light"] .mode-btn.mode-sandbox.active {
+  background-color: rgba(245, 158, 11, 0.16);
+  color: #b45309;
+  border-color: rgba(217, 119, 6, 0.6);
+  box-shadow: 0 0 10px rgba(245, 158, 11, 0.25);
+}
+
+[data-theme="light"] .mode-btn.mode-prod.active {
+  background-color: rgba(16, 185, 129, 0.16);
+  color: #047857;
+  border-color: rgba(16, 185, 129, 0.6);
+  box-shadow: 0 0 10px rgba(16, 185, 129, 0.25);
 }
 
 .mode-dot {
@@ -876,16 +1066,39 @@ footer {
   height: 8px;
   border-radius: 50%;
   display: inline-block;
+  transition: all 0.25s ease;
+  flex-shrink: 0;
 }
 
-.mode-dot.amber {
+/* Punto inactivo atenuado */
+.mode-btn:not(.active) .mode-dot {
+  opacity: 0.35;
+  box-shadow: none !important;
+  background-color: var(--text-muted);
+}
+
+/* Puntos activos luminosos */
+.mode-btn.active .mode-dot.amber {
   background-color: #f59e0b;
-  box-shadow: 0 0 6px #f59e0b;
+  box-shadow: 0 0 8px #f59e0b;
 }
 
-.mode-dot.emerald {
+.mode-btn.active .mode-dot.emerald {
   background-color: #10b981;
-  box-shadow: 0 0 6px #10b981;
+  box-shadow: 0 0 8px #10b981;
+}
+
+/* Acento sutil en el borde superior de la cabecera */
+.app-header {
+  transition: border-top 0.3s ease;
+}
+
+.app-header.sandbox-mode {
+  border-top: 3px solid #f59e0b;
+}
+
+.app-header.prod-mode {
+  border-top: 3px solid #10b981;
 }
 
 .sandbox-banner {
@@ -1428,11 +1641,13 @@ footer {
 
 /* 3. Tabla CRM Simplificada (7 Columnas Limpias) */
 .crm-actions-cell {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 0.35rem;
-  flex-wrap: wrap;
+  gap: 0.4rem;
+  flex-wrap: nowrap;
+  white-space: nowrap;
+  min-width: 165px;
 }
 
 .btn-crm-action {
@@ -1448,6 +1663,7 @@ footer {
   color: var(--text-secondary);
   cursor: pointer;
   transition: all 0.2s ease;
+  flex-shrink: 0;
 }
 
 .btn-crm-action:hover {
@@ -1481,6 +1697,64 @@ footer {
 .btn-crm-action.wa:hover {
   background: #25d366;
   color: #ffffff;
+}
+
+/* Modal Compositor Universal de WhatsApp (Fase 4) */
+.modal-wa-dialog {
+  max-width: 660px;
+  width: 95%;
+}
+
+.wa-composer-icon-bubble {
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  background: rgba(37, 211, 102, 0.12);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.wa-client-card {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  padding: 0.85rem 1.1rem;
+}
+
+.wa-templates-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.wa-template-btn {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+  font-weight: 500;
+  padding: 0.4rem 0.75rem;
+  border-radius: 20px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.wa-template-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+  border-color: rgba(37, 211, 102, 0.4);
+}
+
+.wa-template-btn.active {
+  background: rgba(37, 211, 102, 0.15);
+  color: #25d366;
+  border-color: #25d366;
+  font-weight: 600;
 }
 
 /* 4. Modal Rápido Ver QR / Credencial */
@@ -1655,6 +1929,90 @@ footer {
   font-size: 0.95rem;
   font-weight: 700;
   color: var(--text-primary);
+}
+
+.drawer-pay-kpis {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.65rem;
+  margin-bottom: 0.5rem;
+}
+
+.drawer-qr-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 2.25rem 1.25rem;
+  background: var(--bg-card);
+  border: 1px dashed var(--border-color);
+  border-radius: 12px;
+  gap: 0.75rem;
+}
+
+.drawer-meta-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.45rem;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 0.75rem 0.9rem;
+  font-size: 0.8rem;
+}
+
+.drawer-hw-info-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.5rem;
+  margin-top: 0.6rem;
+  padding-top: 0.6rem;
+  border-top: 1px dashed rgba(37,99,235,0.2);
+  font-size: 0.8rem;
+}
+
+.drawer-danger-zone {
+  margin-top: 1.25rem;
+  padding: 1.1rem;
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  background: rgba(239, 68, 68, 0.05);
+  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.btn-table-action {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-table-action:hover {
+  background-color: var(--bg-hover);
+  color: var(--text-primary);
+  border-color: var(--primary);
+}
+
+.btn-table-action.danger:hover {
+  background-color: rgba(239, 68, 68, 0.15);
+  color: var(--danger);
+  border-color: var(--danger);
+}
+
+.btn-table-action svg {
+  width: 14px;
+  height: 14px;
 }
 
 /* 6. Flujo de Migración Inmediata en 1 Paso */

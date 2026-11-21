@@ -6,7 +6,7 @@
 
 // =================== INTERCEPTOR GLOBAL DE FETCH (SESIÓN PIN VAULT HTTP 423) ===================
 const _originalFetch = window.fetch;
-window.fetch = async function(...args) {
+window.fetch = async function (...args) {
   let [resource, config] = args;
   config = config || {};
   config.headers = config.headers || {};
@@ -37,6 +37,66 @@ window.fetch = async function(...args) {
   }
   return response;
 };
+
+// =================== NORMALIZACIÓN DE TELÉFONOS PERÚ (+51) ===================
+function normalizePeruPhone(raw) {
+  if (!raw) return '';
+  const trimmed = String(raw).trim();
+  if (!trimmed) return '';
+  const hasPlus = trimmed.startsWith('+');
+  const digits = trimmed.replace(/\D/g, '');
+  if (!digits) return '';
+
+  if (hasPlus) {
+    return '+' + digits;
+  }
+  if (digits.length === 9 && digits.startsWith('9')) {
+    return '+51' + digits;
+  }
+  if (digits.length === 11 && digits.startsWith('519')) {
+    return '+' + digits;
+  }
+  return digits;
+}
+
+/**
+ * Renderiza de forma segura un código QR vectorial sin fallos por QRCode.CorrectLevel
+ */
+function renderSafeQrCode(container, text, size = 196, colorDark = '#0f172a', colorLight = '#ffffff') {
+  const containerEl = (typeof container === 'string') ? document.getElementById(container) : container;
+  if (!containerEl) return null;
+  containerEl.innerHTML = '';
+  if (typeof QRCode === 'undefined') return null;
+
+  let level = 0;
+  if (typeof QRCode.CorrectLevel !== 'undefined' && QRCode.CorrectLevel.M !== undefined) {
+    level = QRCode.CorrectLevel.M;
+  }
+
+  try {
+    return new QRCode(containerEl, {
+      text: text,
+      width: size,
+      height: size,
+      colorDark: colorDark,
+      colorLight: colorLight,
+      correctLevel: level,
+    });
+  } catch (e) {
+    try {
+      return new QRCode(containerEl, {
+        text: text,
+        width: size,
+        height: size,
+        colorDark: colorDark,
+        colorLight: colorLight,
+      });
+    } catch (e2) {
+      console.error('renderSafeQrCode fallback error:', e2);
+      return null;
+    }
+  }
+}
 
 let globalClients = [];
 let globalReleases = [];
@@ -74,6 +134,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   await loadReleaseMatrix();
   initLicenseStudioEvents();
   initModalEvents();
+  initWaComposerEvents();
   initInspectorEvents();
   initReleaseUploadAndAutoDetect();
   initFinancesAndBackupsEvents();
@@ -165,9 +226,11 @@ function initNavigation() {
   const sidebar = document.getElementById('appSidebar');
   const btnToggle = document.getElementById('btnToggleSidebar');
   const btnMobileToggle = document.getElementById('btnMobileSidebarToggle');
+  const floatingTooltip = document.getElementById('sidebarFloatingTooltip');
 
   // 1. Restaurar estado colapsado guardado
-  const isCollapsed = localStorage.getItem('ml_sidebar_collapsed') === 'true';
+  const isCollapsed = localStorage.getItem('ml_admin_sidebar_collapsed') === 'true' ||
+    localStorage.getItem('ml_sidebar_collapsed') === 'true';
   if (isCollapsed && sidebar) {
     sidebar.classList.add('collapsed');
   }
@@ -176,7 +239,9 @@ function initNavigation() {
   btnToggle?.addEventListener('click', () => {
     if (!sidebar) return;
     const collapsed = sidebar.classList.toggle('collapsed');
+    localStorage.setItem('ml_admin_sidebar_collapsed', collapsed ? 'true' : 'false');
     localStorage.setItem('ml_sidebar_collapsed', collapsed ? 'true' : 'false');
+    if (floatingTooltip) floatingTooltip.classList.remove('visible');
   });
 
   // 3. Evento para menú responsive en móviles
@@ -198,6 +263,13 @@ function initNavigation() {
 
   const tabs = document.querySelectorAll('.nav-tab');
   tabs.forEach(tab => {
+    // Preservar título accesible sin provocar tooltips nativos desalineados
+    const origTitle = tab.getAttribute('title');
+    if (origTitle) {
+      tab.setAttribute('data-nav-title', origTitle);
+      tab.removeAttribute('title');
+    }
+
     tab.addEventListener('click', () => {
       tabs.forEach(t => t.classList.remove('active'));
       document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
@@ -214,6 +286,7 @@ function initNavigation() {
 
       // Cerrar sidebar en móviles tras seleccionar vista
       sidebar?.classList.remove('mobile-open');
+      if (floatingTooltip) floatingTooltip.classList.remove('visible');
 
       if (tab.dataset.tab === 'tabDashboard') {
         loadDashboard();
@@ -233,6 +306,34 @@ function initNavigation() {
         loadVaultHealth();
       }
     });
+
+    // Tooltip flotante nativo sin recorte por overflow en estado colapsado
+    tab.addEventListener('mouseenter', () => {
+      if (!sidebar?.classList.contains('collapsed') || !floatingTooltip) return;
+      const labelText = tab.querySelector('.nav-label')?.textContent?.trim() ||
+        tab.getAttribute('data-nav-title') || '';
+      if (!labelText) return;
+
+      floatingTooltip.textContent = labelText;
+      const rect = tab.getBoundingClientRect();
+      const top = rect.top + (rect.height / 2) - 14;
+      const left = rect.right + 10;
+      floatingTooltip.style.top = `${Math.max(8, top)}px`;
+      floatingTooltip.style.left = `${left}px`;
+      floatingTooltip.classList.add('visible');
+    });
+
+    tab.addEventListener('mouseleave', () => {
+      if (floatingTooltip) floatingTooltip.classList.remove('visible');
+    });
+  });
+
+  // Ocultar tooltip al hacer scroll en el sidebar o redimensionar
+  sidebar?.querySelector('.sidebar-body')?.addEventListener('scroll', () => {
+    if (floatingTooltip) floatingTooltip.classList.remove('visible');
+  });
+  window.addEventListener('resize', () => {
+    if (floatingTooltip) floatingTooltip.classList.remove('visible');
   });
 }
 
@@ -293,9 +394,13 @@ function initModeSwitcher() {
   });
 }
 
+let _isSwitchingMode = false;
+
 async function loadSystemMode() {
   try {
-    const res = await fetch('/api/system/mode');
+    const res = await fetch('/api/system/mode', {
+      headers: { 'X-App-Mode': currentMode }
+    });
     if (!res.ok) return;
     const data = await res.json();
     currentMode = data.mode || 'sandbox';
@@ -306,35 +411,76 @@ async function loadSystemMode() {
 }
 
 async function switchMode(newMode) {
-  if (newMode === currentMode) return;
+  if (newMode === currentMode || _isSwitchingMode) return;
+  _isSwitchingMode = true;
+
+  const modeSwitcher = document.getElementById('modeSwitcher') || document.querySelector('.mode-switcher');
+  if (modeSwitcher) modeSwitcher.classList.add('switching');
 
   try {
+    // 1. Limpieza atómica de drawers, modales y referencias del entorno previo
+    closeClient360Drawer();
+    closeModal('modalWaComposer');
+    currentWaComposerClientId = null;
+    document.querySelectorAll('.modal-overlay.open').forEach(m => m.classList.remove('open'));
+
+    currentDrawerClientId = null;
+    currentQuickQrClientId = null;
+    currentHistoryClientId = null;
+
+    currentSearchQuery = '';
+    const searchInput = document.getElementById('searchClientsInput');
+    if (searchInput) searchInput.value = '';
+
+    currentClientFilter = 'all';
+    document.querySelectorAll('.chip-filter').forEach(c => c.classList.remove('active'));
+    document.querySelector('.chip-filter[data-filter="all"]')?.classList.add('active');
+
+    // 2. Coordinación estricta con el backend y confirmación de sincronización
     const res = await fetch('/api/system/mode', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'X-App-Mode': newMode
+      },
       body: JSON.stringify({ mode: newMode }),
     });
 
     if (!res.ok) throw new Error('Error al cambiar de modo');
     const data = await res.json();
-    currentMode = data.mode;
+    currentMode = data.mode || newMode;
     updateModeUI();
 
     showToast(
       currentMode === 'sandbox'
-        ? 'Cambiado a Modo Pruebas (Sandbox).'
-        : 'Cambiado a Modo Real (Producción).',
-      'success'
+        ? 'Entorno activo: Modo Pruebas (Sandbox).'
+        : 'Entorno activo: Modo Real (Producción).',
+      'info'
     );
 
-    await loadDashboard();
-    await loadClients();
-    await loadReleases();
-    await loadReleaseMatrix();
-    await loadFinances();
-    await loadBackups();
+    // 3. Recarga limpia coordinada de todos los datos del entorno activo
+    await Promise.allSettled([
+      loadDashboard(),
+      loadClients(),
+      loadReleases(),
+      loadReleaseMatrix(),
+      loadFinances(),
+      loadBackups(),
+    ]);
+
+    // 4. Forzar re-renderizado inmediato de la pestaña activa si corresponde
+    const activeTabBtn = document.querySelector('.nav-tab.active');
+    const activeTabKey = activeTabBtn ? activeTabBtn.dataset.tab : 'tabDashboard';
+    if (activeTabKey === 'tabClients') {
+      renderClientsTable();
+    } else if (activeTabKey === 'tabFinances') {
+      renderFinancesTable();
+    }
   } catch (e) {
     showToast('Error al cambiar modo: ' + e.message, 'error');
+  } finally {
+    _isSwitchingMode = false;
+    if (modeSwitcher) modeSwitcher.classList.remove('switching');
   }
 }
 
@@ -343,30 +489,60 @@ function updateModeUI() {
   const btnProd = document.getElementById('btnModeProd');
   const banner = document.getElementById('sandboxBanner');
   const btnReset = document.getElementById('btnResetSandbox');
+  const appHeader = document.querySelector('.app-header');
+  const kpiSubtitle = document.getElementById('kpiActiveClientsSubtitle');
 
   if (currentMode === 'sandbox') {
-    btnSandbox?.classList.add('active');
-    btnProd?.classList.remove('active');
+    btnSandbox?.classList.add('active', 'mode-sandbox');
+    btnSandbox?.classList.remove('mode-prod');
+    btnProd?.classList.remove('active', 'mode-sandbox');
+    btnProd?.classList.add('mode-prod');
+
     if (banner) banner.style.display = 'block';
     if (btnReset) btnReset.style.display = 'inline-flex';
+
+    if (appHeader) {
+      appHeader.classList.add('sandbox-mode');
+      appHeader.classList.remove('prod-mode');
+    }
+    if (kpiSubtitle) {
+      kpiSubtitle.textContent = 'En pruebas (Sandbox)';
+    }
   } else {
-    btnProd?.classList.add('active');
-    btnSandbox?.classList.remove('active');
+    btnProd?.classList.add('active', 'mode-prod');
+    btnProd?.classList.remove('mode-sandbox');
+    btnSandbox?.classList.remove('active', 'mode-prod');
+    btnSandbox?.classList.add('mode-sandbox');
+
     if (banner) banner.style.display = 'none';
     if (btnReset) btnReset.style.display = 'none';
+
+    if (appHeader) {
+      appHeader.classList.add('prod-mode');
+      appHeader.classList.remove('sandbox-mode');
+    }
+    if (kpiSubtitle) {
+      kpiSubtitle.textContent = 'En producción (Real)';
+    }
   }
 }
 
 // =================== 1. DASHBOARD FINANCIERO & MICRO-GRÁFICOS SVG ===================
 async function loadDashboard() {
   try {
-    const res = await fetch('/api/dashboard');
+    const res = await fetch('/api/dashboard', {
+      headers: { 'X-App-Mode': currentMode }
+    });
     if (!res.ok) throw new Error('Error al cargar dashboard');
     const data = await res.json();
 
     document.getElementById('kpiRevenueMonth').textContent = `S/ ${data.totalRevenueMonth.toFixed(2)}`;
     document.getElementById('kpiRevenueTotal').textContent = `S/ ${data.totalRevenueAccumulated.toFixed(2)}`;
     document.getElementById('kpiActiveClients').textContent = data.totalActiveClients;
+    const kpiProspectsEl = document.getElementById('kpiProspects');
+    if (kpiProspectsEl) {
+      kpiProspectsEl.textContent = data.prospectClients !== undefined ? data.prospectClients : 0;
+    }
     document.getElementById('kpiExpiringSoon').textContent = data.expiringSoonClients;
     document.getElementById('kpiExpired').textContent = data.expiredClients;
     document.getElementById('kpiPerpetual').textContent = data.perpetualClients;
@@ -398,9 +574,10 @@ async function loadDashboard() {
           <td><span class="badge badge-yellow">⏳ ${action.days_left} día(s)</span></td>
           <td>${action.expires_date ? action.expires_date.substring(0, 10) : '-'}</td>
           <td>
-            <a href="${waLink}" target="_blank" class="btn btn-wa btn-sm">
-              <span>📲 Avisar por WhatsApp</span>
-            </a>
+            <button type="button" class="btn btn-wa btn-sm" onclick="openWhatsAppComposer('${action.client_id}', 'expiring')" title="Abrir Compositor de WhatsApp">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" style="width:14px; height:14px; margin-right:4px;"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+              <span>Avisar por WhatsApp</span>
+            </button>
           </td>
         `;
         tbody.appendChild(tr);
@@ -412,7 +589,7 @@ async function loadDashboard() {
       try {
         const finRes = await fetch('/api/finances');
         if (finRes.ok) globalFinances = await finRes.json();
-      } catch (_) {}
+      } catch (_) { }
     }
 
     // Renderizar los 2 Micro-Gráficos SVG Nativos
@@ -478,11 +655,11 @@ function renderMonthlyRevenueChart(payments = []) {
     const x = 30 + idx * (barWidth + barGap);
     const h = (m.total / maxTotal) * chartHeight;
     const y = chartBottom - h;
-    const amtLabel = m.total > 0 ? `S/${Math.round(m.total)}` : 'S/0';
+    const amtLabel = m.total > 0 ? `S/ ${Number(m.total).toFixed(2)}` : 'S/ 0';
 
     barsSvg += `
       <g class="chart-bar" tabindex="0">
-        <title>${m.label}: S/ ${m.total.toFixed(2)}</title>
+        <title>${m.label}: S/ ${Number(m.total).toFixed(2)}</title>
         <rect x="${x}" y="${y}" width="${barWidth}" height="${Math.max(4, h)}" rx="6" fill="url(#revGrad)" opacity="${m.total > 0 ? '1' : '0.2'}"/>
         <text x="${x + barWidth / 2}" y="${Math.max(15, y - 6)}" text-anchor="middle" font-size="10" font-weight="700" fill="var(--text-primary)">${amtLabel}</text>
         <text x="${x + barWidth / 2}" y="${chartBottom + 18}" text-anchor="middle" font-size="11" font-weight="600" fill="var(--text-secondary)">${m.label}</text>
@@ -528,20 +705,33 @@ function renderPlanDistributionChart(clients = []) {
     SEMESTRAL: { label: 'Semestral', count: 0, color: '#10b981' },
     ANUAL: { label: 'Anual', count: 0, color: '#f59e0b' },
     PERPETUO: { label: 'Perpetuo', count: 0, color: '#8b5cf6' },
+    EXTENSION_CORTESIA: { label: 'Cortesía', count: 0, color: '#d97706' },
+    PROSPECTO: { label: 'Prospecto', count: 0, color: '#6366f1' },
     TRIAL: { label: 'Trial', count: 0, color: '#64748b' },
+    OTROS: { label: 'Otros', count: 0, color: '#94a3b8' },
   };
 
   let totalCount = 0;
   cList.forEach(c => {
     const p = (c.license_type || 'MENSUAL').toUpperCase();
+    const s = (c.license_status || '').toUpperCase();
     if (p.includes('PERPETUO')) {
       planCounts.PERPETUO.count++;
+      totalCount++;
+    } else if (p.includes('CORTESIA') || p.includes('EXTENSION_CORTESIA') || s === 'EXTENSION_CORTESIA') {
+      planCounts.EXTENSION_CORTESIA.count++;
+      totalCount++;
+    } else if (p === 'PROSPECTO' || s === 'PROSPECTO') {
+      planCounts.PROSPECTO.count++;
       totalCount++;
     } else if (planCounts[p]) {
       planCounts[p].count++;
       totalCount++;
-    } else {
+    } else if (p.includes('TRIAL')) {
       planCounts.TRIAL.count++;
+      totalCount++;
+    } else {
+      planCounts.OTROS.count++;
       totalCount++;
     }
   });
@@ -595,7 +785,7 @@ function renderPlanDistributionChart(clients = []) {
   `;
 }
 
-// 1.3 Eventos de Clic en KPI Cards para Filtrar CRM
+// 1.3 Eventos de Clic en KPI Cards para Filtrar CRM o Cambiar de Pestaña
 function initDashboardKpiClickEvents() {
   const cards = document.querySelectorAll('[data-kpi-filter]');
   cards.forEach(card => {
@@ -628,6 +818,17 @@ function initDashboardKpiClickEvents() {
       showToast(`Filtrando clientes por: ${filter.toUpperCase()}`, 'info');
     });
   });
+
+  // Acceso directo desde KPI de ingresos hacia Finanzas & Respaldos
+  const tabCards = document.querySelectorAll('[data-kpi-tab]');
+  tabCards.forEach(card => {
+    card.addEventListener('click', () => {
+      const targetTab = card.dataset.kpiTab;
+      if (!targetTab) return;
+      const tabBtn = document.querySelector(`.nav-tab[data-tab="${targetTab}"]`);
+      if (tabBtn) tabBtn.click();
+    });
+  });
 }
 
 // =================== 2. CRM DE CLIENTES & BUSCADOR OMNICANAL ===================
@@ -656,23 +857,32 @@ function initOmnichannelSearch() {
 
 async function loadClients() {
   try {
-    const res = await fetch('/api/clients');
+    const res = await fetch('/api/clients', {
+      headers: { 'X-App-Mode': currentMode }
+    });
     if (!res.ok) throw new Error('Error al cargar clientes');
     globalClients = await res.json();
 
     // Poblar selector en Generador
     const licSelect = document.getElementById('licClientSelect');
-    const currentVal = licSelect.value;
-    licSelect.innerHTML = '<option value="">-- Elige un cliente --</option>';
+    const currentVal = licSelect ? licSelect.value : '';
+    if (licSelect) {
+      licSelect.innerHTML = '<option value="">-- Elige un cliente --</option>';
 
-    globalClients.forEach(c => {
-      const opt = document.createElement('option');
-      opt.value = c.id;
-      opt.textContent = `${c.business_name} (${c.owner_name}) — ${c.current_device_id}`;
-      licSelect.appendChild(opt);
-    });
+      globalClients.forEach(c => {
+        const opt = document.createElement('option');
+        opt.value = c.id;
+        opt.textContent = `${c.business_name} (${c.owner_name}) — ${c.current_device_id}`;
+        licSelect.appendChild(opt);
+      });
 
-    if (currentVal) licSelect.value = currentVal;
+      if (currentVal && globalClients.some(c => c.id === currentVal)) {
+        licSelect.value = currentVal;
+      } else {
+        licSelect.value = '';
+        currentSelectedClientId = null;
+      }
+    }
 
     updateFilterCounts();
     renderClientsTable();
@@ -683,22 +893,61 @@ async function loadClients() {
   }
 }
 
+// =================== COMPARADOR SEMVER RIGUROSO & RELEASES (FASE 4) ===================
+function compareSemVer(v1, v2) {
+  const parse = (v) => {
+    if (!v) return [0, 0, 0];
+    const clean = String(v).trim().replace(/^[vV]/, '').split('+')[0].split('-')[0];
+    const parts = clean.split('.');
+    return [
+      parseInt(parts[0], 10) || 0,
+      parseInt(parts[1], 10) || 0,
+      parseInt(parts[2], 10) || 0,
+    ];
+  };
+  const p1 = parse(v1);
+  const p2 = parse(v2);
+  for (let i = 0; i < 3; i++) {
+    if (p1[i] !== p2[i]) return p1[i] - p2[i];
+  }
+  return 0;
+}
+
+function getLatestPublishedVersion() {
+  if (!globalReleases || globalReleases.length === 0) return null;
+  let latest = null;
+  for (const r of globalReleases) {
+    const vn = (r.version_name || '').trim();
+    if (vn) {
+      if (!latest || compareSemVer(vn, latest) > 0) {
+        latest = vn;
+      }
+    }
+  }
+  return latest;
+}
+
 function updateFilterCounts() {
   const now = new Date();
   let countActive = 0;
   let countExpiring = 0;
   let countExpired = 0;
   let countPerpetual = 0;
+  let countProspect = 0;
   let countOutdated = 0;
 
-  const latestVer = (globalReleases.length > 0) ? globalReleases[0].version_name : '9.24.0';
+  const latestVer = getLatestPublishedVersion();
 
   globalClients.forEach(c => {
     const plan = (c.license_type || 'MENSUAL').toUpperCase();
+    const status = (c.license_status || '').toUpperCase();
+    const isProspect = plan === 'PROSPECTO' || status === 'PROSPECTO';
     const isPerp = plan === 'PERPETUO_LIBERADO' || plan === 'PERPETUO';
     const expDate = c.license_expires ? new Date(c.license_expires) : null;
 
-    if (isPerp) {
+    if (isProspect) {
+      countProspect++;
+    } else if (isPerp) {
       countPerpetual++;
       countActive++;
     } else if (expDate) {
@@ -713,8 +962,11 @@ function updateFilterCounts() {
       }
     }
 
-    if ((c.installed_version || '') !== latestVer) {
-      countOutdated++;
+    const clientVer = (c.installed_version || '').trim();
+    if (!isProspect && latestVer && clientVer.length > 0) {
+      if (compareSemVer(clientVer, latestVer) < 0) {
+        countOutdated++;
+      }
     }
   });
 
@@ -724,6 +976,7 @@ function updateFilterCounts() {
   setTxt('countExpiring', countExpiring);
   setTxt('countExpired', countExpired);
   setTxt('countPerpetual', countPerpetual);
+  setTxt('countProspect', countProspect);
   setTxt('countOutdated', countOutdated);
 }
 
@@ -732,21 +985,29 @@ function renderClientsTable() {
   tbody.innerHTML = '';
 
   const now = new Date();
-  const latestVer = (globalReleases.length > 0) ? globalReleases[0].version_name : '9.34.0';
+  const latestVer = getLatestPublishedVersion();
 
   const filtered = globalClients.filter(c => {
     // 1. Filtro por chip de estado
     if (currentClientFilter !== 'all') {
       const plan = (c.license_type || 'MENSUAL').toUpperCase();
+      const status = (c.license_status || '').toUpperCase();
+      const isProspect = plan === 'PROSPECTO' || status === 'PROSPECTO';
       const isPerp = plan === 'PERPETUO_LIBERADO' || plan === 'PERPETUO';
       const expDate = c.license_expires ? new Date(c.license_expires) : null;
       const diffDays = expDate ? Math.ceil((expDate - now) / (1000 * 60 * 60 * 24)) : 999;
 
-      if (currentClientFilter === 'active' && !(isPerp || diffDays >= 0)) return false;
-      if (currentClientFilter === 'expiring' && !(!isPerp && diffDays >= 0 && diffDays <= 7)) return false;
-      if (currentClientFilter === 'expired' && !(!isPerp && diffDays < 0)) return false;
-      if (currentClientFilter === 'perpetual' && !isPerp) return false;
-      if (currentClientFilter === 'outdated' && (c.installed_version || '') === latestVer) return false;
+      if (currentClientFilter === 'prospect' && !isProspect) return false;
+      if (currentClientFilter === 'active' && (isProspect || !(isPerp || diffDays >= 0))) return false;
+      if (currentClientFilter === 'expiring' && (isProspect || !(!isPerp && diffDays >= 0 && diffDays <= 7))) return false;
+      if (currentClientFilter === 'expired' && (isProspect || !(!isPerp && diffDays < 0))) return false;
+      if (currentClientFilter === 'perpetual' && (isProspect || !isPerp)) return false;
+      if (currentClientFilter === 'outdated') {
+        const clientVer = (c.installed_version || '').trim();
+        if (isProspect || !latestVer || !clientVer || compareSemVer(clientVer, latestVer) >= 0) {
+          return false;
+        }
+      }
     }
 
     // 2. Filtro omnicanal por texto
@@ -780,11 +1041,15 @@ function renderClientsTable() {
     const tr = document.createElement('tr');
     let statusBadge = '<span class="badge badge-green">Activa</span>';
     const plan = (c.license_type || 'MENSUAL').toUpperCase();
+    const status = (c.license_status || '').toUpperCase();
+    const isProspect = plan === 'PROSPECTO' || status === 'PROSPECTO';
     const isPerp = plan === 'PERPETUO_LIBERADO' || plan === 'PERPETUO';
     const expDate = c.license_expires ? new Date(c.license_expires) : null;
     const diffDays = expDate ? Math.ceil((expDate - now) / (1000 * 60 * 60 * 24)) : 999;
 
-    if (isPerp) {
+    if (isProspect) {
+      statusBadge = '<span class="badge badge-prospect">Prospecto</span>';
+    } else if (isPerp) {
       statusBadge = '<span class="badge badge-purple">Perpetua</span>';
     } else if (diffDays < 0) {
       statusBadge = '<span class="badge badge-red">Vencida</span>';
@@ -792,13 +1057,40 @@ function renderClientsTable() {
       statusBadge = `<span class="badge badge-yellow">Vence en ${diffDays}d</span>`;
     }
 
-    const expText = isPerp ? 'De por Vida' : (c.license_expires ? c.license_expires.substring(0, 10) : 'Sin fecha');
-    const cleanPhone = (c.phone || '').replace(/[^0-9]/g, '');
-    const waDirectLink = cleanPhone ? `https://api.whatsapp.com/send?phone=${cleanPhone}` : '#';
-    const isOutdated = (c.installed_version || '') !== latestVer;
+    const expText = isProspect
+      ? (c.expected_subscription_date ? `Seguim: ${escapeHtml(c.expected_subscription_date)}` : 'Sin vencimiento')
+      : (isPerp ? 'De por Vida' : (c.license_expires ? c.license_expires.substring(0, 10) : 'Sin fecha'));
+
+    const clientVer = (c.installed_version || '').trim();
+    const isOutdated = !isProspect && !!latestVer && clientVer.length > 0 && compareSemVer(clientVer, latestVer) < 0;
+
+    let verBadge = '';
+    if (isProspect || !clientVer) {
+      verBadge = '<span class="badge badge-outline" style="font-size:0.68rem; padding:1px 6px; margin-top:2px; color:var(--text-muted);">Sin versión</span>';
+    } else if (!latestVer) {
+      verBadge = '<span class="badge badge-green" style="font-size:0.68rem; padding:1px 6px; margin-top:2px;">Al día</span>';
+    } else if (isOutdated) {
+      verBadge = '<span class="badge badge-yellow" style="font-size:0.68rem; padding:1px 6px; margin-top:2px;">Update pend.</span>';
+    } else {
+      verBadge = '<span class="badge badge-green" style="font-size:0.68rem; padding:1px 6px; margin-top:2px;">Al día</span>';
+    }
+
+    const isPendingDev = !c.current_device_id || c.current_device_id === 'PENDIENTE' || c.current_device_id === 'ML-0000';
+    const deviceMarkup = (isProspect && isPendingDev)
+      ? '<span class="badge badge-unlinked">Sin vincular</span>'
+      : `<span class="device-id-badge" title="Hardware ID derivado de Settings.Secure.ANDROID_ID">
+          <span>${escapeHtml(c.current_device_id)}</span>
+          <button class="btn-micro" onclick="copyDeviceIdToClipboard('${escapeHtml(c.current_device_id)}')" title="Copiar Hardware ID">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" style="width:12px; height:12px;"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+          </button>
+        </span>`;
+
+    const pendingBonusBadge = (c.ai_pending_bonus && c.ai_pending_bonus > 0)
+      ? `<div class="badge-pending-bonus" title="Bono acordado pendiente de emitir en token Ed25519">+${c.ai_pending_bonus} IA por emitir</div>`
+      : '';
 
     tr.innerHTML = `
-      <td><strong>${escapeHtml(c.id)}</strong></td>
+      <td style="white-space: nowrap; font-family: var(--font-mono);"><strong>${escapeHtml(c.id)}</strong></td>
       <td>
         <div><strong>${escapeHtml(c.business_name)}</strong></div>
         <div style="font-size:0.8rem; color:var(--text-secondary); margin-top:2px;">
@@ -809,41 +1101,37 @@ function renderClientsTable() {
       <td>
         <div style="display:flex; align-items:center; gap:0.35rem; flex-wrap:wrap;">
           ${statusBadge}
-          <small style="font-weight:700; color:var(--text-secondary);">(${escapeHtml(c.license_type || 'MENSUAL')})</small>
+          ${!isProspect ? `<small style="font-weight:700; color:var(--text-secondary);">(${escapeHtml(c.license_type || 'MENSUAL')})</small>` : ''}
         </div>
         <div style="font-size:0.78rem; color:var(--text-secondary); margin-top:3px; font-family:var(--font-mono);">
-          📅 ${expText}
+          ${expText}
         </div>
       </td>
       <td>
-        <span class="device-id-badge" title="Hardware ID derivado de Settings.Secure.ANDROID_ID">
-          <span>${escapeHtml(c.current_device_id)}</span>
-          <button class="btn-micro" onclick="copyDeviceIdToClipboard('${escapeHtml(c.current_device_id)}')" title="Copiar Hardware ID">📋</button>
-        </span>
+        ${deviceMarkup}
       </td>
       <td>
-        <div style="font-weight:600;">v${escapeHtml(c.installed_version || '9.34.0')}</div>
-        ${isOutdated
-          ? '<span class="badge badge-yellow" style="font-size:0.68rem; padding:1px 6px; margin-top:2px;">Update pend.</span>'
-          : '<span class="badge badge-green" style="font-size:0.68rem; padding:1px 6px; margin-top:2px;">Al día</span>'}
+        <div style="font-weight:600;">${clientVer ? 'v' + escapeHtml(clientVer) : '<span style="color:var(--text-muted); font-size:0.85rem;">-</span>'}</div>
+        ${verBadge}
       </td>
       <td>
         ${(c.ai_extra_credits || 0) > 0
-          ? `<span class="badge badge-purple">+${c.ai_extra_credits} IA</span>`
-          : '<span class="badge badge-outline" style="color:var(--text-muted); border:1px solid var(--border-color);">0 IA</span>'}
+        ? `<span class="badge badge-purple">+${c.ai_extra_credits} IA</span>`
+        : '<span class="badge badge-outline" style="color:var(--text-muted); border:1px solid var(--border-color);">0 IA</span>'}
+        ${pendingBonusBadge}
       </td>
-      <td style="text-align:center;">
+      <td style="text-align:center; white-space: nowrap;">
         <div class="crm-actions-cell">
-          <button class="btn-crm-action" onclick="openClient360Drawer('${c.id}')" title="Ficha 360° del Cliente">
+          <button type="button" class="btn-crm-action" onclick="openClient360Drawer('${c.id}', 'drawerTabOverview')" title="Ficha 360° del Cliente">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
           </button>
-          <button class="btn-crm-action primary" onclick="openQuickQrModal('${c.id}')" title="Ver QR y Credencial Oficial">
+          <button type="button" class="btn-crm-action primary" onclick="openClient360Drawer('${c.id}', 'drawerTabQr')" title="Ver QR y Credencial Oficial">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
           </button>
-          <a href="${waDirectLink}" target="_blank" class="btn-crm-action wa" title="Abrir Chat de WhatsApp">
+          <button type="button" class="btn-crm-action wa" onclick="openWhatsAppComposer('${c.id}')" title="Enviar WhatsApp (Compositor)">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
-          </a>
-          <button class="btn-crm-action" onclick="selectClientForLicense('${c.id}')" title="Emitir Licencia Ed25519">
+          </button>
+          <button type="button" class="btn-crm-action" onclick="selectClientForLicense('${c.id}')" title="Emitir Licencia Ed25519">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
           </button>
         </div>
@@ -875,6 +1163,15 @@ function selectClientForLicense(clientId) {
     licSelect.value = clientId;
     updateClientSummaryCard();
     updatePlanImpactAndProjection();
+
+    // Precargar bono IA acordado pendiente de emitir si existe
+    const client = globalClients.find(c => c.id === clientId);
+    if (client && (client.ai_pending_bonus || 0) > 0) {
+      const bonusInput = document.getElementById('licCustomAiBonus');
+      if (bonusInput) {
+        bonusInput.value = client.ai_pending_bonus;
+      }
+    }
   }
 }
 
@@ -984,8 +1281,15 @@ function updateClientSummaryCard() {
   const now = new Date();
   const expDate = client.license_expires ? new Date(client.license_expires) : null;
   const isPerp = (client.license_type || '').toUpperCase().includes('PERPETU');
+  const isProspect = (client.license_type || '').toUpperCase() === 'PROSPECTO' || (client.license_status || '').toUpperCase() === 'PROSPECTO';
 
-  if (isPerp) {
+  if (isProspect) {
+    document.getElementById('sumExpiresDate').textContent = client.expected_subscription_date
+      ? `Seguimiento: ${client.expected_subscription_date}`
+      : 'Sin vencimiento (Prospecto)';
+    document.getElementById('sumStatusBadge').className = 'badge badge-prospect';
+    document.getElementById('sumStatusBadge').textContent = 'PROSPECTO';
+  } else if (isPerp) {
     document.getElementById('sumExpiresDate').textContent = 'Vitalicia (De por Vida)';
     document.getElementById('sumStatusBadge').className = 'badge badge-purple';
     document.getElementById('sumStatusBadge').textContent = 'PERPETUA';
@@ -1175,14 +1479,7 @@ async function generateLicense() {
 
     // Renderizar QR Code
     const qrContainer = document.getElementById('qrContainer');
-    qrContainer.innerHTML = '';
-    lastGeneratedQr = new QRCode(qrContainer, {
-      text: data.token,
-      width: 230,
-      height: 230,
-      colorDark: '#0f172a',
-      colorLight: '#ffffff',
-    });
+    lastGeneratedQr = renderSafeQrCode(qrContainer, data.token, 230);
 
     // Renderizar Credencial PNG de Alta Resolución tras render del QR
     setTimeout(() => {
@@ -1361,7 +1658,7 @@ function renderCredentialCanvas(licenseData, client, targetCanvasId = 'credentia
   if (qrImg) {
     try {
       ctx.drawImage(qrImg, qrX + 17, qrY + 17, 220, 220);
-    } catch (_) {}
+    } catch (_) { }
   }
 
   ctx.fillStyle = '#0f172a';
@@ -1464,15 +1761,7 @@ async function openQuickQrModal(clientId) {
   }
 
   const qrContainer = document.getElementById('quickQrContainer');
-  qrContainer.innerHTML = '';
-  lastQuickQr = new QRCode(qrContainer, {
-    text: token,
-    width: 236,
-    height: 236,
-    colorDark: '#0f172a',
-    colorLight: '#ffffff',
-    correctLevel: QRCode.CorrectLevel.M,
-  });
+  lastQuickQr = renderSafeQrCode(qrContainer, token, 236);
 
   document.getElementById('quickQrCodeDisplay').textContent = token;
 
@@ -1564,7 +1853,7 @@ async function openQuickQrModal(clientId) {
   openModal('modalQuickQr');
 }
 
-// =================== DRAWER LATERAL: FICHA 360° DEL CLIENTE (FASE 4A) ===================
+// =================== DRAWER LATERAL: FICHA 360° DEL CLIENTE (FASE 4A + FASE 5) ===================
 function initDrawerEvents() {
   const dtabs = document.querySelectorAll('.drawer-tab-btn');
   dtabs.forEach(btn => {
@@ -1587,7 +1876,13 @@ function initDrawerEvents() {
     const doc = document.getElementById('drawerEditDocId').value.trim();
     const phone = document.getElementById('drawerEditPhone').value.trim();
     const device = document.getElementById('drawerEditDeviceId').value.trim().toUpperCase();
+    const model = document.getElementById('drawerEditDeviceModel')?.value.trim() || '';
+    const plan = document.getElementById('drawerEditPlanSelect')?.value || 'MENSUAL';
     const ver = document.getElementById('drawerEditInstalledVersion').value.trim();
+    const exp = document.getElementById('drawerEditExpires')?.value || null;
+    const upd = document.getElementById('drawerEditUpdates')?.value || null;
+    const aiRep = parseInt(document.getElementById('drawerEditAiReported')?.value) || 0;
+    const aiBonus = parseInt(document.getElementById('drawerEditAiPendingBonus')?.value) || 0;
     const notes = document.getElementById('drawerEditNotes').value.trim();
 
     try {
@@ -1600,16 +1895,25 @@ function initDrawerEvents() {
           document_id: doc,
           phone: phone,
           current_device_id: device,
+          device_model: model,
+          license_type: plan,
           installed_version: ver,
+          license_expires: exp,
+          updates_until: upd,
+          ai_reported_balance: aiRep,
+          ai_pending_bonus: aiBonus,
           notes: notes,
         }),
       });
 
-      if (!res.ok) throw new Error('Error al actualizar datos');
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || 'Error al actualizar datos');
+      }
       showToast('Ficha 360° del cliente actualizada de inmediato.', 'success');
       await loadClients();
       await loadDashboard();
-      openClient360Drawer(currentDrawerClientId);
+      openClient360Drawer(currentDrawerClientId, 'drawerTabEdit');
     } catch (err) {
       showToast('Error: ' + err.message, 'error');
     }
@@ -1631,33 +1935,104 @@ function initDrawerEvents() {
 
   document.getElementById('btnDrawerAddPayment')?.addEventListener('click', () => {
     if (!currentDrawerClientId) return;
-    const cid = currentDrawerClientId;
-    closeClient360Drawer();
-    currentHistoryClientId = cid;
-    document.getElementById('manualPayClientId').value = cid;
-    document.getElementById('manualPayAmount').value = '35.00';
-    document.getElementById('manualPayPlan').value = 'Renovación Mensual';
-    openModal('modalManualPayment');
+    openAddPaymentModal(currentDrawerClientId);
+  });
+
+  // Modal Sincronizar Datos Reportados del Celular (Envío de formulario)
+  document.getElementById('btnSubmitSyncReported')?.addEventListener('click', async () => {
+    const clientId = document.getElementById('syncRepClientId').value;
+    if (!clientId) return;
+
+    const deviceId = document.getElementById('syncRepDeviceId').value.trim();
+    const deviceModel = document.getElementById('syncRepDeviceModel').value.trim();
+    const version = document.getElementById('syncRepVersion').value.trim();
+    const aiBalance = parseInt(document.getElementById('syncRepAiBalance').value);
+    const trialDays = document.getElementById('syncRepTrialDays').value ? parseInt(document.getElementById('syncRepTrialDays').value) : null;
+    const expires = document.getElementById('syncRepExpires').value || null;
+    const notes = document.getElementById('syncRepNotes').value.trim();
+
+    try {
+      const res = await fetch(`/api/clients/${clientId}/sync-reported`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          device_id: deviceId || undefined,
+          device_model: deviceModel || undefined,
+          installed_version: version || undefined,
+          ai_reported_balance: !isNaN(aiBalance) ? aiBalance : undefined,
+          trial_days_remaining: trialDays !== null && !isNaN(trialDays) ? trialDays : undefined,
+          license_expires: expires || undefined,
+          notes: notes || undefined,
+        }),
+      });
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || 'Error al sincronizar datos reportados');
+      }
+
+      closeModal('modalSyncReported');
+      showToast('Datos del celular sincronizados con éxito.', 'success');
+      await loadClients();
+      await loadDashboard();
+      if (currentDrawerClientId === clientId) {
+        openClient360Drawer(clientId, 'drawerTabOverview');
+      }
+    } catch (e) {
+      showToast('Error: ' + e.message, 'error');
+    }
   });
 }
 
 async function openClient360Drawer(clientId) {
+  const initialTab = arguments[1] || 'drawerTabOverview';
   currentDrawerClientId = clientId;
   const client = globalClients.find(c => c.id === clientId);
   if (!client) return;
 
-  document.getElementById('drawerBizName').textContent = client.business_name;
-  document.getElementById('drawerOwnerName').textContent = client.owner_name;
-  document.getElementById('drawerDeviceId').textContent = client.current_device_id;
+  // Activar pestaña solicitada de inmediato (con soporte para alias drawerTabSummary)
+  const targetTabId = (initialTab === 'drawerTabSummary') ? 'drawerTabOverview' : initialTab;
+  const dtabs = document.querySelectorAll('.drawer-tab-btn');
+  dtabs.forEach(b => {
+    if (b.dataset.dtab === targetTabId) {
+      b.classList.add('active');
+    } else {
+      b.classList.remove('active');
+    }
+  });
+  document.querySelectorAll('.drawer-tab-pane').forEach(p => {
+    if (p.id === targetTabId) {
+      p.classList.add('active');
+    } else {
+      p.classList.remove('active');
+    }
+  });
+
+  // Cabecera Ficha 360°
+  document.getElementById('drawerBizName').textContent = client.business_name || 'Sin Nombre';
+  document.getElementById('drawerOwnerName').textContent = client.owner_name || '-';
+  document.getElementById('drawerDeviceId').textContent = client.current_device_id || 'PENDIENTE';
 
   const statusBadge = document.getElementById('drawerStatusBadge');
   const plan = (client.license_type || 'MENSUAL').toUpperCase();
+  const status = (client.license_status || '').toUpperCase();
+  const isProspect = plan === 'PROSPECTO' || status === 'PROSPECTO';
+  const isTrial = plan === 'TRIAL';
   const isPerp = plan === 'PERPETUO_LIBERADO' || plan === 'PERPETUO';
   const now = new Date();
   const expDate = client.license_expires ? new Date(client.license_expires) : null;
   const diffDays = expDate ? Math.ceil((expDate - now) / (1000 * 60 * 60 * 24)) : 999;
 
-  if (isPerp) {
+  if (isProspect) {
+    statusBadge.className = 'badge badge-prospect';
+    statusBadge.textContent = 'Prospecto';
+  } else if (isTrial) {
+    statusBadge.className = 'badge badge-yellow';
+    const trialDays = client.trial_days_remaining !== undefined && client.trial_days_remaining !== null
+      ? client.trial_days_remaining
+      : (diffDays >= 0 ? diffDays : 0);
+    statusBadge.textContent = `Trial (${trialDays}d)`;
+  } else if (isPerp) {
     statusBadge.className = 'badge badge-purple';
     statusBadge.textContent = 'Perpetua';
   } else if (diffDays < 0) {
@@ -1671,104 +2046,273 @@ async function openClient360Drawer(clientId) {
     statusBadge.textContent = 'Activa';
   }
 
-  document.getElementById('drawerKpiPlan').textContent = plan.replace(/_/g, ' ');
-  document.getElementById('drawerKpiExpires').textContent = isPerp ? 'De por Vida' : (client.license_expires ? client.license_expires.substring(0, 10) : 'Sin fecha');
+  // Pestaña 1: Resumen y Licencia
+  document.getElementById('drawerKpiPlan').textContent = isProspect ? 'PROSPECTO' : plan.replace(/_/g, ' ');
+  document.getElementById('drawerKpiExpires').textContent = isProspect
+    ? (client.expected_subscription_date ? `Seguimiento: ${client.expected_subscription_date}` : 'Sin vencimiento')
+    : (isPerp ? 'De por Vida' : (client.license_expires ? client.license_expires.substring(0, 10) : 'Sin fecha'));
   document.getElementById('drawerKpiAiCredits').textContent = `+${client.ai_extra_credits || 0} IA`;
   document.getElementById('drawerKpiVersion').textContent = `v${client.installed_version || '9.34.0'}`;
-  document.getElementById('drawerKpiUpdates').textContent = client.updates_until ? client.updates_until.substring(0, 10) : '-';
+  
+  const drawerKpiUpdates = document.getElementById('drawerBoxUpdates')?.querySelector('.drawer-kpi-val') || document.getElementById('drawerKpiUpdates');
+  if (drawerKpiUpdates) {
+    if (isProspect || isTrial) {
+      drawerKpiUpdates.textContent = 'No aplica';
+    } else {
+      drawerKpiUpdates.textContent = client.updates_until ? client.updates_until.substring(0, 10) : '-';
+    }
+  }
+
   document.getElementById('drawerPhone').textContent = client.phone || '-';
   document.getElementById('drawerDocId').textContent = client.document_id || '-';
+  const drawerDeviceModel = document.getElementById('drawerDeviceModel');
+  if (drawerDeviceModel) {
+    drawerDeviceModel.textContent = client.device_model || 'No registrado';
+  }
+  const drawerAiBreakdown = document.getElementById('drawerAiBreakdown');
+  if (drawerAiBreakdown) {
+    drawerAiBreakdown.textContent = `Reportado: ${client.ai_reported_balance || 0} IA | Bono: +${client.ai_pending_bonus || 0} IA`;
+  }
   document.getElementById('drawerNotes').textContent = client.notes || 'Sin observaciones registradas.';
 
+  // Pestaña 4: Hardware Actual (Caja Superior)
+  document.getElementById('drawerCurrentDevIdDisplay').textContent = client.current_device_id || 'PENDIENTE';
+  const drawerHwModelDisplay = document.getElementById('drawerHwModelDisplay');
+  if (drawerHwModelDisplay) {
+    drawerHwModelDisplay.textContent = client.device_model || 'No registrado';
+  }
+  const drawerHwVersionDisplay = document.getElementById('drawerHwVersionDisplay');
+  if (drawerHwVersionDisplay) {
+    const latestVer = getLatestPublishedVersion();
+    const clientVer = (client.installed_version || '').trim();
+    let badgeHtml = '';
+    if (isProspect || !clientVer) {
+      badgeHtml = '<span class="badge badge-outline" style="font-size:0.68rem; padding:1px 6px; margin-left:4px; color:var(--text-muted);">Sin versión</span>';
+    } else if (!latestVer) {
+      badgeHtml = '<span class="badge badge-green" style="font-size:0.68rem; padding:1px 6px; margin-left:4px;">Al día</span>';
+    } else if (compareSemVer(clientVer, latestVer) < 0) {
+      badgeHtml = '<span class="badge badge-yellow" style="font-size:0.68rem; padding:1px 6px; margin-left:4px;">Update pend.</span>';
+    } else {
+      badgeHtml = '<span class="badge badge-green" style="font-size:0.68rem; padding:1px 6px; margin-left:4px;">Al día</span>';
+    }
+    drawerHwVersionDisplay.innerHTML = `<code>v${escapeHtml(client.installed_version || '9.34.0')}</code> ${badgeHtml}`;
+  }
+  const drawerHwNonceDisplay = document.getElementById('drawerHwNonceDisplay');
+  if (drawerHwNonceDisplay) {
+    drawerHwNonceDisplay.textContent = client.next_nonce || 1;
+  }
+  const drawerHwLinkedDateDisplay = document.getElementById('drawerHwLinkedDateDisplay');
+  if (drawerHwLinkedDateDisplay) {
+    drawerHwLinkedDateDisplay.textContent = client.created_at ? client.created_at.substring(0, 10) : 'Al registrar';
+  }
+
+  // Pestaña 5: Edición Rápida Form Pre-fill
   document.getElementById('drawerEditClientId').value = client.id;
   document.getElementById('drawerEditBizName').value = client.business_name || '';
   document.getElementById('drawerEditOwnerName').value = client.owner_name || '';
   document.getElementById('drawerEditDocId').value = client.document_id || '';
   document.getElementById('drawerEditPhone').value = client.phone || '';
   document.getElementById('drawerEditDeviceId').value = client.current_device_id || '';
+  const editDevModel = document.getElementById('drawerEditDeviceModel');
+  if (editDevModel) editDevModel.value = client.device_model || '';
+  const editPlanSel = document.getElementById('drawerEditPlanSelect');
+  if (editPlanSel) editPlanSel.value = client.license_type || 'MENSUAL';
   document.getElementById('drawerEditInstalledVersion').value = client.installed_version || '9.34.0';
+  const editExpires = document.getElementById('drawerEditExpires');
+  if (editExpires) editExpires.value = client.license_expires ? client.license_expires.substring(0, 10) : '';
+  const editUpdates = document.getElementById('drawerEditUpdates');
+  if (editUpdates) editUpdates.value = client.updates_until ? client.updates_until.substring(0, 10) : '';
+  const editAiRep = document.getElementById('drawerEditAiReported');
+  if (editAiRep) editAiRep.value = client.ai_reported_balance || 0;
+  const editAiBonus = document.getElementById('drawerEditAiPendingBonus');
+  if (editAiBonus) editAiBonus.value = client.ai_pending_bonus || 0;
   document.getElementById('drawerEditNotes').value = client.notes || '';
-
-  document.getElementById('drawerCurrentDevIdDisplay').textContent = client.current_device_id;
 
   try {
     const res = await fetch(`/api/clients/${clientId}/history`);
     if (res.ok) {
       const history = await res.json();
 
+      // --- PESTAÑA 3: PAGOS & FINANZAS ---
       let totalPaid = 0;
+      const methodCounts = {};
+      let lastDate = '-';
       const paymentsBody = document.getElementById('drawerPaymentsBody');
       paymentsBody.innerHTML = '';
-      if (history.payments && history.payments.length > 0) {
-        history.payments.forEach(p => {
-          totalPaid += (parseFloat(p.amount) || 0);
+
+      const payments = history.payments || [];
+      if (payments.length > 0) {
+        payments.forEach(p => {
+          const amt = parseFloat(p.amount) || 0;
+          totalPaid += amt;
+          const m = p.method || 'Otro';
+          methodCounts[m] = (methodCounts[m] || 0) + 1;
+          const pDate = p.date ? p.date.substring(0, 10) : '-';
+          if (lastDate === '-' || (pDate !== '-' && pDate > lastDate)) {
+            lastDate = pDate;
+          }
+
           const tr = document.createElement('tr');
+          const safePaymentJson = JSON.stringify(p).replace(/'/g, '&#39;');
           tr.innerHTML = `
-            <td>${p.date ? p.date.substring(0, 10) : '-'}</td>
-            <td><strong style="color:var(--success);">S/ ${(p.amount || 0).toFixed(2)}</strong></td>
-            <td><span class="badge badge-mono">${escapeHtml(p.plan)}</span></td>
-            <td>${escapeHtml(p.method)}</td>
+            <td>${pDate}</td>
+            <td><span class="badge badge-mono">${escapeHtml(p.plan || '-')}</span></td>
+            <td><strong style="color:var(--success);">S/ ${amt.toFixed(2)}</strong></td>
+            <td>${escapeHtml(p.method || '-')}</td>
             <td>${escapeHtml(p.reference || '-')}</td>
+            <td style="text-align: center; white-space: nowrap;">
+              <button type="button" class="btn-table-action" title="Editar Pago" onclick='openEditPaymentModal("${clientId}", ${safePaymentJson})'>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" style="width:13px; height:13px;"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+              </button>
+              <button type="button" class="btn-table-action danger" title="Eliminar Pago" onclick='confirmDeletePayment("${clientId}", "${p.id}")'>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" style="width:13px; height:13px;"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+              </button>
+            </td>
           `;
           paymentsBody.appendChild(tr);
         });
       } else {
-        paymentsBody.innerHTML = '<tr><td colspan="5" style="text-align:center; color:var(--text-muted); padding:1rem;">Sin pagos registrados</td></tr>';
+        paymentsBody.innerHTML = '<tr><td colspan="6" style="text-align:center; color:var(--text-muted); padding:1rem;">Sin pagos registrados</td></tr>';
       }
-      document.getElementById('drawerKpiTotalPaid').textContent = `S/ ${totalPaid.toFixed(2)}`;
 
-      let token = '';
-      if (history.codes && history.codes.length > 0) {
-        token = history.codes[history.codes.length - 1].token;
-      } else {
-        token = `ML9-PENDIENTE-${client.current_device_id}`;
-      }
-      document.getElementById('drawerCodeDisplay').textContent = token;
-      const qrBox = document.getElementById('drawerQrContainer');
-      qrBox.innerHTML = '';
-      new QRCode(qrBox, {
-        text: token,
-        width: 196,
-        height: 196,
-        colorDark: '#0f172a',
-        colorLight: '#ffffff',
-        correctLevel: QRCode.CorrectLevel.M,
-      });
-
-      document.getElementById('btnDrawerCopyCode').onclick = () => {
-        navigator.clipboard.writeText(token).then(() => showToast('¡Código copiado!', 'success'));
-      };
-      document.getElementById('btnDrawerDownloadQr').onclick = () => {
-        const qrCanvas = qrBox.querySelector('canvas') || qrBox.querySelector('img');
-        if (qrCanvas) {
-          const a = document.createElement('a');
-          a.download = `QR_${client.current_device_id}.png`;
-          a.href = qrCanvas.toDataURL ? qrCanvas.toDataURL('image/png') : qrCanvas.src;
-          a.click();
+      // Calcular medio más frecuente
+      let topMethod = '-';
+      let maxCount = 0;
+      for (const [meth, cnt] of Object.entries(methodCounts)) {
+        if (cnt > maxCount) {
+          maxCount = cnt;
+          topMethod = meth;
         }
-      };
-      const cleanPhone = (client.phone || '').replace(/[^0-9]/g, '');
-      const msgText = renderConfigTemplate('license_issued', {
-        titular: client.owner_name,
-        negocio: client.business_name,
-        plan: (client.license_type || 'MENSUAL').replace(/_/g, ' '),
-        vencimiento: client.license_expires ? client.license_expires.substring(0, 10) : 'Activa',
-        creditos_ia: client.ai_extra_credits || 0,
-        codigo: token,
-        device_id: client.current_device_id,
-      });
-      document.getElementById('btnDrawerSendWa').href = `https://api.whatsapp.com/send?phone=${cleanPhone}&text=${encodeURIComponent(msgText)}`;
+      }
 
+      document.getElementById('drawerKpiTotalPaid').textContent = `S/ ${totalPaid.toFixed(2)}`;
+      const drawerPayKpiTotal = document.getElementById('drawerPayKpiTotal');
+      if (drawerPayKpiTotal) drawerPayKpiTotal.textContent = `S/ ${totalPaid.toFixed(2)}`;
+      const drawerPayKpiCount = document.getElementById('drawerPayKpiCount');
+      if (drawerPayKpiCount) drawerPayKpiCount.textContent = `${payments.length}`;
+      const drawerPayKpiLastDate = document.getElementById('drawerPayKpiLastDate');
+      if (drawerPayKpiLastDate) drawerPayKpiLastDate.textContent = lastDate;
+      const drawerPayKpiMethod = document.getElementById('drawerPayKpiMethod');
+      if (drawerPayKpiMethod) drawerPayKpiMethod.textContent = topMethod;
+
+      // --- PESTAÑA 2: QR & CREDENCIAL OFICIAL ---
+      const codes = (history.codes && history.codes.length > 0) ? history.codes : (client.generated_codes_history || []);
+      const emptyState = document.getElementById('drawerQrEmptyState');
+      const qrContent = document.getElementById('drawerQrContent');
+      const selectorContainer = document.getElementById('drawerQrSelectorContainer');
+      const codeSelector = document.getElementById('drawerQrCodeSelector');
+
+      if (!codes || codes.length === 0) {
+        if (emptyState) emptyState.style.display = 'flex';
+        if (qrContent) qrContent.style.display = 'none';
+      } else {
+        if (emptyState) emptyState.style.display = 'none';
+        if (qrContent) qrContent.style.display = 'flex';
+
+        const renderSelectedDrawerLicense = (selectedCode) => {
+          const token = selectedCode.token;
+          document.getElementById('drawerCodeDisplay').textContent = token;
+          renderSafeQrCode('drawerQrContainer', token, 196);
+
+          // Metadatos
+          const metaPlan = document.getElementById('drawerQrMetaPlan');
+          if (metaPlan) metaPlan.textContent = selectedCode.plan || client.license_type || 'MENSUAL';
+          const metaEmitted = document.getElementById('drawerQrMetaEmitted');
+          if (metaEmitted) metaEmitted.textContent = selectedCode.created_at ? selectedCode.created_at.substring(0, 10) : '-';
+          const metaExpires = document.getElementById('drawerQrMetaExpires');
+          if (metaExpires) metaExpires.textContent = selectedCode.expires_at ? selectedCode.expires_at.substring(0, 10) : (client.license_expires ? client.license_expires.substring(0, 10) : 'Activa');
+          const metaNonce = document.getElementById('drawerQrMetaNonce');
+          if (metaNonce) metaNonce.textContent = selectedCode.nonce || client.next_nonce || 1;
+          const metaAi = document.getElementById('drawerQrMetaAi');
+          if (metaAi) metaAi.textContent = `+${selectedCode.ai_credits ?? client.ai_extra_credits ?? 0} IA`;
+          const metaDevice = document.getElementById('drawerQrMetaDevice');
+          if (metaDevice) metaDevice.textContent = selectedCode.device_id || client.current_device_id || '-';
+
+          // 5 Botones Vectoriales
+          document.getElementById('btnDrawerCopyCode').onclick = () => {
+            navigator.clipboard.writeText(token).then(() => showToast('¡Código copiado al portapapeles!', 'success'));
+          };
+
+          document.getElementById('btnDrawerDownloadQr').onclick = () => {
+            const qrBox = document.getElementById('drawerQrContainer');
+            const qrCanvas = qrBox?.querySelector('canvas') || qrBox?.querySelector('img');
+            if (qrCanvas) {
+              const a = document.createElement('a');
+              a.download = `QR_${client.current_device_id}_N${selectedCode.nonce || 1}.png`;
+              a.href = qrCanvas.toDataURL ? qrCanvas.toDataURL('image/png') : qrCanvas.src;
+              a.click();
+              showToast('QR descargado correctamente.', 'success');
+            }
+          };
+
+          document.getElementById('btnDrawerDownloadCredential').onclick = () => {
+            renderCredentialCanvas({
+              token: selectedCode.token,
+              plan: selectedCode.plan || client.license_type,
+              device_id: selectedCode.device_id || client.current_device_id,
+              days_added: selectedCode.days_added,
+              expires_result: selectedCode.expires_at || client.license_expires,
+              client: client,
+            }, client, 'historyCredentialCanvas', 'drawerQrContainer');
+
+            const canvas = document.getElementById('historyCredentialCanvas');
+            if (canvas) {
+              const nameClean = (client.business_name || 'Licencia').replace(/[^a-zA-Z0-9]/g, '_');
+              const link = document.createElement('a');
+              link.download = `Credencial_${nameClean}_${selectedCode.plan || 'Oficial'}.png`;
+              link.href = canvas.toDataURL('image/png');
+              link.click();
+              showToast('Credencial descargada en PNG @2x.', 'success');
+            }
+          };
+
+          document.getElementById('btnDrawerAuditInspector').onclick = () => {
+            auditTokenInInspector(token);
+          };
+
+          document.getElementById('btnDrawerSendWa').onclick = () => {
+            openWhatsAppComposer(client.id, 'license');
+          };
+        };
+
+        // Configurar selector histórico si hay más de 1
+        if (codes.length > 1) {
+          if (selectorContainer) selectorContainer.style.display = 'block';
+          if (codeSelector) {
+            codeSelector.innerHTML = '';
+            codes.forEach((c, idx) => {
+              const opt = document.createElement('option');
+              opt.value = idx;
+              const cDate = c.created_at ? c.created_at.substring(0, 10) : '';
+              opt.textContent = `${c.plan || 'LICENCIA'} • Nonce #${c.nonce || 1} • ${cDate}`;
+              if (idx === codes.length - 1) opt.selected = true;
+              codeSelector.appendChild(opt);
+            });
+            codeSelector.onchange = () => {
+              const selectedIdx = parseInt(codeSelector.value);
+              if (codes[selectedIdx]) renderSelectedDrawerLicense(codes[selectedIdx]);
+            };
+          }
+        } else {
+          if (selectorContainer) selectorContainer.style.display = 'none';
+        }
+
+        // Renderizar la última licencia por defecto
+        renderSelectedDrawerLicense(codes[codes.length - 1]);
+      }
+
+      // --- PESTAÑA 4: HARDWARE & MIGRACIONES ---
       const hwBody = document.getElementById('drawerHardwareBody');
       hwBody.innerHTML = '';
-      if (history.hardware && history.hardware.length > 0) {
-        history.hardware.forEach(h => {
+      const migrations = history.device_history || history.hardware || [];
+      if (migrations && migrations.length > 0) {
+        migrations.forEach(h => {
           const tr = document.createElement('tr');
           tr.innerHTML = `
             <td>${h.migrated_at ? h.migrated_at.substring(0, 10) : '-'}</td>
             <td><code style="font-family:var(--font-mono);">${escapeHtml(h.old_device_id)}</code></td>
             <td><strong style="font-family:var(--font-mono); color:var(--primary);">${escapeHtml(h.new_device_id)}</strong></td>
-            <td>S/ ${(h.fee_amount || 0).toFixed(2)}</td>
+            <td>S/ ${(h.fee_amount || h.fee_charged || 0).toFixed(2)}</td>
             <td>${escapeHtml(h.reason || '-')}</td>
           `;
           hwBody.appendChild(tr);
@@ -1791,10 +2335,387 @@ function closeClient360Drawer() {
   currentDrawerClientId = null;
 }
 
+/**
+ * Eliminación segura con confirmación del cliente desde la Ficha 360°
+ */
+function deleteClientFromDrawer() {
+  if (!currentDrawerClientId) return;
+  const clientId = currentDrawerClientId;
+  const client = globalClients.find(c => c.id === clientId);
+  const name = client ? client.business_name : clientId;
+
+  showConfirmModal(
+    'Eliminar Cliente Definitivamente',
+    `¿Estás seguro de que deseas eliminar permanentemente a "${name}" de la cartera activa? Se creará automáticamente un respaldo de seguridad en disco antes de procesar la eliminación.`,
+    async () => {
+      try {
+        const res = await fetch(`/api/clients/${currentDrawerClientId}`, {
+          method: 'DELETE',
+        });
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData.error || 'Error al eliminar cliente');
+        }
+        showToast(`Cliente "${name}" eliminado de la cartera exitosamente.`, 'success');
+        closeClient360Drawer();
+        await loadClients();
+        await loadDashboard();
+      } catch (err) {
+        showToast('Error al eliminar: ' + err.message, 'error');
+      }
+    },
+    true
+  );
+}
+
+/**
+ * Apertura de Modal para Registrar Pago Manual
+ */
+function openAddPaymentModal(clientId) {
+  const client = globalClients.find(c => c.id === clientId);
+  if (!client) return;
+  document.getElementById('manualPayClientId').value = clientId;
+  const payId = document.getElementById('manualPayId');
+  if (payId) payId.value = '';
+  const payTitle = document.getElementById('manualPayTitle');
+  if (payTitle) payTitle.textContent = 'Registrar Pago Manual';
+  const payDate = document.getElementById('manualPayDate');
+  if (payDate) payDate.value = new Date().toISOString().substring(0, 10);
+  document.getElementById('manualPayAmount').value = '35.00';
+  document.getElementById('manualPayPlan').value = 'Renovación Mensual';
+  document.getElementById('manualPayMethod').value = 'Yape';
+  document.getElementById('manualPayRef').value = '';
+  document.getElementById('manualPayNotes').value = '';
+  openModal('modalManualPayment');
+}
+
+/**
+ * Apertura de Modal para Editar Pago Registrado
+ */
+function openEditPaymentModal(clientId, payment) {
+  document.getElementById('manualPayClientId').value = clientId;
+  const payId = document.getElementById('manualPayId');
+  if (payId) payId.value = payment.id || '';
+  const payTitle = document.getElementById('manualPayTitle');
+  if (payTitle) payTitle.textContent = 'Editar Pago Registrado';
+  const payDate = document.getElementById('manualPayDate');
+  if (payDate) payDate.value = payment.date ? payment.date.substring(0, 10) : new Date().toISOString().substring(0, 10);
+  document.getElementById('manualPayAmount').value = payment.amount || 0;
+  document.getElementById('manualPayPlan').value = payment.plan || '';
+  document.getElementById('manualPayMethod').value = payment.method || 'Yape';
+  document.getElementById('manualPayRef').value = payment.reference || '';
+  document.getElementById('manualPayNotes').value = payment.notes || '';
+  openModal('modalManualPayment');
+}
+
+/**
+ * Confirmación y eliminación de pago en el historial contable
+ */
+function confirmDeletePayment(clientId, paymentId) {
+  showConfirmModal(
+    'Eliminar Registro de Pago',
+    '¿Estás seguro de que deseas anular y eliminar este registro de pago del historial contable del cliente?',
+    async () => {
+      try {
+        const res = await fetch(`/api/clients/${clientId}/payments/${paymentId}`, {
+          method: 'DELETE',
+        });
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData.error || 'Error al eliminar pago');
+        }
+        showToast('Registro de pago eliminado correctamente.', 'success');
+        if (currentDrawerClientId === clientId) {
+          await openClient360Drawer(clientId, 'drawerTabFinances');
+        }
+        if (currentHistoryClientId === clientId) {
+          await openClientHistoryModal(clientId);
+        }
+        await loadClients();
+        await loadDashboard();
+        await loadFinances();
+      } catch (err) {
+        showToast('Error al eliminar pago: ' + err.message, 'error');
+      }
+    },
+    true
+  );
+}
+
+/**
+ * Apertura del Modal para Sincronizar Datos Reportados en Celular
+ */
+function openSyncReportedModal(clientId) {
+  const client = globalClients.find(c => c.id === clientId);
+  if (!client) return;
+  document.getElementById('syncRepClientId').value = clientId;
+  document.getElementById('syncRepDeviceId').value = (client.current_device_id && client.current_device_id !== 'PENDIENTE') ? client.current_device_id : '';
+  document.getElementById('syncRepDeviceModel').value = client.device_model || '';
+  document.getElementById('syncRepVersion').value = client.installed_version || '';
+  document.getElementById('syncRepAiBalance').value = client.ai_reported_balance || 0;
+  document.getElementById('syncRepTrialDays').value = (client.trial_days_remaining !== undefined && client.trial_days_remaining !== null) ? client.trial_days_remaining : '';
+  document.getElementById('syncRepExpires').value = client.license_expires ? client.license_expires.substring(0, 10) : '';
+  document.getElementById('syncRepNotes').value = '';
+  openModal('modalSyncReported');
+}
+
+/**
+ * Transferir token al Inspector Forense de inmediato
+ */
+function auditTokenInInspector(token) {
+  closeClient360Drawer();
+  const tabs = document.querySelectorAll('.nav-tab');
+  tabs.forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+
+  const inspTab = document.querySelector('[data-tab="tabInspector"]');
+  inspTab?.classList.add('active');
+  document.getElementById('tabInspector')?.classList.add('active');
+
+  const inp = document.getElementById('inspectTokenInput');
+  if (inp) {
+    inp.value = token;
+    inspectToken();
+    showToast('Token transferido al Inspector Forense.', 'info');
+  }
+}
+
+// =================== 3B. COMPOSITOR UNIVERSAL DE WHATSAPP (FASE 4) ===================
+let currentWaComposerClientId = null;
+let currentWaComposerTemplateKey = 'welcome';
+
+const WA_TEMPLATES = {
+  welcome: {
+    name: 'Saludo y Bienvenida',
+    text: '¡Hola, {titular}! 👋 Te saluda el equipo de MochilaLista.\nQueremos darte la más cordial bienvenida a nuestra plataforma de punto de venta 100% Offline-First para tu negocio *{negocio}*.\nTu sistema ya está configurado para operar con el Hardware ID: `{device_id}`.\nCuentas con soporte técnico y todas las herramientas de control comercial sin depender de conexión a internet.\n¡Quedamos atentos a cualquier consulta! 🎒🚀'
+  },
+  expiring: {
+    name: 'Recordatorio de Renovación Preventiva',
+    text: 'Estimado(a) {titular}, te saludamos de MochilaLista.\nTe recordamos cordialmente que la licencia de tu sistema para *{negocio}* (Plan {plan}) se encuentra próxima a vencer en *{dias_restantes} día(s)* (Fecha de vencimiento: *{vencimiento}*).\nPara garantizar la continuidad ininterrumpida de tus ventas y la emisión de comprobantes, te invitamos a coordinar tu renovación anticipada.\nHardware ID: `{device_id}`.\n¡Estamos a tu entera disposición! 📲✨'
+  },
+  prospect: {
+    name: 'Seguimiento a Prospecto',
+    text: '¡Hola, {titular}! Te saludamos cordialmente de MochilaLista.\nNos comunicamos para hacer seguimiento a la evaluación del sistema de punto de venta en tu negocio *{negocio}*.\n¿Has tenido oportunidad de revisar las funciones de cobro rápido, inventario e IA offline?\nCon gusto podemos coordinar una breve demostración o habilitarte una activación personalizada adaptada al ritmo de tu negocio.\n¡Quedamos a tu orden! 💼📊'
+  },
+  license: {
+    name: 'Entrega Oficial de Licencia / Credencial',
+    text: '¡Excelente noticia, {titular}!\nTu licencia oficial de MochilaLista para el negocio *{negocio}* ha sido generada exitosamente.\n\n📌 Detalles de la Licencia:\n• Plan: {plan}\n• Hardware ID: `{device_id}`\n• Vigencia: {vencimiento}\n• Versión: {version}\n\n🔑 Código de Activación:\n`{codigo_licencia}`\n\nPuedes ingresar este código o escanear el QR desde la pantalla de activación de tu aplicación móvil. ¡Gracias por confiar en MochilaLista! 🎒✅'
+  },
+  update: {
+    name: 'Aviso de Nueva Versión APK',
+    text: '¡Hola, {titular}! Te saludamos de MochilaLista.\nTe informamos que ya se encuentra disponible una nueva actualización de la aplicación: versión *v{version}* con mejoras clave de rendimiento, estabilidad y nuevas funciones comerciales para tu negocio *{negocio}*.\nTu equipo actual (`{device_id}`) es totalmente compatible.\nContáctanos por este medio para facilitarte el enlace de descarga directa del APK oficial. 🚀📲'
+  },
+  empty: {
+    name: 'Chat Vacío',
+    text: ''
+  }
+};
+
+function formatPlanLabel(plan) {
+  if (!plan) return 'MENSUAL';
+  const p = plan.toUpperCase();
+  if (p === 'TRIAL') return 'Trial Gratuito';
+  if (p === 'MENSUAL') return 'Mensual';
+  if (p === 'SEMESTRAL') return 'Semestral';
+  if (p === 'ANUAL') return 'Anual';
+  if (p === 'PERPETUO_LIBERADO' || p === 'PERPETUO') return 'Perpetuo Liberado';
+  if (p === 'EXTENSION_CORTESIA') return 'Cortesía';
+  if (p === 'PROSPECTO') return 'Prospecto';
+  return plan.replace(/_/g, ' ');
+}
+
+async function openWhatsAppComposer(clientId, defaultTemplateKey = null) {
+  const client = globalClients.find(c => c.id === clientId);
+  if (!client) {
+    showToast('Cliente no encontrado.', 'error');
+    return;
+  }
+
+  currentWaComposerClientId = clientId;
+
+  const bizNameEl = document.getElementById('waCompBizName');
+  const ownerNameEl = document.getElementById('waCompOwnerName');
+  const planBadgeEl = document.getElementById('waCompPlanBadge');
+  const devIdEl = document.getElementById('waCompDeviceId');
+  const phoneDisplayEl = document.getElementById('waCompPhoneDisplay');
+  const phoneWarningEl = document.getElementById('waCompPhoneWarning');
+  const sendBtn = document.getElementById('btnWaCompSend');
+  const openEmptyBtn = document.getElementById('btnWaCompOpenEmpty');
+
+  if (bizNameEl) bizNameEl.textContent = client.business_name || 'Sin negocio';
+  if (ownerNameEl) ownerNameEl.textContent = client.owner_name || 'Sin titular';
+  if (devIdEl) devIdEl.textContent = client.current_device_id || 'PENDIENTE';
+
+  const plan = (client.license_type || 'MENSUAL').toUpperCase();
+  const status = (client.license_status || '').toUpperCase();
+  const isProspect = plan === 'PROSPECTO' || status === 'PROSPECTO';
+  const isPerp = plan === 'PERPETUO_LIBERADO' || plan === 'PERPETUO';
+  const now = new Date();
+  const expDate = client.license_expires ? new Date(client.license_expires) : null;
+  const diffDays = expDate ? Math.ceil((expDate - now) / (1000 * 60 * 60 * 24)) : 999;
+
+  if (planBadgeEl) {
+    if (isProspect) {
+      planBadgeEl.className = 'badge badge-prospect';
+      planBadgeEl.textContent = 'Prospecto';
+    } else if (isPerp) {
+      planBadgeEl.className = 'badge badge-purple';
+      planBadgeEl.textContent = 'Perpetua';
+    } else if (diffDays < 0) {
+      planBadgeEl.className = 'badge badge-red';
+      planBadgeEl.textContent = 'Vencida';
+    } else if (diffDays <= 7) {
+      planBadgeEl.className = 'badge badge-yellow';
+      planBadgeEl.textContent = `Vence en ${diffDays}d`;
+    } else {
+      planBadgeEl.className = 'badge badge-green';
+      planBadgeEl.textContent = 'Activa';
+    }
+  }
+
+  let rawPhone = (client.phone || '').trim();
+  let cleanDigits = rawPhone.replace(/[^0-9]/g, '');
+  if (cleanDigits.length === 9 && !cleanDigits.startsWith('51')) {
+    cleanDigits = '51' + cleanDigits;
+  }
+  const hasValidPhone = cleanDigits.length >= 9;
+
+  if (phoneDisplayEl) {
+    phoneDisplayEl.textContent = rawPhone || 'No registrado';
+  }
+
+  if (phoneWarningEl) {
+    phoneWarningEl.style.display = hasValidPhone ? 'none' : 'flex';
+  }
+
+  if (sendBtn) {
+    sendBtn.style.opacity = hasValidPhone ? '1' : '0.4';
+    sendBtn.style.pointerEvents = hasValidPhone ? 'auto' : 'none';
+  }
+  if (openEmptyBtn) {
+    openEmptyBtn.style.opacity = hasValidPhone ? '1' : '0.4';
+    openEmptyBtn.style.pointerEvents = hasValidPhone ? 'auto' : 'none';
+    openEmptyBtn.href = hasValidPhone ? `https://wa.me/${cleanDigits}` : '#';
+  }
+
+  // Selección inteligente de plantilla
+  let initialTpl = 'welcome';
+  if (defaultTemplateKey && WA_TEMPLATES[defaultTemplateKey]) {
+    initialTpl = defaultTemplateKey;
+  } else if (isProspect) {
+    initialTpl = 'prospect';
+  } else if (!isPerp && diffDays <= 7) {
+    initialTpl = 'expiring';
+  } else {
+    initialTpl = 'welcome';
+  }
+
+  // Cargar token histórico más reciente si existe
+  let lastToken = `ML9-PENDIENTE-${client.current_device_id || 'DISPOSITIVO'}`;
+  try {
+    const res = await fetch(`/api/clients/${clientId}/history`);
+    if (res.ok) {
+      const history = await res.json();
+      if (history.codes && history.codes.length > 0) {
+        lastToken = history.codes[history.codes.length - 1].token;
+      }
+    }
+  } catch (_) { }
+
+  const modalEl = document.getElementById('modalWaComposer');
+  if (modalEl) {
+    modalEl.dataset.lastToken = lastToken;
+    modalEl.dataset.cleanPhone = cleanDigits;
+  }
+
+  selectWaTemplate(initialTpl);
+  openModal('modalWaComposer');
+}
+
+function selectWaTemplate(tplKey) {
+  if (!WA_TEMPLATES[tplKey]) tplKey = 'welcome';
+  currentWaComposerTemplateKey = tplKey;
+
+  document.querySelectorAll('.wa-template-btn').forEach(b => {
+    if (b.dataset.tpl === tplKey) {
+      b.classList.add('active');
+    } else {
+      b.classList.remove('active');
+    }
+  });
+
+  const client = globalClients.find(c => c.id === currentWaComposerClientId);
+  const modalEl = document.getElementById('modalWaComposer');
+  const lastToken = modalEl?.dataset?.lastToken || 'ML9-PENDIENTE';
+  const textarea = document.getElementById('waCompMessage');
+
+  if (!client || !textarea) return;
+
+  const rawTpl = WA_TEMPLATES[tplKey].text;
+  if (!rawTpl) {
+    textarea.value = '';
+    updateWaComposerStats();
+    return;
+  }
+
+  const now = new Date();
+  const expDate = client.license_expires ? new Date(client.license_expires) : null;
+  const diffDays = expDate ? Math.max(0, Math.ceil((expDate - now) / (1000 * 60 * 60 * 24))) : 0;
+  const latestVer = getLatestPublishedVersion() || client.installed_version || '9.34.0';
+
+  let rendered = rawTpl
+    .replace(/\{negocio\}/g, client.business_name || 'su negocio')
+    .replace(/\{titular\}/g, client.owner_name || 'Estimado cliente')
+    .replace(/\{plan\}/g, formatPlanLabel(client.license_type))
+    .replace(/\{dias_restantes\}/g, String(diffDays))
+    .replace(/\{vencimiento\}/g, client.license_expires ? client.license_expires.substring(0, 10) : 'Activa')
+    .replace(/\{device_id\}/g, client.current_device_id || 'PENDIENTE')
+    .replace(/\{version\}/g, latestVer)
+    .replace(/\{codigo_licencia\}/g, lastToken);
+
+  textarea.value = rendered;
+  updateWaComposerStats();
+}
+
+function updateWaComposerStats() {
+  const textarea = document.getElementById('waCompMessage');
+  const counter = document.getElementById('waCompCharCounter');
+  const sendBtn = document.getElementById('btnWaCompSend');
+  const modalEl = document.getElementById('modalWaComposer');
+  const cleanDigits = modalEl?.dataset?.cleanPhone || '';
+
+  if (!textarea) return;
+  const text = textarea.value;
+  if (counter) counter.textContent = `${text.length} caracteres`;
+
+  if (sendBtn && cleanDigits && cleanDigits.length >= 9) {
+    sendBtn.href = `https://wa.me/${cleanDigits}?text=${encodeURIComponent(text)}`;
+  }
+}
+
+function copyWaComposerMessage() {
+  const textarea = document.getElementById('waCompMessage');
+  if (!textarea || !textarea.value) {
+    showToast('El mensaje está vacío.', 'warning');
+    return;
+  }
+  navigator.clipboard.writeText(textarea.value).then(() => {
+    showToast('¡Mensaje copiado al portapapeles!', 'success');
+  }).catch(() => {
+    showToast('Error al copiar el mensaje.', 'error');
+  });
+}
+
+function initWaComposerEvents() {
+  document.getElementById('waCompMessage')?.addEventListener('input', updateWaComposerStats);
+}
+
 // =================== 4. RELEASE MANAGER & SUBIDA DE APK DIRECTA ===================
 async function loadReleases() {
   try {
-    const res = await fetch('/api/releases');
+    const res = await fetch('/api/releases', {
+      headers: { 'X-App-Mode': currentMode }
+    });
     if (!res.ok) throw new Error('Error al cargar versiones');
     globalReleases = await res.json();
 
@@ -1809,8 +2730,8 @@ async function loadReleases() {
     globalReleases.forEach(r => {
       const tr = document.createElement('tr');
       const badge = r.type === 'HOTFIX'
-          ? '<span class="badge badge-green">HOTFIX (Parche)</span>'
-          : '<span class="badge badge-purple">FEATURE RELEASE</span>';
+        ? '<span class="badge badge-green">HOTFIX (Parche)</span>'
+        : '<span class="badge badge-purple">FEATURE RELEASE</span>';
 
       const shortSha = r.apk_sha256 ? `${r.apk_sha256.substring(0, 12)}...` : '-';
       const sizeInfo = r.file_size_mb ? `${r.file_size_mb} MB` : '-';
@@ -1900,7 +2821,9 @@ function deleteRelease(versionName) {
 
 async function loadReleaseMatrix() {
   try {
-    const res = await fetch('/api/releases/matrix');
+    const res = await fetch('/api/releases/matrix', {
+      headers: { 'X-App-Mode': currentMode }
+    });
     if (!res.ok) throw new Error('Error al cargar matriz');
     const matrix = await res.json();
 
@@ -1918,8 +2841,8 @@ async function loadReleaseMatrix() {
       let statusBadge = '<span class="badge badge-green">✓ Al Día</span>';
       if (!row.is_up_to_date) {
         statusBadge = row.is_eligible_for_free
-            ? '<span class="badge badge-green">Derecho Gratuito</span>'
-            : '<span class="badge badge-yellow">Requiere Pase / Renovación</span>';
+          ? '<span class="badge badge-green">Derecho Gratuito</span>'
+          : '<span class="badge badge-yellow">Requiere Pase / Renovación</span>';
       }
 
       const cleanPhone = (row.phone || '').replace(/[^0-9]/g, '');
@@ -2436,7 +3359,9 @@ function initFinancesAndBackupsEvents() {
 
 async function loadFinances() {
   try {
-    const res = await fetch('/api/finances');
+    const res = await fetch('/api/finances', {
+      headers: { 'X-App-Mode': currentMode }
+    });
     if (!res.ok) throw new Error('Error al cargar finanzas');
     globalFinances = await res.json();
     renderFinancesTable();
@@ -2514,7 +3439,9 @@ function renderFinancesTable() {
 
 async function loadBackups() {
   try {
-    const res = await fetch('/api/backups');
+    const res = await fetch('/api/backups', {
+      headers: { 'X-App-Mode': currentMode }
+    });
     if (!res.ok) throw new Error('Error al cargar respaldos');
     const backups = await res.json();
 
@@ -2530,8 +3457,8 @@ async function loadBackups() {
     backups.forEach(b => {
       const tr = document.createElement('tr');
       const modeBadge = b.mode === 'prod'
-          ? '<span class="badge badge-green">PROD</span>'
-          : (b.mode === 'sandbox' ? '<span class="badge badge-yellow">SANDBOX</span>' : '<span class="badge badge-purple">GLOBAL</span>');
+        ? '<span class="badge badge-green">PROD</span>'
+        : (b.mode === 'sandbox' ? '<span class="badge badge-yellow">SANDBOX</span>' : '<span class="badge badge-purple">GLOBAL</span>');
 
       tr.innerHTML = `
         <td><code style="font-family:var(--font-mono); font-size:0.8rem;">${escapeHtml(b.filename)}</code></td>
@@ -2598,8 +3525,97 @@ function initModalEvents() {
     });
   });
 
-  // Modal Crear Cliente
+  // Modal Crear Cliente (Reingeniería Fase 3)
+  const situationSelect = document.getElementById('newClientSituation');
+  const updateSituationFields = () => {
+    const sit = situationSelect?.value || 'TRIAL';
+    const grpPlan = document.getElementById('grpNewPlan');
+    const grpTrial = document.getElementById('grpTrialDaysRemaining');
+    const grpSubDate = document.getElementById('grpExpectedSubscriptionDate');
+    const lblDevice = document.getElementById('lblNewDeviceId');
+    const reqDevice = document.getElementById('reqStarDeviceId');
+    const inputDevice = document.getElementById('newDeviceId');
+    const aiReported = document.getElementById('newAiReportedBalance');
+
+    if (sit === 'PROSPECTO') {
+      if (grpPlan) grpPlan.style.display = 'none';
+      if (grpTrial) grpTrial.style.display = 'none';
+      if (grpSubDate) grpSubDate.style.display = 'block';
+      if (lblDevice) lblDevice.innerHTML = 'Hardware ID (Opcional — PENDIENTE):';
+      if (reqDevice) reqDevice.style.display = 'none';
+      if (inputDevice) {
+        inputDevice.required = false;
+        inputDevice.placeholder = 'PENDIENTE (Opcional)';
+      }
+      if (aiReported && !aiReported.dataset.manual) aiReported.value = 0;
+    } else if (sit === 'TRIAL') {
+      if (grpPlan) grpPlan.style.display = 'none';
+      if (grpTrial) grpTrial.style.display = 'block';
+      if (grpSubDate) grpSubDate.style.display = 'none';
+      if (lblDevice) lblDevice.innerHTML = 'Hardware ID del Celular (ML-XXXX): <span class="required-star">*</span>';
+      if (reqDevice) reqDevice.style.display = 'inline';
+      if (inputDevice) {
+        inputDevice.required = true;
+        inputDevice.placeholder = 'Ej: ML-9K4B';
+      }
+      if (aiReported && !aiReported.dataset.manual) aiReported.value = 50;
+    } else { // COMMERCIAL
+      if (grpPlan) grpPlan.style.display = 'block';
+      if (grpTrial) grpTrial.style.display = 'none';
+      if (grpSubDate) grpSubDate.style.display = 'none';
+      if (lblDevice) lblDevice.innerHTML = 'Hardware ID del Celular (ML-XXXX): <span class="required-star">*</span>';
+      if (reqDevice) reqDevice.style.display = 'inline';
+      if (inputDevice) {
+        inputDevice.required = true;
+        inputDevice.placeholder = 'Ej: ML-9K4B';
+      }
+      if (aiReported && !aiReported.dataset.manual) aiReported.value = 0;
+    }
+  };
+
+  situationSelect?.addEventListener('change', updateSituationFields);
+
+  // Aviso Contextual de Crédito IA Offline
+  const aiBonusInput = document.getElementById('newAiPendingBonus');
+  aiBonusInput?.addEventListener('input', () => {
+    const val = parseInt(aiBonusInput.value) || 0;
+    const notice = document.getElementById('noticeAiBonus');
+    if (notice) {
+      notice.style.display = val > 0 ? 'block' : 'none';
+    }
+  });
+
+  // Normalización interactiva de Teléfono
+  const phoneInput = document.getElementById('newPhone');
+  phoneInput?.addEventListener('input', () => {
+    const hint = document.getElementById('hintPhonePreview');
+    if (hint) {
+      const norm = normalizePeruPhone(phoneInput.value);
+      hint.textContent = norm ? `Formato normalizado: ${norm}` : 'Se normalizará automáticamente con prefijo Perú +51';
+    }
+  });
+  phoneInput?.addEventListener('blur', () => {
+    const norm = normalizePeruPhone(phoneInput.value);
+    if (norm) phoneInput.value = norm;
+  });
+
+  // Cálculo en vivo de vencimiento de Trial
+  const trialDaysInput = document.getElementById('newTrialDaysRemaining');
+  trialDaysInput?.addEventListener('input', () => {
+    const days = parseInt(trialDaysInput.value) || 30;
+    const hint = document.getElementById('hintTrialExpires');
+    if (hint) {
+      const expDate = new Date();
+      expDate.setDate(expDate.getDate() + days);
+      hint.textContent = `Vencerá el ${expDate.toISOString().substring(0, 10)} (en ${days} días).`;
+    }
+  });
+
   document.getElementById('btnOpenCreateClient')?.addEventListener('click', () => {
+    document.getElementById('formCreateClient')?.reset();
+    const notice = document.getElementById('noticeAiBonus');
+    if (notice) notice.style.display = 'none';
+    updateSituationFields();
     openModal('modalCreateClient');
   });
 
@@ -2780,11 +3796,13 @@ function initModalEvents() {
 
   document.getElementById('btnSubmitManualPayment')?.addEventListener('click', async () => {
     const clientId = document.getElementById('manualPayClientId').value;
+    const paymentId = document.getElementById('manualPayId')?.value?.trim();
     const amount = parseFloat(document.getElementById('manualPayAmount').value) || 0;
     const plan = document.getElementById('manualPayPlan').value.trim();
     const method = document.getElementById('manualPayMethod').value;
     const ref = document.getElementById('manualPayRef').value.trim();
     const notes = document.getElementById('manualPayNotes').value.trim();
+    const date = document.getElementById('manualPayDate')?.value || new Date().toISOString().substring(0, 10);
 
     if (!amount || !plan) {
       showToast('Por favor completa el monto y concepto.', 'warning');
@@ -2792,24 +3810,53 @@ function initModalEvents() {
     }
 
     try {
-      const res = await fetch(`/api/clients/${clientId}/payments`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          amount: amount,
-          plan: plan,
-          method: method,
-          reference: ref,
-          notes: notes,
-        }),
-      });
+      let res;
+      if (paymentId) {
+        // Actualizar pago existente (PUT)
+        res = await fetch(`/api/clients/${clientId}/payments/${paymentId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            amount: amount,
+            plan: plan,
+            method: method,
+            reference: ref,
+            notes: notes,
+            date: date,
+          }),
+        });
+      } else {
+        // Registrar nuevo pago (POST)
+        res = await fetch(`/api/clients/${clientId}/payments`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            amount: amount,
+            plan: plan,
+            method: method,
+            reference: ref,
+            notes: notes,
+            date: date,
+          }),
+        });
+      }
 
-      if (!res.ok) throw new Error('Error al registrar pago');
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || 'Error al procesar registro de pago');
+      }
+
       closeModal('modalManualPayment');
-      showToast('Pago manual registrado con éxito.', 'success');
-      await openClientHistoryModal(clientId);
+      showToast(paymentId ? 'Pago actualizado con éxito.' : 'Pago manual registrado con éxito.', 'success');
+      if (currentHistoryClientId === clientId) {
+        await openClientHistoryModal(clientId);
+      }
+      if (currentDrawerClientId === clientId) {
+        await openClient360Drawer(clientId, 'drawerTabFinances');
+      }
       await loadClients();
       await loadDashboard();
+      await loadFinances();
     } catch (e) {
       showToast('Error: ' + e.message, 'error');
     }
@@ -3040,20 +4087,40 @@ function voidPayment(clientId, paymentId) {
   );
 }
 
-// =================== FLUJOS DE 1 SOLO PASO (FASE 4A) ===================
+// =================== FLUJOS DE 1 SOLO PASO (FASE 4A / REINGENIERÍA FASE 3) ===================
 async function handleCreateClient(andEmit = false) {
+  const situation = document.getElementById('newClientSituation')?.value || 'TRIAL';
   const biz = document.getElementById('newBizName').value.trim();
   const owner = document.getElementById('newOwnerName').value.trim();
   const doc = document.getElementById('newDocId').value.trim();
-  const phone = document.getElementById('newPhone').value.trim();
-  const device = document.getElementById('newDeviceId').value.trim().toUpperCase();
-  const plan = document.getElementById('newPlan').value;
+  const rawPhone = document.getElementById('newPhone').value.trim();
+  const phone = normalizePeruPhone(rawPhone);
+  let device = document.getElementById('newDeviceId').value.trim().toUpperCase();
   const installedVer = document.getElementById('newInstalledVersion').value.trim() || '9.34.0';
-  const aiExtra = parseInt(document.getElementById('newAiExtraCredits').value) || 0;
+  const aiReported = parseInt(document.getElementById('newAiReportedBalance').value) || 0;
+  const aiBonus = parseInt(document.getElementById('newAiPendingBonus').value) || 0;
+  const trialDays = parseInt(document.getElementById('newTrialDaysRemaining')?.value) || 30;
+  const expectedSubDate = document.getElementById('newExpectedSubscriptionDate')?.value || null;
   const notes = document.getElementById('newNotes').value.trim();
 
-  if (!biz || !owner || !phone || !device) {
-    showToast('Por favor completa los campos obligatorios (Negocio, Titular, Teléfono y Hardware ID).', 'warning');
+  let plan = 'TRIAL';
+  if (situation === 'PROSPECTO') {
+    plan = 'PROSPECTO';
+    if (!device) device = 'PENDIENTE';
+  } else if (situation === 'TRIAL') {
+    plan = 'TRIAL';
+  } else { // COMMERCIAL
+    plan = document.getElementById('newPlan').value;
+  }
+
+  // Validaciones según situación
+  if (!biz || !owner || !phone) {
+    showToast('Por favor completa los campos obligatorios: Negocio, Titular y Teléfono WhatsApp.', 'warning');
+    return;
+  }
+
+  if (situation !== 'PROSPECTO' && (!device || device === 'PENDIENTE')) {
+    showToast('Para clientes con app instalada o licencia comercial, el Hardware ID es obligatorio.', 'warning');
     return;
   }
 
@@ -3068,8 +4135,13 @@ async function handleCreateClient(andEmit = false) {
         phone: phone,
         current_device_id: device,
         license_type: plan,
+        license_status: situation === 'PROSPECTO' ? 'PROSPECTO' : (plan.includes('PERPETU') ? 'PERPETUA' : 'ACTIVA'),
         installed_version: installedVer,
-        ai_extra_credits: aiExtra,
+        ai_reported_balance: aiReported,
+        ai_pending_bonus: aiBonus,
+        ai_extra_credits: aiBonus,
+        trial_days_remaining: situation === 'TRIAL' ? trialDays : null,
+        expected_subscription_date: situation === 'PROSPECTO' ? expectedSubDate : null,
         notes: notes,
       }),
     });
@@ -3082,6 +4154,8 @@ async function handleCreateClient(andEmit = false) {
     const createdClient = await res.json();
     closeModal('modalCreateClient');
     document.getElementById('formCreateClient').reset();
+    const notice = document.getElementById('noticeAiBonus');
+    if (notice) notice.style.display = 'none';
 
     await loadClients();
     await loadDashboard();
@@ -3152,15 +4226,7 @@ async function handleMigrateDeviceSubmit() {
 
       const qrBox = document.getElementById('migSuccessQrContainer');
       if (qrBox) {
-        qrBox.innerHTML = '';
-        new QRCode(qrBox, {
-          text: token,
-          width: 170,
-          height: 170,
-          colorDark: '#0f172a',
-          colorLight: '#ffffff',
-          correctLevel: QRCode.CorrectLevel.M,
-        });
+        renderSafeQrCode(qrBox, token, 170);
       }
 
       document.getElementById('btnMigCopyCode').onclick = () => {
@@ -3206,8 +4272,8 @@ function openMigrateModal(clientId) {
   document.getElementById('migOldDeviceId').value = client.current_device_id;
   document.getElementById('migNewDeviceId').value = '';
   const migDefault = (ownerConfig?.catalog?.HARDWARE_MIGRATION_FEE?.price !== undefined)
-      ? ownerConfig.catalog.HARDWARE_MIGRATION_FEE.price
-      : (ownerConfig?.migration_fee || 40.0);
+    ? ownerConfig.catalog.HARDWARE_MIGRATION_FEE.price
+    : (ownerConfig?.migration_fee || 40.0);
   document.getElementById('migFee').value = Number(migDefault).toFixed(2);
   document.getElementById('migReason').value = '';
   document.getElementById('migPaymentMethod').value = 'Yape';
@@ -3442,8 +4508,8 @@ function populateSettingsForm(cfg) {
   const migFeeInput = document.getElementById('cfgMigrationFee');
   if (migFeeInput) {
     const migPrice = (cfg?.catalog?.HARDWARE_MIGRATION_FEE?.price !== undefined)
-        ? cfg.catalog.HARDWARE_MIGRATION_FEE.price
-        : (cfg?.migration_fee || 40.0);
+      ? cfg.catalog.HARDWARE_MIGRATION_FEE.price
+      : (cfg?.migration_fee || 40.0);
     migFeeInput.value = Number(migPrice).toFixed(2);
   }
 
@@ -3521,8 +4587,8 @@ function applyConfigToUi(cfg) {
   const migFee = document.getElementById('migFee');
   if (migFee) {
     const p = (cfg?.catalog?.HARDWARE_MIGRATION_FEE?.price !== undefined)
-        ? cfg.catalog.HARDWARE_MIGRATION_FEE.price
-        : (cfg?.migration_fee || 40.0);
+      ? cfg.catalog.HARDWARE_MIGRATION_FEE.price
+      : (cfg?.migration_fee || 40.0);
     migFee.value = Number(p).toFixed(2);
   }
 
@@ -4009,15 +5075,15 @@ function renderVaultFilesTable(files, mirrorExists) {
       </td>
       <td>
         ${exists
-          ? '<span style="color:var(--success); font-weight:600; font-size:0.8rem;">● En Disco</span>'
-          : '<span style="color:var(--danger); font-weight:600; font-size:0.8rem;">○ Ausente</span>'
-        }
+        ? '<span style="color:var(--success); font-weight:600; font-size:0.8rem;">● En Disco</span>'
+        : '<span style="color:var(--danger); font-weight:600; font-size:0.8rem;">○ Ausente</span>'
+      }
       </td>
       <td>
         ${(mirrorExists && exists)
-          ? '<span style="color:var(--cyan); font-weight:600; font-size:0.8rem;">🛡️ Bóveda Espejo</span>'
-          : '<span style="color:var(--text-muted); font-size:0.8rem;">-</span>'
-        }
+        ? '<span style="color:var(--cyan); font-weight:600; font-size:0.8rem;">🛡️ Bóveda Espejo</span>'
+        : '<span style="color:var(--text-muted); font-size:0.8rem;">-</span>'
+      }
       </td>
       <td>
         <div style="font-family:var(--font-mono); font-size:0.78rem;">${bytes}</div>
@@ -4025,9 +5091,9 @@ function renderVaultFilesTable(files, mirrorExists) {
       </td>
       <td>
         ${exists
-          ? '<span class="badge badge-green" style="font-size:0.75rem;">Sincronizado</span>'
-          : '<span class="badge badge-amber" style="font-size:0.75rem;">Pendiente</span>'
-        }
+        ? '<span class="badge badge-green" style="font-size:0.75rem;">Sincronizado</span>'
+        : '<span class="badge badge-amber" style="font-size:0.75rem;">Pendiente</span>'
+      }
       </td>
     `;
     tbody.appendChild(tr);
@@ -4132,16 +5198,8 @@ async function openRescueKitModal() {
 
     // Código QR Vectorial
     const qrContainer = document.getElementById('rescueQrContainer');
-    if (qrContainer && typeof QRCode !== 'undefined') {
-      qrContainer.innerHTML = '';
-      new QRCode(qrContainer, {
-        text: data.qr_key || 'MOCHILALISTA-RESCUE-KIT',
-        width: 140,
-        height: 140,
-        colorDark: '#000000',
-        colorLight: '#ffffff',
-        correctLevel: QRCode.CorrectLevel.M,
-      });
+    if (qrContainer) {
+      renderSafeQrCode(qrContainer, data.qr_key || 'MOCHILALISTA-RESCUE-KIT', 140, '#000000', '#ffffff');
     }
 
     openModal('printableEmergencyKit');
