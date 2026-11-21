@@ -1,5 +1,3 @@
-import 'package:intl/intl.dart';
-
 /// Modelo de usuario autenticado en Google para respaldos en Drive
 class GoogleDriveUser {
   final String id;
@@ -160,8 +158,17 @@ class GoogleDriveBackupMetadata {
 
   String get formattedDate {
     final local = createdAt.toLocal();
-    final formatter = DateFormat('dd/MM/yyyy • hh:mm a');
-    return formatter.format(local);
+    final day = local.day.toString().padLeft(2, '0');
+    final month = local.month.toString().padLeft(2, '0');
+    final year = local.year.toString();
+
+    final hour24 = local.hour;
+    final period = hour24 >= 12 ? 'PM' : 'AM';
+    final hour12 = hour24 % 12 == 0 ? 12 : hour24 % 12;
+    final hourStr = hour12.toString().padLeft(2, '0');
+    final minuteStr = local.minute.toString().padLeft(2, '0');
+
+    return '$day/$month/$year • $hourStr:$minuteStr $period';
   }
 
   Map<String, dynamic> toMap() {

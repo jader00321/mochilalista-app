@@ -1682,6 +1682,7 @@ class _OrderPlanBottomSheetState extends State<OrderPlanBottomSheet> {
   }
 
   void _resetText() {
+    FocusManager.instance.primaryFocus?.unfocus();
     setState(() {
       _msgController.text = widget.defaultMessage;
       _yapePlinActive = false;
@@ -1708,46 +1709,52 @@ class _OrderPlanBottomSheetState extends State<OrderPlanBottomSheet> {
         ) +
         12.0;
 
-    return Container(
-      constraints: BoxConstraints(
-        maxHeight: MediaQuery.sizeOf(context).height * 0.88,
-      ),
-      decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF1E1E28) : Colors.white,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // Zona 1 — Cabecera Ejecutiva Fija
-          _buildFixedHeader(isDark),
-          Divider(
-            height: 1,
-            thickness: 1,
-            color: isDark ? Colors.white10 : Colors.black12,
-          ),
+    return GestureDetector(
+      behavior: HitTestBehavior.translucent,
+      onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
+      child: Container(
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.sizeOf(context).height * 0.88,
+        ),
+        decoration: BoxDecoration(
+          color: isDark ? const Color(0xFF1E1E28) : Colors.white,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Zona 1 — Cabecera Ejecutiva Fija
+            _buildFixedHeader(isDark),
+            Divider(
+              height: 1,
+              thickness: 1,
+              color: isDark ? Colors.white10 : Colors.black12,
+            ),
 
-          // Zona 2 — Cuerpo Desplazable Cómodo (Flexible + SingleChildScrollView)
-          Flexible(
-            child: SingleChildScrollView(
-              physics: const BouncingScrollPhysics(),
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  _buildSummaryCard(isDark),
-                  const SizedBox(height: 14),
-                  _buildQuickChips(isDark),
-                  const SizedBox(height: 14),
-                  _buildEditableMessageField(isDark),
-                ],
+            // Zona 2 — Cuerpo Desplazable Cómodo (Flexible + SingleChildScrollView)
+            Flexible(
+              child: SingleChildScrollView(
+                physics: const BouncingScrollPhysics(),
+                keyboardDismissBehavior:
+                    ScrollViewKeyboardDismissBehavior.onDrag,
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _buildSummaryCard(isDark),
+                    const SizedBox(height: 14),
+                    _buildQuickChips(isDark),
+                    const SizedBox(height: 14),
+                    _buildEditableMessageField(isDark),
+                  ],
+                ),
               ),
             ),
-          ),
 
-          // Zona 3 — Zona de Acciones Inferior Fija (100% Protegida)
-          _buildFixedActions(isDark, bottomSafety),
-        ],
+            // Zona 3 — Zona de Acciones Inferior Fija (100% Protegida)
+            _buildFixedActions(isDark, bottomSafety),
+          ],
+        ),
       ),
     );
   }
@@ -1911,6 +1918,7 @@ class _OrderPlanBottomSheetState extends State<OrderPlanBottomSheet> {
               InkWell(
                 key: const ValueKey("copy_hardware_id_btn"),
                 onTap: () {
+                  FocusManager.instance.primaryFocus?.unfocus();
                   Clipboard.setData(ClipboardData(text: widget.hardwareId));
                   CustomSnackBar.show(
                     context,
@@ -1973,32 +1981,35 @@ class _OrderPlanBottomSheetState extends State<OrderPlanBottomSheet> {
         ),
         const SizedBox(height: 6),
         Wrap(
-          spacing: 8,
-          runSpacing: 8,
+          spacing: 6,
+          runSpacing: 6,
           children: [
             _buildComplementChip(
-              label: "Ya realicé el Yape/Plin",
+              label: "Ya hice Yape/Plin",
               icon: Icons.check_circle_outline_rounded,
               isSelected: _yapePlinActive,
               onSelected: (val) {
+                FocusManager.instance.primaryFocus?.unfocus();
                 _toggleLine(val, _yapePlinLine);
               },
               isDark: isDark,
             ),
             _buildComplementChip(
-              label: "Solicito cuenta BCP/BBVA",
+              label: "Pedir BCP/BBVA",
               icon: Icons.account_balance_outlined,
               isSelected: _bankAccountsActive,
               onSelected: (val) {
+                FocusManager.instance.primaryFocus?.unfocus();
                 _toggleLine(val, _bankAccountLine);
               },
               isDark: isDark,
             ),
             _buildComplementChip(
-              label: "Requiero Factura Comercial",
+              label: "Necesito Factura",
               icon: Icons.receipt_long_outlined,
               isSelected: _commercialInvoiceActive,
               onSelected: (val) {
+                FocusManager.instance.primaryFocus?.unfocus();
                 _toggleLine(val, _invoiceLine);
               },
               isDark: isDark,
@@ -2018,9 +2029,11 @@ class _OrderPlanBottomSheetState extends State<OrderPlanBottomSheet> {
   }) {
     final activeColor = Colors.blue[700]!;
     return FilterChip(
+      visualDensity: VisualDensity.compact,
+      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
       avatar: Icon(
         icon,
-        size: 15,
+        size: 14,
         color: isSelected
             ? Colors.white
             : (isDark ? Colors.blue[300] : Colors.blue[700]),
@@ -2028,7 +2041,7 @@ class _OrderPlanBottomSheetState extends State<OrderPlanBottomSheet> {
       label: Text(
         label,
         style: TextStyle(
-          fontSize: 11.5,
+          fontSize: 11,
           fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
           color: isSelected
               ? Colors.white
@@ -2042,15 +2055,19 @@ class _OrderPlanBottomSheetState extends State<OrderPlanBottomSheet> {
           ? const Color(0xFF262636)
           : const Color(0xFFF1F5F9),
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(8),
         side: BorderSide(
           color: isSelected
               ? activeColor
               : (isDark ? Colors.white12 : Colors.black12),
         ),
       ),
-      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-      onSelected: onSelected,
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 0),
+      labelPadding: const EdgeInsets.symmetric(horizontal: 2, vertical: 0),
+      onSelected: (val) {
+        FocusManager.instance.primaryFocus?.unfocus();
+        onSelected(val);
+      },
     );
   }
 
@@ -2063,7 +2080,7 @@ class _OrderPlanBottomSheetState extends State<OrderPlanBottomSheet> {
           children: [
             Expanded(
               child: Text(
-                "Mensaje para Soporte Oficial (Editable):",
+                "Mensaje (Editable)",
                 style: TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.bold,
@@ -2087,6 +2104,7 @@ class _OrderPlanBottomSheetState extends State<OrderPlanBottomSheet> {
           controller: _msgController,
           minLines: 4,
           maxLines: 6,
+          onTapOutside: (_) => FocusManager.instance.primaryFocus?.unfocus(),
           style: TextStyle(
             fontSize: 12.5,
             height: 1.4,
@@ -2166,6 +2184,7 @@ class _OrderPlanBottomSheetState extends State<OrderPlanBottomSheet> {
                     ),
                   ),
                   onPressed: () {
+                    FocusManager.instance.primaryFocus?.unfocus();
                     Clipboard.setData(ClipboardData(text: _msgController.text));
                     CustomSnackBar.show(
                       context,
@@ -2219,7 +2238,10 @@ class _OrderPlanBottomSheetState extends State<OrderPlanBottomSheet> {
                 ),
                 elevation: 2,
               ),
-              onPressed: () => widget.onSendWhatsApp(_msgController.text),
+              onPressed: () {
+                FocusManager.instance.primaryFocus?.unfocus();
+                widget.onSendWhatsApp(_msgController.text);
+              },
             ),
           ),
         ],

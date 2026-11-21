@@ -10,6 +10,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:app_movil/core/utils/backup_manager.dart';
 import 'package:app_movil/core/config/api_constants.dart';
 import 'package:app_movil/core/providers/license_provider.dart';
+import 'package:app_movil/core/providers/google_drive_backup_provider.dart';
 
 // Providers Principales
 import 'package:app_movil/core/providers/auth_provider.dart';
@@ -122,6 +123,16 @@ class MochilaListaApp extends StatelessWidget {
     return MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (_) => LicenseProvider()..checkLicense()),
+        ChangeNotifierProxyProvider<LicenseProvider, GoogleDriveBackupProvider>(
+          create: (_) => GoogleDriveBackupProvider(),
+          update: (_, licenseProv, driveProv) {
+            final prov = driveProv ?? GoogleDriveBackupProvider();
+            if (licenseProv.isInitialized && !prov.hasInitialized) {
+              prov.initializeFromCache();
+            }
+            return prov;
+          },
+        ),
         ChangeNotifierProvider(create: (_) => AuthProvider()),
         ChangeNotifierProvider(create: (_) => ThemeProvider()),
         ChangeNotifierProvider(create: (_) => PrinterProvider()),

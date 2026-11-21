@@ -142,7 +142,7 @@ Abre tu navegador web en `http://localhost:8080`. Dispones de **8 módulos de co
    * **Teléfono WhatsApp:** (ej. `+51987654321`)
    * **Device ID del Teléfono:** (ej. `ML-9K4B` — 7 caracteres en mayúsculas)
    * **Plan Inicial:** Selecciona `TRIAL GRATUITO (30 días — S/ 0.00)` (opción por defecto) o el plan contratado.
-   * **Versión de App Instalada:** (por defecto: `9.33.0` — Esquema SQLite `v36`)
+   * **Versión de App Instalada:** (por defecto: `9.34.0` — Esquema SQLite `v36`)
    * **Créditos IA Extra Iniciales:** (por defecto: `0`)
 3. Presiona **"Guardar Cliente"**.
 

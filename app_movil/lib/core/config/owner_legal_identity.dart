@@ -4,8 +4,8 @@ class OwnerLegalIdentity {
   // Identidad oficial del Titular y Autor
   static const String authorFullName = "Julio Angello Vasquez Navarro";
   static const String appCommercialName = "MochilaLista";
-  static const String currentAppVersion = "9.33.0";
-  static const String currentAppVersionWithBuild = "9.33.0+77";
+  static const String currentAppVersion = "9.34.0";
+  static const String currentAppVersionWithBuild = "9.34.0+78";
   static const String legalJurisdiction = "Lima, República del Perú";
   static const String legalFrameworkNotice =
       "Protegido por el D.L. 822 (Ley de Derecho de Autor) e INDECOPI";
@@ -29,13 +29,43 @@ class OwnerLegalIdentity {
   static const String bbvaAccountNumber = ""; // Configurable
   static const String bbvaCciNumber = ""; // Configurable
 
+  /// Formatea gramaticalmente el nombre del plan con su artículo correspondiente
+  static String formatPlanArticleName(String planName) {
+    final lower = planName.toLowerCase();
+    if (lower.contains('update') || lower.contains('pase')) {
+      return "el Pase Anual de Actualizaciones";
+    }
+    if (lower.contains('perpetua') || lower.contains('perpetuo')) {
+      return "la Licencia Perpetua";
+    }
+    if (lower.contains('bolsa') ||
+        lower.contains('extra') ||
+        RegExp(r'\bia\b').hasMatch(lower)) {
+      return "una Bolsa Extra de IA (150 escaneos)";
+    }
+    if (lower.contains('mensual')) {
+      return "el Plan Mensual";
+    }
+    if (lower.contains('trimestral')) {
+      return "el Plan Trimestral";
+    }
+    if (lower.contains('semestral')) {
+      return "el Plan Semestral";
+    }
+    if (lower.contains('anual')) {
+      return "el Plan Anual";
+    }
+    return "el $planName";
+  }
+
   /// Construye el mensaje comercial oficial prellenado para solicitar planes
   static String buildPlanOrderMessage({
     required String planName,
     required String price,
     required String hardwareId,
   }) {
-    return "Hola Julio Angello, deseo solicitar el $planName ($price) para MochilaLista.\n"
+    final formattedPlan = formatPlanArticleName(planName);
+    return "Hola Julio Angello, deseo solicitar $formattedPlan ($price) para MochilaLista.\n"
         "Mi código de dispositivo (Hardware ID) es: $hardwareId\n"
         "Adjunto mi comprobante de pago por Yape / Transferencia bancaria.";
   }

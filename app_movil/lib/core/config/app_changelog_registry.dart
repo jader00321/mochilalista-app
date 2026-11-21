@@ -22,45 +22,45 @@ class AppChangelogRegistry {
   static const String currentVersion = OwnerLegalIdentity.currentAppVersionWithBuild;
 
   // =========================================================================
-  // 🚀 NOVEDADES ACTIVAS DE LA VERSIÓN ACTUAL (v9.33.0+77)
-  // Perfeccionamiento UX, Solicitud de Planes, Activación Blindada y Google Drive Estilo WhatsApp
+  // 🚀 NOVEDADES ACTIVAS DE LA VERSIÓN ACTUAL (v9.34.0+78)
+  // Plan Maestro 13: EULA Definitivo, Drive Reactivo, Semáforo y Blindaje Comercial
   // =========================================================================
   static const List<AppChangelogItem> activeChangelog = [
     AppChangelogItem(
-      icon: Icons.system_update_rounded,
-      title: "Actualización Confiable y Segura",
+      icon: Icons.gavel_rounded,
+      title: "EULA Definitivo y Autorreparable",
       description:
-          "El aviso de bienvenida se presenta únicamente al actualizar de versión, garantizando que restaurar copias de seguridad jamás dispare falsos avisos.",
+          "Los Términos de Licencia se aceptan una sola vez. Al restaurar copias de seguridad de cualquier versión, la app se autorrepara en silencio y no vuelve a pedir el EULA.",
     ),
     AppChangelogItem(
-      icon: Icons.cloud_sync_rounded,
-      title: "Respaldo en la Nube Estilo WhatsApp",
+      icon: Icons.cloud_download_rounded,
+      title: "Google Drive en Pantalla Inicial",
       description:
-          "Restauración guiada de hasta las 5 copias más recientes al vincular tu cuenta de Google, arranque limpio tras desinstalar y diagnóstico asistido.",
+          "Vincula tu cuenta de Google y restaura tus respaldos en la nube directamente desde la pantalla de perfiles inicial, sin crear negocios ficticios.",
     ),
     AppChangelogItem(
-      icon: Icons.shopping_bag_outlined,
-      title: "Solicitud de Planes Interactiva",
+      icon: Icons.speed_rounded,
+      title: "Respaldo Reactivo y Fluido en RAM",
       description:
-          "Nuevo modal de pedido protegido con chips rápidos de personalización, resumen transparente y diseñado a la medida de tu teléfono.",
+          "Carga instantánea de copias en memoria y patrón Stale-While-Revalidate: navegación suave sin recargas destructivas ni saltos visuales al hacer scroll.",
     ),
     AppChangelogItem(
-      icon: Icons.paste_rounded,
-      title: "Activación Inteligente de Licencia",
+      icon: Icons.visibility_rounded,
+      title: "Historial Nítido y Fechas Locales",
       description:
-          "Detección exacta de tokens oficiales al abrir la app, copiado seguro sin duplicaciones y visualización completa y clara de mensajes.",
+          "Barra de estado superior perfectamente legible en cualquier tema, fechas y horas locales completas en tu zona horaria y correo visible al 100%.",
     ),
     AppChangelogItem(
-      icon: Icons.document_scanner_rounded,
-      title: "Escaneo Visualmente Renovado",
+      icon: Icons.touch_app_rounded,
+      title: "Solicitud de Planes con Foco Inteligente",
       description:
-          "Pantalla de escaneo de listas escolares rediseñada con mayor espacio, tipografías consistentes e instrucciones directas para agilizar tu venta.",
+          "Modal de pedido optimizado con chips compactos, redacción comercial exacta y desenfoque automático al tocar cualquier botón interactivo.",
     ),
     AppChangelogItem(
-      icon: Icons.new_releases_rounded,
-      title: "Novedades Siempre Disponibles",
+      icon: Icons.verified_user_rounded,
+      title: "Semáforo de Respaldo y Blindaje SHA-256",
       description:
-          "Consulta los cambios y mejoras del sistema en cualquier momento desde tu Perfil comercial, con una interfaz limpia y sin opciones duplicadas.",
+          "Indicador visual de salud de tus copias (Al día / Atención / Sin copias) y endurecimiento Anti-Tampering con certificado comercial RSA-4096.",
     ),
   ];
 
@@ -82,6 +82,44 @@ class AppChangelogRegistry {
   // En cada nueva compilación de release, mover aquí el bloque anterior.
   // =========================================================================
   static final Map<String, List<AppChangelogItem>> _historicalChangelogs = {
+    '9.33.0+77': const [
+      AppChangelogItem(
+        icon: Icons.system_update_rounded,
+        title: "Actualización Confiable y Segura",
+        description:
+            "El aviso de bienvenida se presenta únicamente al actualizar de versión, garantizando que restaurar copias de seguridad jamás dispare falsos avisos.",
+      ),
+      AppChangelogItem(
+        icon: Icons.cloud_sync_rounded,
+        title: "Respaldo en la Nube Estilo WhatsApp",
+        description:
+            "Restauración guiada de hasta las 5 copias más recientes al vincular tu cuenta de Google, arranque limpio tras desinstalar y diagnóstico asistido.",
+      ),
+      AppChangelogItem(
+        icon: Icons.shopping_bag_outlined,
+        title: "Solicitud de Planes Interactiva",
+        description:
+            "Nuevo modal de pedido protegido con chips rápidos de personalización, resumen transparente y diseñado a la medida de tu teléfono.",
+      ),
+      AppChangelogItem(
+        icon: Icons.paste_rounded,
+        title: "Activación Inteligente de Licencia",
+        description:
+            "Detección exacta de tokens oficiales al abrir la app, copiado seguro sin duplicaciones y visualización completa y clara de mensajes.",
+      ),
+      AppChangelogItem(
+        icon: Icons.document_scanner_rounded,
+        title: "Escaneo Visualmente Renovado",
+        description:
+            "Pantalla de escaneo de listas escolares rediseñada con mayor espacio, tipografías consistentes e instrucciones directas para agilizar tu venta.",
+      ),
+      AppChangelogItem(
+        icon: Icons.new_releases_rounded,
+        title: "Novedades Siempre Disponibles",
+        description:
+            "Consulta los cambios y mejoras del sistema en cualquier momento desde tu Perfil comercial, con una interfaz limpia y sin opciones duplicadas.",
+      ),
+    ],
     '9.32.0+76': const [
       AppChangelogItem(
         icon: Icons.sync_rounded,

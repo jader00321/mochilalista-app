@@ -13,9 +13,9 @@ import java.security.MessageDigest
 class MainActivity: FlutterFragmentActivity() {
     private val CHANNEL = "com.mochilalista.app/device_security"
 
-    // Huella SHA-256 del certificado oficial de Release de Julio Angello Vasquez Navarro
-    // Si está vacía o en modo DEBUG, no se bloquea la ejecución para permitir desarrollo fluido.
-    private val OFFICIAL_RELEASE_SIGNATURE_SHA256 = ""
+    // Huella SHA-256 del certificado oficial de Release de Julio Angello Vasquez Navarro (RSA-4096)
+    // Coincidencia exacta con el certificado de producción comercial de MochilaLista
+    private val OFFICIAL_RELEASE_SIGNATURE_SHA256 = "7C:43:AD:DC:34:77:6F:39:74:EA:C2:3F:DA:CC:47:59:9E:FD:53:93:A4:DB:B2:86:72:D0:68:99:83:3F:FD:20"
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -106,7 +106,10 @@ class MainActivity: FlutterFragmentActivity() {
             val currentSignatureHash = md.digest(signatures[0].toByteArray())
                 .joinToString("") { "%02X".format(it) }
 
-            currentSignatureHash.equals(OFFICIAL_RELEASE_SIGNATURE_SHA256, ignoreCase = true)
+            val normalizedOfficial = OFFICIAL_RELEASE_SIGNATURE_SHA256.replace(":", "").uppercase()
+            val normalizedCurrent = currentSignatureHash.replace(":", "").uppercase()
+
+            normalizedCurrent == normalizedOfficial
         } catch (e: Exception) {
             // En caso de fallo de lectura inesperado, no bloquear catastróficamente al usuario legítimo
             true

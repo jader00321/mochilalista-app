@@ -30,13 +30,15 @@ class LicenseRepository {
 
   static const String firstTrialStorageKey = 'ml_first_trial_timestamp';
   static const String deviceEulaVersionKey = 'ml_device_eula_accepted_version';
-  static const String deviceEulaTimestampKey = 'ml_device_eula_accepted_timestamp';
+  static const String deviceEulaTimestampKey =
+      'ml_device_eula_accepted_timestamp';
+  static const String canonicalEulaVersion = '1.0';
 
   LicenseRepository({
     LocalDatabase? localDb,
     FlutterSecureStorage? secureStorage,
-  })  : _localDb = localDb ?? LocalDatabase.instance,
-        _secureStorage = secureStorage ?? const FlutterSecureStorage();
+  }) : _localDb = localDb ?? LocalDatabase.instance,
+       _secureStorage = secureStorage ?? const FlutterSecureStorage();
 
   /// Obtiene o inicializa la licencia de la app.
   /// Si la tabla está vacía (instalación limpia), inicializa automáticamente el TRIAL de 30 días con 50 escaneos IA.
@@ -53,18 +55,29 @@ class LicenseRepository {
       // 🛡️ Anclaje y consulta del primer trial en almacenamiento seguro
       DateTime trialStartDate = now;
       try {
-        final storedFirstTrial = await _secureStorage.read(key: firstTrialStorageKey);
+        final storedFirstTrial = await _secureStorage.read(
+          key: firstTrialStorageKey,
+        );
         if (storedFirstTrial != null) {
           final parsed = DateTime.tryParse(storedFirstTrial);
           if (parsed != null) {
             trialStartDate = parsed;
-            AppLogger.i('LicenseRepository', 'Restaurando fecha de trial original anclada: $trialStartDate');
+            AppLogger.i(
+              'LicenseRepository',
+              'Restaurando fecha de trial original anclada: $trialStartDate',
+            );
           }
         } else {
-          await _secureStorage.write(key: firstTrialStorageKey, value: now.toIso8601String());
+          await _secureStorage.write(
+            key: firstTrialStorageKey,
+            value: now.toIso8601String(),
+          );
         }
       } catch (e) {
-        AppLogger.w('LicenseRepository', 'Error accediendo a first_trial_timestamp en almacenamiento seguro: $e');
+        AppLogger.w(
+          'LicenseRepository',
+          'Error accediendo a first_trial_timestamp en almacenamiento seguro: $e',
+        );
       }
 
       final expiration = trialStartDate.add(const Duration(days: 30));
@@ -111,15 +124,60 @@ class LicenseRepository {
       };
 
       final id = await db.insert('licencia_app', initialMap);
-      AppLogger.i('LicenseRepository', 'Inicializado TRIAL de 30 días para dispositivo $currentFingerprint');
+      AppLogger.i(
+        'LicenseRepository',
+        'Inicializado TRIAL de 30 días para dispositivo $currentFingerprint',
+      );
       final newModel = LicenseModel.fromMap({...initialMap, 'id': id});
-      final evaluated = await evaluateLicenseState(newModel, overrideNow: overrideNow);
+      final evaluated = await evaluateLicenseState(
+        newModel,
+        overrideNow: overrideNow,
+      );
       ApiConstants.setAiSelectedMode(evaluated.aiSelectedMode);
       return evaluated;
     }
 
-    final currentModel = LicenseModel.fromMap(rows.first);
-    final evaluated = await evaluateLicenseState(currentModel, overrideNow: overrideNow);
+    var currentModel = LicenseModel.fromMap(rows.first);
+
+    // 🛡️ AUTORREPARACIÓN DE EULA EN SQLITE:
+    // Si la fila en SQLite tiene eulaAcceptedVersion en null (ej. tras restaurar un backup antiguo),
+    // pero el dispositivo ya aceptó el EULA previamente (anclado en FlutterSecureStorage),
+    // autorreparar inmediatamente la fila en SQLite para garantizar persistencia y evitar falsos positivos.
+    if (currentModel.eulaAcceptedVersion == null) {
+      try {
+        final savedEulaVersion = await _secureStorage.read(
+          key: deviceEulaVersionKey,
+        );
+        final savedEulaTs = await _secureStorage.read(
+          key: deviceEulaTimestampKey,
+        );
+        if (savedEulaVersion != null && savedEulaVersion.isNotEmpty) {
+          final ts = savedEulaTs ?? DateTime.now().toIso8601String();
+          await db.update('licencia_app', {
+            'eula_accepted_version': savedEulaVersion,
+            'eula_accepted_timestamp': ts,
+          }, where: 'id = (SELECT id FROM licencia_app LIMIT 1)');
+          currentModel = currentModel.copyWith(
+            eulaAcceptedVersion: savedEulaVersion,
+            eulaAcceptedTimestamp: DateTime.tryParse(ts),
+          );
+          AppLogger.i(
+            'LicenseRepository',
+            'EULA autorreparado en SQLite desde almacenamiento seguro: $savedEulaVersion',
+          );
+        }
+      } catch (e) {
+        AppLogger.w(
+          'LicenseRepository',
+          'Error autorreparando EULA desde almacenamiento seguro: $e',
+        );
+      }
+    }
+
+    final evaluated = await evaluateLicenseState(
+      currentModel,
+      overrideNow: overrideNow,
+    );
     ApiConstants.setAiSelectedMode(evaluated.aiSelectedMode);
     return evaluated;
   }
@@ -149,9 +207,7 @@ class LicenseRepository {
         );
         await db.update(
           'licencia_app',
-          {
-            'device_fingerprint': currentFingerprint,
-          },
+          {'device_fingerprint': currentFingerprint},
           where: 'id = ?',
           whereArgs: [model.id ?? 1],
         );
@@ -199,7 +255,10 @@ class LicenseRepository {
     // 4. Si estaba desajustado o pendiente de migración y ya no lo está
     if (model.estadoActual == 'RELOJ_DESAJUSTADO') {
       // El reloj volvió a ser consistente
-      AppLogger.i('LicenseRepository', 'Reloj resincronizado. Restaurando evaluación normal.');
+      AppLogger.i(
+        'LicenseRepository',
+        'Reloj resincronizado. Restaurando evaluación normal.',
+      );
     }
 
     String nuevoEstado = model.estadoActual;
@@ -245,31 +304,41 @@ class LicenseRepository {
 
   /// Ejecuta la consulta cruzada sobre SQLite para comprobar que la hora actual
   /// no sea anterior a eventos comerciales previos (tolerancia de 2 horas)
-  Future<ClockCheckResult> checkClockConsistency({DateTime? overrideNow}) async {
+  Future<ClockCheckResult> checkClockConsistency({
+    DateTime? overrideNow,
+  }) async {
     final db = await _localDb.database;
     final now = overrideNow ?? DateTime.now();
 
     String? maxLicencia;
     try {
-      final res = await db.rawQuery('SELECT MAX(fecha_ultimo_check) as max_ts FROM licencia_app');
+      final res = await db.rawQuery(
+        'SELECT MAX(fecha_ultimo_check) as max_ts FROM licencia_app',
+      );
       maxLicencia = res.first['max_ts'] as String?;
     } catch (_) {}
 
     String? maxVenta;
     try {
-      final res = await db.rawQuery('SELECT MAX(COALESCE(fecha_venta, created_at)) as max_ts FROM ventas');
+      final res = await db.rawQuery(
+        'SELECT MAX(COALESCE(fecha_venta, created_at)) as max_ts FROM ventas',
+      );
       maxVenta = res.first['max_ts'] as String?;
     } catch (_) {}
 
     String? maxStock;
     try {
-      final res = await db.rawQuery('SELECT MAX(fecha_registro) as max_ts FROM stock_ledger');
+      final res = await db.rawQuery(
+        'SELECT MAX(fecha_registro) as max_ts FROM stock_ledger',
+      );
       maxStock = res.first['max_ts'] as String?;
     } catch (_) {}
 
     String? maxQuote;
     try {
-      final res = await db.rawQuery('SELECT MAX(created_at) as max_ts FROM smart_quotations');
+      final res = await db.rawQuery(
+        'SELECT MAX(created_at) as max_ts FROM smart_quotations',
+      );
       maxQuote = res.first['max_ts'] as String?;
     } catch (_) {}
 
@@ -305,7 +374,10 @@ class LicenseRepository {
   }
 
   /// Canjea un código de acceso firmado con Ed25519 aplicando renovación acumulativa sin pérdida de días y recargas de IA
-  Future<LicenseModel> redeemLicenseCode(String rawCode, {DateTime? overrideNow}) async {
+  Future<LicenseModel> redeemLicenseCode(
+    String rawCode, {
+    DateTime? overrideNow,
+  }) async {
     final currentFingerprint = await DeviceFingerprint.generate();
     final currentLicense = await getOrCreateLicense(overrideNow: overrideNow);
 
@@ -320,36 +392,47 @@ class LicenseRepository {
     final db = await _localDb.database;
 
     final isOnlyAiRecharge = validation.plan == 'RECARGA_IA_150';
-    final isMigrationReactivation = currentLicense.estadoActual == 'PENDIENTE_MIGRACION';
-    final updatedPlan = isOnlyAiRecharge ? currentLicense.tipoPlan : validation.plan;
+    final isMigrationReactivation =
+        currentLicense.estadoActual == 'PENDIENTE_MIGRACION';
+    final updatedPlan = isOnlyAiRecharge
+        ? currentLicense.tipoPlan
+        : validation.plan;
     // Si es reactivación de migración con daysToAdd == 0 (ej. perpetua o reactivación pura),
     // preserva la fecha de expiración existente sin desfasar el calendario.
     // Si daysToAdd > 0, el validador usó baseDate = now, fijando exactamente now + daysToAdd.
     final updatedExpiration = isOnlyAiRecharge
         ? currentLicense.fechaExpiracion
-        : (isMigrationReactivation && validation.daysToAdd == 0 && currentLicense.fechaExpiracion.isAfter(now)
-            ? currentLicense.fechaExpiracion
-            : validation.newExpiration);
+        : (isMigrationReactivation &&
+                  validation.daysToAdd == 0 &&
+                  currentLicense.fechaExpiracion.isAfter(now)
+              ? currentLicense.fechaExpiracion
+              : validation.newExpiration);
     // Si la reactivación proviene de PENDIENTE_MIGRACION (restauración en teléfono nuevo),
     // la base de datos ya recuperó el saldo IA acumulado histórico; no se vuelve a sumar
     // la cuota base del plan para evitar doble conteo. Solo se añaden bonos extra si existieran.
     final addedCumulativeScans = isMigrationReactivation
         ? validation.aiExtraCredits
         : (isOnlyAiRecharge
-            ? math.max(150, validation.aiExtraCredits)
-            : (LicenseModel.getCumulativeScansForPlan(validation.plan) + validation.aiExtraCredits));
-    final updatedAccumulatedScans = currentLicense.aiAccumulatedScans + addedCumulativeScans;
-    final updatedExtraCredits = currentLicense.aiExtraCredits + validation.aiExtraCredits;
+              ? math.max(150, validation.aiExtraCredits)
+              : (LicenseModel.getCumulativeScansForPlan(validation.plan) +
+                    validation.aiExtraCredits));
+    final updatedAccumulatedScans =
+        currentLicense.aiAccumulatedScans + addedCumulativeScans;
+    final updatedExtraCredits =
+        currentLicense.aiExtraCredits + validation.aiExtraCredits;
 
     final updatedModel = currentLicense.copyWith(
       tipoPlan: updatedPlan,
-      estadoActual: currentLicense.isPerpetual ? 'ACTIVA' : (isOnlyAiRecharge ? currentLicense.estadoActual : 'ACTIVA'),
+      estadoActual: currentLicense.isPerpetual
+          ? 'ACTIVA'
+          : (isOnlyAiRecharge ? currentLicense.estadoActual : 'ACTIVA'),
       fechaExpiracion: updatedExpiration,
       ultimoNonce: validation.nonce,
       ultimoCodigoUsado: validation.cleanCode,
       updatesUntil: validation.updatesUntil ?? currentLicense.updatesUntil,
       maxMajorVersion: validation.maxMajorVersion,
-      businessOwnerTag: validation.businessOwnerTag ?? currentLicense.businessOwnerTag,
+      businessOwnerTag:
+          validation.businessOwnerTag ?? currentLicense.businessOwnerTag,
       fechaUltimoCheck: now,
       aiExtraCredits: updatedExtraCredits,
       aiAccumulatedScans: updatedAccumulatedScans,
@@ -374,7 +457,10 @@ class LicenseRepository {
       whereArgs: [currentLicense.id ?? 1],
     );
 
-    AppLogger.i('LicenseRepository', 'Código canjeado exitosamente: Plan $updatedPlan, Nueva Expiración: $updatedExpiration, Escaneos IA Acumulados: $updatedAccumulatedScans (+$addedCumulativeScans)');
+    AppLogger.i(
+      'LicenseRepository',
+      'Código canjeado exitosamente: Plan $updatedPlan, Nueva Expiración: $updatedExpiration, Escaneos IA Acumulados: $updatedAccumulatedScans (+$addedCumulativeScans)',
+    );
     return updatedModel;
   }
 
@@ -447,7 +533,10 @@ class LicenseRepository {
     final license = await getOrCreateLicense();
     final db = await _localDb.database;
     final updatedCredits = license.aiExtraCredits + credits;
-    final updatedAccumulated = (license.aiAccumulatedScans + credits).clamp(0, 999999);
+    final updatedAccumulated = (license.aiAccumulatedScans + credits).clamp(
+      0,
+      999999,
+    );
 
     await db.update(
       'licencia_app',
@@ -464,7 +553,9 @@ class LicenseRepository {
   Future<void> setAiSelectedMode(String mode) async {
     final license = await getOrCreateLicense();
     final db = await _localDb.database;
-    final validMode = (mode.toUpperCase().trim() == 'BYOK') ? 'BYOK' : 'INCLUDED';
+    final validMode = (mode.toUpperCase().trim() == 'BYOK')
+        ? 'BYOK'
+        : 'INCLUDED';
 
     await db.update(
       'licencia_app',
@@ -479,40 +570,41 @@ class LicenseRepository {
 
   /// Registra la aceptación del contrato EULA tanto en SQLite como a nivel de dispositivo (FlutterSecureStorage)
   Future<void> recordEulaAcceptance(String version) async {
-    final license = await getOrCreateLicense();
+    await getOrCreateLicense();
     final db = await _localDb.database;
     final now = DateTime.now();
 
-    await db.update(
-      'licencia_app',
-      {
-        'eula_accepted_version': version,
-        'eula_accepted_timestamp': now.toIso8601String(),
-      },
-      where: 'id = ?',
-      whereArgs: [license.id ?? 1],
-    );
+    await db.update('licencia_app', {
+      'eula_accepted_version': version,
+      'eula_accepted_timestamp': now.toIso8601String(),
+    }, where: 'id = (SELECT id FROM licencia_app LIMIT 1)');
 
     try {
       await _secureStorage.write(key: deviceEulaVersionKey, value: version);
-      await _secureStorage.write(key: deviceEulaTimestampKey, value: now.toIso8601String());
-      AppLogger.i('LicenseRepository', 'EULA versión $version guardado a nivel global de dispositivo.');
+      await _secureStorage.write(
+        key: deviceEulaTimestampKey,
+        value: now.toIso8601String(),
+      );
+      AppLogger.i(
+        'LicenseRepository',
+        'EULA versión $version guardado a nivel global de dispositivo.',
+      );
     } catch (e) {
-      AppLogger.w('LicenseRepository', 'Error respaldando EULA en almacenamiento seguro: $e');
+      AppLogger.w(
+        'LicenseRepository',
+        'Error respaldando EULA en almacenamiento seguro: $e',
+      );
     }
   }
 
   /// Actualiza la última versión de la aplicación ejecutada por el usuario
   Future<void> updateLastExecutedAppVersion(String version) async {
-    final license = await getOrCreateLicense();
+    await getOrCreateLicense();
     final db = await _localDb.database;
 
-    await db.update(
-      'licencia_app',
-      {'last_executed_app_version': version},
-      where: 'id = ?',
-      whereArgs: [license.id ?? 1],
-    );
+    await db.update('licencia_app', {
+      'last_executed_app_version': version,
+    }, where: 'id = (SELECT id FROM licencia_app LIMIT 1)');
   }
 
   String _generateMonthKey(DateTime date) {

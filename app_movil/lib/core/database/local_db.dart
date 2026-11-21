@@ -1426,6 +1426,8 @@ class LocalDatabase {
       )
     ''');
     await db.execute('CREATE INDEX IF NOT EXISTS idx_licencia_device ON licencia_app(device_fingerprint)');
+    await ensureColumnExists(db, 'licencia_app', 'eula_accepted_version', 'TEXT');
+    await ensureColumnExists(db, 'licencia_app', 'eula_accepted_timestamp', 'TEXT');
     await ensureColumnExists(db, 'licencia_app', 'last_executed_app_version', 'TEXT');
     await ensureColumnExists(db, 'licencia_app', 'ai_accumulated_scans', 'INTEGER NOT NULL DEFAULT 50');
     await ensureColumnExists(db, 'licencia_app', 'ai_selected_mode', "TEXT NOT NULL DEFAULT 'INCLUDED'");

@@ -120,7 +120,7 @@ void main() {
       expect(find.text("S/ 90.00"), findsWidgets);
       expect(find.text("+180 IA"), findsWidgets);
       expect(find.textContaining(mockDeviceId), findsWidgets);
-      expect(find.text("Mensaje para Soporte Oficial (Editable):"), findsOneWidget);
+      expect(find.text("Mensaje (Editable)"), findsOneWidget);
 
       // 2. Comprobar texto precargado en el TextField
       final defaultExpectedMsg = OwnerLegalIdentity.buildPlanOrderMessage(
@@ -257,24 +257,24 @@ void main() {
       await tester.pump(const Duration(milliseconds: 300));
       expect(clipboardContent, equals(mockDeviceId), reason: "El micro-botón debe copiar exactamente el Hardware ID");
 
-      // 2. Probar Chip 1: "Ya realicé el Yape/Plin"
-      final chipYape = find.text("Ya realicé el Yape/Plin");
+      // 2. Probar Chip 1: "Ya hice Yape/Plin"
+      final chipYape = find.text("Ya hice Yape/Plin");
       expect(chipYape, findsOneWidget);
       await tester.tap(chipYape);
       await tester.pumpAndSettle();
 
       expect(find.textContaining("Pago realizado vía Yape/Plin. Adjunto comprobante."), findsOneWidget);
 
-      // 3. Probar Chip 2: "Solicito cuenta BCP/BBVA"
-      final chipBank = find.text("Solicito cuenta BCP/BBVA");
+      // 3. Probar Chip 2: "Pedir BCP/BBVA"
+      final chipBank = find.text("Pedir BCP/BBVA");
       expect(chipBank, findsOneWidget);
       await tester.tap(chipBank);
       await tester.pumpAndSettle();
 
       expect(find.textContaining("Solicito números de cuenta para transferencia bancaria."), findsOneWidget);
 
-      // 4. Probar Chip 3: "Requiero Factura Comercial"
-      final chipInvoice = find.text("Requiero Factura Comercial");
+      // 4. Probar Chip 3: "Necesito Factura"
+      final chipInvoice = find.text("Necesito Factura");
       expect(chipInvoice, findsOneWidget);
       await tester.tap(chipInvoice);
       await tester.pumpAndSettle();

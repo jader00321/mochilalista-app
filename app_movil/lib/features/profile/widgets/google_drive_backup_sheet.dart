@@ -2,11 +2,11 @@ import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:app_movil/core/config/owner_legal_identity.dart';
 import 'package:app_movil/core/providers/auth_provider.dart';
 import 'package:app_movil/core/providers/license_provider.dart';
+import 'package:app_movil/core/providers/google_drive_backup_provider.dart';
 import 'package:app_movil/core/services/backup/google_drive_backup_service.dart';
 import 'package:app_movil/core/services/backup/i_google_drive_backup_service.dart';
 import 'package:app_movil/core/services/device_fingerprint.dart';
@@ -129,97 +129,15 @@ class GoogleDriveBackupSheet extends StatefulWidget {
     return result ?? false;
   }
 
-  @override
-  State<GoogleDriveBackupSheet> createState() => _GoogleDriveBackupSheetState();
-}
-
-class _GoogleDriveBackupSheetState extends State<GoogleDriveBackupSheet> {
-  late IGoogleDriveBackupService _service;
-  GoogleDriveUser? _user;
-  DriveBackupConfig _config = const DriveBackupConfig(isEnabled: false);
-  List<GoogleDriveBackupMetadata> _backups = [];
-
-  bool _isLoading = true;
-  bool _isBackingUp = false;
-  bool _isRestoring = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _service = widget.backupService ?? GoogleDriveBackupService.instance;
-    _loadState();
-  }
-
-  Future<void> _loadState() async {
-    setState(() => _isLoading = true);
-    try {
-      final user = await _service.getCurrentUser();
-      final config = await _service.getConfig();
-      List<GoogleDriveBackupMetadata> backups = [];
-
-      if (user != null) {
-        backups = await _service.listBackups();
-      }
-
-      if (mounted) {
-        setState(() {
-          _user = user;
-          _config = config;
-          _backups = backups;
-          _isLoading = false;
-        });
-      }
-    } catch (_) {
-      if (mounted) setState(() => _isLoading = false);
-    }
-  }
-
-  Future<void> _handleSignIn() async {
-    final licenseHardwareId = Provider.of<LicenseProvider?>(context, listen: false)?.deviceFingerprint;
-    setState(() => _isLoading = true);
-    try {
-      final user = await _service.signIn();
-      if (user != null) {
-        final config = await _service.getConfig();
-        final backups = await _service.listBackups();
-        if (mounted) {
-          setState(() {
-            _user = user;
-            _config = config;
-            _backups = backups;
-            _isLoading = false;
-          });
-          CustomSnackBar.show(
-            context,
-            message: "Conectado a Google Drive como ${user.email}",
-          );
-
-          // Conexión silenciosa y no bloqueante del Marcador de Trial (Fase 2)
-          if (licenseHardwareId != null && licenseHardwareId.isNotEmpty) {
-            unawaited(_service.registerTrialMarker(licenseHardwareId));
-          }
-
-          // Si se encontraron copias previas en la nube, desplegar modal guiado estilo WhatsApp
-          if (backups.isNotEmpty) {
-            await _showGuidedWhatsAppRestoreModal(backups, user.email);
-          }
-        }
-      } else {
-        if (mounted) setState(() => _isLoading = false);
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() => _isLoading = false);
-        await _showOAuthErrorDialog(e, passedHardwareId: licenseHardwareId);
-      }
-    }
-  }
-
-  Future<void> _showGuidedWhatsAppRestoreModal(
-    List<GoogleDriveBackupMetadata> allBackups,
-    String userEmail,
-  ) async {
-    final isDark = widget.isDark;
+  /// Asistente guiado estilo WhatsApp para restaurar una de las últimas 5 copias
+  static Future<void> showGuidedWhatsAppRestoreModal(
+    BuildContext context, {
+    required GoogleDriveBackupProvider driveProvider,
+    required List<GoogleDriveBackupMetadata> allBackups,
+    required String userEmail,
+    bool isDark = false,
+    Future<void> Function()? onRestoreSuccess,
+  }) async {
     final recentBackups = allBackups.take(5).toList();
     if (recentBackups.isEmpty) return;
 
@@ -374,27 +292,29 @@ class _GoogleDriveBackupSheetState extends State<GoogleDriveBackupSheet> {
                                   child: Column(
                                     crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
-                                      Row(
+                                      Text(
+                                        backup.formattedDate,
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 13.5,
+                                          color: isDark ? Colors.white : Colors.black87,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Wrap(
+                                        spacing: 6,
+                                        runSpacing: 2,
+                                        crossAxisAlignment: WrapCrossAlignment.center,
                                         children: [
-                                          Expanded(
-                                            child: Text(
-                                              backup.formattedDate,
-                                              style: TextStyle(
-                                                fontWeight: FontWeight.bold,
-                                                fontSize: 13.5,
-                                                color: isDark ? Colors.white : Colors.black87,
-                                              ),
-                                            ),
-                                          ),
                                           if (isNewest)
                                             Container(
                                               padding: const EdgeInsets.symmetric(
-                                                horizontal: 7,
-                                                vertical: 2,
+                                                horizontal: 6,
+                                                vertical: 1.5,
                                               ),
                                               decoration: BoxDecoration(
                                                 color: const Color(0xFF25D366).withValues(alpha: 0.15),
-                                                borderRadius: BorderRadius.circular(6),
+                                                borderRadius: BorderRadius.circular(4),
                                                 border: Border.all(
                                                   color: const Color(0xFF25D366).withValues(alpha: 0.5),
                                                 ),
@@ -403,34 +323,11 @@ class _GoogleDriveBackupSheetState extends State<GoogleDriveBackupSheet> {
                                                 "Más reciente",
                                                 style: TextStyle(
                                                   color: Color(0xFF25D366),
-                                                  fontSize: 10.5,
+                                                  fontSize: 9.5,
                                                   fontWeight: FontWeight.bold,
                                                 ),
                                               ),
                                             ),
-                                        ],
-                                      ),
-                                      const SizedBox(height: 4),
-                                      Row(
-                                        children: [
-                                          Icon(
-                                            Icons.verified_user_rounded,
-                                            size: 13,
-                                            color: isDark ? Colors.grey[400] : Colors.grey[600],
-                                          ),
-                                          const SizedBox(width: 4),
-                                          Expanded(
-                                            child: Text(
-                                              "Respaldo integral multi-perfil",
-                                              maxLines: 1,
-                                              overflow: TextOverflow.ellipsis,
-                                              style: TextStyle(
-                                                fontSize: 11.5,
-                                                color: isDark ? Colors.grey[400] : Colors.grey[600],
-                                              ),
-                                            ),
-                                          ),
-                                          const SizedBox(width: 8),
                                           Text(
                                             backup.formattedSize,
                                             style: TextStyle(
@@ -438,6 +335,13 @@ class _GoogleDriveBackupSheetState extends State<GoogleDriveBackupSheet> {
                                               fontWeight: FontWeight.w600,
                                               fontFamily: 'monospace',
                                               color: isDark ? Colors.grey[300] : Colors.grey[700],
+                                            ),
+                                          ),
+                                          Text(
+                                            "Respaldo integral multi-perfil",
+                                            style: TextStyle(
+                                              fontSize: 11,
+                                              color: isDark ? Colors.grey[400] : Colors.grey[600],
                                             ),
                                           ),
                                         ],
@@ -473,11 +377,14 @@ class _GoogleDriveBackupSheetState extends State<GoogleDriveBackupSheet> {
                             icon: const Icon(Icons.restore_rounded, size: 20),
                             label: const Text(
                               "Restaurar copia seleccionada",
-                              style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+                              style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                             ),
                             style: ElevatedButton.styleFrom(
                               backgroundColor: const Color(0xFF25D366),
                               foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(horizontal: 12),
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(12),
                               ),
@@ -486,7 +393,12 @@ class _GoogleDriveBackupSheetState extends State<GoogleDriveBackupSheet> {
                             onPressed: () {
                               final chosen = recentBackups[selectedIndex];
                               Navigator.pop(sheetCtx);
-                              _executeDirectRestore(chosen);
+                              executeDirectRestore(
+                                context,
+                                driveProvider: driveProvider,
+                                backup: chosen,
+                                onRestoreSuccess: onRestoreSuccess,
+                              );
                             },
                           ),
                         ),
@@ -514,42 +426,45 @@ class _GoogleDriveBackupSheetState extends State<GoogleDriveBackupSheet> {
     );
   }
 
-  Future<void> _executeDirectRestore(GoogleDriveBackupMetadata backup) async {
-    setState(() => _isRestoring = true);
+  /// Ejecución directa y reactiva de restauración con actualización de providers
+  static Future<void> executeDirectRestore(
+    BuildContext context, {
+    required GoogleDriveBackupProvider driveProvider,
+    required GoogleDriveBackupMetadata backup,
+    Future<void> Function()? onRestoreSuccess,
+  }) async {
     try {
-      final res = await _service.downloadAndRestoreBackup(backup.fileId);
-      if (!mounted) return;
-      setState(() => _isRestoring = false);
+      final res = await driveProvider.restoreBackup(backup);
+      if (!context.mounted) return;
 
       if (res.isSuccess) {
-        if (!mounted) return;
         try {
           final authProv = Provider.of<AuthProvider?>(context, listen: false);
           await authProv?.checkInitialState();
         } catch (_) {}
-        if (!mounted) return;
+        if (!context.mounted) return;
         try {
           final licenseProv = Provider.of<LicenseProvider?>(context, listen: false);
           await licenseProv?.checkLicense();
         } catch (_) {}
-        if (!mounted) return;
+        if (onRestoreSuccess != null) {
+          await onRestoreSuccess();
+        }
+        if (!context.mounted) return;
         CustomSnackBar.show(
           context,
           message: "¡Copia de seguridad restaurada con éxito! Todos tus perfiles y negocios están listos.",
           isError: false,
         );
       } else {
-        if (mounted) {
-          CustomSnackBar.show(
-            context,
-            message: res.message,
-            isError: true,
-          );
-        }
+        CustomSnackBar.show(
+          context,
+          message: res.message,
+          isError: true,
+        );
       }
     } catch (e) {
-      if (mounted) {
-        setState(() => _isRestoring = false);
+      if (context.mounted) {
         CustomSnackBar.show(
           context,
           message: "Error restaurando copia: $e",
@@ -559,8 +474,13 @@ class _GoogleDriveBackupSheetState extends State<GoogleDriveBackupSheet> {
     }
   }
 
-  Future<void> _showOAuthErrorDialog(dynamic error, {String? passedHardwareId}) async {
-    final isDark = widget.isDark;
+  /// Diálogo humano para errores OAuth con opción de ver reporte técnico
+  static Future<void> showOAuthErrorDialog(
+    BuildContext context,
+    dynamic error, {
+    bool isDark = false,
+    String? passedHardwareId,
+  }) async {
     final hardwareId = passedHardwareId ?? await DeviceFingerprint.generate();
     final sha1 = await DeviceFingerprint.getAppSigningSha1();
     final appVersion = OwnerLegalIdentity.currentAppVersionWithBuild;
@@ -579,7 +499,7 @@ Fecha: ${DateTime.now().toIso8601String()}
 ============================================
 """.trim();
 
-    if (!mounted) return;
+    if (!context.mounted) return;
 
     bool isTechnicalExpanded = false;
 
@@ -735,13 +655,144 @@ Fecha: ${DateTime.now().toIso8601String()}
     );
   }
 
-  Future<void> _handleSignOut() async {
-    await _service.signOut();
+  @override
+  State<GoogleDriveBackupSheet> createState() => _GoogleDriveBackupSheetState();
+}
+
+class _GoogleDriveBackupSheetState extends State<GoogleDriveBackupSheet>
+    with AutomaticKeepAliveClientMixin<GoogleDriveBackupSheet> {
+  GoogleDriveBackupProvider? _localFallbackProvider;
+
+  @override
+  bool get wantKeepAlive => true;
+
+  GoogleDriveBackupProvider _resolveProvider(BuildContext context) {
+    if (widget.backupService != null) {
+      if (_localFallbackProvider == null || _localFallbackProvider!.service != widget.backupService) {
+        _localFallbackProvider?.removeListener(_onLocalProviderChanged);
+        _localFallbackProvider?.dispose();
+        _localFallbackProvider = GoogleDriveBackupProvider(service: widget.backupService);
+        _localFallbackProvider!.addListener(_onLocalProviderChanged);
+        _localFallbackProvider!.initializeFromCache();
+      }
+      return _localFallbackProvider!;
+    }
+
+    final ambient = Provider.of<GoogleDriveBackupProvider?>(context);
+    if (ambient != null) {
+      return ambient;
+    }
+
+    if (_localFallbackProvider == null) {
+      _localFallbackProvider = GoogleDriveBackupProvider(service: GoogleDriveBackupService.instance);
+      _localFallbackProvider!.addListener(_onLocalProviderChanged);
+      _localFallbackProvider!.initializeFromCache();
+    }
+    return _localFallbackProvider!;
+  }
+
+  void _onLocalProviderChanged() {
+    if (mounted) setState(() {});
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (widget.backupService != null) {
+        _resolveProvider(context);
+      } else {
+        final ambient = Provider.of<GoogleDriveBackupProvider?>(context, listen: false);
+        if (ambient != null) {
+          if (!ambient.hasInitialized && !ambient.isInitialLoading) {
+            ambient.initializeFromCache();
+          } else if (ambient.isConnected) {
+            ambient.syncBackupsSilently();
+          }
+        }
+      }
+    });
+  }
+
+  @override
+  void didUpdateWidget(GoogleDriveBackupSheet oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.backupService != widget.backupService) {
+      _localFallbackProvider?.removeListener(_onLocalProviderChanged);
+      _localFallbackProvider?.dispose();
+      _localFallbackProvider = null;
+    }
+  }
+
+  @override
+  void dispose() {
+    _localFallbackProvider?.removeListener(_onLocalProviderChanged);
+    _localFallbackProvider?.dispose();
+    super.dispose();
+  }
+
+  Future<void> _handleSignIn(GoogleDriveBackupProvider prov) async {
+    final licenseHardwareId = Provider.of<LicenseProvider?>(context, listen: false)?.deviceFingerprint;
+    try {
+      final user = await prov.signIn(licenseHardwareId: licenseHardwareId);
+      if (user != null && mounted) {
+        CustomSnackBar.show(
+          context,
+          message: "Conectado a Google Drive como ${user.email}",
+        );
+
+        // Si se encontraron copias previas en la nube, desplegar modal guiado estilo WhatsApp
+        if (prov.backups.isNotEmpty) {
+          await _showGuidedWhatsAppRestoreModal(prov, prov.backups, user.email);
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        await _showOAuthErrorDialog(e, passedHardwareId: licenseHardwareId);
+      }
+    }
+  }
+
+  Future<void> _showGuidedWhatsAppRestoreModal(
+    GoogleDriveBackupProvider prov,
+    List<GoogleDriveBackupMetadata> allBackups,
+    String userEmail,
+  ) =>
+      GoogleDriveBackupSheet.showGuidedWhatsAppRestoreModal(
+        context,
+        driveProvider: prov,
+        allBackups: allBackups,
+        userEmail: userEmail,
+        isDark: widget.isDark,
+      );
+
+  Future<void> _showOAuthErrorDialog(dynamic error, {String? passedHardwareId}) =>
+      GoogleDriveBackupSheet.showOAuthErrorDialog(
+        context,
+        error,
+        isDark: widget.isDark,
+        passedHardwareId: passedHardwareId,
+      );
+
+  String _formatDateTime(DateTime dt) {
+    final local = dt.toLocal();
+    final day = local.day.toString().padLeft(2, '0');
+    final month = local.month.toString().padLeft(2, '0');
+    final year = local.year.toString();
+
+    final hour24 = local.hour;
+    final period = hour24 >= 12 ? 'PM' : 'AM';
+    final hour12 = hour24 % 12 == 0 ? 12 : hour24 % 12;
+    final hourStr = hour12.toString().padLeft(2, '0');
+    final minuteStr = local.minute.toString().padLeft(2, '0');
+
+    return '$day/$month/$year • $hourStr:$minuteStr $period';
+  }
+
+  Future<void> _handleSignOut(GoogleDriveBackupProvider prov) async {
+    await prov.signOut();
     if (mounted) {
-      setState(() {
-        _user = null;
-        _backups = [];
-      });
       CustomSnackBar.show(
         context,
         message: "Cuenta de Google desvinculada.",
@@ -749,22 +800,12 @@ Fecha: ${DateTime.now().toIso8601String()}
     }
   }
 
-  Future<void> _handleBackupNow() async {
-    if (_user == null) return;
-    setState(() => _isBackingUp = true);
+  Future<void> _handleBackupNow(GoogleDriveBackupProvider prov) async {
+    if (prov.currentUser == null) return;
 
     try {
-      final meta = await _service.uploadEncryptedBackup();
-      final updatedBackups = await _service.listBackups();
-      final updatedConfig = await _service.getConfig();
-
+      final meta = await prov.performBackupNow();
       if (mounted) {
-        setState(() {
-          _backups = updatedBackups;
-          _config = updatedConfig;
-          _isBackingUp = false;
-        });
-
         CustomSnackBar.show(
           context,
           message: "¡Copia de seguridad guardada en Google Drive! (${meta?.formattedSize ?? ''})",
@@ -772,7 +813,6 @@ Fecha: ${DateTime.now().toIso8601String()}
       }
     } catch (e) {
       if (mounted) {
-        setState(() => _isBackingUp = false);
         CustomSnackBar.show(
           context,
           message: "No se pudo completar el respaldo: $e",
@@ -782,7 +822,7 @@ Fecha: ${DateTime.now().toIso8601String()}
     }
   }
 
-  Future<void> _confirmAndRestore(GoogleDriveBackupMetadata backup) async {
+  Future<void> _confirmAndRestore(GoogleDriveBackupProvider prov, GoogleDriveBackupMetadata backup) async {
     final isDark = widget.isDark;
     final confirmed = await showDialog<bool>(
       context: context,
@@ -864,13 +904,9 @@ Fecha: ${DateTime.now().toIso8601String()}
     if (confirmed != true) return;
     if (!mounted) return;
 
-    setState(() => _isRestoring = true);
-
     try {
-      final res = await _service.downloadAndRestoreBackup(backup.fileId);
-
+      final res = await prov.restoreBackup(backup);
       if (!mounted) return;
-      setState(() => _isRestoring = false);
 
       if (res.isSuccess) {
         // Refrescar Providers activos
@@ -906,7 +942,6 @@ Fecha: ${DateTime.now().toIso8601String()}
       }
     } catch (e) {
       if (mounted) {
-        setState(() => _isRestoring = false);
         CustomSnackBar.show(
           context,
           message: "Error restaurando respaldo: $e",
@@ -916,30 +951,34 @@ Fecha: ${DateTime.now().toIso8601String()}
     }
   }
 
-  Future<void> _updateFrequency(BackupFrequency freq) async {
-    final updated = _config.copyWith(frequency: freq);
-    await _service.saveConfig(updated);
-    setState(() => _config = updated);
+  Future<void> _updateFrequency(GoogleDriveBackupProvider prov, BackupFrequency freq) async {
+    await prov.updateConfig(prov.config.copyWith(frequency: freq));
   }
 
-  Future<void> _toggleWifiOnly(bool val) async {
-    final updated = _config.copyWith(wifiOnly: val);
-    await _service.saveConfig(updated);
-    setState(() => _config = updated);
+  Future<void> _toggleWifiOnly(GoogleDriveBackupProvider prov, bool val) async {
+    await prov.updateConfig(prov.config.copyWith(wifiOnly: val));
   }
 
   @override
   Widget build(BuildContext context) {
+    super.build(context);
+    final prov = _resolveProvider(context);
     final isDark = widget.isDark;
     final cardColor = isDark ? const Color(0xFF232332) : Colors.white;
 
-    if (_isLoading) {
+    if (prov.isInitialLoading && !prov.hasInitialized) {
       return Container(
         padding: const EdgeInsets.all(32),
         alignment: Alignment.center,
         child: const CircularProgressIndicator(),
       );
     }
+
+    final user = prov.currentUser;
+    final config = prov.config;
+    final backups = prov.backups;
+    final isBackingUp = prov.isBackingUp;
+    final isRestoring = prov.isRestoring;
 
     return SingleChildScrollView(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
@@ -1009,7 +1048,7 @@ Fecha: ${DateTime.now().toIso8601String()}
           ],
 
           // Estado: No Vinculado
-          if (_user == null) ...[
+          if (user == null) ...[
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
@@ -1096,15 +1135,21 @@ Fecha: ${DateTime.now().toIso8601String()}
                   const SizedBox(height: 16),
 
                   ElevatedButton.icon(
-                    icon: const Icon(Icons.account_circle_outlined, size: 20),
-                    label: const Text("Vincular Cuenta de Google"),
+                    icon: prov.isSigningIn
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                          )
+                        : const Icon(Icons.account_circle_outlined, size: 20),
+                    label: Text(prov.isSigningIn ? "Conectando..." : "Vincular Cuenta de Google"),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.blue,
                       foregroundColor: Colors.white,
                       padding: const EdgeInsets.symmetric(vertical: 14),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                     ),
-                    onPressed: _handleSignIn,
+                    onPressed: prov.isSigningIn ? null : () => _handleSignIn(prov),
                   ),
                 ],
               ),
@@ -1112,7 +1157,7 @@ Fecha: ${DateTime.now().toIso8601String()}
           ],
 
           // Estado: Vinculado
-          if (_user != null) ...[
+          if (user != null) ...[
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
@@ -1125,77 +1170,167 @@ Fecha: ${DateTime.now().toIso8601String()}
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  // Tarjeta de Usuario Conectado
-                  Row(
-                    children: [
-                      CircleAvatar(
-                        radius: 20,
-                        backgroundColor: Colors.blue.withValues(alpha: 0.2),
-                        backgroundImage: _user!.photoUrl != null ? NetworkImage(_user!.photoUrl!) : null,
-                        child: _user!.photoUrl == null
-                            ? const Icon(Icons.person, color: Colors.blue, size: 22)
-                            : null,
+                  // Aviso discreto de error de sincronización no destructivo
+                  if (prov.lastError != null && prov.isConnected) ...[
+                    Container(
+                      margin: const EdgeInsets.only(bottom: 12),
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: Colors.amber.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: Colors.amber.withValues(alpha: 0.4)),
                       ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              _user!.displayName ?? "Cuenta Conectada",
+                      child: Row(
+                        children: [
+                          const Icon(Icons.info_outline_rounded, size: 16, color: Colors.amber),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              "No se pudieron sincronizar las copias más recientes. Mostrando copia guardada.",
+                              style: TextStyle(
+                                fontSize: 11.5,
+                                color: isDark ? Colors.amber[200] : Colors.amber[900],
+                              ),
+                            ),
+                          ),
+                          TextButton(
+                            onPressed: () => prov.syncBackupsSilently(force: true),
+                            child: const Text("Reintentar", style: TextStyle(fontSize: 11)),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+
+                  // Tarjeta de Usuario Conectado (3 Filas Limpias y Responsivas)
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Fila 1: Avatar + Nombre de Usuario + Botón Desvincular a la derecha
+                      Row(
+                        children: [
+                          CircleAvatar(
+                            radius: 18,
+                            backgroundColor: Colors.blue.withValues(alpha: 0.2),
+                            backgroundImage: user.photoUrl != null ? NetworkImage(user.photoUrl!) : null,
+                            child: user.photoUrl == null
+                                ? const Icon(Icons.person, color: Colors.blue, size: 20)
+                                : null,
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              user.displayName ?? "Cuenta Conectada",
                               style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
                               overflow: TextOverflow.ellipsis,
                             ),
-                            Text(
-                              _user!.email,
-                              style: TextStyle(fontSize: 12, color: isDark ? Colors.grey[400] : Colors.grey[600]),
-                              overflow: TextOverflow.ellipsis,
+                          ),
+                          TextButton(
+                            style: TextButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              minimumSize: Size.zero,
+                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                             ),
-                          ],
-                        ),
+                            onPressed: isBackingUp || isRestoring ? null : () => _handleSignOut(prov),
+                            child: const Text(
+                              "Desvincular",
+                              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.redAccent),
+                            ),
+                          ),
+                        ],
                       ),
-                      TextButton(
-                        onPressed: _handleSignOut,
-                        child: const Text("Desvincular", style: TextStyle(fontSize: 11, color: Colors.redAccent)),
+                      const SizedBox(height: 6),
+                      // Fila 2: Correo electrónico al 100% del ancho, sin truncamiento
+                      Text(
+                        user.email,
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: isDark ? Colors.grey[300] : Colors.blueGrey[800],
+                        ),
+                        maxLines: 2,
+                        softWrap: true,
+                      ),
+                      const SizedBox(height: 6),
+                      // Fila 3: Semáforo visual de salud de respaldo (Óptimo / Atención / Sin Copias)
+                      Builder(
+                        builder: (context) {
+                          final health = GoogleDriveBackupProvider.computeHealthInfo(
+                            backups: backups,
+                            isDark: isDark,
+                          );
+                          return Wrap(
+                            crossAxisAlignment: WrapCrossAlignment.center,
+                            spacing: 8,
+                            runSpacing: 4,
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                                decoration: BoxDecoration(
+                                  color: health.backgroundColor,
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(health.icon, size: 13, color: health.color),
+                                    const SizedBox(width: 4),
+                                    Flexible(
+                                      child: Text(
+                                        health.label,
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.bold,
+                                          color: health.color,
+                                        ),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              if (config.lastBackupAt != null)
+                                Text(
+                                  "Última copia: ${_formatDateTime(config.lastBackupAt!)}",
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    color: isDark ? Colors.grey[400] : Colors.grey[600],
+                                  ),
+                                ),
+                            ],
+                          );
+                        },
                       ),
                     ],
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 14),
                   const Divider(height: 1),
                   const SizedBox(height: 14),
 
-                  // Botón Respaldar Ahora e Indicador
+                  // Botón Respaldar Ahora
                   Row(
                     children: [
                       Expanded(
                         child: ElevatedButton.icon(
-                          icon: _isBackingUp
+                          icon: isBackingUp
                               ? const SizedBox(
                                   width: 16,
                                   height: 16,
                                   child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                                 )
                               : const Icon(Icons.cloud_upload_rounded, size: 20),
-                          label: Text(_isBackingUp ? "Subiendo..." : "Respaldar Ahora"),
+                          label: Text(isBackingUp ? "Subiendo..." : "Respaldar Ahora"),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: Colors.blue,
                             foregroundColor: Colors.white,
                             padding: const EdgeInsets.symmetric(vertical: 13),
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                           ),
-                          onPressed: _isBackingUp || _isRestoring ? null : _handleBackupNow,
+                          onPressed: isBackingUp || isRestoring ? null : () => _handleBackupNow(prov),
                         ),
                       ),
                     ],
                   ),
-                  if (_config.lastBackupAt != null) ...[
-                    const SizedBox(height: 8),
-                    Text(
-                      "Última copia: ${DateFormat('dd/MM/yyyy • hh:mm a').format(_config.lastBackupAt!.toLocal())}",
-                      style: TextStyle(fontSize: 11, color: isDark ? Colors.grey[400] : Colors.grey[600]),
-                      textAlign: TextAlign.center,
-                    ),
-                  ],
                   const SizedBox(height: 16),
 
                   // Modo de Operación: Automático vs Manual
@@ -1206,24 +1341,22 @@ Fecha: ${DateTime.now().toIso8601String()}
                       style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
                     ),
                     subtitle: Text(
-                      _config.isEnabled
+                      config.isEnabled
                           ? "Sincronización en segundo plano con tu cuenta de Google."
                           : "Modo manual (se respaldará únicamente al presionar 'Respaldar Ahora').",
                       style: const TextStyle(fontSize: 11),
                     ),
-                    value: _config.isEnabled,
+                    value: config.isEnabled,
                     activeThumbColor: Colors.blue,
                     activeTrackColor: Colors.blue.withValues(alpha: 0.4),
                     onChanged: (val) async {
-                      final updated = _config.copyWith(isEnabled: val);
-                      await _service.saveConfig(updated);
-                      if (mounted) setState(() => _config = updated);
+                      await prov.updateConfig(config.copyWith(isEnabled: val));
                     },
                   ),
                   const SizedBox(height: 8),
 
                   // Selector de Frecuencia (visible solo si automático está activado)
-                  if (_config.isEnabled) ...[
+                  if (config.isEnabled) ...[
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -1250,7 +1383,7 @@ Fecha: ${DateTime.now().toIso8601String()}
                           ),
                           child: DropdownButtonHideUnderline(
                             child: DropdownButton<BackupFrequency>(
-                              value: _config.frequency == BackupFrequency.manual ? BackupFrequency.daily : _config.frequency,
+                              value: config.frequency == BackupFrequency.manual ? BackupFrequency.daily : config.frequency,
                               isExpanded: true,
                               dropdownColor: cardColor,
                               items: [
@@ -1264,7 +1397,7 @@ Fecha: ${DateTime.now().toIso8601String()}
                                 );
                               }).toList(),
                               onChanged: (f) {
-                                if (f != null) _updateFrequency(f);
+                                if (f != null) _updateFrequency(prov, f);
                               },
                             ),
                           ),
@@ -1279,10 +1412,10 @@ Fecha: ${DateTime.now().toIso8601String()}
                     contentPadding: EdgeInsets.zero,
                     title: const Text("Solo con Wi-Fi", style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
                     subtitle: const Text("Ahorra datos móviles al respaldar automáticamente", style: TextStyle(fontSize: 11)),
-                    value: _config.wifiOnly,
+                    value: config.wifiOnly,
                     activeThumbColor: Colors.blue,
                     activeTrackColor: Colors.blue.withValues(alpha: 0.4),
-                    onChanged: _toggleWifiOnly,
+                    onChanged: (val) => _toggleWifiOnly(prov, val),
                   ),
                 ],
               ),
@@ -1298,17 +1431,37 @@ Fecha: ${DateTime.now().toIso8601String()}
                   child: Text(
                     "Copias en Google Drive (Últimas 5)",
                     style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
                 Text(
-                  "${_backups.length}/5 copias",
+                  "${backups.length}/5 copias",
                   style: TextStyle(fontSize: 12, color: isDark ? Colors.grey[400] : Colors.grey[600]),
                 ),
+                const SizedBox(width: 4),
+                if (prov.isSyncingSilently)
+                  const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 8),
+                    child: SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.blue),
+                    ),
+                  )
+                else
+                  IconButton(
+                    icon: const Icon(Icons.refresh_rounded, size: 18),
+                    tooltip: "Actualizar lista de copias",
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                    color: isDark ? Colors.grey[400] : Colors.grey[600],
+                    onPressed: isRestoring || isBackingUp ? null : () => prov.syncBackupsSilently(force: true),
+                  ),
               ],
             ),
             const SizedBox(height: 10),
 
-            if (_backups.isEmpty)
+            if (backups.isEmpty)
               Container(
                 padding: const EdgeInsets.all(20),
                 decoration: BoxDecoration(
@@ -1324,7 +1477,7 @@ Fecha: ${DateTime.now().toIso8601String()}
                 ),
               )
             else
-              ..._backups.asMap().entries.map((entry) {
+              ...backups.asMap().entries.map((entry) {
                 final index = entry.key;
                 final backup = entry.value;
                 final isLatest = (index == 0);
@@ -1341,34 +1494,41 @@ Fecha: ${DateTime.now().toIso8601String()}
                           : (isDark ? Colors.white10 : Colors.grey.withValues(alpha: 0.2)),
                     ),
                   ),
-                  child: Row(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color: isLatest
-                              ? Colors.green.withValues(alpha: 0.15)
-                              : Colors.blue.withValues(alpha: 0.1),
-                          shape: BoxShape.circle,
-                        ),
-                        child: Icon(
-                          Icons.insert_drive_file_outlined,
-                          size: 18,
-                          color: isLatest ? Colors.green : Colors.blue,
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
+                      // Fila 1: Icono y Fecha Completa al 100% de ancho disponible (Cero truncamiento)
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(6),
+                            decoration: BoxDecoration(
+                              color: isLatest
+                                  ? Colors.green.withValues(alpha: 0.15)
+                                  : Colors.blue.withValues(alpha: 0.1),
+                              shape: BoxShape.circle,
+                            ),
+                            child: Icon(
+                              Icons.insert_drive_file_outlined,
+                              size: 16,
+                              color: isLatest ? Colors.green : Colors.blue,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
                               backup.formattedDate,
                               style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-                              overflow: TextOverflow.ellipsis,
                             ),
-                            const SizedBox(height: 2),
-                            Wrap(
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      // Fila 2: Tamaño, Badge 'Más reciente' y Botón 'Restaurar'
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Wrap(
                               spacing: 6,
                               crossAxisAlignment: WrapCrossAlignment.center,
                               children: [
@@ -1376,12 +1536,13 @@ Fecha: ${DateTime.now().toIso8601String()}
                                   backup.formattedSize,
                                   style: TextStyle(
                                     fontSize: 11,
+                                    fontWeight: FontWeight.w500,
                                     color: isDark ? Colors.grey[400] : Colors.grey[600],
                                   ),
                                 ),
                                 if (isLatest)
                                   Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                                    padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
                                     decoration: BoxDecoration(
                                       color: Colors.green.withValues(alpha: 0.15),
                                       borderRadius: BorderRadius.circular(4),
@@ -1389,7 +1550,7 @@ Fecha: ${DateTime.now().toIso8601String()}
                                     child: const Text(
                                       "Más reciente",
                                       style: TextStyle(
-                                        fontSize: 9,
+                                        fontSize: 9.5,
                                         fontWeight: FontWeight.bold,
                                         color: Colors.green,
                                       ),
@@ -1397,19 +1558,22 @@ Fecha: ${DateTime.now().toIso8601String()}
                                   ),
                               ],
                             ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      OutlinedButton(
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: Colors.blue,
-                          side: const BorderSide(color: Colors.blue),
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                        ),
-                        onPressed: _isRestoring ? null : () => _confirmAndRestore(backup),
-                        child: const Text("Restaurar", style: TextStyle(fontSize: 12)),
+                          ),
+                          const SizedBox(width: 6),
+                          OutlinedButton.icon(
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: Colors.blue,
+                              side: const BorderSide(color: Colors.blue),
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                              minimumSize: Size.zero,
+                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                            ),
+                            icon: const Icon(Icons.restore_rounded, size: 14),
+                            label: const Text("Restaurar", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                            onPressed: isRestoring ? null : () => _confirmAndRestore(prov, backup),
+                          ),
+                        ],
                       ),
                     ],
                   ),

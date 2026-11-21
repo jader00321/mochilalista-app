@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:math' as math;
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -6,6 +7,7 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:app_movil/core/providers/auth_provider.dart';
 import 'package:app_movil/core/providers/license_provider.dart';
+import 'package:app_movil/core/providers/google_drive_backup_provider.dart';
 import 'package:app_movil/core/models/user_model.dart';
 import 'package:app_movil/core/widgets/primary_button.dart';
 import 'package:app_movil/core/widgets/auth_background.dart';
@@ -18,6 +20,7 @@ import 'package:app_movil/core/services/startup_flow_coordinator.dart';
 import 'package:app_movil/core/utils/backup_manager.dart';
 import 'package:app_movil/features/profile/services/business_backup_service.dart';
 import 'package:app_movil/features/profile/widgets/delete_business_modal.dart';
+import 'package:app_movil/features/profile/widgets/google_drive_backup_sheet.dart';
 
 // Widgets y lógica extraídos
 import 'package:app_movil/features/auth/screens/onboarding/widgets/profile_card_widgets.dart';
@@ -44,6 +47,7 @@ class _ProfileSelectionScreenState extends State<ProfileSelectionScreen>
   int? _selectedProfileId;
   bool _isProcessing = false;
   String _processingMessage = "";
+  bool _isDriveActionLoading = false;
 
   // --- Orden persistido de perfiles ---
   List<int> _profileOrder = [];
@@ -82,7 +86,12 @@ class _ProfileSelectionScreenState extends State<ProfileSelectionScreen>
 
   Future<bool> _ensureEulaAccepted() async {
     final licenseProv = Provider.of<LicenseProvider?>(context, listen: false);
-    if (licenseProv?.license?.eulaAcceptedVersion != null) return true;
+    if (licenseProv == null) return false;
+    if (licenseProv.license == null) {
+      await licenseProv.checkLicense();
+    }
+    if (licenseProv.license?.eulaAcceptedVersion != null) return true;
+    if (!mounted) return false;
     final accepted = await EulaAcceptanceModal.show(context);
     return accepted == true;
   }
@@ -576,11 +585,20 @@ class _ProfileSelectionScreenState extends State<ProfileSelectionScreen>
                 },
               ),
               const SizedBox(height: 12),
+              _buildGoogleDriveSection(context, isDark: isDark, isEmptyState: true, profiles: const []),
+              const SizedBox(height: 8),
               TextButton(
                 onPressed: () => showProfileRestoreBottomSheet(context),
-                child: Text("¿Tienes un backup? Restaurar aquí", style: TextStyle(color: isDark ? Colors.blue[300] : Colors.blue[700], decoration: TextDecoration.underline, fontWeight: FontWeight.w600)),
+                child: Text(
+                  "¿Tienes un archivo local (.mlbg)? Restaurar aquí",
+                  style: TextStyle(
+                    color: isDark ? Colors.blue[300] : Colors.blue[700],
+                    decoration: TextDecoration.underline,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 14),
               OutlinedButton.icon(
                 icon: Icon(Icons.explore_outlined, size: 18, color: isDark ? const Color(0xFF38BDF8) : const Color(0xFF0284C7)),
                 label: Text(
@@ -767,7 +785,7 @@ class _ProfileSelectionScreenState extends State<ProfileSelectionScreen>
       },
       child: Column(
         children: [
-          const SizedBox(height: 24),
+          const SizedBox(height: 16),
           PrimaryButton(
             text: "CREAR NUEVO NEGOCIO",
             icon: Icons.add_business_rounded,
@@ -780,11 +798,13 @@ class _ProfileSelectionScreenState extends State<ProfileSelectionScreen>
               ));
             },
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 12),
+          _buildGoogleDriveSection(context, isDark: isDark, isEmptyState: false, profiles: profiles),
+          const SizedBox(height: 8),
           TextButton(
             onPressed: () => showProfileRestoreBottomSheet(context),
             child: Text(
-              "¿Tienes un backup? Restaurar aquí",
+              "¿Tienes un archivo local (.mlbg)? Restaurar aquí",
               style: TextStyle(
                 color: isDark ? Colors.blue[300] : Colors.blue[700],
                 decoration: TextDecoration.underline,
@@ -792,7 +812,7 @@ class _ProfileSelectionScreenState extends State<ProfileSelectionScreen>
               ),
             ),
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 8),
           // Botón discreto y elegante para Modo Explorador (CERO emojis Unicode)
           InkWell(
             borderRadius: BorderRadius.circular(14),
@@ -854,5 +874,522 @@ class _ProfileSelectionScreenState extends State<ProfileSelectionScreen>
         ),
       ),
     );
+  }
+
+  // ============================================================
+  // SECCIÓN INTELIGENTE DE GOOGLE DRIVE EN PERFILES
+  // ============================================================
+
+  Widget _buildGoogleDriveSection(
+    BuildContext context, {
+    required bool isDark,
+    required bool isEmptyState,
+    required List<UserModel> profiles,
+  }) {
+    final driveProv = Provider.of<GoogleDriveBackupProvider?>(context);
+    if (driveProv == null) return const SizedBox.shrink();
+
+    final isConnected = driveProv.isConnected && driveProv.currentUser != null;
+
+    if (!isConnected) {
+      // Estado A: Google Drive NO vinculado
+      return InkWell(
+        key: const ValueKey('drive_unlinked_card'),
+        onTap: _isDriveActionLoading ? null : () => _handleDriveSignIn(driveProv),
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          decoration: BoxDecoration(
+            color: isDark ? const Color(0xFF1E222A) : const Color(0xFFF1F5F9),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: isDark ? Colors.white12 : Colors.black12,
+            ),
+          ),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF0284C7).withValues(alpha: 0.12),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.cloud_download_rounded,
+                  size: 22,
+                  color: Color(0xFF0284C7),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      "Recuperar desde Google Drive",
+                      style: TextStyle(
+                        fontSize: 13.5,
+                        fontWeight: FontWeight.bold,
+                        color: isDark ? Colors.white : Colors.black87,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      "Vincula tu correo para respaldar o restaurar tus negocios en la nube",
+                      style: TextStyle(
+                        fontSize: 11,
+                        height: 1.25,
+                        color: isDark ? Colors.grey[400] : Colors.grey[600],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 6),
+              if (_isDriveActionLoading)
+                const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF0284C7)),
+                )
+              else
+                Icon(
+                  Icons.chevron_right_rounded,
+                  size: 20,
+                  color: isDark ? Colors.grey[400] : Colors.grey[500],
+                ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    // Estado B: Google Drive YA vinculado (Semáforo de salud reactivo)
+    final health = GoogleDriveBackupProvider.computeHealthInfo(
+      backups: driveProv.backups,
+      isDark: isDark,
+    );
+
+    return InkWell(
+      key: const ValueKey('drive_linked_card'),
+      onTap: () => _openDriveQuickOptionsModal(driveProv, isDark, profiles),
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: health.color.withValues(alpha: isDark ? 0.12 : 0.08),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: health.color.withValues(alpha: isDark ? 0.35 : 0.45),
+            width: 1.2,
+          ),
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(7),
+              decoration: BoxDecoration(
+                color: health.color.withValues(alpha: 0.18),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                health.icon,
+                size: 18,
+                color: health.color,
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    driveProv.currentUser?.email ?? "Cuenta Google",
+                    style: TextStyle(
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.bold,
+                      color: isDark ? Colors.white : Colors.black87,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    health.label,
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: health.color,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 4),
+            Icon(
+              Icons.more_vert_rounded,
+              size: 18,
+              color: isDark ? Colors.grey[400] : Colors.grey[600],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _handleDriveSignIn(GoogleDriveBackupProvider driveProv) async {
+    if (!await _ensureEulaAccepted()) return;
+    if (!mounted) return;
+
+    setState(() {
+      _isDriveActionLoading = true;
+    });
+
+    try {
+      final licenseHardwareId = Provider.of<LicenseProvider?>(context, listen: false)?.deviceFingerprint;
+      final user = await driveProv.signIn(licenseHardwareId: licenseHardwareId);
+      if (!mounted) return;
+
+      if (user != null) {
+        if (driveProv.backups.isNotEmpty) {
+          await GoogleDriveBackupSheet.showGuidedWhatsAppRestoreModal(
+            context,
+            driveProvider: driveProv,
+            allBackups: driveProv.backups,
+            userEmail: user.email,
+            isDark: Theme.of(context).brightness == Brightness.dark,
+            onRestoreSuccess: () async {
+              await _loadProfileOrder();
+              await _loadProfileMetadata();
+              if (mounted) setState(() {});
+            },
+          );
+        } else {
+          CustomSnackBar.show(
+            context,
+            message: "Cuenta vinculada (${user.email}). No se encontraron copias previas.",
+            isError: false,
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        final licenseHardwareId = Provider.of<LicenseProvider?>(context, listen: false)?.deviceFingerprint;
+        await GoogleDriveBackupSheet.showOAuthErrorDialog(
+          context,
+          e,
+          isDark: Theme.of(context).brightness == Brightness.dark,
+          passedHardwareId: licenseHardwareId,
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isDriveActionLoading = false;
+        });
+      }
+    }
+  }
+
+  void _openDriveQuickOptionsModal(
+    GoogleDriveBackupProvider driveProv,
+    bool isDark,
+    List<UserModel> profiles,
+  ) {
+    final bottomSafety = math.max(
+      MediaQuery.viewInsetsOf(context).bottom,
+      math.max(
+        MediaQuery.viewPaddingOf(context).bottom,
+        MediaQuery.paddingOf(context).bottom,
+      ),
+    ) + 12.0;
+
+    showModalBottomSheet<void>(
+      context: context,
+      useSafeArea: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetCtx) => SafeArea(
+        top: false,
+        bottom: true,
+        child: Container(
+          padding: EdgeInsets.fromLTRB(20, 16, 20, bottomSafety),
+          decoration: BoxDecoration(
+            color: isDark ? const Color(0xFF1E1E28) : Colors.white,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          child: SingleChildScrollView(
+            physics: const BouncingScrollPhysics(),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    margin: const EdgeInsets.only(bottom: 12),
+                    width: 36,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: isDark ? Colors.white24 : Colors.black12,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF25D366).withValues(alpha: 0.15),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.cloud_sync_rounded,
+                        color: Color(0xFF25D366),
+                        size: 22,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            "Google Drive",
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          Text(
+                            driveProv.currentUser?.email ?? "",
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: isDark ? Colors.grey[400] : Colors.grey[600],
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+
+                // Opción 1: Ver y Restaurar Copias
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Colors.blue.withValues(alpha: 0.12),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.history_rounded, color: Colors.blue, size: 20),
+                  ),
+                  title: const Text(
+                    "Ver y Restaurar Copias de la Nube",
+                    style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600),
+                  ),
+                  subtitle: Text(
+                    driveProv.backups.isNotEmpty
+                        ? "Explora las ${driveProv.backups.length} copias disponibles"
+                        : "No hay copias guardadas en Google Drive aún",
+                    style: TextStyle(
+                      fontSize: 11.5,
+                      color: isDark ? Colors.grey[400] : Colors.grey[600],
+                    ),
+                  ),
+                  trailing: const Icon(Icons.chevron_right_rounded, size: 18),
+                  onTap: () {
+                    Navigator.pop(sheetCtx);
+                    if (driveProv.backups.isEmpty) {
+                      CustomSnackBar.show(
+                        context,
+                        message: "No hay copias de seguridad en Google Drive aún.",
+                      );
+                    } else {
+                      GoogleDriveBackupSheet.showGuidedWhatsAppRestoreModal(
+                        context,
+                        driveProvider: driveProv,
+                        allBackups: driveProv.backups,
+                        userEmail: driveProv.currentUser?.email ?? "",
+                        isDark: isDark,
+                        onRestoreSuccess: () async {
+                          await _loadProfileOrder();
+                          await _loadProfileMetadata();
+                          if (mounted) setState(() {});
+                        },
+                      );
+                    }
+                  },
+                ),
+                Divider(height: 12, color: isDark ? Colors.white12 : Colors.black12),
+
+                // Opción 2: Respaldar Ahora
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Colors.green.withValues(alpha: 0.12),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.cloud_upload_rounded, color: Colors.green, size: 20),
+                  ),
+                  title: const Text(
+                    "Respaldar Ahora en Google Drive",
+                    style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600),
+                  ),
+                  subtitle: Text(
+                    profiles.isNotEmpty
+                        ? "Genera una copia inmediata de tus ${profiles.length} perfil(es)"
+                        : "Crea al menos un negocio antes de respaldar",
+                    style: TextStyle(
+                      fontSize: 11.5,
+                      color: isDark ? Colors.grey[400] : Colors.grey[600],
+                    ),
+                  ),
+                  trailing: const Icon(Icons.chevron_right_rounded, size: 18),
+                  onTap: () {
+                    Navigator.pop(sheetCtx);
+                    if (profiles.isEmpty) {
+                      CustomSnackBar.show(
+                        context,
+                        message: "Crea al menos un negocio antes de realizar un respaldo.",
+                        isError: true,
+                      );
+                    } else {
+                      _executeDriveBackupNow(driveProv);
+                    }
+                  },
+                ),
+                Divider(height: 12, color: isDark ? Colors.white12 : Colors.black12),
+
+                // Opción 3: Desvincular Cuenta
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Colors.redAccent.withValues(alpha: 0.12),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.link_off_rounded, color: Colors.redAccent, size: 20),
+                  ),
+                  title: const Text(
+                    "Desvincular Cuenta de Google",
+                    style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600, color: Colors.redAccent),
+                  ),
+                  subtitle: Text(
+                    "Tus copias en la nube se mantendrán intactas",
+                    style: TextStyle(
+                      fontSize: 11.5,
+                      color: isDark ? Colors.grey[400] : Colors.grey[600],
+                    ),
+                  ),
+                  onTap: () {
+                    Navigator.pop(sheetCtx);
+                    _confirmAndSignOutDrive(driveProv, isDark);
+                  },
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _confirmAndSignOutDrive(
+    GoogleDriveBackupProvider driveProv,
+    bool isDark,
+  ) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: isDark ? const Color(0xFF1E1E28) : Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.redAccent.withValues(alpha: 0.12),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.link_off_rounded, color: Colors.redAccent, size: 24),
+            ),
+            const SizedBox(width: 12),
+            const Expanded(
+              child: Text(
+                "¿Desvincular Google Drive?",
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17),
+              ),
+            ),
+          ],
+        ),
+        content: const Text(
+          "Tus respaldos en la nube se mantendrán a salvo en tu cuenta de Google, pero la sincronización automática en este celular se detendrá.",
+          style: TextStyle(fontSize: 13, height: 1.4),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text("Cancelar", style: TextStyle(color: Colors.grey)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.redAccent,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text("Desvincular"),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      await driveProv.signOut();
+      if (mounted) {
+        CustomSnackBar.show(
+          context,
+          message: "Cuenta de Google desvinculada.",
+          isError: false,
+        );
+      }
+    }
+  }
+
+  Future<void> _executeDriveBackupNow(GoogleDriveBackupProvider driveProv) async {
+    setState(() {
+      _isProcessing = true;
+      _processingMessage = "Guardando respaldo en\nGoogle Drive...";
+    });
+
+    try {
+      final meta = await driveProv.performBackupNow();
+      if (mounted) {
+        setState(() => _isProcessing = false);
+        CustomSnackBar.show(
+          context,
+          message: "¡Copia de seguridad guardada en Google Drive! (${meta?.formattedSize ?? ''})",
+          isError: false,
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isProcessing = false);
+        CustomSnackBar.show(
+          context,
+          message: "No se pudo completar el respaldo: $e",
+          isError: true,
+        );
+      }
+    }
   }
 }
