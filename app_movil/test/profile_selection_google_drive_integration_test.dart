@@ -10,6 +10,7 @@ import 'package:app_movil/core/providers/theme_provider.dart';
 import 'package:app_movil/core/providers/google_drive_backup_provider.dart';
 import 'package:app_movil/core/services/backup/i_google_drive_backup_service.dart';
 import 'package:app_movil/features/auth/screens/onboarding/profile_selection_screen.dart';
+import 'package:app_movil/features/profile/widgets/drive_action_feedback_modal.dart';
 
 /// Fake de AuthProvider para pruebas instrumentadas rápidas y sin dependencias SQLite
 class FakeAuthProvider extends ChangeNotifier implements AuthProvider {
@@ -254,8 +255,8 @@ void main() {
     await tester.pump(Duration(milliseconds: millis));
   }
 
-  group('Fase 3: Integración de Google Drive en ProfileSelectionScreen', () {
-    testWidgets('1. Estado NO vinculado (0 negocios) muestra tarjeta Google Drive, enlace .mlbg y cero emojis crudos', (tester) async {
+  group('Fase 1: Rediseño Profesional de Perfiles, Google Drive y Feedback Animado', () {
+    testWidgets('1. Estado NO vinculado (0 negocios) muestra módulo unificado, enlace .mlbg y texto explorador sin Modo Demo', (tester) async {
       final mockAuth = FakeAuthProvider();
       final mockLicense = FakeLicenseProvider(
         initialLicense: LicenseModel(
@@ -281,14 +282,19 @@ void main() {
       ));
       await pumpScreen(tester);
 
-      // Debe mostrar la tarjeta en Estado A (no vinculado)
+      // Debe mostrar la tarjeta en Estado A (no vinculado) dentro del módulo unificado
       expect(find.byKey(const ValueKey('drive_unlinked_card')), findsOneWidget);
       expect(find.text("Recuperar desde Google Drive"), findsOneWidget);
       expect(find.text("Vincula tu correo para respaldar o restaurar tus negocios en la nube"), findsOneWidget);
       expect(find.byIcon(Icons.cloud_download_rounded), findsOneWidget);
 
-      // Texto de backup local actualizado a .mlbg
-      expect(find.text("¿Tienes un archivo local (.mlbg)? Restaurar aquí"), findsOneWidget);
+      // Enlace local integrado en una sola línea
+      expect(find.byKey(const ValueKey('local_backup_restore_tile')), findsOneWidget);
+      expect(find.text("Restaurar respaldo local (.mlbg)"), findsOneWidget);
+
+      // Texto de exploración limpio y centrado sin "(Modo Demo)"
+      expect(find.text("Explorar la app sin registrarse"), findsOneWidget);
+      expect(find.textContaining("(Modo Demo)"), findsNothing);
 
       // Verificación de CERO emojis crudos en todos los Text widgets del árbol
       final textWidgets = tester.widgetList<Text>(find.byType(Text));
@@ -354,11 +360,11 @@ void main() {
       // Y que se refrescó AuthProvider
       expect(mockAuth.checkInitialStateCalls, greaterThanOrEqualTo(1));
 
-      // Drenar timers de snackbar
-      await tester.pump(const Duration(seconds: 6));
+      // Drenar timers de CustomSnackBar
+      await tester.pump(const Duration(seconds: 7));
     });
 
-    testWidgets('3. Vinculación sin copias previas muestra confirmación y pasa a Estado B', (tester) async {
+    testWidgets('3. Vinculación sin copias previas muestra DriveActionFeedbackModal y pasa a Estado B', (tester) async {
       final mockAuth = FakeAuthProvider();
       final mockLicense = FakeLicenseProvider(
         initialLicense: LicenseModel(
@@ -374,7 +380,6 @@ void main() {
         ),
       );
       final mockService = MockDriveServiceForProfileSelection();
-      // Sin copias en la nube
       mockService.mockBackupsList.clear();
 
       final driveProvider = GoogleDriveBackupProvider(service: mockService);
@@ -391,20 +396,25 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('drive_unlinked_card')));
       await pumpScreen(tester, 500);
 
-      // Debe mostrar el mensaje en CustomSnackBar
+      // Debe mostrar el DriveActionFeedbackModal con confirmación
+      expect(find.byType(DriveActionFeedbackModal), findsOneWidget);
+      expect(find.text("¡Cuenta vinculada con éxito!"), findsOneWidget);
       expect(find.text("Cuenta vinculada (comerciante.activo@gmail.com). No se encontraron copias previas."), findsOneWidget);
+
+      // Cerrar modal interactivo con botón Listo
+      await tester.ensureVisible(find.byKey(const ValueKey('btn_drive_feedback_done')));
+      await pumpScreen(tester, 300);
+      await tester.tap(find.byKey(const ValueKey('btn_drive_feedback_done')));
+      await pumpScreen(tester, 500);
 
       // La tarjeta debe haber cambiado a Estado B (cápsula vinculada con semáforo Sin copias)
       expect(find.byKey(const ValueKey('drive_linked_card')), findsOneWidget);
       expect(find.text("comerciante.activo@gmail.com"), findsOneWidget);
       expect(find.text("Sin copias en la nube"), findsOneWidget);
       expect(find.byIcon(Icons.cloud_off_outlined), findsOneWidget);
-
-      // Drenar timers de snackbar
-      await tester.pump(const Duration(seconds: 6));
     });
 
-    testWidgets('4. Estado YA vinculado (con perfiles existentes) muestra cápsula con email, badge y menú rápido funcional', (tester) async {
+    testWidgets('4. Estado YA vinculado (1 perfil): Pluralización singular estricta y despliegue de DriveActionFeedbackModal con metadatos al respaldar', (tester) async {
       final mockAuth = FakeAuthProvider();
       mockAuth.localProfiles = [
         UserModel(
@@ -468,24 +478,51 @@ void main() {
       expect(find.text("Al día • 2/5 copias"), findsOneWidget);
       expect(find.byIcon(Icons.verified_user_rounded), findsOneWidget);
 
+      // Enlace local y botón de explorador en una sola línea
+      expect(find.byKey(const ValueKey('local_backup_restore_tile')), findsOneWidget);
+      expect(find.text("Restaurar respaldo local (.mlbg)"), findsOneWidget);
+      expect(find.text("Explorar la app sin registrarse"), findsOneWidget);
+      expect(find.textContaining("(Modo Demo)"), findsNothing);
+
       // Tap en la cápsula vinculada para abrir menú rápido
       await tester.tap(find.byKey(const ValueKey('drive_linked_card')));
       await pumpScreen(tester, 500);
 
-      // Debe abrir el BottomSheet de opciones rápidas
+      // Debe abrir el BottomSheet de opciones rápidas rediseñado
       expect(find.text("Ver y Restaurar Copias de la Nube"), findsOneWidget);
       expect(find.text("Respaldar Ahora en Google Drive"), findsOneWidget);
       expect(find.text("Desvincular Cuenta de Google"), findsOneWidget);
 
+      // PLURALIZACIÓN EXACTA: 1 perfil -> "de tu negocio" (cero "tus 1 perfil(es)")
+      expect(find.text("Genera una copia inmediata de tu negocio"), findsOneWidget);
+      expect(find.textContaining("perfil(es)"), findsNothing);
+
       // Probar opción Respaldar Ahora
       await tester.tap(find.text("Respaldar Ahora en Google Drive"));
-      await pumpScreen(tester, 500);
+      await pumpScreen(tester, 600);
 
       // Verificar que invocó uploadEncryptedBackup
       expect(mockService.uploadCalls, equals(1));
 
-      // Drenar timers de snackbar
-      await tester.pump(const Duration(seconds: 6));
+      // Debe desplegarse DriveActionFeedbackModal
+      expect(find.byType(DriveActionFeedbackModal), findsOneWidget);
+      expect(find.byKey(const ValueKey('drive_feedback_title')), findsOneWidget);
+      expect(find.text("¡Respaldo guardado en la nube!"), findsOneWidget);
+
+      // Verifica metadatos mostrados (peso en KB y contador actualizado)
+      expect(find.byKey(const ValueKey('drive_feedback_size')), findsOneWidget);
+      expect(find.byKey(const ValueKey('drive_feedback_copies')), findsOneWidget);
+      expect(find.text("3/5"), findsOneWidget);
+
+      // Cierre interactivo limpio con botón Listo
+      expect(find.byKey(const ValueKey('btn_drive_feedback_done')), findsOneWidget);
+      await tester.ensureVisible(find.byKey(const ValueKey('btn_drive_feedback_done')));
+      await pumpScreen(tester, 300);
+      await tester.tap(find.byKey(const ValueKey('btn_drive_feedback_done')));
+      await pumpScreen(tester, 500);
+
+      // El modal interactivo debe haberse cerrado
+      expect(find.byType(DriveActionFeedbackModal), findsNothing);
     });
 
     testWidgets('5. Retrocompatibilidad nullable: Si GoogleDriveBackupProvider es null, la pantalla no arroja error', (tester) async {
@@ -508,7 +545,7 @@ void main() {
       await tester.pumpWidget(buildTestHost(
         authProvider: mockAuth,
         licenseProvider: mockLicense,
-        driveProvider: null,
+        driveProvider: driveProviderNull(),
       ));
       await pumpScreen(tester);
 
@@ -517,6 +554,7 @@ void main() {
       expect(find.text("CREAR NUEVO NEGOCIO"), findsOneWidget);
       expect(find.byKey(const ValueKey('drive_unlinked_card')), findsNothing);
       expect(find.byKey(const ValueKey('drive_linked_card')), findsNothing);
+      expect(find.byKey(const ValueKey('local_backup_restore_tile')), findsOneWidget);
     });
 
     testWidgets('6. Densidad de pantalla y safe area sin desbordamientos en 320x568dp y 360x640dp con bottom 48dp', (tester) async {
@@ -564,5 +602,35 @@ void main() {
       tester.view.resetDevicePixelRatio();
       tester.view.resetPadding();
     });
+
+    testWidgets('7. Pluralización estricta con múltiples negocios (2 perfiles): Muestra "de tus 2 negocios"', (tester) async {
+      final mockAuth = FakeAuthProvider();
+      mockAuth.localProfiles = [
+        UserModel(id: 1, fullName: 'Dueño 1', email: 'd1@test.com', isActive: true, business: BusinessModel(id: 10, commercialName: 'Negocio 1')),
+        UserModel(id: 2, fullName: 'Dueño 2', email: 'd2@test.com', isActive: true, business: BusinessModel(id: 20, commercialName: 'Negocio 2')),
+      ];
+      final mockLicense = FakeLicenseProvider();
+      final mockService = MockDriveServiceForProfileSelection();
+      mockService.mockUser = const GoogleDriveUser(id: 'g_user', email: 'dueño@gmail.com');
+      final driveProvider = GoogleDriveBackupProvider(service: mockService);
+      await driveProvider.initializeFromCache();
+
+      await tester.pumpWidget(buildTestHost(
+        authProvider: mockAuth,
+        licenseProvider: mockLicense,
+        driveProvider: driveProvider,
+      ));
+      await pumpScreen(tester);
+
+      // Abrir menú rápido
+      await tester.tap(find.byKey(const ValueKey('drive_linked_card')));
+      await pumpScreen(tester, 500);
+
+      // Pluralización esperada
+      expect(find.text("Genera una copia inmediata de tus 2 negocios"), findsOneWidget);
+      expect(find.textContaining("perfil(es)"), findsNothing);
+    });
   });
 }
+
+GoogleDriveBackupProvider? driveProviderNull() => null;

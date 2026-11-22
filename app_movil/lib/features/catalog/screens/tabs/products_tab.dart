@@ -25,10 +25,12 @@ import 'package:app_movil/features/catalog/screens/product_detail_screen.dart';
 import 'package:app_movil/core/widgets/price_update_modal.dart';
 import 'package:app_movil/core/widgets/stock_update_modal.dart';
 import 'package:app_movil/core/widgets/interactive_sheet_wrapper.dart';
+import 'package:app_movil/core/widgets/tour/configs/inventory_tour.dart';
 
 class ProductsTab extends StatefulWidget {
   final TabController? tabController;
-  const ProductsTab({super.key, this.tabController});
+  final InventoryTourKeys? tourKeys;
+  const ProductsTab({super.key, this.tabController, this.tourKeys});
 
   @override
   State<ProductsTab> createState() => _ProductsTabState();
@@ -692,20 +694,23 @@ class _ProductsTabState extends State<ProductsTab>
                 ),
 
                 // 2. Toolbar Fija
-                InventoryFilterHeader(
-                  provider: provider,
-                  isDark: isDark,
-                  viewMode: _viewMode,
-                  onViewModeChanged: (mode) => setState(() => _viewMode = mode),
-                  onStockAlertToggled: _onStockAlertToggled,
-                  onStockAlertExplanationRequested: () {
-                    _dismissStockAlertToast();
-                    InventoryFilterHeader.showColorAlertExplanation(
-                      context,
-                      provider,
-                      isDark,
-                    );
-                  },
+                KeyedSubtree(
+                  key: widget.tourKeys?.searchFiltersKey ?? const ValueKey('tour_search_filters_fallback'),
+                  child: InventoryFilterHeader(
+                    provider: provider,
+                    isDark: isDark,
+                    viewMode: _viewMode,
+                    onViewModeChanged: (mode) => setState(() => _viewMode = mode),
+                    onStockAlertToggled: _onStockAlertToggled,
+                    onStockAlertExplanationRequested: () {
+                      _dismissStockAlertToast();
+                      InventoryFilterHeader.showColorAlertExplanation(
+                        context,
+                        provider,
+                        isDark,
+                      );
+                    },
+                  ),
                 ),
 
                 // 2.1 Banner de Producto en Creación Pendiente (Borrador en Memoria)
@@ -926,26 +931,29 @@ class _ProductsTabState extends State<ProductsTab>
                   ),
                   const SizedBox(height: 16),
                 ],
-                FloatingActionButton(
-                  heroTag: 'btn_inv_create',
-                  onPressed: _toggleFab,
-                  elevation: isDark ? 0 : 6,
-                  backgroundColor: _isFabOpen
-                      ? (isDark ? Colors.red[800] : Colors.red)
-                      : (isDark
-                            ? Colors.blue[300]
-                            : Theme.of(context).primaryColor),
-                  foregroundColor: isDark && !_isFabOpen
-                      ? Colors.black87
-                      : Colors.white,
-                  child: RotationTransition(
-                    turns: _fabRotateAnimation,
-                    child: Icon(
-                      Icons.add,
-                      size: 30,
-                      color: isDark && !_isFabOpen
-                          ? Colors.black87
-                          : Colors.white,
+                KeyedSubtree(
+                  key: widget.tourKeys?.newProductFabKey ?? const ValueKey('tour_new_prod_fab_fallback'),
+                  child: FloatingActionButton(
+                    heroTag: 'btn_inv_create',
+                    onPressed: _toggleFab,
+                    elevation: isDark ? 0 : 6,
+                    backgroundColor: _isFabOpen
+                        ? (isDark ? Colors.red[800] : Colors.red)
+                        : (isDark
+                              ? Colors.blue[300]
+                              : Theme.of(context).primaryColor),
+                    foregroundColor: isDark && !_isFabOpen
+                        ? Colors.black87
+                        : Colors.white,
+                    child: RotationTransition(
+                      turns: _fabRotateAnimation,
+                      child: Icon(
+                        Icons.add,
+                        size: 30,
+                        color: isDark && !_isFabOpen
+                            ? Colors.black87
+                            : Colors.white,
+                      ),
                     ),
                   ),
                 ),

@@ -1,9 +1,12 @@
 import 'package:flutter/foundation.dart';
 import 'package:app_movil/core/models/license_model.dart';
 import 'package:app_movil/core/services/license/license_repository.dart';
+import 'package:app_movil/core/services/license/license_redeem_result.dart';
 import 'package:app_movil/core/services/device_fingerprint.dart';
 import 'package:app_movil/core/config/api_constants.dart';
 import 'package:app_movil/core/utils/app_logger.dart';
+
+export 'package:app_movil/core/services/license/license_redeem_result.dart';
 
 /// Provider de Gestión de Licencias, Verificación Antifraude y Cuotas IA
 class LicenseProvider extends ChangeNotifier {
@@ -80,13 +83,21 @@ class LicenseProvider extends ChangeNotifier {
     }
   }
 
-  /// Canjea y activa un código de licencia criptográfica firmado con Ed25519
-  Future<bool> redeemCode(String code, {DateTime? overrideNow}) async {
+  LicenseRedeemResult? _lastRedeemResult;
+  LicenseRedeemResult? get lastRedeemResult => _lastRedeemResult;
+
+  /// Canjea un código retornando el resultado tipado detallado
+  Future<LicenseRedeemResult> redeemCodeDetailed(String code, {DateTime? overrideNow}) async {
     final clean = code.trim();
     if (clean.isEmpty) {
-      _errorMessage = "Por favor, ingresa o escanea un código de activación.";
+      _lastRedeemResult = LicenseRedeemResult.failure(
+        status: LicenseRedeemStatus.invalidFormat,
+        message: "Por favor, ingresa o escanea un código de activación.",
+        currentLicenseSnapshot: _license,
+      );
+      _errorMessage = _lastRedeemResult!.message;
       notifyListeners();
-      return false;
+      return _lastRedeemResult!;
     }
 
     _isLoading = true;
@@ -95,19 +106,35 @@ class LicenseProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final updated = await _repository.redeemLicenseCode(clean, overrideNow: overrideNow);
-      _license = updated;
-      _remainingAiScans = await _repository.getRemainingAiScans(overrideNow: overrideNow);
-      _successMessage = "¡Licencia activada con éxito! Plan: ${updated.tipoPlan}";
+      final result = await _repository.redeemLicenseCodeDetailed(clean, overrideNow: overrideNow);
+      _lastRedeemResult = result;
+      if (result.isSuccess) {
+        _license = result.currentLicenseSnapshot;
+        _remainingAiScans = await _repository.getRemainingAiScans(overrideNow: overrideNow);
+        _successMessage = result.message;
+      } else {
+        _errorMessage = result.message;
+      }
       _isLoading = false;
       notifyListeners();
-      return true;
+      return result;
     } catch (e) {
-      _errorMessage = e.toString().replaceFirst('Exception: ', '');
+      _lastRedeemResult = LicenseRedeemResult.failure(
+        status: LicenseRedeemStatus.invalidFormat,
+        message: e.toString().replaceFirst('Exception: ', ''),
+        currentLicenseSnapshot: _license,
+      );
+      _errorMessage = _lastRedeemResult!.message;
       _isLoading = false;
       notifyListeners();
-      return false;
+      return _lastRedeemResult!;
     }
+  }
+
+  /// Canjea y activa un código de licencia criptográfica firmado con Ed25519
+  Future<bool> redeemCode(String code, {DateTime? overrideNow}) async {
+    final result = await redeemCodeDetailed(code, overrideNow: overrideNow);
+    return result.isSuccess;
   }
 
   /// Verifica si se puede realizar un escaneo IA

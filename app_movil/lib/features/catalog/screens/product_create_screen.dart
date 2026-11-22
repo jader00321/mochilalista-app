@@ -17,6 +17,9 @@ import 'package:app_movil/core/widgets/product_optional_info.dart';
 import 'package:app_movil/core/widgets/info_tooltip_button.dart';
 import 'package:app_movil/features/catalog/widgets/form/product_stock_strategy_selector.dart';
 import 'package:app_movil/core/widgets/presentation_card/presentation_math_engine.dart';
+import 'package:app_movil/core/services/tour/interactive_tour_service.dart';
+import 'package:app_movil/core/widgets/tour/configs/product_create_tour.dart';
+import 'package:app_movil/core/widgets/tour/tour_step_model.dart';
 
 class ProductCreateScreen extends StatefulWidget {
   final String? initialBarcode;
@@ -28,6 +31,8 @@ class ProductCreateScreen extends StatefulWidget {
 }
 
 class _ProductCreateScreenState extends State<ProductCreateScreen> {
+  final _tourKeys = ProductCreateTourKeys();
+  bool _wasOriginallyExpanded = true;
   final _formKey = GlobalKey<FormState>();
   final _nameCtrl = TextEditingController();
   final _descCtrl = TextEditingController();
@@ -121,7 +126,38 @@ class _ProductCreateScreenState extends State<ProductCreateScreen> {
         }
       }
       _isHydrating = false;
+
+      if (widget.extractionBundle == null && mounted) {
+        InteractiveTourService.maybeStartAutomaticTour(context, _buildTourConfig());
+      }
     });
+  }
+
+  ScreenTourConfig _buildTourConfig() {
+    return ProductCreateTour.buildConfig(
+      keys: _tourKeys,
+      onExpandSection: () async {
+        _wasOriginallyExpanded = _allExpanded;
+        if (!_allExpanded) {
+          setState(() {
+            _allExpanded = true;
+            for (var c in _controllers) {
+              c['isExpanded'] = true;
+            }
+          });
+        }
+      },
+      onCollapseSection: () async {
+        if (!_wasOriginallyExpanded && _allExpanded) {
+          setState(() {
+            _allExpanded = false;
+            for (var c in _controllers) {
+              c['isExpanded'] = false;
+            }
+          });
+        }
+      },
+    );
   }
 
   void _onBaseCostChanged() {
@@ -557,6 +593,12 @@ class _ProductCreateScreenState extends State<ProductCreateScreen> {
             ],
           ],
         ),
+        leading: IconButton(
+          key: _tourKeys.backButtonKey,
+          icon: const Icon(Icons.arrow_back),
+          tooltip: "Volver",
+          onPressed: () => Navigator.maybePop(context),
+        ),
         backgroundColor: surfaceColor,
         foregroundColor: textColor,
         elevation: 0,
@@ -567,24 +609,32 @@ class _ProductCreateScreenState extends State<ProductCreateScreen> {
               icon: Icon(Icons.cleaning_services_outlined, size: 20, color: isDark ? Colors.grey[400] : Colors.grey[600]),
               onPressed: () => _handleClearAll(isDark),
             ),
-          const InfoTooltipButton(
+          InfoTooltipButton(
             title: "Creación de Productos",
             description: "Registra productos con múltiples presentaciones de venta, cálculo automático de márgenes y sincronización de unidades.",
-            tips: [
+            tips: const [
               InfoTip(icon: Icons.calculate_rounded, text: "Chips de redondeo (.50, .90, .00): tócalos para redondear o vuélvelos a pulsar para recuperar el precio exacto previo."),
               InfoTip(icon: Icons.search_rounded, text: "Usa los selectores interactivos para Marca, Categoría y Proveedor."),
               InfoTip(icon: Icons.drafts_outlined, text: "Tus datos se guardan automáticamente en borrador en memoria."),
               InfoTip(icon: Icons.copy_rounded, text: "Usa clonar variante para duplicar una presentación rápidamente."),
             ],
+            onStartInteractiveTour: () => InteractiveTourService.startManualTour(
+              context,
+              _buildTourConfig(),
+            ),
+            tourButtonLabel: 'Iniciar guía interactiva paso a paso',
           ),
           const SizedBox(width: 4),
         ],
       ),
-      bottomNavigationBar: ProductFormBottomBar(
-        title: "GUARDAR PRODUCTO",
-        isLoading: provider.isLoading,
-        isDark: isDark,
-        onSave: _save,
+      bottomNavigationBar: KeyedSubtree(
+        key: _tourKeys.saveButtonKey,
+        child: ProductFormBottomBar(
+          title: "GUARDAR PRODUCTO",
+          isLoading: provider.isLoading,
+          isDark: isDark,
+          onSave: _save,
+        ),
       ),
       body: GestureDetector(
         onTap: () => FocusScope.of(context).unfocus(),
@@ -598,40 +648,51 @@ class _ProductCreateScreenState extends State<ProductCreateScreen> {
               children: [
                 if (widget.extractionBundle != null)
                   _buildExtractionBanner(isDark),
-                ProductGeneralInfo(
-                  nameCtrl: _nameCtrl,
-                  brandDisplay: ProductEntityPickers.getBrandDisplay(provider: provider, selectedBrandId: _selectedBrandId, selectedBrandName: _selectedBrandName),
-                  isBrandDeferred: _selectedBrandId != null && _selectedBrandId! < 0,
-                  onSelectBrand: _pickBrand,
-                  categoryDisplay: ProductEntityPickers.getCategoryDisplay(provider: provider, selectedCategoryId: _selectedCategoryId, selectedCategoryName: _selectedCategoryName),
-                  isCategoryDeferred: _selectedCategoryId != null && _selectedCategoryId! < 0,
-                  onSelectCategory: _pickCategory,
-                  generalProviderDisplay: ProductEntityPickers.getProviderDisplay(provider: provider, providerId: _generalProviderId, deferredProviderNames: _deferredProviderNames),
-                  isGeneralProviderDeferred: _generalProviderId != null && _generalProviderId! < 0,
-                  onSelectGeneralProvider: () => _pickGeneralProvider(isDark),
-                  generalState: _generalState,
-                  isDark: isDark,
-                  onStateChanged: _setGeneralState,
+                KeyedSubtree(
+                  key: _tourKeys.generalInfoKey,
+                  child: ProductGeneralInfo(
+                    nameCtrl: _nameCtrl,
+                    brandDisplay: ProductEntityPickers.getBrandDisplay(provider: provider, selectedBrandId: _selectedBrandId, selectedBrandName: _selectedBrandName),
+                    isBrandDeferred: _selectedBrandId != null && _selectedBrandId! < 0,
+                    onSelectBrand: _pickBrand,
+                    categoryDisplay: ProductEntityPickers.getCategoryDisplay(provider: provider, selectedCategoryId: _selectedCategoryId, selectedCategoryName: _selectedCategoryName),
+                    isCategoryDeferred: _selectedCategoryId != null && _selectedCategoryId! < 0,
+                    onSelectCategory: _pickCategory,
+                    generalProviderDisplay: ProductEntityPickers.getProviderDisplay(provider: provider, providerId: _generalProviderId, deferredProviderNames: _deferredProviderNames),
+                    isGeneralProviderDeferred: _generalProviderId != null && _generalProviderId! < 0,
+                    onSelectGeneralProvider: () => _pickGeneralProvider(isDark),
+                    generalState: _generalState,
+                    isDark: isDark,
+                    onStateChanged: _setGeneralState,
+                  ),
                 ),
                 const SizedBox(height: 16),
-                ProductOptionalInfo(
-                  descCtrl: _descCtrl,
-                  imgCtrl: _imgUrlCtrl,
-                  barcodeCtrl: _barcodeCtrl,
+                KeyedSubtree(
+                  key: _tourKeys.barcodeKey,
+                  child: ProductOptionalInfo(
+                    descCtrl: _descCtrl,
+                    imgCtrl: _imgUrlCtrl,
+                    barcodeCtrl: _barcodeCtrl,
+                  ),
                 ),
                 const SizedBox(height: 16),
-                ProductStockStrategySelector(
-                  selectedStrategy: _modoStock,
-                  onStrategyChanged: _onStrategyChanged,
-                  sharedStockController: _sharedStockCtrl,
-                  baseCostController: _baseCostCtrl,
-                  controllers: _controllers,
-                  isDark: isDark,
-                  isEditMode: false,
-                  onAutoCreateUnitVariant: _createUnitVariantAutomatically,
+                KeyedSubtree(
+                  key: _tourKeys.stockStrategyKey,
+                  child: ProductStockStrategySelector(
+                    selectedStrategy: _modoStock,
+                    onStrategyChanged: _onStrategyChanged,
+                    sharedStockController: _sharedStockCtrl,
+                    baseCostController: _baseCostCtrl,
+                    controllers: _controllers,
+                    isDark: isDark,
+                    isEditMode: false,
+                    onAutoCreateUnitVariant: _createUnitVariantAutomatically,
+                  ),
                 ),
                 const SizedBox(height: 20),
-                VariantSectionHeader(
+                KeyedSubtree(
+                  key: _tourKeys.variantsHeaderKey,
+                  child: VariantSectionHeader(
                   isDark: isDark,
                   allExpanded: _allExpanded,
                   canReorder: _controllers.length > 1,
@@ -647,6 +708,7 @@ class _ProductCreateScreenState extends State<ProductCreateScreen> {
                     controllers: _controllers,
                     onReorder: (oldIdx, newIdx) => setState(_syncDraft),
                   ),
+                ),
                 ),
                 const SizedBox(height: 8),
                 if (_controllers.length > 1) ...[

@@ -163,7 +163,7 @@ Abre tu navegador web en `http://localhost:8080`. Dispones de **8 módulos de co
      - **`PROSPECTO`:** Contacto comercial en prospección sin licencia generada ni expiración ficticia (`license_expires = null`).
      - **`TRIAL GRATUITO (Días Reales)`:** Permite ingresar los días exactos que le restan al comerciante en su teléfono (`trial_days_remaining`, ej. `17 días`). No impone ventana artificial de actualización (`updates_until = null`), respetando la naturaleza Offline-First de la app móvil.
      - **`CON LICENCIA ACTIVA`:** Planes comerciales tarifados (`MENSUAL`, `TRIMESTRAL`, `SEMESTRAL`, `ANUAL`, `PERPETUO`).
-   * **Versión de App Instalada:** (por defecto: `9.35.0` — Esquema SQLite `v36`).
+   * **Versión de App Instalada:** (por defecto: `9.36.0` — Esquema SQLite `v36`).
    * **Gestión de Créditos IA:**
      - **Saldo IA Reportado en Celular:** Créditos que el cliente indica tener disponibles en su app móvil (ej. `49 IA`).
      - **Bonos IA Pendientes por Emitir:** Escaneos adicionales que se incorporarán en la próxima emisión de token criptográfico Ed25519 (ej. `+20 IA`). Ambos valores se muestran desacoplados de forma transparente, previniendo falsas sumas anticipadas en el CRM.
@@ -293,7 +293,7 @@ En **Cartera de Clientes**, presiona el botón **`[👁️]`** (Ficha 360°) o *
      * **`[Copiar Código]`:** Copia la cadena `ML9-...`.
      * **`[Descargar Tarjeta (@2x)]`:** Descarga la credencial gráfica PNG en 900x520 px.
      * **`[Copiar Imagen Credencial]`:** Copia el mapa de bits al portapapeles (`Ctrl+V`) para pegado instantáneo en WhatsApp Web.
-     * **`[Descargar Solo QR]`:** Descarga el archivo de imagen PNG del código óptico.
+     * **`[Descargar Solo QR]`:** Descarga el archivo de imagen PNG del código óptico con **margen blanco reglamentario de 32px** (*quiet zone* blanca pura al 100%), garantizando lectura inmediata y sin fallos desde la galería fotográfica de cualquier celular.
      * **`[Auditar en Inspector]`** y **`[WhatsApp]`** contextual.
 
 3. **Pestaña 3 — Pagos y Finanzas (CRUD Dinámico y Boletas):**
@@ -480,6 +480,11 @@ La matriz compara la versión instalada de cada cliente contra el último lanzam
 ### 3.5. Comportamiento en la App Móvil: Snapshot `.bak` y Modal Post-Actualización
 1. **Snapshot `.bak` Transparente:** La app crea una copia `mochilalista.db_pre_upgrade_vX.bak` antes de aplicar migraciones de esquema SQLite. Si ocurre un fallo eléctrico o de hardware durante la migración, la app restaura el `.bak` automáticamente sin perder ningún dato de venta o inventario.
 2. **Modal Festivo Post-Actualización:** Tras iniciar la nueva versión, se despliega el modal no intrusivo con las novedades de la versión.
+3. **Novedades Operativas de UX y Seguridad (v9.36.0):**
+   * **Margen Blanco Reglamentario (32px):** Todas las exportaciones de `"Descargar Solo QR"` en `mochilalista_admin` incorporan un margen blanco perimetral de 32px, eliminando fallos de recorte al leer imágenes QR desde la galería del celular.
+   * **Activación Clara y Amigable:** Reemplazo de los mensajes técnicos ("Nonce 1 <= 1") por el nuevo modal interactivo animado (`LicenseActivationFeedbackModal`) con estados humanos categorizados para licencias comerciales y bonos IA.
+   * **Escáner QR para Monitores PC:** Nuevo visor de cámara con controles de linterna, zoom rápido (1x/2x/3x), enfoque táctil (*Tap-to-Focus*) y protección estricta contra superposición de la barra inferior de navegación Android (`<, ○, |||`).
+   * **Guía Turística Interactiva Paso a Paso:** Sistema de inducción interactivo (*Coach Marks*) en las 10 pantallas troncales de la app (Home, Perfil, Crear Producto, Caja Rápida, Inventario, Cotizador Escolar, Clientes CRM, Historial de Ventas, Respaldos y Licencias). Incluye supresión automática tras restaurar copias de seguridad de Google Drive o `.mlbg`, invocación manual bajo demanda desde el botón de ayuda (`?` / `i`) de cada pantalla y switch de reinicio/control global en `Perfil > Ajustes`.
 
 ---
 

@@ -11,6 +11,7 @@ import 'package:app_movil/core/services/backup/google_drive_backup_service.dart'
 import 'package:app_movil/core/services/backup/i_google_drive_backup_service.dart';
 import 'package:app_movil/core/services/device_fingerprint.dart';
 import 'package:app_movil/core/widgets/custom_snackbar.dart';
+import 'package:app_movil/core/services/tour/interactive_tour_service.dart';
 
 /// Componente modular y hoja de gestión para Copias de Seguridad en Google Drive
 class GoogleDriveBackupSheet extends StatefulWidget {
@@ -438,6 +439,10 @@ class GoogleDriveBackupSheet extends StatefulWidget {
       if (!context.mounted) return;
 
       if (res.isSuccess) {
+        try {
+          await InteractiveTourService.suppressAutomaticToursAfterRestore();
+        } catch (_) {}
+        if (!context.mounted) return;
         try {
           final authProv = Provider.of<AuthProvider?>(context, listen: false);
           await authProv?.checkInitialState();
@@ -909,6 +914,9 @@ class _GoogleDriveBackupSheetState extends State<GoogleDriveBackupSheet>
       if (!mounted) return;
 
       if (res.isSuccess) {
+        try {
+          await InteractiveTourService.suppressAutomaticToursAfterRestore();
+        } catch (_) {}
         // Refrescar Providers activos
         if (mounted) {
           try {

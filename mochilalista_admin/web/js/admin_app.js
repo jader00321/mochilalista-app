@@ -1931,30 +1931,70 @@ function updateGeneratorRightColumn(client) {
   }
 }
 
-function downloadQrCode() {
-  const qrImg = document.querySelector('#qrContainer img') || document.querySelector('#qrContainer canvas');
-  if (qrImg) {
-    let url;
-    if (qrImg.tagName.toLowerCase() === 'canvas') {
-      url = qrImg.toDataURL('image/png');
-    } else {
-      url = qrImg.src;
-    }
-    const a = document.createElement('a');
-    a.download = `QR_MochilaLista_${Date.now()}.png`;
-    a.href = url;
-    a.click();
-    showToast('QR descargado correctamente.', 'success');
-  } else if (lastGeneratedQr) {
-    const url = lastGeneratedQr.toDataURL();
-    const a = document.createElement('a');
-    a.download = `QR_MochilaLista_${Date.now()}.png`;
-    a.href = url;
-    a.click();
-    showToast('QR descargado correctamente.', 'success');
-  } else {
-    showToast('No hay código QR disponible para descargar.', 'warning');
+/**
+ * Exporta un código QR con margen reglamentario blanco puro (#FFFFFF) de 32px (Quiet Zone).
+ * Resuelve la imposibilidad de detección en cámaras móviles y decodificadores de galería.
+ * @param {HTMLElement|string} sourceContainer - Contenedor del canvas/img o elemento directo
+ * @param {string} fileName - Nombre de descarga del archivo PNG
+ * @param {number} marginPx - Tamaño del margen perimetral blanco en píxeles (default: 32)
+ */
+function downloadQrWithQuietZone(sourceContainer, fileName, marginPx = 32) {
+  let container = null;
+  if (typeof sourceContainer === 'string') {
+    container = document.querySelector(sourceContainer);
+  } else if (sourceContainer instanceof HTMLElement) {
+    container = sourceContainer;
   }
+
+  if (!container) {
+    showToast('No hay código QR disponible para descargar.', 'warning');
+    return;
+  }
+
+  const sourceEl = container.tagName && (container.tagName.toLowerCase() === 'canvas' || container.tagName.toLowerCase() === 'img')
+    ? container
+    : (container.querySelector('canvas') || container.querySelector('img'));
+
+  if (!sourceEl) {
+    showToast('No hay código QR disponible para descargar.', 'warning');
+    return;
+  }
+
+  function doExport(srcCanvasOrImg, w, h) {
+    const totalW = w + (marginPx * 2);
+    const totalH = h + (marginPx * 2);
+    const offscreen = document.createElement('canvas');
+    offscreen.width = totalW;
+    offscreen.height = totalH;
+    const ctx = offscreen.getContext('2d');
+    if (!ctx) return;
+    ctx.imageSmoothingEnabled = false;
+    ctx.fillStyle = '#FFFFFF';
+    ctx.fillRect(0, 0, totalW, totalH);
+    ctx.drawImage(srcCanvasOrImg, marginPx, marginPx, w, h);
+
+    const a = document.createElement('a');
+    a.download = fileName.endsWith('.png') ? fileName : `${fileName}.png`;
+    a.href = offscreen.toDataURL('image/png');
+    a.click();
+    showToast('QR descargado con margen blanco reglamentario.', 'success');
+  }
+
+  if (sourceEl.tagName.toLowerCase() === 'canvas') {
+    doExport(sourceEl, sourceEl.width, sourceEl.height);
+  } else if (sourceEl.tagName.toLowerCase() === 'img') {
+    if (sourceEl.complete && sourceEl.naturalWidth > 0) {
+      doExport(sourceEl, sourceEl.naturalWidth, sourceEl.naturalHeight);
+    } else {
+      const img = new Image();
+      img.onload = () => doExport(img, img.naturalWidth || 256, img.naturalHeight || 256);
+      img.src = sourceEl.src;
+    }
+  }
+}
+
+function downloadQrCode() {
+  downloadQrWithQuietZone('#qrContainer', `QR_MochilaLista_${Date.now()}.png`, 32);
 }
 
 async function generateLicense() {
@@ -2320,14 +2360,7 @@ async function openQuickQrModal(clientId) {
   };
 
   document.getElementById('btnQuickDownloadQr').onclick = () => {
-    const qrCanvas = qrContainer.querySelector('canvas') || qrContainer.querySelector('img');
-    if (qrCanvas) {
-      const a = document.createElement('a');
-      a.download = `QR_MochilaLista_${client.current_device_id}_${Date.now()}.png`;
-      a.href = qrCanvas.toDataURL ? qrCanvas.toDataURL('image/png') : qrCanvas.src;
-      a.click();
-      showToast('QR descargado correctamente.', 'success');
-    }
+    downloadQrWithQuietZone(qrContainer, `QR_MochilaLista_${client.current_device_id}_${Date.now()}.png`, 32);
   };
 
   document.getElementById('btnQuickCopyCredential').onclick = async () => {
@@ -3561,15 +3594,7 @@ async function openClient360Drawer(clientId) {
           };
 
           document.getElementById('btnDrawerDownloadQr').onclick = () => {
-            const qrBox = document.getElementById('drawerQrContainer');
-            const qrCanvas = qrBox?.querySelector('canvas') || qrBox?.querySelector('img');
-            if (qrCanvas) {
-              const a = document.createElement('a');
-              a.download = `QR_${client.current_device_id}_N${codeNonce}.png`;
-              a.href = qrCanvas.toDataURL ? qrCanvas.toDataURL('image/png') : qrCanvas.src;
-              a.click();
-              showToast('QR descargado correctamente.', 'success');
-            }
+            downloadQrWithQuietZone('#drawerQrContainer', `QR_${client.current_device_id}_N${codeNonce}.png`, 32);
           };
 
           document.getElementById('btnDrawerAuditInspector').onclick = () => {

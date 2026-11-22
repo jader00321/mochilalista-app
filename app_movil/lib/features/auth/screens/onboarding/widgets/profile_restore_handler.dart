@@ -7,6 +7,7 @@ import 'package:app_movil/core/utils/backup_manager.dart';
 import 'package:app_movil/features/profile/services/business_backup_service.dart';
 import 'package:app_movil/core/widgets/custom_snackbar.dart';
 import 'package:app_movil/core/widgets/interactive_sheet_wrapper.dart';
+import 'package:app_movil/core/services/tour/interactive_tour_service.dart';
 
 // ============================================================
 // BOTTOM SHEET: Restaurar Backup (elegir tipo de archivo)
@@ -293,6 +294,10 @@ void handleUnifiedProfileRestore(BuildContext context, {String? type}) async {
       final result = await BackupManager.restoreBackupFromFilePath(path);
       if (context.mounted) {
         if (result.isSuccess) {
+          try {
+            await InteractiveTourService.suppressAutomaticToursAfterRestore();
+          } catch (_) {}
+          if (!context.mounted) return;
           if (result.requiresLicenseMigration) {
             CustomSnackBar.show(
               context,

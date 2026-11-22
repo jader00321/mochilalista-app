@@ -14,6 +14,8 @@ import 'package:app_movil/features/smart_quotation/widgets/workbench/dashboard_h
 import 'package:app_movil/core/widgets/export_options_modal.dart';
 import 'package:app_movil/core/widgets/info_tooltip_button.dart';
 import 'package:app_movil/core/widgets/interactive_sheet_wrapper.dart';
+import 'package:app_movil/core/services/tour/interactive_tour_service.dart';
+import 'package:app_movil/core/widgets/tour/configs/workbench_tour.dart';
 
 class WorkbenchScreen extends StatefulWidget {
   const WorkbenchScreen({super.key});
@@ -23,6 +25,7 @@ class WorkbenchScreen extends StatefulWidget {
 }
 
 class _WorkbenchScreenState extends State<WorkbenchScreen> with SingleTickerProviderStateMixin {
+  final _tourKeys = WorkbenchTourKeys();
   late TabController _tabController;
   final List<ScrollController> _scrollControllers = [
     ScrollController(),
@@ -57,6 +60,10 @@ class _WorkbenchScreenState extends State<WorkbenchScreen> with SingleTickerProv
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       Provider.of<WorkbenchProvider>(context, listen: false).loadDashboard();
+      InteractiveTourService.maybeStartAutomaticTour(
+        context,
+        WorkbenchTour.buildConfig(keys: _tourKeys),
+      );
     });
   }
 
@@ -197,13 +204,13 @@ class _WorkbenchScreenState extends State<WorkbenchScreen> with SingleTickerProv
                   Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const InfoTooltipButton(
-                        padding: EdgeInsets.symmetric(horizontal: 4),
-                        constraints: BoxConstraints(minWidth: 32, minHeight: 36),
+                      InfoTooltipButton(
+                        padding: const EdgeInsets.symmetric(horizontal: 4),
+                        constraints: const BoxConstraints(minWidth: 32, minHeight: 36),
                         title: "Mesa de Trabajo de Cotizaciones",
                         description:
                             "Centro de control de pedidos y listas escolares: cotizaciones en proceso, listas armadas y ventas despachadas.",
-                        tips: [
+                        tips: const [
                           InfoTip(
                             icon: Icons.auto_awesome_rounded,
                             text:
@@ -225,20 +232,30 @@ class _WorkbenchScreenState extends State<WorkbenchScreen> with SingleTickerProv
                                 "Genera reportes y proformas en PDF o Excel con tu membrete comercial.",
                           ),
                         ],
+                        onStartInteractiveTour: () => InteractiveTourService.startManualTour(
+                          context,
+                          WorkbenchTour.buildConfig(keys: _tourKeys),
+                        ),
+                        tourButtonLabel: 'Iniciar guía interactiva paso a paso',
                       ),
-                      IconButton(
-                        icon: const Icon(Icons.archive, size: 22), 
-                        padding: const EdgeInsets.symmetric(horizontal: 4),
-                        constraints: const BoxConstraints(minWidth: 32, minHeight: 36),
-                        tooltip: "Ver Listas Archivadas",
-                        onPressed: () => ArchivedListsModal.show(context, provider, isDark),
+                      KeyedSubtree(
+                        key: _tourKeys.archivedListsKey,
+                        child: IconButton(
+                          icon: const Icon(Icons.archive, size: 22), 
+                          padding: const EdgeInsets.symmetric(horizontal: 4),
+                          constraints: const BoxConstraints(minWidth: 32, minHeight: 36),
+                          tooltip: "Ver Listas Archivadas",
+                          onPressed: () => ArchivedListsModal.show(context, provider, isDark),
+                        ),
                       ),
-                      IconButton(
-                        icon: const Icon(Icons.file_download, size: 22),
-                        padding: const EdgeInsets.symmetric(horizontal: 4),
-                        constraints: const BoxConstraints(minWidth: 32, minHeight: 36),
-                        tooltip: "Exportar Reportes",
-                        onPressed: () {
+                      KeyedSubtree(
+                        key: _tourKeys.exportReportsKey,
+                        child: IconButton(
+                          icon: const Icon(Icons.file_download, size: 22),
+                          padding: const EdgeInsets.symmetric(horizontal: 4),
+                          constraints: const BoxConstraints(minWidth: 32, minHeight: 36),
+                          tooltip: "Exportar Reportes",
+                          onPressed: () {
                           ExportOptionsModal.show(
                             context,
                             options: [
@@ -333,7 +350,8 @@ class _WorkbenchScreenState extends State<WorkbenchScreen> with SingleTickerProv
                           );
                         },
                       ),
-                      const SizedBox(width: 4),
+                    ),
+                    const SizedBox(width: 4),
                     ],
                   ),
                 ],
@@ -346,13 +364,16 @@ class _WorkbenchScreenState extends State<WorkbenchScreen> with SingleTickerProv
         child: Column(
           children: [
             // Bloque 1: KPIs Colapsables con AnimatedSize (0px overlap, colapso suave)
-            ClipRect(
-              child: AnimatedSize(
-                duration: const Duration(milliseconds: 250),
-                curve: Curves.easeInOutCubic,
-                child: _showKpis
-                    ? DashboardHeader(provider: provider, isDark: isDark, tabController: _tabController)
-                    : const SizedBox(width: double.infinity, height: 0),
+            KeyedSubtree(
+              key: _tourKeys.kpisHeaderKey,
+              child: ClipRect(
+                child: AnimatedSize(
+                  duration: const Duration(milliseconds: 250),
+                  curve: Curves.easeInOutCubic,
+                  child: _showKpis
+                      ? DashboardHeader(provider: provider, isDark: isDark, tabController: _tabController)
+                      : const SizedBox(width: double.infinity, height: 0),
+                ),
               ),
             ),
 
@@ -360,13 +381,16 @@ class _WorkbenchScreenState extends State<WorkbenchScreen> with SingleTickerProv
             _buildTabBarSection(isDark, surfaceColor),
 
             // Bloque 3: Sub-filtros Reactivos Colapsables (Reaparecen al subir)
-            ClipRect(
-              child: AnimatedSize(
-                duration: const Duration(milliseconds: 200),
-                curve: Curves.easeInOutCubic,
-                child: _showFilters
-                    ? _buildFilterChips(provider, isDark)
-                    : const SizedBox(width: double.infinity, height: 0),
+            KeyedSubtree(
+              key: _tourKeys.filterChipsKey,
+              child: ClipRect(
+                child: AnimatedSize(
+                  duration: const Duration(milliseconds: 200),
+                  curve: Curves.easeInOutCubic,
+                  child: _showFilters
+                      ? _buildFilterChips(provider, isDark)
+                      : const SizedBox(width: double.infinity, height: 0),
+                ),
               ),
             ),
 
@@ -415,15 +439,18 @@ class _WorkbenchScreenState extends State<WorkbenchScreen> with SingleTickerProv
                 ),
               ),
             ),
-            FloatingActionButton(
-              heroTag: 'btn_wb_add',
-              backgroundColor: isDark ? Colors.green[700] : const Color(0xFF2E7D32),
-              elevation: 4,
-              child: const Icon(Icons.add, color: Colors.white, size: 28),
-              onPressed: () {
-                Navigator.push(context, MaterialPageRoute(builder: (_) => const ManualQuotationScreen(quotationId: null)))
-                  .then((_) => provider.loadDashboard());
-              },
+            KeyedSubtree(
+              key: _tourKeys.newQuotationFabKey,
+              child: FloatingActionButton(
+                heroTag: 'btn_wb_add',
+                backgroundColor: isDark ? Colors.green[700] : const Color(0xFF2E7D32),
+                elevation: 4,
+                child: const Icon(Icons.add, color: Colors.white, size: 28),
+                onPressed: () {
+                  Navigator.push(context, MaterialPageRoute(builder: (_) => const ManualQuotationScreen(quotationId: null)))
+                    .then((_) => provider.loadDashboard());
+                },
+              ),
             ),
           ],
         ),

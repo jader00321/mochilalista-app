@@ -3,6 +3,9 @@ import 'package:cryptography/cryptography.dart';
 import 'package:flutter/foundation.dart';
 import 'package:app_movil/core/models/license_model.dart';
 import 'package:app_movil/core/services/device_fingerprint.dart';
+import 'package:app_movil/core/services/license/license_redeem_result.dart';
+
+export 'package:app_movil/core/services/license/license_redeem_result.dart';
 
 /// Resultado del análisis y validación criptográfica de un código de acceso
 class LicenseValidationResult {
@@ -135,8 +138,10 @@ class Ed25519LicenseValidator {
     final parts = cleanCode.split('.');
 
     if (parts.length != 2) {
-      throw Exception(
-        "Formato de código de acceso inválido. Debe contener payload y firma digital separados por un punto.",
+      throw const LicenseValidationException(
+        status: LicenseRedeemStatus.invalidFormat,
+        message:
+            "Formato de código de acceso inválido. Debe contener payload y firma digital separados por un punto.",
       );
     }
 
@@ -146,17 +151,27 @@ class Ed25519LicenseValidator {
     try {
       payloadBytes = decodeBase64UrlSafe(parts[0]);
     } catch (_) {
-      throw Exception("El contenido de la licencia está corrupto o mal codificado.");
+      throw const LicenseValidationException(
+        status: LicenseRedeemStatus.invalidFormat,
+        message: "El contenido de la licencia está corrupto o mal codificado.",
+      );
     }
 
     try {
       signatureBytes = decodeBase64UrlSafe(parts[1]);
     } catch (_) {
-      throw Exception("La firma digital de la licencia está corrupta o mal codificada.");
+      throw const LicenseValidationException(
+        status: LicenseRedeemStatus.invalidFormat,
+        message: "La firma digital de la licencia está corrupta o mal codificada.",
+      );
     }
 
     if (signatureBytes.length != 64) {
-      throw Exception("La firma digital no cumple con la longitud matemática Ed25519 (64 bytes requeridos).");
+      throw const LicenseValidationException(
+        status: LicenseRedeemStatus.invalidFormat,
+        message:
+            "La firma digital no cumple con la longitud matemática Ed25519 (64 bytes requeridos).",
+      );
     }
 
     // 1. Verificación matemática estricta con Ed25519
@@ -170,8 +185,10 @@ class Ed25519LicenseValidator {
     );
 
     if (!isSignatureValid) {
-      throw Exception(
-        "Firma digital inválida. El código ha sido adulterado o no fue emitido por Julio Angello Vasquez Navarro.",
+      throw const LicenseValidationException(
+        status: LicenseRedeemStatus.invalidSignatureOrTampered,
+        message:
+            "Firma digital inválida. El código ha sido adulterado o no fue emitido por Julio Angello Vasquez Navarro.",
       );
     }
 
@@ -181,7 +198,10 @@ class Ed25519LicenseValidator {
       final jsonStr = utf8.decode(payloadBytes);
       payload = jsonDecode(jsonStr) as Map<String, dynamic>;
     } catch (_) {
-      throw Exception("El payload de la licencia no contiene un formato JSON válido.");
+      throw const LicenseValidationException(
+        status: LicenseRedeemStatus.invalidFormat,
+        message: "El payload de la licencia no contiene un formato JSON válido.",
+      );
     }
 
     // 3. Comprobación de identidad de hardware (DeviceFingerprint)
@@ -194,16 +214,28 @@ class Ed25519LicenseValidator {
       }
     }
     if (!deviceMatches) {
-      throw Exception(
-        "Este código pertenece al dispositivo '$tokenDeviceId', no a este teléfono ('$currentDeviceFingerprint').",
+      throw LicenseValidationException(
+        status: LicenseRedeemStatus.hardwareMismatch,
+        tokenDeviceId: tokenDeviceId,
+        currentDeviceId: currentDeviceFingerprint,
+        message:
+            "Este código pertenece al dispositivo '$tokenDeviceId', no a este teléfono ('$currentDeviceFingerprint').",
       );
     }
 
     // 4. Protección Anti-Replay por Nonce incremental
     final tokenNonce = (payload['n'] as num?)?.toInt() ?? 0;
-    if (tokenNonce <= currentLicense.ultimoNonce) {
-      throw Exception(
-        "Este código ya fue canjeado previamente o contiene un correlativo vencido (Nonce $tokenNonce <= ${currentLicense.ultimoNonce}).",
+    final currentNonce = currentLicense.ultimoNonce;
+    if (tokenNonce <= currentNonce) {
+      final isExactSame = (tokenNonce == currentNonce && tokenNonce > 0);
+      throw LicenseValidationException(
+        status: isExactSame
+            ? LicenseRedeemStatus.alreadyRedeemedSameNonce
+            : LicenseRedeemStatus.supersededOlderNonce,
+        tokenNonce: tokenNonce,
+        currentNonce: currentNonce,
+        message:
+            "Este código ya fue canjeado previamente o contiene un correlativo vencido (Nonce $tokenNonce <= $currentNonce).",
       );
     }
 
@@ -252,8 +284,10 @@ class Ed25519LicenseValidator {
     final isPureAiRecharge =
         plan == 'RECARGA_IA_150' || plan == 'BONO_IA_PERSONALIZADO';
     if (plan == 'BONO_IA_PERSONALIZADO' && extraCredits <= 0) {
-      throw Exception(
-        'El bono de IA personalizado debe especificar una cantidad de escaneos mayor a 0.',
+      throw const LicenseValidationException(
+        status: LicenseRedeemStatus.invalidFormat,
+        message:
+            'El bono de IA personalizado debe especificar una cantidad de escaneos mayor a 0.',
       );
     }
 
@@ -301,8 +335,14 @@ class Ed25519LicenseValidator {
         } else if (iat != null) {
           final maxExpirationFromIat = iat.add(Duration(days: daysToAdd));
           if (now.isAfter(maxExpirationFromIat)) {
-            throw Exception(
-              "Este código de licencia ya ha cumplido su periodo de vigencia contratado.",
+            throw LicenseValidationException(
+              status: LicenseRedeemStatus.expiredToken,
+              tokenNonce: tokenNonce,
+              currentNonce: currentLicense.ultimoNonce,
+              tokenDeviceId: tokenDeviceId,
+              currentDeviceId: currentDeviceFingerprint,
+              message:
+                  "Este código de licencia ya ha cumplido su periodo de vigencia contratado.",
             );
           }
 

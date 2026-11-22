@@ -19,11 +19,15 @@ import 'package:app_movil/features/auth/screens/onboarding/profile_selection_scr
 import 'package:app_movil/core/widgets/shimmer_box.dart';
 import 'package:app_movil/core/widgets/marquee_text.dart';
 import 'package:app_movil/core/utils/currency_formatter.dart';
+import 'package:app_movil/core/widgets/info_tooltip_button.dart';
+import 'package:app_movil/core/services/tour/interactive_tour_service.dart';
+import 'package:app_movil/core/widgets/tour/configs/home_screen_tour.dart';
 
 import 'package:app_movil/core/services/lifecycle_resume_coordinator.dart';
 
 class DashboardHeader extends StatefulWidget {
-  const DashboardHeader({super.key});
+  final HomeScreenTourKeys? tourKeys;
+  const DashboardHeader({super.key, this.tourKeys});
 
   @override
   State<DashboardHeader> createState() => _DashboardHeaderState();
@@ -262,6 +266,38 @@ class _DashboardHeaderState extends State<DashboardHeader> with SingleTickerProv
                                 );
                               }
                             ),
+                          ),
+                        ),
+                        const SizedBox(width: 4),
+                        InfoTooltipButton(
+                          iconColor: Colors.white,
+                          iconSize: 22,
+                          padding: const EdgeInsets.all(6),
+                          constraints: const BoxConstraints(),
+                          title: 'Pantalla de Inicio',
+                          description:
+                              'El centro neurálgico de tu negocio. Desde aquí supervisas tus ventas del día, buscas productos en OmniSearch y accedes a las funciones principales.',
+                          tips: const [
+                            InfoTip(
+                              icon: Icons.search_rounded,
+                              text:
+                                  'Usa la barra OmniSearch para buscar productos, precios y clientes al instante.',
+                            ),
+                            InfoTip(
+                              icon: Icons.qr_code_scanner_rounded,
+                              text:
+                                  'Toca el ícono de código de barras para escanear con la cámara.',
+                            ),
+                            InfoTip(
+                              icon: Icons.bolt_rounded,
+                              text:
+                                  'Los accesos rápidos te llevan directo a Venta Rápida, Inventario y Cotizaciones.',
+                            ),
+                          ],
+                          onStartInteractiveTour: () =>
+                              InteractiveTourService.startManualTour(
+                            context,
+                            HomeScreenTour.buildConfig(keys: widget.tourKeys),
                           ),
                         ),
                       ],

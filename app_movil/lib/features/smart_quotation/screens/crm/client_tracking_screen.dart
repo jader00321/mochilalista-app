@@ -12,6 +12,8 @@ import 'package:app_movil/features/smart_quotation/screens/crm/loyalty_center_sc
 import 'package:app_movil/core/widgets/info_tooltip_button.dart';
 import 'package:app_movil/core/widgets/deep_nav_return_pill.dart';
 import 'package:app_movil/core/widgets/interactive_sheet_wrapper.dart';
+import 'package:app_movil/core/services/tour/interactive_tour_service.dart';
+import 'package:app_movil/core/widgets/tour/configs/client_tracking_tour.dart';
 
 class ClientTrackingScreen extends StatefulWidget {
   const ClientTrackingScreen({super.key});
@@ -23,6 +25,7 @@ class ClientTrackingScreen extends StatefulWidget {
 class _ClientTrackingScreenState extends State<ClientTrackingScreen> {
   final TextEditingController _searchCtrl = TextEditingController();
   final ScrollController _scrollController = ScrollController();
+  final _tourKeys = ClientTrackingTourKeys();
   bool _showScrollToTop = false;
   bool _showFilterSection = true;
   DateTime _lastToggleTime = DateTime.fromMillisecondsSinceEpoch(0);
@@ -36,6 +39,10 @@ class _ClientTrackingScreenState extends State<ClientTrackingScreen> {
       provider.resetFiltersAndSearch();
       _searchCtrl.clear();
       _onRefresh();
+      InteractiveTourService.maybeStartAutomaticTour(
+        context,
+        ClientTrackingTour.buildConfig(keys: _tourKeys),
+      );
     });
   }
 
@@ -379,28 +386,36 @@ class _ClientTrackingScreenState extends State<ClientTrackingScreen> {
         foregroundColor: Colors.white,
         elevation: 0,
         actions: [
-          Consumer<TrackingProvider>(
-            builder: (_, trProv, __) => IconButton(
-              icon: Badge(
-                isLabelVisible: trProv.pendingRewardsCount > 0,
-                label: Text('${trProv.pendingRewardsCount}'),
-                backgroundColor: Colors.redAccent,
-                child: const Icon(Icons.military_tech_rounded, size: 26),
+          KeyedSubtree(
+            key: _tourKeys.loyaltyKey,
+            child: Consumer<TrackingProvider>(
+              builder: (_, trProv, __) => IconButton(
+                icon: Badge(
+                  isLabelVisible: trProv.pendingRewardsCount > 0,
+                  label: Text('${trProv.pendingRewardsCount}'),
+                  backgroundColor: Colors.redAccent,
+                  child: const Icon(Icons.military_tech_rounded, size: 26),
+                ),
+                tooltip: "Fidelización y Premios",
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const LoyaltyCenterScreen()),
+                  ).then((_) => _onRefresh());
+                },
               ),
-              tooltip: "Fidelización y Premios",
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const LoyaltyCenterScreen()),
-                ).then((_) => _onRefresh());
-              },
             ),
           ),
-          const InfoTooltipButton(
+          InfoTooltipButton(
             title: "Directorio de Clientes (CRM)",
             description:
                 "Control integral de clientes, cuentas por cobrar, deudas pendientes y comunicación por WhatsApp.",
-            tips: [
+            onStartInteractiveTour: () =>
+                InteractiveTourService.startManualTour(
+              context,
+              ClientTrackingTour.buildConfig(keys: _tourKeys),
+            ),
+            tips: const [
               InfoTip(
                 icon: Icons.person_add_rounded,
                 text:
@@ -423,10 +438,13 @@ class _ClientTrackingScreenState extends State<ClientTrackingScreen> {
               ),
             ],
           ),
-          IconButton(
-            icon: const Icon(Icons.person_add, size: 28), 
-            tooltip: "Nuevo Cliente", 
-            onPressed: _openCreateClientEditor,
+          KeyedSubtree(
+            key: _tourKeys.addClientKey,
+            child: IconButton(
+              icon: const Icon(Icons.person_add, size: 28), 
+              tooltip: "Nuevo Cliente", 
+              onPressed: _openCreateClientEditor,
+            ),
           ),
           const SizedBox(width: 8),
         ],
@@ -459,38 +477,41 @@ class _ClientTrackingScreenState extends State<ClientTrackingScreen> {
                   ),
 
                 // 2. Buscador Fijo Superior (Siempre visible y accesible)
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-                  child: Container(
-                    height: 48,
-                    decoration: BoxDecoration(
-                      color: isDark ? const Color(0xFF23232F) : Colors.white, 
-                      borderRadius: BorderRadius.circular(16),
-                      boxShadow: [
-                        if (!isDark) 
-                          BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10, offset: const Offset(0, 4)),
-                      ],
-                      border: Border.all(color: isDark ? Colors.white10 : Colors.grey.shade200),
-                    ),
-                    child: TextField(
-                      controller: _searchCtrl,
-                      style: TextStyle(color: textColor, fontSize: 16),
-                      onChanged: (val) => provider.setSearchQuery(val),
-                      decoration: InputDecoration(
-                        hintText: "Buscar por nombre, teléfono o DNI...",
-                        hintStyle: TextStyle(color: isDark ? Colors.grey[500] : Colors.grey[400], fontSize: 15),
-                        prefixIcon: Icon(Icons.search, color: isDark ? Colors.grey[400] : Colors.grey, size: 24),
-                        suffixIcon: _searchCtrl.text.isNotEmpty 
-                            ? IconButton(
-                                icon: Icon(Icons.clear, size: 22, color: textColor), 
-                                onPressed: () { 
-                                  _searchCtrl.clear(); 
-                                  provider.setSearchQuery(""); 
-                                },
-                              ) 
-                            : null,
-                        border: InputBorder.none,
-                        contentPadding: const EdgeInsets.symmetric(vertical: 14),
+                KeyedSubtree(
+                  key: _tourKeys.searchBarKey,
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+                    child: Container(
+                      height: 48,
+                      decoration: BoxDecoration(
+                        color: isDark ? const Color(0xFF23232F) : Colors.white, 
+                        borderRadius: BorderRadius.circular(16),
+                        boxShadow: [
+                          if (!isDark) 
+                            BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10, offset: const Offset(0, 4)),
+                        ],
+                        border: Border.all(color: isDark ? Colors.white10 : Colors.grey.shade200),
+                      ),
+                      child: TextField(
+                        controller: _searchCtrl,
+                        style: TextStyle(color: textColor, fontSize: 16),
+                        onChanged: (val) => provider.setSearchQuery(val),
+                        decoration: InputDecoration(
+                          hintText: "Buscar por nombre, teléfono o DNI...",
+                          hintStyle: TextStyle(color: isDark ? Colors.grey[500] : Colors.grey[400], fontSize: 15),
+                          prefixIcon: Icon(Icons.search, color: isDark ? Colors.grey[400] : Colors.grey, size: 24),
+                          suffixIcon: _searchCtrl.text.isNotEmpty 
+                              ? IconButton(
+                                  icon: Icon(Icons.clear, size: 22, color: textColor), 
+                                  onPressed: () { 
+                                    _searchCtrl.clear(); 
+                                    provider.setSearchQuery(""); 
+                                  },
+                                ) 
+                              : null,
+                          border: InputBorder.none,
+                          contentPadding: const EdgeInsets.symmetric(vertical: 14),
+                        ),
                       ),
                     ),
                   ),
@@ -505,7 +526,10 @@ class _ClientTrackingScreenState extends State<ClientTrackingScreen> {
                         ? Column(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              const ClientFilterBar(),
+                              KeyedSubtree(
+                                key: _tourKeys.filterBarKey,
+                                child: const ClientFilterBar(),
+                              ),
                               Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
                                 decoration: BoxDecoration(
@@ -540,9 +564,11 @@ class _ClientTrackingScreenState extends State<ClientTrackingScreen> {
 
                 // 4. Lista de Clientes con Scroll Anti-Rebote y Margen Seguro Inferior
                 Expanded(
-                  child: NotificationListener<ScrollNotification>(
-                    onNotification: _onScrollNotification,
-                    child: RefreshIndicator(
+                  child: KeyedSubtree(
+                    key: _tourKeys.clientListKey,
+                    child: NotificationListener<ScrollNotification>(
+                      onNotification: _onScrollNotification,
+                      child: RefreshIndicator(
                       onRefresh: _onRefresh,
                       color: Colors.blue[800],
                       child: provider.isLoading && clients.isEmpty
@@ -575,6 +601,7 @@ class _ClientTrackingScreenState extends State<ClientTrackingScreen> {
                     ),
                   ),
                 ),
+              ),
               ],
             ),
           ),

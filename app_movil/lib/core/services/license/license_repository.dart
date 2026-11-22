@@ -476,6 +476,62 @@ class LicenseRepository {
     return updatedModel;
   }
 
+  /// Canjea un código de acceso retornando un resultado tipado integral con detalles y causas de rechazo
+  Future<LicenseRedeemResult> redeemLicenseCodeDetailed(
+    String rawCode, {
+    DateTime? overrideNow,
+  }) async {
+    final currentFingerprint = await DeviceFingerprint.generate();
+    final currentLicense = await getOrCreateLicense(overrideNow: overrideNow);
+
+    try {
+      final validation = await Ed25519LicenseValidator.validateAndParse(
+        rawCode: rawCode,
+        currentDeviceFingerprint: currentFingerprint,
+        currentLicense: currentLicense,
+        overrideNow: overrideNow,
+      );
+
+      final updatedModel = await redeemLicenseCode(rawCode, overrideNow: overrideNow);
+
+      final isOnlyAiRecharge = validation.plan == 'RECARGA_IA_150' ||
+          validation.plan == 'BONO_IA_PERSONALIZADO';
+      final isMigrationReactivation =
+          currentLicense.estadoActual == 'PENDIENTE_MIGRACION';
+      final addedCumulativeScans = isMigrationReactivation
+          ? validation.aiExtraCredits
+          : (validation.plan == 'BONO_IA_PERSONALIZADO'
+              ? validation.aiExtraCredits
+              : (validation.plan == 'RECARGA_IA_150'
+                  ? math.max(150, validation.aiExtraCredits)
+                  : (LicenseModel.getCumulativeScansForPlan(validation.plan) +
+                      validation.aiExtraCredits)));
+
+      return LicenseRedeemResult.success(
+        message: "¡Licencia activada con éxito! Plan: ${updatedModel.tipoPlan}",
+        plan: validation.plan,
+        daysAdded: isOnlyAiRecharge ? 0 : validation.daysToAdd,
+        aiCreditsAdded: addedCumulativeScans,
+        newExpirationDate: updatedModel.fechaExpiracion,
+        tokenNonce: validation.nonce,
+        tokenDeviceId: validation.deviceFingerprint,
+        currentLicenseSnapshot: updatedModel,
+      );
+    } on LicenseValidationException catch (e) {
+      return LicenseRedeemResult.fromException(
+        e,
+        currentLicenseSnapshot: currentLicense,
+      );
+    } catch (e) {
+      return LicenseRedeemResult.failure(
+        status: LicenseRedeemStatus.invalidFormat,
+        message: e.toString().replaceFirst('Exception: ', ''),
+        currentDeviceId: currentFingerprint,
+        currentLicenseSnapshot: currentLicense,
+      );
+    }
+  }
+
   // ==========================================
   // GESTIÓN DE CUOTA IA ACUMULATIVA Y MULTI-PERFIL
   // ==========================================

@@ -14,6 +14,8 @@ import 'package:app_movil/core/utils/backup_manager.dart';
 import 'package:app_movil/core/widgets/info_tooltip_button.dart';
 import 'package:app_movil/core/services/backup/i_google_drive_backup_service.dart';
 import 'package:app_movil/features/profile/widgets/google_drive_backup_sheet.dart';
+import 'package:app_movil/core/services/tour/interactive_tour_service.dart';
+import 'package:app_movil/core/widgets/tour/configs/backup_screen_tour.dart';
 
 class AutoBackupTimerWidget extends StatefulWidget {
   final BackupProvider provider;
@@ -470,9 +472,27 @@ class _SmartBackupSectionState extends State<SmartBackupSection> {
   }
 }
 
-class BackupScreen extends StatelessWidget {
+class BackupScreen extends StatefulWidget {
   final IGoogleDriveBackupService? driveBackupService;
   const BackupScreen({super.key, this.driveBackupService});
+
+  @override
+  State<BackupScreen> createState() => _BackupScreenState();
+}
+
+class _BackupScreenState extends State<BackupScreen> {
+  final _tourKeys = BackupScreenTourKeys();
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      InteractiveTourService.maybeStartAutomaticTour(
+        context,
+        BackupScreenTour.buildConfig(keys: _tourKeys),
+      );
+    });
+  }
 
   void _confirmRestore(BuildContext context, BackupProvider backupProvider) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -582,6 +602,11 @@ class BackupScreen extends StatelessWidget {
           InfoTooltipButton(
             title: 'Respaldos y Seguridad',
             description: 'Desde aquí proteges toda tu información. Puedes crear respaldos manuales o automáticos, exportar tu base de datos completa y configurar la seguridad de tu app.',
+            onStartInteractiveTour: () =>
+                InteractiveTourService.startManualTour(
+              context,
+              BackupScreenTour.buildConfig(keys: _tourKeys),
+            ),
             tips: const [
               InfoTip(icon: Icons.inventory_2, text: 'Backup por Negocio (.mlb): Exporta solo los datos del negocio actual. Ideal para migrar a otro dispositivo.'),
               InfoTip(icon: Icons.storage, text: 'Exportación Global (.db): Guarda una copia exacta de TODOS tus negocios. Úsalo como respaldo total.'),
@@ -616,10 +641,13 @@ class BackupScreen extends StatelessWidget {
                   isDark: isDark,
                 ),
                 const SizedBox(height: 14),
-                GoogleDriveBackupSheet(
-                  backupService: driveBackupService,
-                  isDark: isDark,
-                  showHeader: false,
+                KeyedSubtree(
+                  key: _tourKeys.cloudBackupKey,
+                  child: GoogleDriveBackupSheet(
+                    backupService: widget.driveBackupService,
+                    isDark: isDark,
+                    showHeader: false,
+                  ),
                 ),
                 const SizedBox(height: 36),
 
@@ -636,128 +664,134 @@ class BackupScreen extends StatelessWidget {
               const SizedBox(height: 16),
 
               // B1. Respaldo Local Automático en Memoria del Teléfono (Workmanager)
-              Container(
-                decoration: BoxDecoration(
-                  color: cardColor,
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(
-                    color: isDark ? Colors.white10 : Colors.indigoAccent.withValues(alpha: 0.3),
+              KeyedSubtree(
+                key: _tourKeys.localAutoBackupKey,
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: cardColor,
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                      color: isDark ? Colors.white10 : Colors.indigoAccent.withValues(alpha: 0.3),
+                    ),
+                    boxShadow: [
+                      if (!isDark)
+                        BoxShadow(
+                          color: Colors.indigoAccent.withValues(alpha: 0.05),
+                          blurRadius: 10,
+                          offset: const Offset(0, 4),
+                        ),
+                    ],
                   ),
-                  boxShadow: [
-                    if (!isDark)
-                      BoxShadow(
-                        color: Colors.indigoAccent.withValues(alpha: 0.05),
-                        blurRadius: 10,
-                        offset: const Offset(0, 4),
+                  child: Column(
+                    children: [
+                      SwitchListTile(
+                        title: const Text(
+                          "Respaldo Local Automático en Memoria del Teléfono",
+                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                        ),
+                        subtitle: const Text(
+                          "Crea copias .mlbg silenciosas en el almacenamiento interno de este celular, sin usar Google Drive.",
+                          style: TextStyle(fontSize: 12),
+                        ),
+                        value: backupProvider.isAutoBackupEnabled,
+                        activeTrackColor: Colors.indigoAccent.withValues(alpha: 0.5),
+                        activeThumbColor: Colors.indigoAccent,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                        onChanged: (val) => backupProvider.toggleAutoBackup(val),
                       ),
-                  ],
-                ),
-                child: Column(
-                  children: [
-                    SwitchListTile(
-                      title: const Text(
-                        "Respaldo Local Automático en Memoria del Teléfono",
-                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                      AnimatedSize(
+                        duration: const Duration(milliseconds: 300),
+                        curve: Curves.easeInOut,
+                        child: !backupProvider.isAutoBackupEnabled
+                            ? const SizedBox.shrink()
+                            : _AutoBackupSettingsView(provider: backupProvider, isDark: isDark),
                       ),
-                      subtitle: const Text(
-                        "Crea copias .mlbg silenciosas en el almacenamiento interno de este celular, sin usar Google Drive.",
-                        style: TextStyle(fontSize: 12),
-                      ),
-                      value: backupProvider.isAutoBackupEnabled,
-                      activeTrackColor: Colors.indigoAccent.withValues(alpha: 0.5),
-                      activeThumbColor: Colors.indigoAccent,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                      onChanged: (val) => backupProvider.toggleAutoBackup(val),
-                    ),
-                    AnimatedSize(
-                      duration: const Duration(milliseconds: 300),
-                      curve: Curves.easeInOut,
-                      child: !backupProvider.isAutoBackupEnabled
-                          ? const SizedBox.shrink()
-                          : _AutoBackupSettingsView(provider: backupProvider, isDark: isDark),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
               const SizedBox(height: 20),
 
               // B2. Exportación Global Manual (.mlbg)
-              Container(
-                decoration: BoxDecoration(
-                  color: cardColor,
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(
-                    color: isDark ? Colors.white10 : Colors.blue.withValues(alpha: 0.2),
-                  ),
-                  boxShadow: [
-                    if (!isDark)
-                      BoxShadow(
-                        color: Colors.blue.withValues(alpha: 0.05),
-                        blurRadius: 10,
-                        offset: const Offset(0, 4),
-                      ),
-                  ],
-                ),
-                child: Column(
-                  children: [
-                    _ActionButton(
-                      icon: Icons.chat_bubble_outline,
-                      label: "Enviar Backup Global por WhatsApp",
-                      color: Colors.green,
-                      isDark: isDark,
-                      isTop: true,
-                      onTap: () async {
-                        bool ok = await backupProvider.backupToWhatsApp();
-                        if (context.mounted && !ok && backupProvider.errorMessage.isNotEmpty) {
-                          CustomSnackBar.show(context, message: backupProvider.errorMessage, isError: true);
-                        }
-                      },
+              KeyedSubtree(
+                key: _tourKeys.localExportKey,
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: cardColor,
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                      color: isDark ? Colors.white10 : Colors.blue.withValues(alpha: 0.2),
                     ),
-                    _ActionButton(
-                      icon: Icons.folder_open_rounded,
-                      label: "Guardar Backup Global en Descargas",
-                      color: Colors.orange,
-                      isDark: isDark,
-                      isBottom: false,
-                      onTap: () async {
-                        bool ok = await backupProvider.backupToDownloads();
-                        if (context.mounted) {
-                          if (ok) {
-                            CustomSnackBar.show(context, message: "¡Guardado en la carpeta de Descargas!", isError: false);
-                          } else {
+                    boxShadow: [
+                      if (!isDark)
+                        BoxShadow(
+                          color: Colors.blue.withValues(alpha: 0.05),
+                          blurRadius: 10,
+                          offset: const Offset(0, 4),
+                        ),
+                    ],
+                  ),
+                  child: Column(
+                    children: [
+                      _ActionButton(
+                        icon: Icons.chat_bubble_outline,
+                        label: "Enviar Backup Global por WhatsApp",
+                        color: Colors.green,
+                        isDark: isDark,
+                        isTop: true,
+                        onTap: () async {
+                          bool ok = await backupProvider.backupToWhatsApp();
+                          if (context.mounted && !ok && backupProvider.errorMessage.isNotEmpty) {
                             CustomSnackBar.show(context, message: backupProvider.errorMessage, isError: true);
                           }
-                        }
-                      },
-                    ),
-                    _Divider(isDark: isDark),
-                    _ActionSubButton(
-                      icon: Icons.folder_special_rounded,
-                      label: "Elegir carpeta personalizada",
-                      color: Colors.blueAccent,
-                      isDark: isDark,
-                      onTap: () async {
-                        String? customPath = await FilePicker.platform.getDirectoryPath();
-                        if (customPath == null) return;
-                        if (!context.mounted) return;
-                        CustomSnackBar.show(context, message: "Guardando en ruta elegida...", isError: false);
-                        try {
-                          bool ok = await BackupManager.exportToDirectory(customPath);
+                        },
+                      ),
+                      _ActionButton(
+                        icon: Icons.folder_open_rounded,
+                        label: "Guardar Backup Global en Descargas",
+                        color: Colors.orange,
+                        isDark: isDark,
+                        isBottom: false,
+                        onTap: () async {
+                          bool ok = await backupProvider.backupToDownloads();
                           if (context.mounted) {
                             if (ok) {
-                              CustomSnackBar.show(context, message: "¡Guardado en la carpeta elegida!", isError: false);
+                              CustomSnackBar.show(context, message: "¡Guardado en la carpeta de Descargas!", isError: false);
                             } else {
-                              CustomSnackBar.show(context, message: "Error al exportar la base de datos.", isError: true);
+                              CustomSnackBar.show(context, message: backupProvider.errorMessage, isError: true);
                             }
                           }
-                        } catch (e) {
-                          if (context.mounted) {
-                            CustomSnackBar.show(context, message: e.toString(), isError: true);
+                        },
+                      ),
+                      _Divider(isDark: isDark),
+                      _ActionSubButton(
+                        icon: Icons.folder_special_rounded,
+                        label: "Elegir carpeta personalizada",
+                        color: Colors.blueAccent,
+                        isDark: isDark,
+                        onTap: () async {
+                          String? customPath = await FilePicker.platform.getDirectoryPath();
+                          if (customPath == null) return;
+                          if (!context.mounted) return;
+                          CustomSnackBar.show(context, message: "Guardando en ruta elegida...", isError: false);
+                          try {
+                            bool ok = await BackupManager.exportToDirectory(customPath);
+                            if (context.mounted) {
+                              if (ok) {
+                                CustomSnackBar.show(context, message: "¡Guardado en la carpeta elegida!", isError: false);
+                              } else {
+                                CustomSnackBar.show(context, message: "Error al exportar la base de datos.", isError: true);
+                              }
+                            }
+                          } catch (e) {
+                            if (context.mounted) {
+                              CustomSnackBar.show(context, message: e.toString(), isError: true);
+                            }
                           }
-                        }
-                      },
-                    ),
-                  ],
+                        },
+                      ),
+                    ],
+                  ),
                 ),
               ),
               const SizedBox(height: 20),
@@ -767,64 +801,67 @@ class BackupScreen extends StatelessWidget {
               const SizedBox(height: 20),
 
               // B4. Restauración Local de Backup
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: isDark ? const Color(0xFF1E1418) : const Color(0xFFFFF5F5),
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(
-                    color: isDark ? Colors.redAccent.withValues(alpha: 0.3) : Colors.red.shade200,
+              KeyedSubtree(
+                key: _tourKeys.localImportKey,
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: isDark ? const Color(0xFF1E1418) : const Color(0xFFFFF5F5),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                      color: isDark ? Colors.redAccent.withValues(alpha: 0.3) : Colors.red.shade200,
+                    ),
                   ),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            color: Colors.redAccent.withValues(alpha: 0.15),
-                            shape: BoxShape.circle,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: Colors.redAccent.withValues(alpha: 0.15),
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(Icons.restore_page_outlined, color: Colors.redAccent, size: 22),
                           ),
-                          child: const Icon(Icons.restore_page_outlined, color: Colors.redAccent, size: 22),
-                        ),
-                        const SizedBox(width: 12),
-                        const Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                "Restauración Local (.mlbg o .db)",
-                                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
-                              ),
-                              SizedBox(height: 2),
-                              Text(
-                                "Recupera una copia desde el almacenamiento interno de este celular.",
-                                style: TextStyle(fontSize: 12, color: Colors.grey),
-                              ),
-                            ],
+                          const SizedBox(width: 12),
+                          const Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  "Restauración Local (.mlbg o .db)",
+                                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                                ),
+                                SizedBox(height: 2),
+                                Text(
+                                  "Recupera una copia desde el almacenamiento interno de este celular.",
+                                  style: TextStyle(fontSize: 12, color: Colors.grey),
+                                ),
+                              ],
+                            ),
                           ),
+                        ],
+                      ),
+                      const SizedBox(height: 14),
+                      OutlinedButton.icon(
+                        icon: const Icon(Icons.file_open_outlined, color: Colors.redAccent, size: 20),
+                        label: const Text(
+                          "Cargar Backup Completo (.mlbg o .db)",
+                          style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold, fontSize: 14),
                         ),
-                      ],
-                    ),
-                    const SizedBox(height: 14),
-                    OutlinedButton.icon(
-                      icon: const Icon(Icons.file_open_outlined, color: Colors.redAccent, size: 20),
-                      label: const Text(
-                        "Cargar Backup Completo (.mlbg o .db)",
-                        style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold, fontSize: 14),
+                        style: OutlinedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          side: BorderSide(color: Colors.redAccent.withValues(alpha: 0.5), width: 1.5),
+                          backgroundColor: Colors.redAccent.withValues(alpha: 0.05),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                        ),
+                        onPressed: () => _confirmRestore(context, backupProvider),
                       ),
-                      style: OutlinedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        side: BorderSide(color: Colors.redAccent.withValues(alpha: 0.5), width: 1.5),
-                        backgroundColor: Colors.redAccent.withValues(alpha: 0.05),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                      ),
-                      onPressed: () => _confirmRestore(context, backupProvider),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
               const SizedBox(height: 36),

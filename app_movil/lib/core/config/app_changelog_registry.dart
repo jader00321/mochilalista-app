@@ -22,45 +22,33 @@ class AppChangelogRegistry {
   static const String currentVersion = OwnerLegalIdentity.currentAppVersionWithBuild;
 
   // =========================================================================
-  // 🚀 NOVEDADES ACTIVAS DE LA VERSIÓN ACTUAL (v9.35.0+79)
-  // Plan Maestro 15: Bonos IA Personalizados, Migración Segura y Control de Licencias
+  // 🚀 NOVEDADES ACTIVAS DE LA VERSIÓN ACTUAL (v9.36.0+80)
+  // Plan Maestro 16: Rediseño UX Perfiles, Escáner QR, Activación y Guía Turística Interactiva
   // =========================================================================
   static const List<AppChangelogItem> activeChangelog = [
     AppChangelogItem(
-      icon: Icons.auto_awesome_rounded,
-      title: "Bono y Recarga IA Personalizada",
+      icon: Icons.explore_rounded,
+      title: "Guía Turística Interactiva Paso a Paso",
       description:
-          "Canjea bonos y recargas de inteligencia artificial con cantidades a tu medida sin alterar la fecha de vencimiento de tu suscripción ni de tu período de prueba.",
+          "Nuevo recorrido guiado interactivo disponible en las 10 pantallas principales de la app. Actívalo cuando desees desde el botón de ayuda (?) o gestiónalo desde tu Perfil.",
     ),
     AppChangelogItem(
-      icon: Icons.phonelink_setup_rounded,
-      title: "Migración Segura de Dispositivo",
+      icon: Icons.qr_code_scanner_rounded,
+      title: "Escáner QR Profesional con Enfoque y Galería",
       description:
-          "Reactivación fluida al cambiar de celular o restaurar copias de seguridad de Google Drive: cero duplicación de días y preservación íntegra de tu saldo IA.",
+          "Escanea códigos de activación con total comodidad frente a pantallas de PC con controles de zoom, linterna y enfoque táctil, o cárgalos directo desde tu galería de fotos.",
     ),
     AppChangelogItem(
-      icon: Icons.receipt_long_rounded,
-      title: "Comprobantes y Boletas Oficiales",
+      icon: Icons.cloud_sync_rounded,
+      title: "Perfiles y Respaldo Inteligente Rediseñados",
       description:
-          "Soporte administrativo optimizado para control de licencias, renovaciones preventivas y respaldo contable local.",
+          "Zona inferior limpia y estilizada, menú de Google Drive y respaldo .mlbg con confirmación animada paso a paso y conteo gramatical exacto de tus negocios.",
     ),
     AppChangelogItem(
-      icon: Icons.security_rounded,
-      title: "Blindaje Criptográfico Anti-Clonación",
+      icon: Icons.verified_rounded,
+      title: "Activación Visual y Mensajes Amigables",
       description:
-          "Verificación Ed25519 con control de nonces estrictos y protección contra alteración de hora del sistema.",
-    ),
-    AppChangelogItem(
-      icon: Icons.cloud_download_rounded,
-      title: "Google Drive en Pantalla Inicial",
-      description:
-          "Vincula tu cuenta de Google y restaura tus respaldos en la nube directamente desde la pantalla de perfiles inicial, sin crear negocios ficticios.",
-    ),
-    AppChangelogItem(
-      icon: Icons.verified_user_rounded,
-      title: "Semáforo de Respaldo y Blindaje SHA-256",
-      description:
-          "Indicador visual de salud de tus copias (Al día / Atención / Sin copias) y endurecimiento Anti-Tampering con certificado comercial RSA-4096.",
+          "Nuevo modal interactivo con mensajes claros y humanos al canjear licencias comerciales o bonos de recarga de inteligencia artificial.",
     ),
   ];
 
@@ -82,6 +70,44 @@ class AppChangelogRegistry {
   // En cada nueva compilación de release, mover aquí el bloque anterior.
   // =========================================================================
   static final Map<String, List<AppChangelogItem>> _historicalChangelogs = {
+    '9.35.0+79': const [
+      AppChangelogItem(
+        icon: Icons.auto_awesome_rounded,
+        title: "Bono y Recarga IA Personalizada",
+        description:
+            "Canjea bonos y recargas de inteligencia artificial con cantidades a tu medida sin alterar la fecha de vencimiento de tu suscripción ni de tu período de prueba.",
+      ),
+      AppChangelogItem(
+        icon: Icons.phonelink_setup_rounded,
+        title: "Migración Segura de Dispositivo",
+        description:
+            "Reactivación fluida al cambiar de celular o restaurar copias de seguridad de Google Drive: cero duplicación de días y preservación íntegra de tu saldo IA.",
+      ),
+      AppChangelogItem(
+        icon: Icons.receipt_long_rounded,
+        title: "Comprobantes y Boletas Oficiales",
+        description:
+            "Soporte administrativo optimizado para control de licencias, renovaciones preventivas y respaldo contable local.",
+      ),
+      AppChangelogItem(
+        icon: Icons.security_rounded,
+        title: "Blindaje Criptográfico Anti-Clonación",
+        description:
+            "Verificación Ed25519 con control de nonces estrictos y protección contra alteración de hora del sistema.",
+      ),
+      AppChangelogItem(
+        icon: Icons.cloud_download_rounded,
+        title: "Google Drive en Pantalla Inicial",
+        description:
+            "Vincula tu cuenta de Google y restaura tus respaldos en la nube directamente desde la pantalla de perfiles inicial, sin crear negocios ficticios.",
+      ),
+      AppChangelogItem(
+        icon: Icons.verified_user_rounded,
+        title: "Semáforo de Respaldo y Blindaje SHA-256",
+        description:
+            "Indicador visual de salud de tus copias (Al día / Atención / Sin copias) y endurecimiento Anti-Tampering con certificado comercial RSA-4096.",
+      ),
+    ],
     '9.34.0+78': const [
       AppChangelogItem(
         icon: Icons.gavel_rounded,

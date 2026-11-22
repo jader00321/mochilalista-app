@@ -120,7 +120,7 @@ class _ToastWidgetState extends State<_ToastWidget> with SingleTickerProviderSta
     final topPadding = MediaQuery.of(context).padding.top;
 
     return Positioned(
-      top: topPadding + 10,
+      top: topPadding + kToolbarHeight + 8,
       left: 20,
       right: 20,
       child: Material(

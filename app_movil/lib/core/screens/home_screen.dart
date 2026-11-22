@@ -29,6 +29,8 @@ import 'package:app_movil/core/widgets/explorer_conversion_dock.dart';
 
 import 'package:app_movil/core/services/lifecycle_resume_coordinator.dart';
 import 'package:app_movil/core/services/startup_flow_coordinator.dart';
+import 'package:app_movil/core/services/tour/interactive_tour_service.dart';
+import 'package:app_movil/core/widgets/tour/configs/home_screen_tour.dart';
 import 'package:app_movil/core/providers/license_provider.dart';
 import 'package:app_movil/features/auth/screens/license/license_status_and_activation_screen.dart';
 import 'package:app_movil/features/auth/screens/license/license_locked_screen.dart';
@@ -43,6 +45,7 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   int _currentIndex = 0;
+  final _tourKeys = HomeScreenTourKeys();
 
   @override
   void initState() {
@@ -55,6 +58,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted) return;
       await StartupFlowCoordinator.coordinateStartup(context);
+      if (!mounted) return;
+      await InteractiveTourService.maybeStartAutomaticTour(
+        context,
+        HomeScreenTour.buildConfig(keys: _tourKeys),
+      );
     });
   }
 
@@ -117,7 +125,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
     if (isGuest) {
       screens = [
-        const _HomeDashboardView(),
+        _HomeDashboardView(tourKeys: _tourKeys),
         const InventoryScreen(),    
         const CatalogScreen(),      
       ];
@@ -128,7 +136,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       ];
     } else if (isCommunityClient) {
       screens = [
-        const _HomeDashboardView(), 
+        _HomeDashboardView(tourKeys: _tourKeys), 
         const CatalogScreen(),      
         const ClientOrdersScreen(), 
       ];
@@ -139,7 +147,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       ];
     } else {
       screens = [
-        const _HomeDashboardView(),
+        _HomeDashboardView(tourKeys: _tourKeys),
         const InventoryScreen(),    
         const CatalogScreen(),      
         if (auth.canManageClients) const ClientTrackingScreen(), 
@@ -161,6 +169,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         children: screens,
       ),
       bottomNavigationBar: NavigationBar(
+        key: _tourKeys.bottomNavKey,
         selectedIndex: _currentIndex,
         onDestinationSelected: (index) {
           if (_currentIndex == index) return; // Evitar recargas si ya estamos en la pestaña actual
@@ -187,7 +196,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 // VISTA INTERNA DEL DASHBOARD (HOME)
 // =========================================================================
 class _HomeDashboardView extends StatefulWidget {
-  const _HomeDashboardView();
+  final HomeScreenTourKeys tourKeys;
+  const _HomeDashboardView({required this.tourKeys});
 
   @override
   State<_HomeDashboardView> createState() => _HomeDashboardViewState();
@@ -241,26 +251,35 @@ class _HomeDashboardViewState extends State<_HomeDashboardView> with SingleTicke
         physics: const AlwaysScrollableScrollPhysics(),
         child: Column(
           children: [
-            const RepaintBoundary(child: DashboardHeader()),
+            KeyedSubtree(
+              key: widget.tourKeys.headerKey,
+              child: RepaintBoundary(child: DashboardHeader(tourKeys: widget.tourKeys)),
+            ),
             Padding(
               padding: const EdgeInsets.fromLTRB(20.0, 14.0, 20.0, 0.0),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  OmniSearchBar(
-                    onBarcodeTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => const BarcodeScannerScreen(
-                            isFromHomeGlobalSearch: true,
+                  KeyedSubtree(
+                    key: widget.tourKeys.omniSearchKey,
+                    child: OmniSearchBar(
+                      onBarcodeTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const BarcodeScannerScreen(
+                              isFromHomeGlobalSearch: true,
+                            ),
                           ),
-                        ),
-                      );
-                    },
+                        );
+                      },
+                    ),
                   ),
                   const SizedBox(height: 12),
-                  _buildLicenseBanner(context, isDark),
+                  KeyedSubtree(
+                    key: widget.tourKeys.licenseAlertKey,
+                    child: _buildLicenseBanner(context, isDark),
+                  ),
                   const SizedBox(height: 4),
                   if (!isGuest && (auth.isOwner || auth.isWorker)) ...[
                     const RepaintBoundary(child: RestockSmartBanner()),
@@ -278,23 +297,32 @@ class _HomeDashboardViewState extends State<_HomeDashboardView> with SingleTicke
                   else if (auth.isOwner || auth.isWorker) ...[
                     const RepaintBoundary(child: WeeklySalesChart()),
                     const SizedBox(height: 20),
-                    RepaintBoundary(
-                      child: QuotationBanner(
-                        onGoToWorkbench: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const WorkbenchScreen())),
+                    KeyedSubtree(
+                      key: widget.tourKeys.activityKey,
+                      child: RepaintBoundary(
+                        child: QuotationBanner(
+                          onGoToWorkbench: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const WorkbenchScreen())),
+                        ),
                       ),
-                    )
+                    ),
                   ] else 
-                    RepaintBoundary(
-                      child: QuotationBanner(
-                        title: "Cotiza tu Lista Escolar",
-                        subtitle: "Sube una foto de tu lista escolar y nuestra Inteligencia Artificial detectará los productos automáticamente.",
-                        buttonText: "Escanear Lista con IA",
-                        onGoToWorkbench: () {},
+                    KeyedSubtree(
+                      key: widget.tourKeys.activityKey,
+                      child: RepaintBoundary(
+                        child: QuotationBanner(
+                          title: "Cotiza tu Lista Escolar",
+                          subtitle: "Sube una foto de tu lista escolar y nuestra Inteligencia Artificial detectará los productos automáticamente.",
+                          buttonText: "Escanear Lista con IA",
+                          onGoToWorkbench: () {},
+                        ),
                       ),
                     ),
 
                   const SizedBox(height: 24),
-                  const RepaintBoundary(child: SmartActionGrid()),
+                  KeyedSubtree(
+                    key: widget.tourKeys.smartActionsKey,
+                    child: const RepaintBoundary(child: SmartActionGrid()),
+                  ),
                   if (!isGuest && (auth.isOwner || auth.isWorker)) ...[
                     const SizedBox(height: 32),
                     const RepaintBoundary(child: RecentActivityList()),

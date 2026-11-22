@@ -17,6 +17,7 @@ import 'package:app_movil/core/utils/backup_path_migrator.dart';
 import 'package:app_movil/core/utils/backup_crypto_helper.dart';
 import 'package:app_movil/core/services/device_fingerprint.dart';
 import 'package:app_movil/core/services/license/license_repository.dart';
+import 'package:app_movil/core/services/tour/interactive_tour_service.dart';
 
 /// Resultado detallado de la operación de restauración de respaldo
 class BackupRestoreResult {
@@ -513,6 +514,11 @@ class BackupManager {
           'No se pudo sellar versión o EULA en licencia_app: $e',
         );
       }
+
+      // 🛡️ Supresión inteligente de guías interactivas automáticas tras restaurar respaldo
+      try {
+        await InteractiveTourService.suppressAutomaticToursAfterRestore();
+      } catch (_) {}
 
       // 🛡️ REGLA ANTI-CLONACIÓN INTELIGENTE (Fase 2 - Sección 2.4)
       final currentFingerprint = await DeviceFingerprint.generate();

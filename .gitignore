@@ -22,6 +22,10 @@ mochilalista_admin/private_keys/
 owner_config.json
 data/owner_config.json
 mochilalista_admin/data/owner_config.json
+data/prod_clients_db.json
+mochilalista_admin/data/prod_clients_db.json
+data/prod_releases_db.json
+mochilalista_admin/data/prod_releases_db.json
 data/vault_keyring.json
 mochilalista_admin/data/vault_keyring.json
 data/vault_settings.json

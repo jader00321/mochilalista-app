@@ -24,6 +24,8 @@ import 'package:app_movil/core/widgets/interactive_sheet_wrapper.dart';
 import 'package:app_movil/core/widgets/stock_update_modal.dart';
 import 'package:app_movil/features/smart_quotation/services/sales_service.dart';
 import 'package:app_movil/features/catalog/providers/inventory_provider.dart';
+import 'package:app_movil/core/services/tour/interactive_tour_service.dart';
+import 'package:app_movil/core/widgets/tour/configs/quick_sale_tour.dart';
 
 class QuickSaleScreen extends StatefulWidget {
   const QuickSaleScreen({super.key});
@@ -33,6 +35,7 @@ class QuickSaleScreen extends StatefulWidget {
 }
 
 class _QuickSaleScreenState extends State<QuickSaleScreen> {
+  final _tourKeys = QuickSaleTourKeys();
   final TextEditingController _searchCtrl = TextEditingController();
   final FocusNode _searchFocus = FocusNode(skipTraversal: true);
   Timer? _debounce;
@@ -53,6 +56,10 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
           _recentSoldFuture = SalesService().getRecentSoldPresentations(auth.activeBusinessId!);
         });
       }
+      InteractiveTourService.maybeStartAutomaticTour(
+        context,
+        QuickSaleTour.buildConfig(keys: _tourKeys),
+      );
     });
   }
 
@@ -398,6 +405,11 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
                 InfoTip(icon: Icons.local_offer, text: 'Las ofertas activas aparecen debajo del buscador. Tócalas para aplicarlas.'),
                 InfoTip(icon: Icons.shopping_cart_checkout, text: 'Presiona "Cobrar" para finalizar la venta con el método de pago elegido.'),
               ],
+              onStartInteractiveTour: () => InteractiveTourService.startManualTour(
+                context,
+                QuickSaleTour.buildConfig(keys: _tourKeys),
+              ),
+              tourButtonLabel: 'Iniciar guía interactiva paso a paso',
             ),
             if (!quickProv.isEmpty)
               IconButton(
@@ -458,7 +470,10 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
                       physics: const AlwaysScrollableScrollPhysics(),
                       slivers: [
                     SliverToBoxAdapter(
-                      child: QuickSaleHeader(isGuest: isGuest, isDark: isDark),
+                      child: KeyedSubtree(
+                        key: _tourKeys.headerClientKey,
+                        child: QuickSaleHeader(isGuest: isGuest, isDark: isDark),
+                      ),
                     ),
 
                     SliverAppBar(
@@ -470,7 +485,9 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
                       shadowColor: Colors.black.withValues(alpha: 0.25),
                       toolbarHeight: 68,
                       titleSpacing: 16,
-                      title: SizedBox(
+                      title: KeyedSubtree(
+                        key: _tourKeys.searchScannerKey,
+                        child: SizedBox(
                         height: 48,
                         child: TextField(
                           controller: _searchCtrl,
@@ -529,6 +546,7 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
                           ),
                           onChanged: _onSearchChanged,
                         ),
+                      ),
                       ),
                       bottom: (searchProv.categories.isNotEmpty || searchProv.hasOrphanCategories)
                           ? PreferredSize(
@@ -893,125 +911,167 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
               ),
             ),
 
-              if (quickProv.cartItems.isNotEmpty && searchProv.searchResults.isEmpty)
-                Container(
-                  padding: EdgeInsets.fromLTRB(
-                    20,
-                    14,
-                    20,
-                    InteractiveSheetWrapper.getEffectiveBottomPadding(context, minPadding: 14.0),
-                  ),
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).cardTheme.color,
-                    boxShadow: [
-                      if (!isDark)
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.05),
-                          blurRadius: 15,
-                          offset: const Offset(0, -5),
+              KeyedSubtree(
+                key: _tourKeys.checkoutBottomKey,
+                child: (quickProv.cartItems.isNotEmpty && searchProv.searchResults.isEmpty)
+                    ? Container(
+                        padding: EdgeInsets.fromLTRB(
+                          20,
+                          14,
+                          20,
+                          InteractiveSheetWrapper.getEffectiveBottomPadding(context, minPadding: 14.0),
                         ),
-                    ],
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisSize: MainAxisSize.min,
+                        decoration: BoxDecoration(
+                          color: Theme.of(context).cardTheme.color,
+                          boxShadow: [
+                            if (!isDark)
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.05),
+                                blurRadius: 15,
+                                offset: const Offset(0, -5),
+                              ),
+                          ],
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Wrap(
-                              crossAxisAlignment: WrapCrossAlignment.center,
-                              spacing: 6,
-                              runSpacing: 2,
-                              children: [
-                                const Text(
-                                  "TOTAL A COBRAR",
-                                  style: TextStyle(
-                                    color: Colors.grey,
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 11,
-                                    letterSpacing: 0.8,
-                                  ),
-                                ),
-                                AnimatedSwitcher(
-                                  duration: const Duration(milliseconds: 300),
-                                  transitionBuilder: (child, animation) {
-                                    return FadeTransition(
-                                      opacity: animation,
-                                      child: ScaleTransition(
-                                        scale: Tween<double>(begin: 0.85, end: 1.0).animate(
-                                          CurvedAnimation(parent: animation, curve: Curves.easeOutBack),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Wrap(
+                                    crossAxisAlignment: WrapCrossAlignment.center,
+                                    spacing: 6,
+                                    runSpacing: 2,
+                                    children: [
+                                      const Text(
+                                        "TOTAL A COBRAR",
+                                        style: TextStyle(
+                                          color: Colors.grey,
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 11,
+                                          letterSpacing: 0.8,
                                         ),
-                                        child: child,
                                       ),
-                                    );
-                                  },
-                                  child: (!quickProv.hideProfits && quickProv.estimatedCartProfit > 0)
-                                      ? Container(
-                                          key: const ValueKey('visible_profit_badge'),
-                                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                          decoration: BoxDecoration(
-                                            color: isDark ? Colors.green.withValues(alpha: 0.2) : Colors.green.shade50,
-                                            borderRadius: BorderRadius.circular(6),
-                                            border: Border.all(
-                                              color: isDark ? Colors.green.withValues(alpha: 0.4) : Colors.green.shade300,
+                                      AnimatedSwitcher(
+                                        duration: const Duration(milliseconds: 300),
+                                        transitionBuilder: (child, animation) {
+                                          return FadeTransition(
+                                            opacity: animation,
+                                            child: ScaleTransition(
+                                              scale: Tween<double>(begin: 0.85, end: 1.0).animate(
+                                                CurvedAnimation(parent: animation, curve: Curves.easeOutBack),
+                                              ),
+                                              child: child,
                                             ),
-                                          ),
-                                          child: Text(
-                                            "Ganancia ~${currency.format(quickProv.estimatedCartProfit)}",
-                                            style: TextStyle(
-                                              fontSize: 10,
-                                              fontWeight: FontWeight.bold,
-                                              color: isDark ? Colors.green[300] : Colors.green[800],
-                                            ),
-                                          ),
-                                        )
-                                      : const SizedBox.shrink(key: ValueKey('empty_profit_badge')),
-                                ),
-                              ],
+                                          );
+                                        },
+                                        child: (!quickProv.hideProfits && quickProv.estimatedCartProfit > 0)
+                                            ? Container(
+                                                key: const ValueKey('visible_profit_badge'),
+                                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                                decoration: BoxDecoration(
+                                                  color: isDark ? Colors.green.withValues(alpha: 0.2) : Colors.green.shade50,
+                                                  borderRadius: BorderRadius.circular(6),
+                                                  border: Border.all(
+                                                    color: isDark ? Colors.green.withValues(alpha: 0.4) : Colors.green.shade300,
+                                                  ),
+                                                ),
+                                                child: Text(
+                                                  "Ganancia ~${currency.format(quickProv.estimatedCartProfit)}",
+                                                  style: TextStyle(
+                                                    fontSize: 10,
+                                                    fontWeight: FontWeight.bold,
+                                                    color: isDark ? Colors.green[300] : Colors.green[800],
+                                                  ),
+                                                ),
+                                              )
+                                            : const SizedBox.shrink(key: ValueKey('empty_profit_badge')),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 2),
+                                  FittedBox(
+                                    fit: BoxFit.scaleDown,
+                                    alignment: Alignment.centerLeft,
+                                    child: Text(
+                                      currency.format(quickProv.totalToPay),
+                                      style: TextStyle(
+                                        fontSize: 32,
+                                        fontWeight: FontWeight.w900,
+                                        color: isDark ? Colors.white : Colors.black87,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
-                            const SizedBox(height: 2),
-                            FittedBox(
-                              fit: BoxFit.scaleDown,
-                              alignment: Alignment.centerLeft,
-                              child: Text(
-                                currency.format(quickProv.totalToPay),
-                                style: TextStyle(
-                                  fontSize: 32,
-                                  fontWeight: FontWeight.w900,
-                                  color: isDark ? Colors.white : Colors.black87,
+                            const SizedBox(width: 12),
+                            ConstrainedBox(
+                              constraints: const BoxConstraints(minWidth: 120, maxWidth: 140),
+                              child: SizedBox(
+                                height: 54,
+                                child: ElevatedButton.icon(
+                                  onPressed: _processToCheckout,
+                                  icon: const Icon(Icons.payment, size: 20),
+                                  label: const Text(
+                                    "COBRAR",
+                                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, letterSpacing: 1),
+                                  ),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: isDark ? Colors.pink[600] : const Color(0xFFD81B60),
+                                    foregroundColor: Colors.white,
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                                    elevation: isDark ? 0 : 4,
+                                    padding: const EdgeInsets.symmetric(horizontal: 14),
+                                  ),
                                 ),
                               ),
                             ),
                           ],
                         ),
-                      ),
-                      const SizedBox(width: 12),
-                      ConstrainedBox(
-                        constraints: const BoxConstraints(minWidth: 120, maxWidth: 140),
-                        child: SizedBox(
-                          height: 54,
-                          child: ElevatedButton.icon(
-                            onPressed: _processToCheckout,
-                            icon: const Icon(Icons.payment, size: 20),
-                            label: const Text(
-                              "COBRAR",
-                              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, letterSpacing: 1),
-                            ),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: isDark ? Colors.pink[600] : const Color(0xFFD81B60),
-                              foregroundColor: Colors.white,
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                              elevation: isDark ? 0 : 4,
-                              padding: const EdgeInsets.symmetric(horizontal: 14),
+                      )
+                    : Container(
+                        width: double.infinity,
+                        padding: EdgeInsets.fromLTRB(
+                          20,
+                          10,
+                          20,
+                          InteractiveSheetWrapper.getEffectiveBottomPadding(context, minPadding: 10.0),
+                        ),
+                        decoration: BoxDecoration(
+                          color: Theme.of(context).cardTheme.color,
+                          border: Border(
+                            top: BorderSide(
+                              color: isDark ? Colors.white10 : Colors.black.withValues(alpha: 0.05),
                             ),
                           ),
                         ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Text(
+                              "TOTAL A COBRAR",
+                              style: TextStyle(
+                                color: Colors.grey,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 11,
+                                letterSpacing: 0.8,
+                              ),
+                            ),
+                            Text(
+                              "S/ 0.00",
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 18,
+                                color: isDark ? Colors.grey[500] : Colors.grey[600],
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
-                    ],
-                  ),
-                ),
+              ),
             ],
           ),
         ),
@@ -1121,16 +1181,19 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
       return [
         SliverFillRemaining(
           hasScrollBody: false,
-          child: Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.point_of_sale, size: 90, color: isDark ? Colors.white10 : Colors.pink[100]),
-                const SizedBox(height: 20),
-                Text("Caja Libre", style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[600], fontSize: 22, fontWeight: FontWeight.bold)),
-                const SizedBox(height: 8),
-                Text("Busca un producto para empezar a cobrar", style: TextStyle(color: isDark ? Colors.grey[600] : Colors.grey, fontSize: 15)),
-              ],
+          child: KeyedSubtree(
+            key: _tourKeys.cartContainerKey,
+            child: Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.point_of_sale, size: 90, color: isDark ? Colors.white10 : Colors.pink[100]),
+                  const SizedBox(height: 20),
+                  Text("Caja Libre", style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[600], fontSize: 22, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 8),
+                  Text("Busca un producto para empezar a cobrar", style: TextStyle(color: isDark ? Colors.grey[600] : Colors.grey, fontSize: 15)),
+                ],
+              ),
             ),
           ),
         )

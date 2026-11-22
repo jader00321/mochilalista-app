@@ -14,6 +14,8 @@ import 'package:app_movil/core/widgets/export_options_modal.dart';
 import 'package:app_movil/features/smart_quotation/models/crm_models.dart';
 import 'package:app_movil/core/widgets/info_tooltip_button.dart';
 import 'package:app_movil/core/widgets/deep_nav_return_pill.dart';
+import 'package:app_movil/core/services/tour/interactive_tour_service.dart';
+import 'package:app_movil/core/widgets/tour/configs/sales_history_tour.dart';
 
 class SalesHistoryScreen extends StatefulWidget {
   const SalesHistoryScreen({super.key});
@@ -24,6 +26,7 @@ class SalesHistoryScreen extends StatefulWidget {
 
 class _SalesHistoryScreenState extends State<SalesHistoryScreen> with SingleTickerProviderStateMixin {
   late TabController _tabController;
+  final _tourKeys = SalesHistoryTourKeys();
   int _currentTabIndex = 0; 
   bool _showKpis = true;
   bool _showFilters = true;
@@ -67,6 +70,10 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> with SingleTick
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final prov = Provider.of<SaleProvider>(context, listen: false);
       prov.loadFilteredHistory(reset: true);
+      InteractiveTourService.maybeStartAutomaticTour(
+        context,
+        SalesHistoryTour.buildConfig(keys: _tourKeys),
+      );
     });
   }
 
@@ -335,11 +342,16 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> with SingleTick
           foregroundColor: Colors.white,
           elevation: 0,
           actions: [
-            const InfoTooltipButton(
+            InfoTooltipButton(
               title: "Historial de Ventas",
               description:
                   "Registro cronológico y financiero de todas las transacciones realizadas por Cotizaciones, Caja Rápida o Ventas a Crédito.",
-              tips: [
+              onStartInteractiveTour: () =>
+                  InteractiveTourService.startManualTour(
+                context,
+                SalesHistoryTour.buildConfig(keys: _tourKeys),
+              ),
+              tips: const [
                 InfoTip(
                   icon: Icons.tab_rounded,
                   text:
@@ -362,10 +374,12 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> with SingleTick
                 ),
               ],
             ),
-            IconButton(
-              icon: const Icon(Icons.file_download, size: 26),
-              tooltip: "Exportar Reportes",
-              onPressed: () {
+            KeyedSubtree(
+              key: _tourKeys.exportKey,
+              child: IconButton(
+                icon: const Icon(Icons.file_download, size: 26),
+                tooltip: "Exportar Reportes",
+                onPressed: () {
                 final provider = Provider.of<SaleProvider>(context, listen: false);
                 ExportOptionsModal.showCombinable(
                   context,
@@ -413,9 +427,12 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> with SingleTick
                 );
               },
             ),
-          ],
-          bottom: PreferredSize(
-            preferredSize: const Size.fromHeight(48),
+          ),
+        ],
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(48),
+          child: KeyedSubtree(
+            key: _tourKeys.tabBarKey,
             child: TabBar(
               controller: _tabController,
               isScrollable: true,
@@ -436,7 +453,8 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> with SingleTick
             ),
           ),
         ),
-        floatingActionButton: _showBackToTop
+      ),
+      floatingActionButton: _showBackToTop
             ? FloatingActionButton(
                 heroTag: "btn_scroll_top_history",
                 backgroundColor: isDark ? Colors.blue[700] : Colors.blue[800],
@@ -473,25 +491,34 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> with SingleTick
                       ),
                     ),
                   // Bloque 1: KPIs Colapsables con AnimatedSize
-                  ClipRect(
-                    child: AnimatedSize(
-                      duration: const Duration(milliseconds: 250),
-                      curve: Curves.easeInOutCubic,
-                      child: _showKpis
-                          ? const HistoryDashboardCards()
-                          : const SizedBox(width: double.infinity, height: 0),
+                  KeyedSubtree(
+                    key: _tourKeys.kpisKey,
+                    child: ClipRect(
+                      child: AnimatedSize(
+                        duration: const Duration(milliseconds: 250),
+                        curve: Curves.easeInOutCubic,
+                        child: _showKpis
+                            ? const HistoryDashboardCards()
+                            : const SizedBox(width: double.infinity, height: 0),
+                      ),
                     ),
                   ),
                   // Bloque 2: Buscador Fijo (Siempre visible y accesible, nunca tapado)
-                  const HistorySearchBar(),
+                  KeyedSubtree(
+                    key: _tourKeys.searchBarKey,
+                    child: const HistorySearchBar(),
+                  ),
                   // Bloque 3: Filtros Reactivos Colapsables / Reaparecen al subir
-                  ClipRect(
-                    child: AnimatedSize(
-                      duration: const Duration(milliseconds: 200),
-                      curve: Curves.easeInOutCubic,
-                      child: _showFilters
-                          ? const HistoryFilterChips()
-                          : const SizedBox(width: double.infinity, height: 0),
+                  KeyedSubtree(
+                    key: _tourKeys.filterChipsKey,
+                    child: ClipRect(
+                      child: AnimatedSize(
+                        duration: const Duration(milliseconds: 200),
+                        curve: Curves.easeInOutCubic,
+                        child: _showFilters
+                            ? const HistoryFilterChips()
+                            : const SizedBox(width: double.infinity, height: 0),
+                      ),
                     ),
                   ),
                   // Bloque 4: TabBarView con aislamiento estricto por tabKey

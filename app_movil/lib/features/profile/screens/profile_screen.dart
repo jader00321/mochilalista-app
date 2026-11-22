@@ -28,6 +28,8 @@ import 'package:app_movil/core/utils/currency_formatter.dart';
 import 'package:app_movil/core/utils/hardware_validator.dart';
 import 'package:app_movil/features/profile/screens/map_picker_screen.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:app_movil/core/services/tour/interactive_tour_service.dart';
+import 'package:app_movil/core/widgets/tour/configs/profile_screen_tour.dart';
 import 'package:app_movil/core/widgets/info_tooltip_button.dart';
 import 'package:app_movil/features/profile/widgets/profile_completion_indicator.dart';
 import 'package:app_movil/core/widgets/interactive_sheet_wrapper.dart';
@@ -47,8 +49,10 @@ class ProfileScreen extends StatefulWidget {
 }
 
 class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProviderStateMixin {
+  final _tourKeys = ProfileScreenTourKeys();
   late AnimationController _animController;
   late Animation<double> _fadeAnimation;
+  bool _automaticToursEnabled = true;
 
   @override
   void initState() {
@@ -56,6 +60,18 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
     _animController = AnimationController(vsync: this, duration: const Duration(milliseconds: 800));
     _fadeAnimation = CurvedAnimation(parent: _animController, curve: Curves.easeOut);
     _animController.forward();
+
+    InteractiveTourService.areAutomaticToursEnabled().then((v) {
+      if (mounted) setState(() => _automaticToursEnabled = v);
+    });
+
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+      await InteractiveTourService.maybeStartAutomaticTour(
+        context,
+        ProfileScreenTour.buildConfig(keys: _tourKeys),
+      );
+    });
   }
 
   @override
@@ -151,13 +167,16 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                         ProfileMenuItem(title: "Editar Datos Personales", icon: Icons.person_outline, isDark: isDark, onTap: () => _showEditProfile(context)),
                         _buildDivider(isDark),
                         
-                        ProfileMenuItem(
-                          title: "Estado y Activación de Licencia",
-                          icon: Icons.verified_outlined,
-                          isDark: isDark,
-                          onTap: () => Navigator.push(
-                            context,
-                            MaterialPageRoute(builder: (_) => const LicenseStatusAndActivationScreen()),
+                        KeyedSubtree(
+                          key: _tourKeys.licenseSupportKey,
+                          child: ProfileMenuItem(
+                            title: "Estado y Activación de Licencia",
+                            icon: Icons.verified_outlined,
+                            isDark: isDark,
+                            onTap: () => Navigator.push(
+                              context,
+                              MaterialPageRoute(builder: (_) => const LicenseStatusAndActivationScreen()),
+                            ),
                           ),
                         ),
                         _buildDivider(isDark),
@@ -173,11 +192,14 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                         ),
                         _buildDivider(isDark),
 
-                        ProfileMenuItem(
-                          title: "Respaldos y Seguridad", 
-                          icon: Icons.security_rounded, 
-                          isDark: isDark, 
-                          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const BackupScreen()))
+                        KeyedSubtree(
+                          key: _tourKeys.backupsKey,
+                          child: ProfileMenuItem(
+                            title: "Respaldos y Seguridad", 
+                            icon: Icons.security_rounded, 
+                            isDark: isDark, 
+                            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const BackupScreen()))
+                          ),
                         ),
                         _buildDivider(isDark),
 
@@ -195,7 +217,10 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                         _buildDivider(isDark),
                         ProfileMenuItem(title: "Notificaciones", icon: Icons.notifications_none, isDark: isDark, onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const NotificationsScreen()))),
                         _buildDivider(isDark),
-                        ProfileMenuItem(title: "Impresora Térmica", icon: Icons.print_outlined, isDark: isDark, onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PrinterConfigScreen())), trailing: const Icon(Icons.bluetooth, size: 22, color: Colors.blue)),
+                        KeyedSubtree(
+                          key: _tourKeys.printerKey,
+                          child: ProfileMenuItem(title: "Impresora Térmica", icon: Icons.print_outlined, isDark: isDark, onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PrinterConfigScreen())), trailing: const Icon(Icons.bluetooth, size: 22, color: Colors.blue)),
+                        ),
                       ]),
 
                       const SizedBox(height: 35),
@@ -282,12 +307,46 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                           ),
                         ),
 
+                      KeyedSubtree(
+                        key: _tourKeys.securityPinKey,
+                        child: _buildSettingsContainer(cardColor, [
+                          ProfileMenuItem(
+                            title: auth.hasPinCache ? "Cambiar PIN de Seguridad" : "Crear PIN de Seguridad", 
+                            icon: Icons.lock_outline, 
+                            isDark: isDark, 
+                            onTap: () => _showChangePassword(context)
+                          ),
+                        ]),
+                      ),
+
+                      const SizedBox(height: 35),
+                      _buildSectionHeader("Aprendizaje y Ayuda", textColor),
+                      const SizedBox(height: 12),
                       _buildSettingsContainer(cardColor, [
                         ProfileMenuItem(
-                          title: auth.hasPinCache ? "Cambiar PIN de Seguridad" : "Crear PIN de Seguridad", 
-                          icon: Icons.lock_outline, 
-                          isDark: isDark, 
-                          onTap: () => _showChangePassword(context)
+                          title: "Guías interactivas automáticas",
+                          icon: Icons.explore_outlined,
+                          isDark: isDark,
+                          onTap: () async {
+                            final next = !_automaticToursEnabled;
+                            await InteractiveTourService.setAutomaticToursEnabled(next);
+                            if (mounted) setState(() => _automaticToursEnabled = next);
+                          },
+                          trailing: Switch(
+                            value: _automaticToursEnabled,
+                            activeThumbColor: Colors.blue[400],
+                            onChanged: (val) async {
+                              await InteractiveTourService.setAutomaticToursEnabled(val);
+                              if (mounted) setState(() => _automaticToursEnabled = val);
+                            },
+                          ),
+                        ),
+                        _buildDivider(isDark),
+                        ProfileMenuItem(
+                          title: "Reiniciar guías de aprendizaje",
+                          icon: Icons.restart_alt_rounded,
+                          isDark: isDark,
+                          onTap: () => _confirmResetTours(context, isDark),
                         ),
                       ]),
 
@@ -646,9 +705,15 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                     InfoTip(icon: Icons.camera_alt, text: 'Toca el ícono de cámara sobre tu logo para cambiarlo.'),
                     InfoTip(icon: Icons.dark_mode, text: 'Activa el modo oscuro/claro según tu preferencia.'),
                   ],
+                  onStartInteractiveTour: () => InteractiveTourService.startManualTour(
+                    context,
+                    ProfileScreenTour.buildConfig(keys: _tourKeys),
+                  ),
                 ),
               ),
-              Column(
+              KeyedSubtree(
+                key: _tourKeys.businessCardKey,
+                child: Column(
                 children: [
                   const SizedBox(height: 15),
                   Stack(
@@ -699,6 +764,7 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                   ),
                 ],
               ),
+            ),
             ],
           ),
         ),
@@ -905,6 +971,66 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
           CustomSnackBar.show(context, message: auth.errorMessage, isError: true);
         }
       }
+    }
+  }
+
+  Future<void> _confirmResetTours(BuildContext context, bool isDark) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: isDark ? const Color(0xFF1E293B) : Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.blue.withValues(alpha: 0.15),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.restart_alt_rounded, color: Colors.blue),
+            ),
+            const SizedBox(width: 12),
+            const Expanded(
+              child: Text(
+                "Reiniciar Guías",
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+              ),
+            ),
+          ],
+        ),
+        content: const Text(
+          "¿Deseas reiniciar las guías de aprendizaje? Volverás a ver las explicaciones interactivas paso a paso en las pantallas principales de la app.",
+          style: TextStyle(fontSize: 13, height: 1.4),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text("Cancelar", style: TextStyle(color: Colors.grey)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: isDark ? const Color(0xFF38BDF8) : const Color(0xFF2563EB),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              elevation: 0,
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text("Reiniciar", style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      await InteractiveTourService.resetAllTours();
+      if (!context.mounted) return;
+      setState(() => _automaticToursEnabled = true);
+      CustomSnackBar.show(
+        context,
+        message: "Guías interactivas reiniciadas. Disfruta tu recorrido.",
+        isError: false,
+      );
     }
   }
 

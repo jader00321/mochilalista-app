@@ -8,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:app_movil/core/providers/auth_provider.dart';
 import 'package:app_movil/core/providers/license_provider.dart';
 import 'package:app_movil/core/providers/google_drive_backup_provider.dart';
+import 'package:app_movil/core/services/backup/i_google_drive_backup_service.dart';
 import 'package:app_movil/core/models/user_model.dart';
 import 'package:app_movil/core/widgets/primary_button.dart';
 import 'package:app_movil/core/widgets/auth_background.dart';
@@ -21,6 +22,7 @@ import 'package:app_movil/core/utils/backup_manager.dart';
 import 'package:app_movil/features/profile/services/business_backup_service.dart';
 import 'package:app_movil/features/profile/widgets/delete_business_modal.dart';
 import 'package:app_movil/features/profile/widgets/google_drive_backup_sheet.dart';
+import 'package:app_movil/features/profile/widgets/drive_action_feedback_modal.dart';
 
 // Widgets y lógica extraídos
 import 'package:app_movil/features/auth/screens/onboarding/widgets/profile_card_widgets.dart';
@@ -566,12 +568,12 @@ class _ProfileSelectionScreenState extends State<ProfileSelectionScreen>
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(Icons.store_mall_directory_outlined, size: 80, color: isDark ? Colors.grey[700] : Colors.grey[300]),
-              const SizedBox(height: 16),
+              Icon(Icons.store_mall_directory_outlined, size: 76, color: isDark ? Colors.grey[700] : Colors.grey[300]),
+              const SizedBox(height: 14),
               Text("No hay negocios registrados", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87)),
-              const SizedBox(height: 8),
-              Text("Crea tu primer perfil para empezar.", textAlign: TextAlign.center, style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[600])),
-              const SizedBox(height: 40),
+              const SizedBox(height: 6),
+              Text("Crea tu primer perfil para empezar.", textAlign: TextAlign.center, style: TextStyle(fontSize: 13, color: isDark ? Colors.grey[400] : Colors.grey[600])),
+              const SizedBox(height: 32),
               PrimaryButton(
                 text: "CREAR NUEVO NEGOCIO",
                 icon: Icons.add_business_rounded,
@@ -584,47 +586,10 @@ class _ProfileSelectionScreenState extends State<ProfileSelectionScreen>
                   ));
                 },
               ),
-              const SizedBox(height: 12),
-              _buildGoogleDriveSection(context, isDark: isDark, isEmptyState: true, profiles: const []),
-              const SizedBox(height: 8),
-              TextButton(
-                onPressed: () => showProfileRestoreBottomSheet(context),
-                child: Text(
-                  "¿Tienes un archivo local (.mlbg)? Restaurar aquí",
-                  style: TextStyle(
-                    color: isDark ? Colors.blue[300] : Colors.blue[700],
-                    decoration: TextDecoration.underline,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
               const SizedBox(height: 14),
-              OutlinedButton.icon(
-                icon: Icon(Icons.explore_outlined, size: 18, color: isDark ? const Color(0xFF38BDF8) : const Color(0xFF0284C7)),
-                label: Text(
-                  "Explorar la app sin registrarse (Modo Demo)",
-                  style: TextStyle(
-                    color: isDark ? const Color(0xFF38BDF8) : const Color(0xFF0284C7),
-                    fontWeight: FontWeight.w600,
-                    fontSize: 13,
-                  ),
-                ),
-                onPressed: () async {
-                  if (!await _ensureEulaAccepted()) return;
-                  if (!mounted) return;
-                  Navigator.pushReplacement(
-                    context,
-                    MaterialPageRoute(builder: (_) => const HomeScreen()),
-                  );
-                },
-                style: OutlinedButton.styleFrom(
-                  side: BorderSide(
-                    color: (isDark ? const Color(0xFF38BDF8) : const Color(0xFF0284C7)).withValues(alpha: 0.35),
-                  ),
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                ),
-              ),
+              _buildUnifiedBackupSection(context, isDark: isDark, isEmptyState: true, profiles: const []),
+              const SizedBox(height: 12),
+              _buildExplorerDemoButton(isDark: isDark),
             ],
           ),
         ),
@@ -785,7 +750,7 @@ class _ProfileSelectionScreenState extends State<ProfileSelectionScreen>
       },
       child: Column(
         children: [
-          const SizedBox(height: 16),
+          const SizedBox(height: 14),
           PrimaryButton(
             text: "CREAR NUEVO NEGOCIO",
             icon: Icons.add_business_rounded,
@@ -799,53 +764,52 @@ class _ProfileSelectionScreenState extends State<ProfileSelectionScreen>
             },
           ),
           const SizedBox(height: 12),
-          _buildGoogleDriveSection(context, isDark: isDark, isEmptyState: false, profiles: profiles),
-          const SizedBox(height: 8),
-          TextButton(
-            onPressed: () => showProfileRestoreBottomSheet(context),
-            child: Text(
-              "¿Tienes un archivo local (.mlbg)? Restaurar aquí",
-              style: TextStyle(
-                color: isDark ? Colors.blue[300] : Colors.blue[700],
-                decoration: TextDecoration.underline,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-          const SizedBox(height: 8),
-          // Botón discreto y elegante para Modo Explorador (CERO emojis Unicode)
-          InkWell(
-            borderRadius: BorderRadius.circular(14),
-            onTap: () {
-              Navigator.pushReplacement(
-                context,
-                MaterialPageRoute(builder: (_) => const HomeScreen()),
-              );
-            },
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    Icons.explore_outlined,
-                    size: 17,
-                    color: isDark ? const Color(0xFF38BDF8) : const Color(0xFF0284C7),
-                  ),
-                  const SizedBox(width: 6),
-                  Text(
-                    "Explorar la app sin registrarse (Modo Demo)",
-                    style: TextStyle(
-                      color: isDark ? const Color(0xFF38BDF8) : const Color(0xFF0284C7),
-                      fontSize: 12.5,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
+          _buildUnifiedBackupSection(context, isDark: isDark, isEmptyState: false, profiles: profiles),
+          const SizedBox(height: 10),
+          _buildExplorerDemoButton(isDark: isDark),
         ],
+      ),
+    );
+  }
+
+  Widget _buildExplorerDemoButton({required bool isDark}) {
+    return Center(
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: () {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (_) => const HomeScreen()),
+          );
+        },
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                Icons.explore_outlined,
+                size: 18,
+                color: isDark ? const Color(0xFF38BDF8) : const Color(0xFF0284C7),
+              ),
+              const SizedBox(width: 8),
+              Flexible(
+                child: Text(
+                  "Explorar la app sin registrarse",
+                  textAlign: TextAlign.center,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: isDark ? const Color(0xFF38BDF8) : const Color(0xFF0284C7),
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -877,94 +841,131 @@ class _ProfileSelectionScreenState extends State<ProfileSelectionScreen>
   }
 
   // ============================================================
-  // SECCIÓN INTELIGENTE DE GOOGLE DRIVE EN PERFILES
+  // MÓDULO UNIFICADO DE RESPALDO Y RESTAURACIÓN EN PERFILES
   // ============================================================
 
-  Widget _buildGoogleDriveSection(
+  Widget _buildUnifiedBackupSection(
     BuildContext context, {
     required bool isDark,
     required bool isEmptyState,
     required List<UserModel> profiles,
   }) {
     final driveProv = Provider.of<GoogleDriveBackupProvider?>(context);
-    if (driveProv == null) return const SizedBox.shrink();
+    final cardBg = isDark ? const Color(0xFF1B1E26) : const Color(0xFFF8FAFC);
+    final cardBorder = isDark ? Colors.white12 : const Color(0xFFE2E8F0);
 
-    final isConnected = driveProv.isConnected && driveProv.currentUser != null;
-
-    if (!isConnected) {
-      // Estado A: Google Drive NO vinculado
-      return InkWell(
-        key: const ValueKey('drive_unlinked_card'),
-        onTap: _isDriveActionLoading ? null : () => _handleDriveSignIn(driveProv),
-        borderRadius: BorderRadius.circular(16),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-          decoration: BoxDecoration(
-            color: isDark ? const Color(0xFF1E222A) : const Color(0xFFF1F5F9),
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: isDark ? Colors.white12 : Colors.black12,
-            ),
-          ),
-          child: Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF0284C7).withValues(alpha: 0.12),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(
-                  Icons.cloud_download_rounded,
-                  size: 22,
-                  color: Color(0xFF0284C7),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      "Recuperar desde Google Drive",
-                      style: TextStyle(
-                        fontSize: 13.5,
-                        fontWeight: FontWeight.bold,
-                        color: isDark ? Colors.white : Colors.black87,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      "Vincula tu correo para respaldar o restaurar tus negocios en la nube",
-                      style: TextStyle(
-                        fontSize: 11,
-                        height: 1.25,
-                        color: isDark ? Colors.grey[400] : Colors.grey[600],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 6),
-              if (_isDriveActionLoading)
-                const SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF0284C7)),
-                )
-              else
-                Icon(
-                  Icons.chevron_right_rounded,
-                  size: 20,
-                  color: isDark ? Colors.grey[400] : Colors.grey[500],
-                ),
-            ],
-          ),
+    if (driveProv == null) {
+      return Container(
+        decoration: BoxDecoration(
+          color: cardBg,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: cardBorder),
         ),
+        child: _buildLocalRestoreTile(isDark),
       );
     }
 
-    // Estado B: Google Drive YA vinculado (Semáforo de salud reactivo)
+    final isConnected = driveProv.isConnected && driveProv.currentUser != null;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: cardBg,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: cardBorder),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Fila Superior: Google Drive
+          if (!isConnected)
+            _buildDriveUnlinkedTile(driveProv, isDark)
+          else
+            _buildDriveLinkedTile(driveProv, isDark, profiles),
+
+          // Divisor sutil
+          Divider(
+            height: 1,
+            thickness: 1,
+            color: isDark ? Colors.white10 : const Color(0xFFE2E8F0),
+          ),
+
+          // Fila Inferior: Archivo local .mlbg en una sola línea limpia
+          _buildLocalRestoreTile(isDark),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDriveUnlinkedTile(GoogleDriveBackupProvider driveProv, bool isDark) {
+    return InkWell(
+      key: const ValueKey('drive_unlinked_card'),
+      onTap: _isDriveActionLoading ? null : () => _handleDriveSignIn(driveProv),
+      borderRadius: const BorderRadius.vertical(top: Radius.circular(18)),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(7),
+              decoration: BoxDecoration(
+                color: const Color(0xFF0284C7).withValues(alpha: 0.12),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.cloud_download_rounded,
+                size: 20,
+                color: Color(0xFF0284C7),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    "Recuperar desde Google Drive",
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.bold,
+                      color: isDark ? Colors.white : Colors.black87,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    "Vincula tu correo para respaldar o restaurar tus negocios en la nube",
+                    style: TextStyle(
+                      fontSize: 11,
+                      height: 1.2,
+                      color: isDark ? Colors.grey[400] : Colors.grey[600],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 6),
+            if (_isDriveActionLoading)
+              const SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF0284C7)),
+              )
+            else
+              Icon(
+                Icons.chevron_right_rounded,
+                size: 18,
+                color: isDark ? Colors.grey[400] : Colors.grey[500],
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDriveLinkedTile(
+    GoogleDriveBackupProvider driveProv,
+    bool isDark,
+    List<UserModel> profiles,
+  ) {
     final health = GoogleDriveBackupProvider.computeHealthInfo(
       backups: driveProv.backups,
       isDark: isDark,
@@ -973,17 +974,9 @@ class _ProfileSelectionScreenState extends State<ProfileSelectionScreen>
     return InkWell(
       key: const ValueKey('drive_linked_card'),
       onTap: () => _openDriveQuickOptionsModal(driveProv, isDark, profiles),
-      borderRadius: BorderRadius.circular(16),
-      child: Container(
+      borderRadius: const BorderRadius.vertical(top: Radius.circular(18)),
+      child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-        decoration: BoxDecoration(
-          color: health.color.withValues(alpha: isDark ? 0.12 : 0.08),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: health.color.withValues(alpha: isDark ? 0.35 : 0.45),
-            width: 1.2,
-          ),
-        ),
         child: Row(
           children: [
             Container(
@@ -1039,6 +1032,44 @@ class _ProfileSelectionScreenState extends State<ProfileSelectionScreen>
     );
   }
 
+  Widget _buildLocalRestoreTile(bool isDark) {
+    return InkWell(
+      key: const ValueKey('local_backup_restore_tile'),
+      onTap: () => showProfileRestoreBottomSheet(context),
+      borderRadius: const BorderRadius.vertical(bottom: Radius.circular(18)),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+        child: Row(
+          children: [
+            Icon(
+              Icons.folder_open_rounded,
+              size: 17,
+              color: isDark ? Colors.blue[300] : Colors.blue[700],
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                "Restaurar respaldo local (.mlbg)",
+                style: TextStyle(
+                  color: isDark ? Colors.blue[300] : Colors.blue[700],
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            Icon(
+              Icons.chevron_right_rounded,
+              size: 16,
+              color: isDark ? Colors.grey[500] : Colors.grey[400],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Future<void> _handleDriveSignIn(GoogleDriveBackupProvider driveProv) async {
     if (!await _ensureEulaAccepted()) return;
     if (!mounted) return;
@@ -1067,10 +1098,17 @@ class _ProfileSelectionScreenState extends State<ProfileSelectionScreen>
             },
           );
         } else {
-          CustomSnackBar.show(
-            context,
-            message: "Cuenta vinculada (${user.email}). No se encontraron copias previas.",
-            isError: false,
+          await DriveActionFeedbackModal.show(
+            context: context,
+            actionType: DriveActionType.signIn,
+            task: (updateStep) async {
+              updateStep("Cuenta vinculada (${user.email})");
+            },
+            customSuccessTitle: "¡Cuenta vinculada con éxito!",
+            customSuccessSubtitle: "Cuenta vinculada (${user.email}). No se encontraron copias previas.",
+            onDone: () {
+              if (mounted) setState(() {});
+            },
           );
         }
       }
@@ -1100,11 +1138,24 @@ class _ProfileSelectionScreenState extends State<ProfileSelectionScreen>
   ) {
     final bottomSafety = math.max(
       MediaQuery.viewInsetsOf(context).bottom,
-      math.max(
-        MediaQuery.viewPaddingOf(context).bottom,
-        MediaQuery.paddingOf(context).bottom,
-      ),
-    ) + 12.0;
+      MediaQuery.viewPaddingOf(context).bottom,
+    ) + 16.0;
+
+    final health = GoogleDriveBackupProvider.computeHealthInfo(
+      backups: driveProv.backups,
+      isDark: isDark,
+    );
+
+    // Fecha exacta de la última copia
+    String lastBackupText;
+    if (driveProv.backups.isNotEmpty) {
+      final latest = driveProv.backups.reduce(
+        (a, b) => a.createdAt.isAfter(b.createdAt) ? a : b,
+      );
+      lastBackupText = "Última copia: ${latest.formattedDate}";
+    } else {
+      lastBackupText = "Sin copias en la nube todavía";
+    }
 
     showModalBottomSheet<void>(
       context: context,
@@ -1117,7 +1168,14 @@ class _ProfileSelectionScreenState extends State<ProfileSelectionScreen>
           padding: EdgeInsets.fromLTRB(20, 16, 20, bottomSafety),
           decoration: BoxDecoration(
             color: isDark ? const Color(0xFF1E1E28) : Colors.white,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.15),
+                blurRadius: 20,
+                offset: const Offset(0, -4),
+              ),
+            ],
           ),
           child: SingleChildScrollView(
             physics: const BouncingScrollPhysics(),
@@ -1127,8 +1185,8 @@ class _ProfileSelectionScreenState extends State<ProfileSelectionScreen>
               children: [
                 Center(
                   child: Container(
-                    margin: const EdgeInsets.only(bottom: 12),
-                    width: 36,
+                    margin: const EdgeInsets.only(bottom: 14),
+                    width: 38,
                     height: 4,
                     decoration: BoxDecoration(
                       color: isDark ? Colors.white24 : Colors.black12,
@@ -1136,32 +1194,55 @@ class _ProfileSelectionScreenState extends State<ProfileSelectionScreen>
                     ),
                   ),
                 ),
+
+                // Cabecera Enriquecida
                 Row(
                   children: [
                     Container(
-                      padding: const EdgeInsets.all(8),
+                      padding: const EdgeInsets.all(9),
                       decoration: BoxDecoration(
-                        color: const Color(0xFF25D366).withValues(alpha: 0.15),
+                        color: health.color.withValues(alpha: isDark ? 0.2 : 0.12),
                         shape: BoxShape.circle,
                       ),
-                      child: const Icon(
+                      child: Icon(
                         Icons.cloud_sync_rounded,
-                        color: Color(0xFF25D366),
-                        size: 22,
+                        color: health.color,
+                        size: 24,
                       ),
                     ),
-                    const SizedBox(width: 10),
+                    const SizedBox(width: 12),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text(
-                            "Google Drive",
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                            ),
+                          Row(
+                            children: [
+                              const Text(
+                                "Google Drive",
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: health.color.withValues(alpha: isDark ? 0.25 : 0.12),
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: Text(
+                                  health.label,
+                                  style: TextStyle(
+                                    fontSize: 10.5,
+                                    fontWeight: FontWeight.bold,
+                                    color: health.color,
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
+                          const SizedBox(height: 2),
                           Text(
                             driveProv.currentUser?.email ?? "",
                             style: TextStyle(
@@ -1171,38 +1252,33 @@ class _ProfileSelectionScreenState extends State<ProfileSelectionScreen>
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           ),
+                          const SizedBox(height: 2),
+                          Text(
+                            lastBackupText,
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: isDark ? Colors.grey[500] : Colors.grey[500],
+                            ),
+                          ),
                         ],
                       ),
                     ),
                   ],
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 18),
 
                 // Opción 1: Ver y Restaurar Copias
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  leading: Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: Colors.blue.withValues(alpha: 0.12),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(Icons.history_rounded, color: Colors.blue, size: 20),
-                  ),
-                  title: const Text(
-                    "Ver y Restaurar Copias de la Nube",
-                    style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600),
-                  ),
-                  subtitle: Text(
-                    driveProv.backups.isNotEmpty
-                        ? "Explora las ${driveProv.backups.length} copias disponibles"
-                        : "No hay copias guardadas en Google Drive aún",
-                    style: TextStyle(
-                      fontSize: 11.5,
-                      color: isDark ? Colors.grey[400] : Colors.grey[600],
-                    ),
-                  ),
-                  trailing: const Icon(Icons.chevron_right_rounded, size: 18),
+                _buildQuickActionCard(
+                  index: 0,
+                  isDark: isDark,
+                  icon: Icons.history_rounded,
+                  accentColor: const Color(0xFF0284C7),
+                  title: "Ver y Restaurar Copias de la Nube",
+                  subtitle: driveProv.backups.isEmpty
+                      ? "Aún no tienes copias en la nube"
+                      : (driveProv.backups.length == 1
+                          ? "Explora tu copia disponible"
+                          : "Explora las ${driveProv.backups.length} copias disponibles"),
                   onTap: () {
                     Navigator.pop(sheetCtx);
                     if (driveProv.backups.isEmpty) {
@@ -1226,33 +1302,20 @@ class _ProfileSelectionScreenState extends State<ProfileSelectionScreen>
                     }
                   },
                 ),
-                Divider(height: 12, color: isDark ? Colors.white12 : Colors.black12),
+                const SizedBox(height: 10),
 
-                // Opción 2: Respaldar Ahora
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  leading: Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: Colors.green.withValues(alpha: 0.12),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(Icons.cloud_upload_rounded, color: Colors.green, size: 20),
-                  ),
-                  title: const Text(
-                    "Respaldar Ahora en Google Drive",
-                    style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600),
-                  ),
-                  subtitle: Text(
-                    profiles.isNotEmpty
-                        ? "Genera una copia inmediata de tus ${profiles.length} perfil(es)"
-                        : "Crea al menos un negocio antes de respaldar",
-                    style: TextStyle(
-                      fontSize: 11.5,
-                      color: isDark ? Colors.grey[400] : Colors.grey[600],
-                    ),
-                  ),
-                  trailing: const Icon(Icons.chevron_right_rounded, size: 18),
+                // Opción 2: Respaldar Ahora (Pluralización gramatical estricta)
+                _buildQuickActionCard(
+                  index: 1,
+                  isDark: isDark,
+                  icon: Icons.cloud_upload_rounded,
+                  accentColor: const Color(0xFF10B981),
+                  title: "Respaldar Ahora en Google Drive",
+                  subtitle: profiles.isEmpty
+                      ? "Crea primero un negocio para respaldar"
+                      : (profiles.length == 1
+                          ? "Genera una copia inmediata de tu negocio"
+                          : "Genera una copia inmediata de tus ${profiles.length} negocios"),
                   onTap: () {
                     Navigator.pop(sheetCtx);
                     if (profiles.isEmpty) {
@@ -1266,34 +1329,115 @@ class _ProfileSelectionScreenState extends State<ProfileSelectionScreen>
                     }
                   },
                 ),
-                Divider(height: 12, color: isDark ? Colors.white12 : Colors.black12),
+                const SizedBox(height: 10),
 
                 // Opción 3: Desvincular Cuenta
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  leading: Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: Colors.redAccent.withValues(alpha: 0.12),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(Icons.link_off_rounded, color: Colors.redAccent, size: 20),
-                  ),
-                  title: const Text(
-                    "Desvincular Cuenta de Google",
-                    style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600, color: Colors.redAccent),
-                  ),
-                  subtitle: Text(
-                    "Tus copias en la nube se mantendrán intactas",
-                    style: TextStyle(
-                      fontSize: 11.5,
-                      color: isDark ? Colors.grey[400] : Colors.grey[600],
-                    ),
-                  ),
+                _buildQuickActionCard(
+                  index: 2,
+                  isDark: isDark,
+                  icon: Icons.link_off_rounded,
+                  accentColor: const Color(0xFFEF4444),
+                  title: "Desvincular Cuenta de Google",
+                  subtitle: "Tus copias en la nube se mantendrán intactas",
+                  isDestructive: true,
                   onTap: () {
                     Navigator.pop(sheetCtx);
                     _confirmAndSignOutDrive(driveProv, isDark);
                   },
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildQuickActionCard({
+    required int index,
+    required bool isDark,
+    required IconData icon,
+    required Color accentColor,
+    required String title,
+    required String subtitle,
+    required VoidCallback onTap,
+    bool isDestructive = false,
+  }) {
+    return TweenAnimationBuilder<double>(
+      duration: Duration(milliseconds: 300 + (index * 70)),
+      curve: Curves.easeOutCubic,
+      tween: Tween<double>(begin: 0.0, end: 1.0),
+      builder: (context, value, child) {
+        return Opacity(
+          opacity: value.clamp(0.0, 1.0),
+          child: Transform.translate(
+            offset: Offset(0, 15 * (1 - value)),
+            child: child,
+          ),
+        );
+      },
+      child: Material(
+        color: isDark
+            ? (isDestructive ? accentColor.withValues(alpha: 0.08) : Colors.white.withValues(alpha: 0.04))
+            : (isDestructive ? accentColor.withValues(alpha: 0.05) : const Color(0xFFF8FAFC)),
+        borderRadius: BorderRadius.circular(16),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(16),
+          onTap: () {
+            HapticFeedback.lightImpact();
+            onTap();
+          },
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: isDestructive
+                    ? accentColor.withValues(alpha: isDark ? 0.3 : 0.25)
+                    : (isDark ? Colors.white12 : const Color(0xFFE2E8F0)),
+                width: 1.1,
+              ),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: accentColor.withValues(alpha: isDark ? 0.2 : 0.12),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(icon, color: accentColor, size: 20),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        style: TextStyle(
+                          fontSize: 13.5,
+                          fontWeight: FontWeight.w600,
+                          color: isDestructive
+                              ? accentColor
+                              : (isDark ? Colors.white : Colors.black87),
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        subtitle,
+                        style: TextStyle(
+                          fontSize: 11.5,
+                          color: isDark ? Colors.grey[400] : Colors.grey[600],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Icon(
+                  Icons.chevron_right_rounded,
+                  size: 18,
+                  color: isDark ? Colors.grey[500] : Colors.grey[400],
                 ),
               ],
             ),
@@ -1353,43 +1497,39 @@ class _ProfileSelectionScreenState extends State<ProfileSelectionScreen>
       ),
     );
 
-    if (confirmed == true) {
-      await driveProv.signOut();
-      if (mounted) {
-        CustomSnackBar.show(
-          context,
-          message: "Cuenta de Google desvinculada.",
-          isError: false,
-        );
-      }
+    if (confirmed == true && mounted) {
+      await DriveActionFeedbackModal.show(
+        context: context,
+        actionType: DriveActionType.signOut,
+        task: (updateStep) async {
+          updateStep("Desvinculando cuenta de Google...");
+          await driveProv.signOut();
+        },
+        onDone: () {
+          if (mounted) setState(() {});
+        },
+      );
     }
   }
 
   Future<void> _executeDriveBackupNow(GoogleDriveBackupProvider driveProv) async {
-    setState(() {
-      _isProcessing = true;
-      _processingMessage = "Guardando respaldo en\nGoogle Drive...";
-    });
+    GoogleDriveBackupMetadata? resultMeta;
 
-    try {
-      final meta = await driveProv.performBackupNow();
-      if (mounted) {
-        setState(() => _isProcessing = false);
-        CustomSnackBar.show(
-          context,
-          message: "¡Copia de seguridad guardada en Google Drive! (${meta?.formattedSize ?? ''})",
-          isError: false,
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() => _isProcessing = false);
-        CustomSnackBar.show(
-          context,
-          message: "No se pudo completar el respaldo: $e",
-          isError: true,
-        );
-      }
-    }
+    await DriveActionFeedbackModal.show(
+      context: context,
+      actionType: DriveActionType.backup,
+      task: (updateStep) async {
+        updateStep("Preparando y cifrando datos del negocio...");
+        await Future.delayed(const Duration(milliseconds: 250));
+        updateStep("Subiendo copia segura a Google Drive...");
+        resultMeta = await driveProv.performBackupNow();
+      },
+      getResultMetadata: () => resultMeta,
+      getUpdatedBackupsCount: () => driveProv.backups.length,
+      onDone: () {
+        if (mounted) setState(() {});
+      },
+      onRetry: () => _executeDriveBackupNow(driveProv),
+    );
   }
 }

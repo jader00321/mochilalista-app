@@ -18,6 +18,8 @@ class InfoTooltipButton extends StatelessWidget {
   final double iconSize;
   final EdgeInsetsGeometry? padding;
   final BoxConstraints? constraints;
+  final VoidCallback? onStartInteractiveTour;
+  final String tourButtonLabel;
 
   const InfoTooltipButton({
     super.key,
@@ -28,6 +30,8 @@ class InfoTooltipButton extends StatelessWidget {
     this.iconSize = 22,
     this.padding,
     this.constraints,
+    this.onStartInteractiveTour,
+    this.tourButtonLabel = "Iniciar guía interactiva paso a paso",
   });
 
   static void showInfoModal({
@@ -35,6 +39,8 @@ class InfoTooltipButton extends StatelessWidget {
     required String title,
     required String description,
     List<InfoTip> tips = const [],
+    VoidCallback? onStartInteractiveTour,
+    String tourButtonLabel = "Iniciar guía interactiva paso a paso",
   }) {
     FocusManager.instance.primaryFocus?.unfocus();
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -46,6 +52,8 @@ class InfoTooltipButton extends StatelessWidget {
         description: description,
         tips: tips,
         isDark: isDark,
+        onStartInteractiveTour: onStartInteractiveTour,
+        tourButtonLabel: tourButtonLabel,
       ),
     ).whenComplete(() {
       FocusManager.instance.primaryFocus?.unfocus();
@@ -58,6 +66,8 @@ class InfoTooltipButton extends StatelessWidget {
       title: title,
       description: description,
       tips: tips,
+      onStartInteractiveTour: onStartInteractiveTour,
+      tourButtonLabel: tourButtonLabel,
     );
   }
 
@@ -92,12 +102,16 @@ class _InfoBottomSheet extends StatelessWidget {
   final String description;
   final List<InfoTip> tips;
   final bool isDark;
+  final VoidCallback? onStartInteractiveTour;
+  final String tourButtonLabel;
 
   const _InfoBottomSheet({
     required this.title,
     required this.description,
     required this.tips,
     required this.isDark,
+    this.onStartInteractiveTour,
+    this.tourButtonLabel = "Iniciar guía interactiva paso a paso",
   });
 
   @override
@@ -106,20 +120,54 @@ class _InfoBottomSheet extends StatelessWidget {
       maxHeightFactor: 0.75,
       backgroundColor: isDark ? const Color(0xFF1A1A24) : Colors.white,
       applyEffectiveBottomPadding: false,
-      bottomAction: SizedBox(
-        width: double.infinity,
-        height: 48,
-        child: TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: Text(
-            "Entendido",
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
-              color: isDark ? Colors.blue[300] : Colors.blue[700],
+      bottomAction: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (onStartInteractiveTour != null) ...[
+            SizedBox(
+              width: double.infinity,
+              height: 46,
+              child: ElevatedButton.icon(
+                onPressed: () {
+                  Navigator.pop(context);
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    onStartInteractiveTour!();
+                  });
+                },
+                icon: const Icon(Icons.explore_rounded, size: 20),
+                label: Text(
+                  tourButtonLabel,
+                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor:
+                      isDark ? const Color(0xFF2563EB) : const Color(0xFF1D4ED8),
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  elevation: 0,
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+          ],
+          SizedBox(
+            width: double.infinity,
+            height: 44,
+            child: TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text(
+                "Entendido",
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: isDark ? Colors.blue[300] : Colors.blue[700],
+                ),
+              ),
             ),
           ),
-        ),
+        ],
       ),
       child: SingleChildScrollView(
         padding: const EdgeInsets.fromLTRB(24, 8, 24, 16),

@@ -15,6 +15,8 @@ import 'package:app_movil/features/scanner/screens/invoice_history_screen.dart';
 import 'package:app_movil/core/widgets/info_tooltip_button.dart';
 import 'package:app_movil/core/widgets/deep_nav_return_pill.dart';
 import 'package:app_movil/features/auth/screens/onboarding/onboarding_screen.dart';
+import 'package:app_movil/core/services/tour/interactive_tour_service.dart';
+import 'package:app_movil/core/widgets/tour/configs/inventory_tour.dart';
 
 class PlaceholderTab extends StatelessWidget {
   final String title;
@@ -57,6 +59,7 @@ class InventoryScreen extends StatefulWidget {
 
 class _InventoryScreenState extends State<InventoryScreen>
     with TickerProviderStateMixin {
+  final _tourKeys = InventoryTourKeys();
   late TabController _tabController;
   late AnimationController _glowController;
   late Animation<double> _glowAnimation;
@@ -83,6 +86,10 @@ class _InventoryScreenState extends State<InventoryScreen>
         context,
         listen: false,
       ).loadInventory(reset: true);
+      InteractiveTourService.maybeStartAutomaticTour(
+        context,
+        InventoryTour.buildConfig(keys: _tourKeys),
+      );
     });
   }
 
@@ -171,54 +178,57 @@ class _InventoryScreenState extends State<InventoryScreen>
         foregroundColor: Colors.white,
 
         actions: [
-          Padding(
-            padding: const EdgeInsets.only(right: 8.0),
-            child: ScaleTransition(
-              scale: _glowAnimation,
-              child: Tooltip(
-                message: "Historial de Facturas IA",
-                child: IconButton(
-                  icon: Stack(
-                    clipBehavior: Clip.none,
-                    children: [
-                      const Icon(Icons.receipt_long_rounded, size: 26),
-                      Positioned(
-                        right: -2,
-                        top: -2,
-                        child: Container(
-                          padding: const EdgeInsets.all(3),
-                          decoration: BoxDecoration(
-                            color: Colors.orange,
-                            shape: BoxShape.circle,
-                            border: Border.all(
-                              color: isDark
-                                  ? const Color(0xFF1A1A24)
-                                  : theme.primaryColor,
-                              width: 2,
+          KeyedSubtree(
+            key: _tourKeys.invoiceAiKey,
+            child: Padding(
+              padding: const EdgeInsets.only(right: 8.0),
+              child: ScaleTransition(
+                scale: _glowAnimation,
+                child: Tooltip(
+                  message: "Historial de Facturas IA",
+                  child: IconButton(
+                    icon: Stack(
+                      clipBehavior: Clip.none,
+                      children: [
+                        const Icon(Icons.receipt_long_rounded, size: 26),
+                        Positioned(
+                          right: -2,
+                          top: -2,
+                          child: Container(
+                            padding: const EdgeInsets.all(3),
+                            decoration: BoxDecoration(
+                              color: Colors.orange,
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: isDark
+                                    ? const Color(0xFF1A1A24)
+                                    : theme.primaryColor,
+                                width: 2,
+                              ),
+                            ),
+                            child: const Icon(
+                              Icons.auto_awesome,
+                              size: 8,
+                              color: Colors.white,
                             ),
                           ),
-                          child: const Icon(
-                            Icons.auto_awesome,
-                            size: 8,
-                            color: Colors.white,
-                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
+                    onPressed: () {
+                      // 🔥 BLOQUEO DE INVITADO PARA HISTORIAL DE FACTURAS
+                      if (isGuest) {
+                        _showExplorationModal(context, isDark);
+                        return;
+                      }
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const InvoiceHistoryScreen(),
+                        ),
+                      );
+                    },
                   ),
-                  onPressed: () {
-                    // 🔥 BLOQUEO DE INVITADO PARA HISTORIAL DE FACTURAS
-                    if (isGuest) {
-                      _showExplorationModal(context, isDark);
-                      return;
-                    }
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => const InvoiceHistoryScreen(),
-                      ),
-                    );
-                  },
                 ),
               ),
             ),
@@ -235,30 +245,41 @@ class _InventoryScreenState extends State<InventoryScreen>
               InfoTip(icon: Icons.local_offer, text: 'Crea ofertas y combos en la pestaña de Ofertas para atraer más clientes.'),
               InfoTip(icon: Icons.find_replace, text: 'Usa el botón de Detectar Duplicados (🔄) en cada pestaña para fusionar registros repetidos.'),
             ],
+            onStartInteractiveTour: () => InteractiveTourService.startManualTour(
+              context,
+              InventoryTour.buildConfig(keys: _tourKeys),
+            ),
+            tourButtonLabel: 'Iniciar guía interactiva paso a paso',
           ),
         ],
 
-        bottom: TabBar(
-          controller: _tabController,
-          isScrollable: true,
-          tabAlignment: TabAlignment.start,
-          padding: EdgeInsets.zero,
-          labelPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
-          indicatorColor: Colors.white,
-          indicatorWeight: 3,
-          labelColor: Colors.white,
-          labelStyle: const TextStyle(
-            fontWeight: FontWeight.bold,
-            fontSize: 14,
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(48),
+          child: KeyedSubtree(
+            key: _tourKeys.tabsKey,
+            child: TabBar(
+              controller: _tabController,
+              isScrollable: true,
+              tabAlignment: TabAlignment.start,
+              padding: EdgeInsets.zero,
+              labelPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
+              indicatorColor: Colors.white,
+              indicatorWeight: 3,
+              labelColor: Colors.white,
+              labelStyle: const TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 14,
+              ),
+              unselectedLabelColor: Colors.white54,
+              tabs: const [
+                Tab(text: "PRODUCTOS"),
+                Tab(text: "OFERTAS / BUNDLES"),
+                Tab(text: "CATEGORÍAS"),
+                Tab(text: "MARCAS"),
+                Tab(text: "PROVEEDORES"),
+              ],
+            ),
           ),
-          unselectedLabelColor: Colors.white54,
-          tabs: const [
-            Tab(text: "PRODUCTOS"),
-            Tab(text: "OFERTAS / BUNDLES"),
-            Tab(text: "CATEGORÍAS"),
-            Tab(text: "MARCAS"),
-            Tab(text: "PROVEEDORES"),
-          ],
         ),
       ),
 
@@ -312,7 +333,10 @@ class _InventoryScreenState extends State<InventoryScreen>
                 child: TabBarView(
                   controller: _tabController,
                   children: [
-                    ProductsTab(tabController: _tabController),
+                    ProductsTab(
+                      tabController: _tabController,
+                      tourKeys: _tourKeys,
+                    ),
                     const OffersTab(),
                     const CategoriesTab(),
                     const BrandsTab(),

@@ -327,9 +327,9 @@ void main() {
       );
 
       expect(find.text("Plan de Cuotas (2)"), findsOneWidget);
-      expect(find.text("Vence: 15/11/2026"), findsOneWidget);
+      expect(find.textContaining("15/11/2026"), findsOneWidget);
       expect(find.text("Vence: 15/12/2026"), findsOneWidget);
-      expect(find.text("PAGADO"), findsOneWidget);
+      expect(find.text("PAGADA"), findsOneWidget);
       expect(find.text("PENDIENTE"), findsOneWidget);
       expect(find.text("Recordar"), findsOneWidget);
       expect(find.text("Cobrar"), findsOneWidget);
