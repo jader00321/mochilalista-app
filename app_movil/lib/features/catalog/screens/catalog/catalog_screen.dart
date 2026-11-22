@@ -33,17 +33,27 @@ import 'package:app_movil/features/smart_quotation/screens/manual_quotation_scre
 import 'package:app_movil/features/catalog/screens/catalog/widgets/catalog_filter_header.dart';
 
 import 'package:app_movil/features/catalog/screens/catalog/widgets/catalog_sort_modal.dart';
+import 'package:app_movil/core/services/tour/interactive_tour_service.dart';
+import 'package:app_movil/core/widgets/tour/configs/catalog_tour.dart';
 
 class CatalogScreen extends StatefulWidget {
-  const CatalogScreen({super.key});
+  final bool autoTriggerTour;
+  final CatalogTourKeys? tourKeys;
+
+  const CatalogScreen({
+    super.key,
+    this.autoTriggerTour = true,
+    this.tourKeys,
+  });
 
   @override
-  State<CatalogScreen> createState() => _CatalogScreenState();
+  State<CatalogScreen> createState() => CatalogScreenState();
 }
 
-class _CatalogScreenState extends State<CatalogScreen> with RouteAware {
+class CatalogScreenState extends State<CatalogScreen> with RouteAware {
   final ScrollController _scrollController = ScrollController();
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
+  late final CatalogTourKeys _tourKeys;
 
   bool _isBottomMenuExpanded = false;
   bool _showScrollToTop = false;
@@ -60,9 +70,68 @@ class _CatalogScreenState extends State<CatalogScreen> with RouteAware {
   @override
   void initState() {
     super.initState();
+    _tourKeys = widget.tourKeys ?? CatalogTourKeys();
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
       _silentRefreshIfNeeded();
+      if (widget.autoTriggerTour) {
+        InteractiveTourService.maybeStartAutomaticTour(
+          context,
+          CatalogTour.buildConfig(
+            keys: _tourKeys,
+            onExpandOffers: expandOffersSection,
+            onCollapseOffers: collapseOffersSection,
+            onExpandBottomMenu: expandBottomMenu,
+            onCollapseBottomMenu: collapseBottomMenu,
+          ),
+        );
+      }
     });
+  }
+
+  Future<void> expandOffersSection() async {
+    if (!_isOffersExpanded && mounted) {
+      setState(() => _isOffersExpanded = true);
+      await Future.delayed(const Duration(milliseconds: 300));
+      await WidgetsBinding.instance.endOfFrame;
+    }
+  }
+
+  Future<void> collapseOffersSection() async {
+    if (_isOffersExpanded && mounted) {
+      setState(() => _isOffersExpanded = false);
+      await Future.delayed(const Duration(milliseconds: 200));
+      await WidgetsBinding.instance.endOfFrame;
+    }
+  }
+
+  Future<void> expandBottomMenu() async {
+    if (!_isBottomMenuExpanded && mounted) {
+      setState(() => _isBottomMenuExpanded = true);
+      await Future.delayed(const Duration(milliseconds: 300));
+      await WidgetsBinding.instance.endOfFrame;
+    }
+  }
+
+  Future<void> collapseBottomMenu() async {
+    if (_isBottomMenuExpanded && mounted) {
+      setState(() => _isBottomMenuExpanded = false);
+      await Future.delayed(const Duration(milliseconds: 200));
+      await WidgetsBinding.instance.endOfFrame;
+    }
+  }
+
+  void _startTour(BuildContext context) {
+    InteractiveTourService.startManualTour(
+      context,
+      CatalogTour.buildConfig(
+        keys: _tourKeys,
+        onExpandOffers: expandOffersSection,
+        onCollapseOffers: collapseOffersSection,
+        onExpandBottomMenu: expandBottomMenu,
+        onCollapseBottomMenu: collapseBottomMenu,
+      ),
+    );
   }
 
   @override
@@ -616,11 +685,12 @@ class _CatalogScreenState extends State<CatalogScreen> with RouteAware {
               )
             : null,
         actions: [
-          const InfoTooltipButton(
+          InfoTooltipButton(
             title: "Catálogo de Ventas",
             description:
                 "Muestra todos tus productos con stock disponible, presentaciones, precios y ofertas en un formato visual para ventas rápidas.",
-            tips: [
+            onStartInteractiveTour: () => _startTour(context),
+            tips: const [
               InfoTip(
                 icon: Icons.touch_app_outlined,
                 text:
@@ -757,6 +827,7 @@ class _CatalogScreenState extends State<CatalogScreen> with RouteAware {
                 children: [
                   // 📌 1. NIVEL 1: Fila Fija del Buscador propio del catálogo
                   CatalogHeader(
+                    key: _tourKeys.searchFiltersKey,
                     onFilterTap: () => LiveFilterBottomSheet.show(context),
                     showCategories: false,
                   ),
@@ -784,19 +855,23 @@ class _CatalogScreenState extends State<CatalogScreen> with RouteAware {
 
                   // 📦 3. NIVEL 3: Grid de Productos Desacoplado
                   Expanded(
-                    child: NotificationListener<ScrollNotification>(
-                      onNotification: _handleScrollNotification,
-                      child: RefreshIndicator(
-                        onRefresh: _onRefresh,
-                        color: Colors.blue[800],
-                        child: CustomScrollView(
-                          controller: _scrollController,
-                          slivers: [
+                    child: KeyedSubtree(
+                      key: _tourKeys.productGridKey,
+                      child: NotificationListener<ScrollNotification>(
+                        onNotification: _handleScrollNotification,
+                        child: RefreshIndicator(
+                          onRefresh: _onRefresh,
+                          color: Colors.blue[800],
+                          child: CustomScrollView(
+                            controller: _scrollController,
+                            slivers: [
 
-                      // Panel de Ofertas
-                if (promoProv.bundles.isNotEmpty)
-                  SliverToBoxAdapter(
-                    child: Builder(
+                        // Panel de Ofertas
+                  if (promoProv.bundles.isNotEmpty)
+                    SliverToBoxAdapter(
+                      child: KeyedSubtree(
+                        key: _tourKeys.offersSectionKey,
+                        child: Builder(
                       builder: (ctx) {
                         final now = DateTime.now();
                         final validBundles = promoProv.bundles.where((b) {
@@ -1091,6 +1166,7 @@ class _CatalogScreenState extends State<CatalogScreen> with RouteAware {
                       },
                     ),
                   ),
+                ),
 
                 if (provider.isLoading && provider.displayItems.isEmpty)
                   const SliverFillRemaining(
@@ -1194,7 +1270,8 @@ class _CatalogScreenState extends State<CatalogScreen> with RouteAware {
                       },
                     ),
                   ),
-              ],
+                ],
+              ),
             ),
           ),
         ),
@@ -1335,19 +1412,22 @@ class _CatalogScreenState extends State<CatalogScreen> with RouteAware {
       );
     }
 
-    return AnimatedSlide(
-      offset: isVisible ? Offset.zero : const Offset(0, 1.0),
-      duration: const Duration(milliseconds: 280),
-      curve: Curves.easeInOutCubic,
-      child: AnimatedContainer(
+    return KeyedSubtree(
+      key: _tourKeys.cartActionKey,
+      child: AnimatedSlide(
+        offset: isVisible ? Offset.zero : const Offset(0, 1.0),
         duration: const Duration(milliseconds: 280),
         curve: Curves.easeInOutCubic,
-        height: isVisible ? barHeight : 0.0,
-        clipBehavior: Clip.hardEdge,
-        decoration: const BoxDecoration(),
-        child: SingleChildScrollView(
-          physics: const NeverScrollableScrollPhysics(),
-          child: barContent,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 280),
+          curve: Curves.easeInOutCubic,
+          height: isVisible ? barHeight : 0.0,
+          clipBehavior: Clip.hardEdge,
+          decoration: const BoxDecoration(),
+          child: SingleChildScrollView(
+            physics: const NeverScrollableScrollPhysics(),
+            child: barContent,
+          ),
         ),
       ),
     );

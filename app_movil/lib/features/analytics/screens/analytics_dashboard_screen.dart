@@ -30,15 +30,25 @@ import 'package:app_movil/features/analytics/widgets/dashboard/top_categories_ca
 import 'package:app_movil/features/analytics/screens/smart_restock_screen.dart';
 import 'package:app_movil/features/analytics/screens/predictive_analytics_screen.dart';
 import 'package:app_movil/core/widgets/info_tooltip_button.dart';
+import 'package:app_movil/core/services/tour/interactive_tour_service.dart';
+import 'package:app_movil/core/widgets/tour/configs/analytics_dashboard_tour.dart';
 
 class AnalyticsDashboardScreen extends StatefulWidget {
-  const AnalyticsDashboardScreen({super.key});
+  final bool autoTriggerTour;
+  final AnalyticsDashboardTourKeys? tourKeys;
+
+  const AnalyticsDashboardScreen({
+    super.key,
+    this.autoTriggerTour = true,
+    this.tourKeys,
+  });
 
   @override
   State<AnalyticsDashboardScreen> createState() => _AnalyticsDashboardScreenState();
 }
 
 class _AnalyticsDashboardScreenState extends State<AnalyticsDashboardScreen> with TickerProviderStateMixin {
+  late final AnalyticsDashboardTourKeys _tourKeys;
   bool _obscureAmounts = false;
   final ValueNotifier<bool> _isFabCompactNotifier = ValueNotifier<bool>(false);
   final ValueNotifier<String> _activeGroupNotifier = ValueNotifier<String>('resumen');
@@ -55,6 +65,7 @@ class _AnalyticsDashboardScreenState extends State<AnalyticsDashboardScreen> wit
   @override
   void initState() {
     super.initState();
+    _tourKeys = widget.tourKeys ?? AnalyticsDashboardTourKeys();
     _scrollController = ScrollController();
     _scrollController.addListener(_onScroll);
     _chipBarScrollController = ScrollController();
@@ -70,7 +81,21 @@ class _AnalyticsDashboardScreenState extends State<AnalyticsDashboardScreen> wit
       final auth = Provider.of<AuthProvider>(context, listen: false);
       _loadCustomSections(auth.activeBusinessId ?? 0);
       Provider.of<AnalyticsProvider>(context, listen: false).reset();
+
+      if (widget.autoTriggerTour) {
+        InteractiveTourService.maybeStartAutomaticTour(
+          context,
+          AnalyticsDashboardTour.buildConfig(keys: _tourKeys),
+        );
+      }
     });
+  }
+
+  void _startTour(BuildContext context) {
+    InteractiveTourService.startManualTour(
+      context,
+      AnalyticsDashboardTour.buildConfig(keys: _tourKeys),
+    );
   }
 
   void _initializeKeys() {
@@ -270,6 +295,7 @@ class _AnalyticsDashboardScreenState extends State<AnalyticsDashboardScreen> wit
       title: "Inteligencia de Negocio & Radar",
       description:
           "Panel de analítica ejecutiva, financiera y comercial. Integra predicción con IA, inventario estancado y radar de noticias del mercado en tiempo real.",
+      onStartInteractiveTour: () => _startTour(context),
       tips: const [
         InfoTip(
           icon: Icons.dashboard_customize,
@@ -622,10 +648,22 @@ class _AnalyticsDashboardScreenState extends State<AnalyticsDashboardScreen> wit
               mainAxisSpacing: 10,
               childAspectRatio: 2.0,
               children: [
-                _buildIdleFeatureBadge("📊 Ganancia Neta Real", "Sin margen de error", isDark),
-                _buildIdleFeatureBadge("🚀 Motor Predictivo", "Tendencias de ventas", isDark),
-                _buildIdleFeatureBadge("📦 Inventario Muerto", "Rescate de liquidez", isDark),
-                _buildIdleFeatureBadge("📰 Radar Mercado IA", "Perú & Tu Región", isDark),
+                KeyedSubtree(
+                  key: _tourKeys.financialKpisKey,
+                  child: _buildIdleFeatureBadge("📊 Ganancia Neta Real", "Sin margen de error", isDark),
+                ),
+                KeyedSubtree(
+                  key: _tourKeys.salesPaymentChartsKey,
+                  child: _buildIdleFeatureBadge("🚀 Motor Predictivo", "Tendencias de ventas", isDark),
+                ),
+                KeyedSubtree(
+                  key: _tourKeys.restockAlertsKey,
+                  child: _buildIdleFeatureBadge("📦 Inventario Muerto", "Rescate de liquidez", isDark),
+                ),
+                KeyedSubtree(
+                  key: _tourKeys.radarInsightsKey,
+                  child: _buildIdleFeatureBadge("📰 Radar Mercado IA", "Perú & Tu Región", isDark),
+                ),
               ],
             ),
             const SizedBox(height: 24),
@@ -899,10 +937,26 @@ class _AnalyticsDashboardScreenState extends State<AnalyticsDashboardScreen> wit
                   if (index >= visibleSections.length) return null;
 
                   final section = visibleSections[index];
+                  Key? tourKey;
+                  if (section.id == 'commercial_radar') {
+                    tourKey = _tourKeys.radarInsightsKey;
+                  } else if (section.id == 'financial_summary') {
+                    tourKey = _tourKeys.financialKpisKey;
+                  } else if (section.id == 'monthly_sales') {
+                    tourKey = _tourKeys.salesPaymentChartsKey;
+                  } else if (section.id == 'restock_alerts') {
+                    tourKey = _tourKeys.restockAlertsKey;
+                  }
+
+                  Widget sectionWidget = _buildSectionWidget(section.id, data, isDark, prov);
+                  if (tourKey != null) {
+                    sectionWidget = KeyedSubtree(key: tourKey, child: sectionWidget);
+                  }
+
                   return Padding(
                     key: _sectionKeys[section.id],
                     padding: const EdgeInsets.only(bottom: 20),
-                    child: _buildSectionWidget(section.id, data, isDark, prov),
+                    child: sectionWidget,
                   );
                 },
                 childCount: _sections.where((s) => s.isVisible).length,

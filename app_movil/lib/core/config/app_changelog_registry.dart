@@ -22,33 +22,33 @@ class AppChangelogRegistry {
   static const String currentVersion = OwnerLegalIdentity.currentAppVersionWithBuild;
 
   // =========================================================================
-  // 🚀 NOVEDADES ACTIVAS DE LA VERSIÓN ACTUAL (v9.36.0+80)
-  // Plan Maestro 16: Rediseño UX Perfiles, Escáner QR, Activación y Guía Turística Interactiva
+  // 🚀 NOVEDADES ACTIVAS DE LA VERSIÓN ACTUAL (v9.37.0+81)
+  // Plan Maestro 17: Estabilización de Guía Interactiva, Persistencia Hermética, Escanear Factura y Cobertura 19 Pantallas
   // =========================================================================
   static const List<AppChangelogItem> activeChangelog = [
     AppChangelogItem(
       icon: Icons.explore_rounded,
-      title: "Guía Turística Interactiva Paso a Paso",
+      title: "Guía Interactiva Estabilizada y Ampliada a 19 Pantallas",
       description:
-          "Nuevo recorrido guiado interactivo disponible en las 10 pantallas principales de la app. Actívalo cuando desees desde el botón de ayuda (?) o gestiónalo desde tu Perfil.",
+          "Cobertura completa en Catálogo, Escáner IA, Checkout, Detalle de Cliente, Fidelización, Analíticas, Ofertas/Combos e Impresora Térmica, con apertura automática de secciones plegables y tarjetas con flecha precisa en cualquier pantalla.",
     ),
     AppChangelogItem(
-      icon: Icons.qr_code_scanner_rounded,
-      title: "Escáner QR Profesional con Enfoque y Galería",
+      icon: Icons.verified_user_rounded,
+      title: "Persistencia Definitiva y Control Total",
       description:
-          "Escanea códigos de activación con total comodidad frente a pantallas de PC con controles de zoom, linterna y enfoque táctil, o cárgalos directo desde tu galería de fotos.",
+          "Las guías automáticas solo se muestran a usuarios nuevos y jamás reaparecen tras cerrar la app, omitir todas las guías o restaurar respaldos; además \"Reiniciar guías de aprendizaje\" en Perfil ahora relanza de inmediato el recorrido desde Perfil y actualiza Inicio al volver.",
     ),
     AppChangelogItem(
-      icon: Icons.cloud_sync_rounded,
-      title: "Perfiles y Respaldo Inteligente Rediseñados",
+      icon: Icons.document_scanner_rounded,
+      title: "Pantalla Escanear Factura Rediseñada",
       description:
-          "Zona inferior limpia y estilizada, menú de Google Drive y respaldo .mlbg con confirmación animada paso a paso y conteo gramatical exacto de tus negocios.",
+          "Nueva distribución equilibrada con saldo de escaneos IA en vivo, acceso directo al Historial de Facturas, botones mejorados de Cámara/Galería y guía rápida de procesamiento automático.",
     ),
     AppChangelogItem(
-      icon: Icons.verified_rounded,
-      title: "Activación Visual y Mensajes Amigables",
+      icon: Icons.auto_fix_high_rounded,
+      title: "Correcciones de Interfaz y Navegación",
       description:
-          "Nuevo modal interactivo con mensajes claros y humanos al canjear licencias comerciales o bonos de recarga de inteligencia artificial.",
+          "Corrección de navegación completa en Respaldos y Seguridad, anclajes precisos en Inventario/Licencias y margen inferior seguro en Perfil sobre la barra de navegación Android.",
     ),
   ];
 
@@ -70,6 +70,32 @@ class AppChangelogRegistry {
   // En cada nueva compilación de release, mover aquí el bloque anterior.
   // =========================================================================
   static final Map<String, List<AppChangelogItem>> _historicalChangelogs = {
+    '9.36.0+80': const [
+      AppChangelogItem(
+        icon: Icons.explore_rounded,
+        title: "Guía Turística Interactiva Paso a Paso",
+        description:
+            "Nuevo recorrido guiado interactivo disponible en las 10 pantallas principales de la app. Actívalo cuando desees desde el botón de ayuda (?) o gestiónalo desde tu Perfil.",
+      ),
+      AppChangelogItem(
+        icon: Icons.qr_code_scanner_rounded,
+        title: "Escáner QR Profesional con Enfoque y Galería",
+        description:
+            "Escanea códigos de activación con total comodidad frente a pantallas de PC con controles de zoom, linterna y enfoque táctil, o cárgalos directo desde tu galería de fotos.",
+      ),
+      AppChangelogItem(
+        icon: Icons.cloud_sync_rounded,
+        title: "Perfiles y Respaldo Inteligente Rediseñados",
+        description:
+            "Zona inferior limpia y estilizada, menú de Google Drive y respaldo .mlbg con confirmación animada paso a paso y conteo gramatical exacto de tus negocios.",
+      ),
+      AppChangelogItem(
+        icon: Icons.verified_rounded,
+        title: "Activación Visual y Mensajes Amigables",
+        description:
+            "Nuevo modal interactivo con mensajes claros y humanos al canjear licencias comerciales o bonos de recarga de inteligencia artificial.",
+      ),
+    ],
     '9.35.0+79': const [
       AppChangelogItem(
         icon: Icons.auto_awesome_rounded,

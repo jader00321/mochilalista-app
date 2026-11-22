@@ -694,23 +694,21 @@ class _ProductsTabState extends State<ProductsTab>
                 ),
 
                 // 2. Toolbar Fija
-                KeyedSubtree(
-                  key: widget.tourKeys?.searchFiltersKey ?? const ValueKey('tour_search_filters_fallback'),
-                  child: InventoryFilterHeader(
-                    provider: provider,
-                    isDark: isDark,
-                    viewMode: _viewMode,
-                    onViewModeChanged: (mode) => setState(() => _viewMode = mode),
-                    onStockAlertToggled: _onStockAlertToggled,
-                    onStockAlertExplanationRequested: () {
-                      _dismissStockAlertToast();
-                      InventoryFilterHeader.showColorAlertExplanation(
-                        context,
-                        provider,
-                        isDark,
-                      );
-                    },
-                  ),
+                InventoryFilterHeader(
+                  searchFiltersKey: widget.tourKeys?.searchFiltersKey ?? const ValueKey('tour_search_filters_fallback'),
+                  provider: provider,
+                  isDark: isDark,
+                  viewMode: _viewMode,
+                  onViewModeChanged: (mode) => setState(() => _viewMode = mode),
+                  onStockAlertToggled: _onStockAlertToggled,
+                  onStockAlertExplanationRequested: () {
+                    _dismissStockAlertToast();
+                    InventoryFilterHeader.showColorAlertExplanation(
+                      context,
+                      provider,
+                      isDark,
+                    );
+                  },
                 ),
 
                 // 2.1 Banner de Producto en Creación Pendiente (Borrador en Memoria)

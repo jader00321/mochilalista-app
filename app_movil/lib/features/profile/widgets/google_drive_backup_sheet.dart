@@ -18,12 +18,14 @@ class GoogleDriveBackupSheet extends StatefulWidget {
   final IGoogleDriveBackupService? backupService;
   final bool isDark;
   final bool showHeader;
+  final Key? statusCardKey;
 
   const GoogleDriveBackupSheet({
     super.key,
     this.backupService,
     this.isDark = false,
     this.showHeader = true,
+    this.statusCardKey,
   });
 
   /// Abre la hoja modal de respaldo en Google Drive
@@ -1058,6 +1060,7 @@ class _GoogleDriveBackupSheetState extends State<GoogleDriveBackupSheet>
           // Estado: No Vinculado
           if (user == null) ...[
             Container(
+              key: widget.statusCardKey,
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
                 color: cardColor,
@@ -1167,6 +1170,7 @@ class _GoogleDriveBackupSheetState extends State<GoogleDriveBackupSheet>
           // Estado: Vinculado
           if (user != null) ...[
             Container(
+              key: widget.statusCardKey,
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
                 color: cardColor,

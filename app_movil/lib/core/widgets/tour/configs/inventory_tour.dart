@@ -23,7 +23,10 @@ class InventoryTourKeys {
 class InventoryTour {
   static final InventoryTourKeys defaultKeys = InventoryTourKeys();
 
-  static ScreenTourConfig buildConfig({InventoryTourKeys? keys}) {
+  static ScreenTourConfig buildConfig({
+    InventoryTourKeys? keys,
+    Future<void> Function()? onEnsureProductsTabActive,
+  }) {
     final k = keys ?? defaultKeys;
 
     return ScreenTourConfig(
@@ -62,6 +65,7 @@ class InventoryTour {
           tip: 'Te ayuda a preparar tus pedidos a proveedores antes de quedarte sin existencias.',
           icon: Icons.filter_alt_outlined,
           borderRadius: 16.0,
+          onBeforeStep: onEnsureProductsTabActive,
         ),
         TourStep(
           id: 'step_new_product_fab',
@@ -71,6 +75,7 @@ class InventoryTour {
               'Toca este botón para añadir nuevos productos, definir presentaciones de venta o importar masivamente tus artículos.',
           icon: Icons.add_circle_outline_rounded,
           borderRadius: 20.0,
+          onBeforeStep: onEnsureProductsTabActive,
         ),
       ],
     );

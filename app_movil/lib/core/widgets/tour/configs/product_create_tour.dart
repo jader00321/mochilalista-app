@@ -31,6 +31,8 @@ class ProductCreateTour {
 
   static ScreenTourConfig buildConfig({
     ProductCreateTourKeys? keys,
+    Future<void> Function()? onExpandBarcodeSection,
+    Future<void> Function()? onCollapseBarcodeSection,
     Future<void> Function()? onExpandSection,
     Future<void> Function()? onCollapseSection,
   }) {
@@ -62,6 +64,8 @@ class ProductCreateTour {
           tip: 'Cada presentación individual también puede tener su propio código de barras.',
           icon: Icons.qr_code_scanner_rounded,
           borderRadius: 14.0,
+          onBeforeStep: onExpandBarcodeSection,
+          onAfterStep: onCollapseBarcodeSection,
         ),
         TourStep(
           id: 'step_stock_strategy',

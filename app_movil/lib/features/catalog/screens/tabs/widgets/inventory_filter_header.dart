@@ -9,6 +9,7 @@ class InventoryFilterHeader extends StatelessWidget {
   final ValueChanged<int> onViewModeChanged;
   final VoidCallback? onStockAlertToggled;
   final VoidCallback? onStockAlertExplanationRequested;
+  final Key? searchFiltersKey;
 
   const InventoryFilterHeader({
     super.key,
@@ -18,6 +19,7 @@ class InventoryFilterHeader extends StatelessWidget {
     required this.onViewModeChanged,
     this.onStockAlertToggled,
     this.onStockAlertExplanationRequested,
+    this.searchFiltersKey,
   });
 
   Widget _buildSortButton(
@@ -303,6 +305,7 @@ class InventoryFilterHeader extends StatelessWidget {
         minHeight: 70.0,
         maxHeight: 70.0,
         child: Container(
+          key: searchFiltersKey,
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
           color: isDark ? const Color(0xFF14141C) : Colors.grey[100],
           child: Row(

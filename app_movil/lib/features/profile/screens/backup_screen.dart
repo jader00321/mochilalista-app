@@ -348,7 +348,7 @@ class _SmartBackupSectionState extends State<SmartBackupSection> {
 
   @override
   Widget build(BuildContext context) {
-    final auth = Provider.of<AuthProvider>(context, listen: false);
+    final auth = Provider.of<AuthProvider?>(context, listen: false);
 
     return Container(
       decoration: BoxDecoration(color: widget.cardColor, borderRadius: BorderRadius.circular(20), border: Border.all(color: widget.isDark ? Colors.white10 : Colors.purple.withValues(alpha: 0.2)), boxShadow: [if (!widget.isDark) BoxShadow(color: Colors.purple.withValues(alpha: 0.05), blurRadius: 10, offset: const Offset(0, 4))]),
@@ -385,9 +385,9 @@ class _SmartBackupSectionState extends State<SmartBackupSection> {
                 _ActionSubButton(
                   icon: Icons.chat_bubble_outline, label: "Enviar por WhatsApp", color: Colors.green, isDark: widget.isDark,
                   onTap: () async {
-                    if (auth.activeBusinessId == null) return;
+                    if (auth?.activeBusinessId == null) return;
                     CustomSnackBar.show(context, message: "Generando archivo .mlb...", isError: false);
-                    bool ok = await BusinessBackupService.exportBusiness(auth.activeBusinessId!, auth.businessName, includeSecurityPin: _includeSecurityPin);
+                    bool ok = await BusinessBackupService.exportBusiness(auth!.activeBusinessId!, auth.businessName, includeSecurityPin: _includeSecurityPin);
                     if (context.mounted) {
                       if (ok) {
                         CustomSnackBar.show(context, message: "Menú de compartir abierto.", isError: false);
@@ -401,9 +401,9 @@ class _SmartBackupSectionState extends State<SmartBackupSection> {
                 _ActionSubButton(
                   icon: Icons.folder_open_rounded, label: "Guardar en Descargas", color: Colors.orange, isDark: widget.isDark,
                   onTap: () async {
-                    if (auth.activeBusinessId == null) return;
+                    if (auth?.activeBusinessId == null) return;
                     CustomSnackBar.show(context, message: "Guardando en descargas...", isError: false);
-                    bool ok = await BusinessBackupService.exportBusinessToFile(auth.activeBusinessId!, auth.businessName, includeSecurityPin: _includeSecurityPin);
+                    bool ok = await BusinessBackupService.exportBusinessToFile(auth!.activeBusinessId!, auth.businessName, includeSecurityPin: _includeSecurityPin);
                     if (context.mounted) {
                       if (ok) {
                         CustomSnackBar.show(context, message: "¡Guardado en Descargas!", isError: false);
@@ -417,12 +417,12 @@ class _SmartBackupSectionState extends State<SmartBackupSection> {
                 _ActionSubButton(
                   icon: Icons.folder_special_rounded, label: "Elegir carpeta personalizada", color: Colors.blueAccent, isDark: widget.isDark,
                   onTap: () async {
-                    if (auth.activeBusinessId == null) return;
+                    if (auth?.activeBusinessId == null) return;
                     String? customPath = await FilePicker.platform.getDirectoryPath();
                     if (customPath == null) return;
                     if (!context.mounted) return;
                     CustomSnackBar.show(context, message: "Guardando en ruta elegida...", isError: false);
-                    bool ok = await BusinessBackupService.exportBusinessToFile(auth.activeBusinessId!, auth.businessName, includeSecurityPin: _includeSecurityPin, targetDirectory: customPath);
+                    bool ok = await BusinessBackupService.exportBusinessToFile(auth!.activeBusinessId!, auth.businessName, includeSecurityPin: _includeSecurityPin, targetDirectory: customPath);
                     if (context.mounted) {
                       if (ok) {
                         CustomSnackBar.show(context, message: "¡Guardado en la carpeta elegida!", isError: false);
@@ -439,10 +439,10 @@ class _SmartBackupSectionState extends State<SmartBackupSection> {
           ),
           _Divider(isDark: widget.isDark),
           SwitchListTile(
-            title: Text("Incluir Clave de Seguridad", style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: auth.hasPinCache ? null : Colors.grey)),
-            subtitle: Text(auth.hasPinCache ? "El backup requerirá esta clave al importarse." : "Este perfil no tiene clave configurada.", style: const TextStyle(fontSize: 12)),
-            value: auth.hasPinCache ? _includeSecurityPin : false,
-            onChanged: auth.hasPinCache ? (val) {
+            title: Text("Incluir Clave de Seguridad", style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: (auth?.hasPinCache ?? false) ? null : Colors.grey)),
+            subtitle: Text((auth?.hasPinCache ?? false) ? "El backup requerirá esta clave al importarse." : "Este perfil no tiene clave configurada.", style: const TextStyle(fontSize: 12)),
+            value: (auth?.hasPinCache ?? false) ? _includeSecurityPin : false,
+            onChanged: (auth?.hasPinCache ?? false) ? (val) {
               setState(() {
                 _includeSecurityPin = val;
               });
@@ -454,16 +454,16 @@ class _SmartBackupSectionState extends State<SmartBackupSection> {
           _ActionButton(
             icon: Icons.post_add, label: "Importar como Nuevo Negocio", color: Colors.teal, isDark: widget.isDark,
             onTap: () {
-              if (auth.activeUserId == null) return;
-              _handleImport(context, auth, isReplace: false);
+              if (auth?.activeUserId == null) return;
+              _handleImport(context, auth!, isReplace: false);
             },
           ),
           _Divider(isDark: widget.isDark),
           _ActionButton(
             icon: Icons.system_update_alt, label: "Reemplazar Negocio Actual", color: Colors.redAccent, isDark: widget.isDark, isBottom: true,
             onTap: () {
-              if (auth.activeUserId == null || auth.activeBusinessId == null) return;
-              _handleImport(context, auth, isReplace: true);
+              if (auth?.activeUserId == null || auth?.activeBusinessId == null) return;
+              _handleImport(context, auth!, isReplace: true);
             },
           ),
         ],
@@ -623,33 +623,32 @@ class _BackupScreenState extends State<BackupScreen> {
         child: Stack(
           children: [
             ListView(
+              cacheExtent: 9999,
               padding: EdgeInsets.only(
                 left: 20,
                 right: 20,
                 top: 10,
-                bottom: math.max(MediaQuery.viewPaddingOf(context).bottom, 16.0) + 16.0,
+                bottom: math.max(MediaQuery.viewPaddingOf(context).bottom, 16.0) + 24.0,
               ),
               children: [
-                // =======================================================
-                // BLOQUE A: COPIA DE SEGURIDAD EN LA NUBE (GOOGLE DRIVE)
-                // =======================================================
-                _buildSectionHeader(
-                  icon: Icons.cloud_done_rounded,
-                  title: "Copia de Seguridad en la Nube",
-                  subtitle: "Base de datos completa: todos tus perfiles y negocios con cifrado AES-256-GCM en Google Drive.",
-                  color: Colors.blue,
-                  isDark: isDark,
-                ),
-                const SizedBox(height: 14),
-                KeyedSubtree(
-                  key: _tourKeys.cloudBackupKey,
-                  child: GoogleDriveBackupSheet(
+                  // =======================================================
+                  // BLOQUE A: COPIA DE SEGURIDAD EN LA NUBE (GOOGLE DRIVE)
+                  // =======================================================
+                  _buildSectionHeader(
+                    icon: Icons.cloud_done_rounded,
+                    title: "Copia de Seguridad en la Nube",
+                    subtitle: "Base de datos completa: todos tus perfiles y negocios con cifrado AES-256-GCM en Google Drive.",
+                    color: Colors.blue,
+                    isDark: isDark,
+                  ),
+                  const SizedBox(height: 14),
+                  GoogleDriveBackupSheet(
+                    statusCardKey: _tourKeys.cloudBackupKey,
                     backupService: widget.driveBackupService,
                     isDark: isDark,
                     showHeader: false,
                   ),
-                ),
-                const SizedBox(height: 36),
+                  const SizedBox(height: 36),
 
               // =======================================================
               // BLOQUE B: COPIA LOCAL EN EL TELÉFONO (.MLBG / .MLB)

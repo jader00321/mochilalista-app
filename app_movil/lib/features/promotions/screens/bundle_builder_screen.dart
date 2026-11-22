@@ -12,14 +12,26 @@ import 'package:app_movil/core/widgets/info_tooltip_button.dart';
 import 'package:app_movil/core/widgets/interactive_sheet_wrapper.dart';
 import 'package:app_movil/core/widgets/morphing_accordion.dart';
 import 'package:intl/intl.dart';
+import 'package:app_movil/core/services/tour/interactive_tour_service.dart';
+import 'package:app_movil/core/widgets/tour/configs/bundle_builder_tour.dart';
 
 class BundleBuilderScreen extends StatefulWidget {
   final BundleModel? bundleToEdit;
   final InventoryWrapper? initialItem;
   final List<InventoryWrapper>? initialMultipleItems;
   final String? initialTipoPromocion;
+  final bool autoTriggerTour;
+  final BundleBuilderTourKeys? tourKeys;
   
-  const BundleBuilderScreen({super.key, this.bundleToEdit, this.initialItem, this.initialMultipleItems, this.initialTipoPromocion});
+  const BundleBuilderScreen({
+    super.key,
+    this.bundleToEdit,
+    this.initialItem,
+    this.initialMultipleItems,
+    this.initialTipoPromocion,
+    this.autoTriggerTour = true,
+    this.tourKeys,
+  });
 
   @override
   State<BundleBuilderScreen> createState() => _BundleBuilderScreenState();
@@ -30,6 +42,7 @@ class _BundleBuilderScreenState extends State<BundleBuilderScreen> {
   final _nameController = TextEditingController();
   final _descController = TextEditingController();
   final _priceController = TextEditingController();
+  late final BundleBuilderTourKeys _tourKeys;
   
   List<BundleItemModel> _selectedItems = [];
   bool _isActive = true;
@@ -48,6 +61,16 @@ class _BundleBuilderScreenState extends State<BundleBuilderScreen> {
   @override
   void initState() {
     super.initState();
+    _tourKeys = widget.tourKeys ?? BundleBuilderTourKeys();
+    if (widget.autoTriggerTour) {
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        if (!mounted) return;
+        await InteractiveTourService.maybeStartAutomaticTour(
+          context,
+          BundleBuilderTour.buildConfig(keys: _tourKeys),
+        );
+      });
+    }
     if (widget.bundleToEdit != null) {
       _nameController.text = widget.bundleToEdit!.nombrePaquete;
       _descController.text = widget.bundleToEdit!.descripcion ?? '';
@@ -110,6 +133,13 @@ class _BundleBuilderScreenState extends State<BundleBuilderScreen> {
         }
       });
     }
+  }
+
+  void _startTour(BuildContext context) {
+    InteractiveTourService.startManualTour(
+      context,
+      BundleBuilderTour.buildConfig(keys: _tourKeys),
+    );
   }
 
   @override
@@ -773,11 +803,12 @@ class _BundleBuilderScreenState extends State<BundleBuilderScreen> {
       appBar: AppBar(
         title: Text(widget.bundleToEdit == null ? "Nuevo Paquete" : "Editar Paquete"),
         actions: [
-          const InfoTooltipButton(
+          InfoTooltipButton(
             title: "Creador de Combos y Promociones",
             description:
                 "Crea paquetes, combos escolares o liquidaciones agrupando productos con precios de oferta para maximizar tus ventas.",
-            tips: [
+            onStartInteractiveTour: () => _startTour(context),
+            tips: const [
               InfoTip(
                 icon: Icons.inventory_2_outlined,
                 text:
@@ -808,7 +839,10 @@ class _BundleBuilderScreenState extends State<BundleBuilderScreen> {
           padding: const EdgeInsets.all(16),
           children: [
             // BASIC INFO SECTION
-            _buildPromoTypeSelector(isDark),
+            KeyedSubtree(
+              key: _tourKeys.identityDurationKey,
+              child: _buildPromoTypeSelector(isDark),
+            ),
             const SizedBox(height: 24),
             _buildDateLimits(isDark),
             const SizedBox(height: 24),
@@ -859,6 +893,7 @@ class _BundleBuilderScreenState extends State<BundleBuilderScreen> {
             const SizedBox(height: 16),
             // HERO PRICE CARD
             AnimatedContainer(
+              key: _tourKeys.pricingSavingsKey,
               duration: const Duration(milliseconds: 300),
               curve: Curves.easeOut,
               padding: const EdgeInsets.all(20),
@@ -1074,6 +1109,7 @@ class _BundleBuilderScreenState extends State<BundleBuilderScreen> {
             
             // CONTENT SECTION
             Row(
+              key: _tourKeys.productSelectionKey,
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                  const Text("Contenido del Paquete", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),

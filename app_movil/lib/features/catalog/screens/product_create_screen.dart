@@ -32,6 +32,7 @@ class ProductCreateScreen extends StatefulWidget {
 
 class _ProductCreateScreenState extends State<ProductCreateScreen> {
   final _tourKeys = ProductCreateTourKeys();
+  final _optionalInfoController = ExpansibleController();
   bool _wasOriginallyExpanded = true;
   final _formKey = GlobalKey<FormState>();
   final _nameCtrl = TextEditingController();
@@ -133,9 +134,32 @@ class _ProductCreateScreenState extends State<ProductCreateScreen> {
     });
   }
 
+  Future<void> _expandOptionalInfoForTour() async {
+    try {
+      if (!_optionalInfoController.isExpanded) {
+        _optionalInfoController.expand();
+        await Future.delayed(const Duration(milliseconds: 320));
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _collapseOptionalInfoForTour() async {
+    try {
+      if (_optionalInfoController.isExpanded &&
+          _barcodeCtrl.text.isEmpty &&
+          _descCtrl.text.isEmpty &&
+          _imgUrlCtrl.text.isEmpty) {
+        _optionalInfoController.collapse();
+        await Future.delayed(const Duration(milliseconds: 250));
+      }
+    } catch (_) {}
+  }
+
   ScreenTourConfig _buildTourConfig() {
     return ProductCreateTour.buildConfig(
       keys: _tourKeys,
+      onExpandBarcodeSection: _expandOptionalInfoForTour,
+      onCollapseBarcodeSection: _collapseOptionalInfoForTour,
       onExpandSection: () async {
         _wasOriginallyExpanded = _allExpanded;
         if (!_allExpanded) {
@@ -670,6 +694,7 @@ class _ProductCreateScreenState extends State<ProductCreateScreen> {
                 KeyedSubtree(
                   key: _tourKeys.barcodeKey,
                   child: ProductOptionalInfo(
+                    controller: _optionalInfoController,
                     descCtrl: _descCtrl,
                     imgCtrl: _imgUrlCtrl,
                     barcodeCtrl: _barcodeCtrl,
@@ -692,55 +717,60 @@ class _ProductCreateScreenState extends State<ProductCreateScreen> {
                 const SizedBox(height: 20),
                 KeyedSubtree(
                   key: _tourKeys.variantsHeaderKey,
-                  child: VariantSectionHeader(
-                  isDark: isDark,
-                  allExpanded: _allExpanded,
-                  canReorder: _controllers.length > 1,
-                  onToggleExpandCollapse: () => setState(() {
-                    _allExpanded = !_allExpanded;
-                    for (var c in _controllers) {
-                      c['isExpanded'] = _allExpanded;
-                    }
-                  }),
-                  onReorder: () => VariantReorderModal.show(
-                    context: context,
-                    isDark: isDark,
-                    controllers: _controllers,
-                    onReorder: (oldIdx, newIdx) => setState(_syncDraft),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      VariantSectionHeader(
+                        isDark: isDark,
+                        allExpanded: _allExpanded,
+                        canReorder: _controllers.length > 1,
+                        onToggleExpandCollapse: () => setState(() {
+                          _allExpanded = !_allExpanded;
+                          for (var c in _controllers) {
+                            c['isExpanded'] = _allExpanded;
+                          }
+                        }),
+                        onReorder: () => VariantReorderModal.show(
+                          context: context,
+                          isDark: isDark,
+                          controllers: _controllers,
+                          onReorder: (oldIdx, newIdx) => setState(_syncDraft),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      if (_controllers.length > 1) ...[
+                        VariantJumpBar(
+                          controllers: _controllers,
+                          presentationKeys: _presentationKeys,
+                          isDark: isDark,
+                          onVariantSelected: (ctrl) => setState(() => ctrl['isExpanded'] = true),
+                        ),
+                        const SizedBox(height: 16),
+                      ],
+                      ProductCreatePresentationList(
+                        controllers: _controllers,
+                        presentationKeys: _presentationKeys,
+                        isDark: isDark,
+                        provider: provider,
+                        deferredProviderNames: _deferredProviderNames,
+                        modoStock: _modoStock,
+                        sharedStockCtrl: _sharedStockCtrl,
+                        baseCostCtrl: _baseCostCtrl,
+                        onSetDefault: (i) => setState(() => ProductCreateOperations.setDefault(index: i, controllers: _controllers, onSyncDraft: _syncDraft, context: context)),
+                        onMoveUp: (i) => setState(() => ProductCreateOperations.moveUp(index: i, controllers: _controllers, onSyncDraft: _syncDraft)),
+                        onMoveDown: (i) => setState(() => ProductCreateOperations.moveDown(index: i, controllers: _controllers, onSyncDraft: _syncDraft)),
+                        onRemove: (i) => setState(() => ProductCreateOperations.removePresentation(index: i, controllers: _controllers, keys: _presentationKeys, onSyncDraft: _syncDraft, context: context)),
+                        onClone: (i) => setState(() => ProductCreateOperations.clonePresentation(index: i, controllers: _controllers, keys: _presentationKeys, onSyncDraft: _syncDraft, context: context)),
+                        onStateChange: (i, val) {
+                          setState(() => _controllers[i]['estado'] = val ? 'publico' : 'privado');
+                          _syncDraft();
+                        },
+                        onCreateLeftover: (parentId, leftoverStock, costoBaseIndiv) => setState(() => ProductCreateOperations.createLeftover(parentId: parentId, leftoverUnits: leftoverStock, costoBaseIndividual: costoBaseIndiv, controllers: _controllers, keys: _presentationKeys, onSyncDraft: _syncDraft, context: context)),
+                        onInvalidateLeftover: (parentId) => setState(() => ProductCreateOperations.invalidateLeftover(parentId: parentId, controllers: _controllers, onSyncDraft: _syncDraft)),
+                        onSyncDraft: _syncDraft,
+                      ),
+                    ],
                   ),
-                ),
-                ),
-                const SizedBox(height: 8),
-                if (_controllers.length > 1) ...[
-                  VariantJumpBar(
-                    controllers: _controllers,
-                    presentationKeys: _presentationKeys,
-                    isDark: isDark,
-                    onVariantSelected: (ctrl) => setState(() => ctrl['isExpanded'] = true),
-                  ),
-                  const SizedBox(height: 16),
-                ],
-                ProductCreatePresentationList(
-                  controllers: _controllers,
-                  presentationKeys: _presentationKeys,
-                  isDark: isDark,
-                  provider: provider,
-                  deferredProviderNames: _deferredProviderNames,
-                  modoStock: _modoStock,
-                  sharedStockCtrl: _sharedStockCtrl,
-                  baseCostCtrl: _baseCostCtrl,
-                  onSetDefault: (i) => setState(() => ProductCreateOperations.setDefault(index: i, controllers: _controllers, onSyncDraft: _syncDraft, context: context)),
-                  onMoveUp: (i) => setState(() => ProductCreateOperations.moveUp(index: i, controllers: _controllers, onSyncDraft: _syncDraft)),
-                  onMoveDown: (i) => setState(() => ProductCreateOperations.moveDown(index: i, controllers: _controllers, onSyncDraft: _syncDraft)),
-                  onRemove: (i) => setState(() => ProductCreateOperations.removePresentation(index: i, controllers: _controllers, keys: _presentationKeys, onSyncDraft: _syncDraft, context: context)),
-                  onClone: (i) => setState(() => ProductCreateOperations.clonePresentation(index: i, controllers: _controllers, keys: _presentationKeys, onSyncDraft: _syncDraft, context: context)),
-                  onStateChange: (i, val) {
-                    setState(() => _controllers[i]['estado'] = val ? 'publico' : 'privado');
-                    _syncDraft();
-                  },
-                  onCreateLeftover: (parentId, leftoverStock, costoBaseIndiv) => setState(() => ProductCreateOperations.createLeftover(parentId: parentId, leftoverUnits: leftoverStock, costoBaseIndividual: costoBaseIndiv, controllers: _controllers, keys: _presentationKeys, onSyncDraft: _syncDraft, context: context)),
-                  onInvalidateLeftover: (parentId) => setState(() => ProductCreateOperations.invalidateLeftover(parentId: parentId, controllers: _controllers, onSyncDraft: _syncDraft)),
-                  onSyncDraft: _syncDraft,
                 ),
                 const SizedBox(height: 8),
                 SizedBox(

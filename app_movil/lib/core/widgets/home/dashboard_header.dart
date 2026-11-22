@@ -27,7 +27,8 @@ import 'package:app_movil/core/services/lifecycle_resume_coordinator.dart';
 
 class DashboardHeader extends StatefulWidget {
   final HomeScreenTourKeys? tourKeys;
-  const DashboardHeader({super.key, this.tourKeys});
+  final VoidCallback? onProfileReturned;
+  const DashboardHeader({super.key, this.tourKeys, this.onProfileReturned});
 
   @override
   State<DashboardHeader> createState() => _DashboardHeaderState();
@@ -342,12 +343,14 @@ class _DashboardHeaderState extends State<DashboardHeader> with SingleTickerProv
                         if (mounted) {
                           _loadData(forceRefresh: true);
                         }
+                        widget.onProfileReturned?.call();
                       });
                   } else {
                     Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const ProfileSelectionScreen()));
                   }
                 },
                 child: Container(
+                  key: widget.tourKeys?.licenseAlertKey,
                   width: 50,
                   height: 50,
                   decoration: BoxDecoration(

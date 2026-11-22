@@ -15,13 +15,20 @@ import 'package:app_movil/features/smart_quotation/widgets/crm/promotion_broadca
 import 'package:app_movil/features/smart_quotation/widgets/crm/client_loyalty_history_modal.dart';
 import 'package:app_movil/core/utils/currency_formatter.dart';
 import 'package:app_movil/core/widgets/info_tooltip_button.dart';
+import 'package:app_movil/core/services/tour/interactive_tour_service.dart';
+import 'package:app_movil/core/widgets/tour/tour_step_model.dart';
+import 'package:app_movil/core/widgets/tour/configs/loyalty_center_tour.dart';
 
 class LoyaltyCenterScreen extends StatefulWidget {
   final int initialTabIndex;
+  final bool autoTriggerTour;
+  final LoyaltyCenterTourKeys? tourKeys;
 
   const LoyaltyCenterScreen({
     super.key,
     this.initialTabIndex = 0,
+    this.autoTriggerTour = true,
+    this.tourKeys,
   });
 
   @override
@@ -31,6 +38,7 @@ class LoyaltyCenterScreen extends StatefulWidget {
 class _LoyaltyCenterScreenState extends State<LoyaltyCenterScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
+  late final LoyaltyCenterTourKeys _tourKeys;
   final ClientService _clientService = ClientService();
 
   final TextEditingController _reputationSearchCtrl = TextEditingController();
@@ -65,6 +73,7 @@ class _LoyaltyCenterScreenState extends State<LoyaltyCenterScreen>
   @override
   void initState() {
     super.initState();
+    _tourKeys = widget.tourKeys ?? LoyaltyCenterTourKeys();
     _tabController = TabController(
       length: 3,
       vsync: this,
@@ -73,7 +82,48 @@ class _LoyaltyCenterScreenState extends State<LoyaltyCenterScreen>
     _tabController.addListener(() {
       if (mounted) setState(() {});
     });
-    WidgetsBinding.instance.addPostFrameCallback((_) => loadData());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      loadData();
+      if (widget.autoTriggerTour) {
+        InteractiveTourService.maybeStartAutomaticTour(
+          context,
+          _buildTourConfig(),
+          onTourCompleted: () {
+            if (mounted && _tabController.index != widget.initialTabIndex) {
+              _tabController.animateTo(widget.initialTabIndex);
+            }
+          },
+        );
+      }
+    });
+  }
+
+  ScreenTourConfig _buildTourConfig() {
+    return LoyaltyCenterTour.buildConfig(
+      keys: _tourKeys,
+      onSwitchTab: (index) async {
+        if (!mounted) return;
+        _tabController.animateTo(index);
+        await Future.delayed(const Duration(milliseconds: 300));
+      },
+      onRestoreInitialTab: () async {
+        if (!mounted) return;
+        _tabController.animateTo(widget.initialTabIndex);
+        await Future.delayed(const Duration(milliseconds: 300));
+      },
+    );
+  }
+
+  void _startTour(BuildContext context) {
+    InteractiveTourService.startManualTour(
+      context,
+      _buildTourConfig(),
+      onTourCompleted: () {
+        if (mounted && _tabController.index != widget.initialTabIndex) {
+          _tabController.animateTo(widget.initialTabIndex);
+        }
+      },
+    );
   }
 
   @override
@@ -368,11 +418,12 @@ class _LoyaltyCenterScreenState extends State<LoyaltyCenterScreen>
             tooltip: "Actualizar datos",
             onPressed: _loadData,
           ),
-          const InfoTooltipButton(
+          InfoTooltipButton(
             title: "Centro de Fidelización y Gamificación",
             description:
                 "Gestiona los puntos acumulados por tus clientes, revisa y aprueba recompensas comerciales desbloqueadas y difunde ofertas exclusivas por WhatsApp.",
-            tips: [
+            onStartInteractiveTour: () => _startTour(context),
+            tips: const [
               InfoTip(
                 icon: Icons.stars_rounded,
                 text: "Los clientes suman puntos automáticamente con compras al contado y pagos puntuales.",
@@ -627,6 +678,7 @@ class _LoyaltyCenterScreenState extends State<LoyaltyCenterScreen>
       children: [
         // Buscador y Chips de Niveles
         Container(
+          key: _tourKeys.pendingClientsKey,
           padding: const EdgeInsets.fromLTRB(16, 10, 16, 8),
           color: cardColor,
           child: Column(
@@ -1312,6 +1364,7 @@ class _LoyaltyCenterScreenState extends State<LoyaltyCenterScreen>
               children: [
                 Expanded(
                   child: OutlinedButton.icon(
+                    key: _tourKeys.rulesConfigKey,
                     onPressed: _openRulesConfig,
                     icon: const Icon(Icons.tune_rounded, size: 16),
                     label: const Text("Reglas de Puntos", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
@@ -1447,6 +1500,7 @@ class _LoyaltyCenterScreenState extends State<LoyaltyCenterScreen>
 
             // --- SECCIÓN 2: CATÁLOGO DE METAS DEL NEGOCIO ---
             Row(
+              key: _tourKeys.rewardsCatalogKey,
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Expanded(
@@ -2513,6 +2567,7 @@ class _LoyaltyCenterScreenState extends State<LoyaltyCenterScreen>
               width: double.infinity,
               height: 46,
               child: ElevatedButton.icon(
+                key: _tourKeys.broadcastWhatsappKey,
                 onPressed: canBroadcast
                     ? () {
                         final auth = Provider.of<AuthProvider>(context, listen: false);

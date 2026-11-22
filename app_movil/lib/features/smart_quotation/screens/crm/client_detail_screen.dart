@@ -20,15 +20,21 @@ import 'package:app_movil/core/widgets/confirm_action_modal.dart';
 import 'package:app_movil/features/smart_quotation/widgets/history/detail_widgets/whatsapp_preview_modal.dart';
 import 'package:app_movil/core/widgets/info_tooltip_button.dart';
 import 'package:app_movil/core/widgets/deep_nav_return_pill.dart'; 
+import 'package:app_movil/core/services/tour/interactive_tour_service.dart';
+import 'package:app_movil/core/widgets/tour/configs/client_detail_tour.dart';
 
 class ClientDetailScreen extends StatefulWidget {
   final ClientModel client;
   final bool autoRefreshOnLoad;
+  final bool autoTriggerTour;
+  final ClientDetailTourKeys? tourKeys;
 
   const ClientDetailScreen({
     super.key,
     required this.client,
     this.autoRefreshOnLoad = true,
+    this.autoTriggerTour = true,
+    this.tourKeys,
   });
 
   @override
@@ -38,6 +44,7 @@ class ClientDetailScreen extends StatefulWidget {
 class _ClientDetailScreenState extends State<ClientDetailScreen> with SingleTickerProviderStateMixin {
   late TabController _tabController;
   late ClientModel _currentClient;
+  late final ClientDetailTourKeys _tourKeys;
   
   final ScrollController _scrollController = ScrollController();
   bool _showScrollToTop = false;
@@ -46,6 +53,7 @@ class _ClientDetailScreenState extends State<ClientDetailScreen> with SingleTick
   void initState() {
     super.initState();
     _currentClient = widget.client; 
+    _tourKeys = widget.tourKeys ?? ClientDetailTourKeys();
     _tabController = TabController(length: 3, vsync: this);
     
     _scrollController.addListener(() {
@@ -61,6 +69,23 @@ class _ClientDetailScreenState extends State<ClientDetailScreen> with SingleTick
         _refreshData();
       });
     }
+
+    if (widget.autoTriggerTour) {
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        if (!mounted) return;
+        await InteractiveTourService.maybeStartAutomaticTour(
+          context,
+          ClientDetailTour.buildConfig(keys: _tourKeys),
+        );
+      });
+    }
+  }
+
+  void _startTour(BuildContext context) {
+    InteractiveTourService.startManualTour(
+      context,
+      ClientDetailTour.buildConfig(keys: _tourKeys),
+    );
   }
 
   @override
@@ -268,11 +293,12 @@ class _ClientDetailScreenState extends State<ClientDetailScreen> with SingleTick
               pinned: true, 
               floating: false,
               actions: [
-                const InfoTooltipButton(
+                InfoTooltipButton(
                   title: "Detalle y Estado de Cuenta",
                   description:
                       "Visión 360° del cliente: balance de deuda, compras históricas, cotizaciones pendientes y libro contable de abonos.",
-                  tips: [
+                  onStartInteractiveTour: () => _startTour(context),
+                  tips: const [
                     InfoTip(
                       icon: Icons.payments_outlined,
                       text:
@@ -360,14 +386,18 @@ class _ClientDetailScreenState extends State<ClientDetailScreen> with SingleTick
             ),
             
             SliverToBoxAdapter(
-              child: ClientStatsHeader(
-                client: _currentClient,
-                isDark: isDark,
-                onWhatsAppTap: () => _launchWhatsApp(context),
-                onCallTap: () => _launchCall(context),
-                onGoToQuickSale: _goToQuickSale,
-                onGoToQuotation: _goToManualQuotation,
-                onFinanceActionCompleted: _refreshData,
+              child: KeyedSubtree(
+                key: _tourKeys.balanceCardKey,
+                child: ClientStatsHeader(
+                  client: _currentClient,
+                  isDark: isDark,
+                  onWhatsAppTap: () => _launchWhatsApp(context),
+                  onCallTap: () => _launchCall(context),
+                  onGoToQuickSale: _goToQuickSale,
+                  onGoToQuotation: _goToManualQuotation,
+                  onFinanceActionCompleted: _refreshData,
+                  whatsappContactKey: _tourKeys.whatsappContactKey,
+                ),
               ),
             ),
             
@@ -407,6 +437,7 @@ class _ClientDetailScreenState extends State<ClientDetailScreen> with SingleTick
                   ],
                 ),
                 surfaceColor,
+                subtreeKey: _tourKeys.movementsTabsKey,
               ),
             ),
           ];
@@ -448,6 +479,7 @@ class _ClientDetailScreenState extends State<ClientDetailScreen> with SingleTick
           
           const SizedBox(height: 16),
           FloatingActionButton.extended(
+            key: _tourKeys.registerPaymentKey,
             heroTag: 'btn_abono',
             onPressed: () => _showPaymentModal(context),
             backgroundColor: isDark ? Colors.green[600] : Colors.green[700],
@@ -466,8 +498,9 @@ class _ClientDetailScreenState extends State<ClientDetailScreen> with SingleTick
 class _SliverAppBarDelegate extends SliverPersistentHeaderDelegate {
   final TabBar _tabBar;
   final Color backgroundColor;
+  final Key? subtreeKey;
 
-  _SliverAppBarDelegate(this._tabBar, this.backgroundColor);
+  _SliverAppBarDelegate(this._tabBar, this.backgroundColor, {this.subtreeKey});
 
   @override
   double get minExtent => _tabBar.preferredSize.height;
@@ -477,6 +510,7 @@ class _SliverAppBarDelegate extends SliverPersistentHeaderDelegate {
   @override
   Widget build(BuildContext context, double shrinkOffset, bool overlapsContent) {
     return Container(
+      key: subtreeKey,
       color: backgroundColor,
       child: _tabBar,
     );

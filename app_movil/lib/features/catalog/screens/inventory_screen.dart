@@ -51,7 +51,14 @@ class PlaceholderTab extends StatelessWidget {
 
 class InventoryScreen extends StatefulWidget {
   final int initialTabIndex;
-  const InventoryScreen({super.key, this.initialTabIndex = 0});
+  final bool autoTriggerTour;
+  final InventoryTourKeys? tourKeys;
+  const InventoryScreen({
+    super.key,
+    this.initialTabIndex = 0,
+    this.autoTriggerTour = true,
+    this.tourKeys,
+  });
 
   @override
   State<InventoryScreen> createState() => _InventoryScreenState();
@@ -60,9 +67,17 @@ class InventoryScreen extends StatefulWidget {
 class _InventoryScreenState extends State<InventoryScreen>
     with TickerProviderStateMixin {
   final _tourKeys = InventoryTourKeys();
+  InventoryTourKeys get _effectiveTourKeys => widget.tourKeys ?? _tourKeys;
   late TabController _tabController;
   late AnimationController _glowController;
   late Animation<double> _glowAnimation;
+
+  Future<void> _ensureProductsTabActiveForTour() async {
+    if (_tabController.index != 0) {
+      _tabController.animateTo(0);
+      await Future.delayed(const Duration(milliseconds: 300));
+    }
+  }
 
   @override
   void initState() {
@@ -86,10 +101,15 @@ class _InventoryScreenState extends State<InventoryScreen>
         context,
         listen: false,
       ).loadInventory(reset: true);
-      InteractiveTourService.maybeStartAutomaticTour(
-        context,
-        InventoryTour.buildConfig(keys: _tourKeys),
-      );
+      if (widget.autoTriggerTour) {
+        InteractiveTourService.maybeStartAutomaticTour(
+          context,
+          InventoryTour.buildConfig(
+            keys: _effectiveTourKeys,
+            onEnsureProductsTabActive: _ensureProductsTabActiveForTour,
+          ),
+        );
+      }
     });
   }
 
@@ -179,7 +199,7 @@ class _InventoryScreenState extends State<InventoryScreen>
 
         actions: [
           KeyedSubtree(
-            key: _tourKeys.invoiceAiKey,
+            key: _effectiveTourKeys.invoiceAiKey,
             child: Padding(
               padding: const EdgeInsets.only(right: 8.0),
               child: ScaleTransition(
@@ -247,7 +267,10 @@ class _InventoryScreenState extends State<InventoryScreen>
             ],
             onStartInteractiveTour: () => InteractiveTourService.startManualTour(
               context,
-              InventoryTour.buildConfig(keys: _tourKeys),
+              InventoryTour.buildConfig(
+                keys: _effectiveTourKeys,
+                onEnsureProductsTabActive: _ensureProductsTabActiveForTour,
+              ),
             ),
             tourButtonLabel: 'Iniciar guía interactiva paso a paso',
           ),
@@ -256,7 +279,7 @@ class _InventoryScreenState extends State<InventoryScreen>
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(48),
           child: KeyedSubtree(
-            key: _tourKeys.tabsKey,
+            key: _effectiveTourKeys.tabsKey,
             child: TabBar(
               controller: _tabController,
               isScrollable: true,
@@ -335,7 +358,7 @@ class _InventoryScreenState extends State<InventoryScreen>
                   children: [
                     ProductsTab(
                       tabController: _tabController,
-                      tourKeys: _tourKeys,
+                      tourKeys: _effectiveTourKeys,
                     ),
                     const OffersTab(),
                     const CategoriesTab(),

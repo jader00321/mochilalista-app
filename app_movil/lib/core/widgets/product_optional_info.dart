@@ -7,12 +7,16 @@ class ProductOptionalInfo extends StatelessWidget {
   final TextEditingController descCtrl;
   final TextEditingController imgCtrl;
   final TextEditingController barcodeCtrl;
+  final ExpansibleController? controller;
+  final Key? barcodeFieldKey;
 
   const ProductOptionalInfo({
     super.key, 
     required this.descCtrl, 
     required this.imgCtrl, 
-    required this.barcodeCtrl
+    required this.barcodeCtrl,
+    this.controller,
+    this.barcodeFieldKey,
   });
   
   @override
@@ -28,6 +32,7 @@ class ProductOptionalInfo extends StatelessWidget {
       child: Theme(
         data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
         child: ExpansionTile(
+          controller: controller,
           initiallyExpanded: barcodeCtrl.text.isNotEmpty || descCtrl.text.isNotEmpty || imgCtrl.text.isNotEmpty,
           iconColor: isDark ? Colors.white : Colors.black87,
           collapsedIconColor: isDark ? Colors.white70 : Colors.grey,
@@ -46,7 +51,11 @@ class ProductOptionalInfo extends StatelessWidget {
             const SizedBox(height: 20),
             CustomTextField(label: "Descripción Global", controller: descCtrl, maxLines: 3, icon: Icons.description),
             const SizedBox(height: 20),
-            BarcodeInputField(controller: barcodeCtrl, label: "Código de Barras Global"),
+            BarcodeInputField(
+              key: barcodeFieldKey,
+              controller: barcodeCtrl,
+              label: "Código de Barras Global",
+            ),
           ],
         ),
       ),

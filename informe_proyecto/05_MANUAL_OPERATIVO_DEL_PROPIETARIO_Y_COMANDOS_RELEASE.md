@@ -163,7 +163,7 @@ Abre tu navegador web en `http://localhost:8080`. Dispones de **8 módulos de co
      - **`PROSPECTO`:** Contacto comercial en prospección sin licencia generada ni expiración ficticia (`license_expires = null`).
      - **`TRIAL GRATUITO (Días Reales)`:** Permite ingresar los días exactos que le restan al comerciante en su teléfono (`trial_days_remaining`, ej. `17 días`). No impone ventana artificial de actualización (`updates_until = null`), respetando la naturaleza Offline-First de la app móvil.
      - **`CON LICENCIA ACTIVA`:** Planes comerciales tarifados (`MENSUAL`, `TRIMESTRAL`, `SEMESTRAL`, `ANUAL`, `PERPETUO`).
-   * **Versión de App Instalada:** (por defecto: `9.36.0` — Esquema SQLite `v36`).
+   * **Versión de App Instalada:** (por defecto: `9.37.0` — Esquema SQLite `v36`).
    * **Gestión de Créditos IA:**
      - **Saldo IA Reportado en Celular:** Créditos que el cliente indica tener disponibles en su app móvil (ej. `49 IA`).
      - **Bonos IA Pendientes por Emitir:** Escaneos adicionales que se incorporarán en la próxima emisión de token criptográfico Ed25519 (ej. `+20 IA`). Ambos valores se muestran desacoplados de forma transparente, previniendo falsas sumas anticipadas en el CRM.
@@ -480,11 +480,12 @@ La matriz compara la versión instalada de cada cliente contra el último lanzam
 ### 3.5. Comportamiento en la App Móvil: Snapshot `.bak` y Modal Post-Actualización
 1. **Snapshot `.bak` Transparente:** La app crea una copia `mochilalista.db_pre_upgrade_vX.bak` antes de aplicar migraciones de esquema SQLite. Si ocurre un fallo eléctrico o de hardware durante la migración, la app restaura el `.bak` automáticamente sin perder ningún dato de venta o inventario.
 2. **Modal Festivo Post-Actualización:** Tras iniciar la nueva versión, se despliega el modal no intrusivo con las novedades de la versión.
-3. **Novedades Operativas de UX y Seguridad (v9.36.0):**
-   * **Margen Blanco Reglamentario (32px):** Todas las exportaciones de `"Descargar Solo QR"` en `mochilalista_admin` incorporan un margen blanco perimetral de 32px, eliminando fallos de recorte al leer imágenes QR desde la galería del celular.
-   * **Activación Clara y Amigable:** Reemplazo de los mensajes técnicos ("Nonce 1 <= 1") por el nuevo modal interactivo animado (`LicenseActivationFeedbackModal`) con estados humanos categorizados para licencias comerciales y bonos IA.
-   * **Escáner QR para Monitores PC:** Nuevo visor de cámara con controles de linterna, zoom rápido (1x/2x/3x), enfoque táctil (*Tap-to-Focus*) y protección estricta contra superposición de la barra inferior de navegación Android (`<, ○, |||`).
-   * **Guía Turística Interactiva Paso a Paso:** Sistema de inducción interactivo (*Coach Marks*) en las 10 pantallas troncales de la app (Home, Perfil, Crear Producto, Caja Rápida, Inventario, Cotizador Escolar, Clientes CRM, Historial de Ventas, Respaldos y Licencias). Incluye supresión automática tras restaurar copias de seguridad de Google Drive o `.mlbg`, invocación manual bajo demanda desde el botón de ayuda (`?` / `i`) de cada pantalla y switch de reinicio/control global en `Perfil > Ajustes`.
+3. **Novedades Operativas de UX, Guías y Seguridad (v9.37.0 — Plan Maestro 17):**
+   * **Guía Turística Interactiva Ampliada a 19 Pantallas Oficiales:** Cobertura integral 1:1 en las 19 pantallas del sistema (Inicio, Perfil, Crear Producto, Caja Rápida, Inventario, Cotizador Escolar, Clientes CRM, Historial de Ventas, Respaldos, Licencias, Catálogo de Ofertas, Escanear Factura, Escanear Lista, Checkout de Venta, Detalle de Cliente y Abonos, Centro de Fidelización, Dashboard de Analíticas, Creador de Combos y Configuración de Impresora Térmica).
+   * **Estabilización Geométrica y Foco Spotlight:** Tarjeta flotante con flecha soldada directamente al elemento enfocado en posiciones superior e inferior, eliminando separaciones indebidas y acotando el foco iluminado a un máximo del 55% de pantalla. Omisión limpia de elementos colapsados sin generar círculos vacíos.
+   * **Persistencia Hermética y Control Global:** Las guías se muestran de forma exclusiva a usuarios nuevos y jamás reaparecen tras alternar perfiles comerciales o restaurar respaldos locales o de Google Drive. Enlace `"Omitir todas las guías"` de propagación inmediata y reactivación instantánea desde `"Reiniciar guías de aprendizaje"` en Perfil mediante `tourResetEpoch`.
+   * **Rediseño Profesional de "Escanear Factura":** Reestructuración vertical que elimina vacíos con saldo IA en vivo, acceso al Historial de Facturas, botones de Cámara y Galería mejorados y guía didáctica de procesamiento OCR, manteniendo 100% inalterada la pantalla `"Escanear Lista"`.
+   * **Historial Operativo Previo (v9.36.0):** Escáner QR optimizado para pantallas de PC con linterna y zoom táctil, feedback animado de activación de licencias comerciales y bonos IA, y rediseño de zona de perfiles y Google Drive.
 
 ---
 

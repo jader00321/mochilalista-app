@@ -16,7 +16,13 @@ import 'package:app_movil/core/services/tour/interactive_tour_service.dart';
 import 'package:app_movil/core/widgets/tour/configs/client_tracking_tour.dart';
 
 class ClientTrackingScreen extends StatefulWidget {
-  const ClientTrackingScreen({super.key});
+  final bool autoTriggerTour;
+  final ClientTrackingTourKeys? tourKeys;
+  const ClientTrackingScreen({
+    super.key,
+    this.autoTriggerTour = true,
+    this.tourKeys,
+  });
 
   @override
   State<ClientTrackingScreen> createState() => _ClientTrackingScreenState();
@@ -26,6 +32,7 @@ class _ClientTrackingScreenState extends State<ClientTrackingScreen> {
   final TextEditingController _searchCtrl = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   final _tourKeys = ClientTrackingTourKeys();
+  ClientTrackingTourKeys get _effectiveTourKeys => widget.tourKeys ?? _tourKeys;
   bool _showScrollToTop = false;
   bool _showFilterSection = true;
   DateTime _lastToggleTime = DateTime.fromMillisecondsSinceEpoch(0);
@@ -39,10 +46,12 @@ class _ClientTrackingScreenState extends State<ClientTrackingScreen> {
       provider.resetFiltersAndSearch();
       _searchCtrl.clear();
       _onRefresh();
-      InteractiveTourService.maybeStartAutomaticTour(
-        context,
-        ClientTrackingTour.buildConfig(keys: _tourKeys),
-      );
+      if (widget.autoTriggerTour) {
+        InteractiveTourService.maybeStartAutomaticTour(
+          context,
+          ClientTrackingTour.buildConfig(keys: _effectiveTourKeys),
+        );
+      }
     });
   }
 
@@ -387,7 +396,7 @@ class _ClientTrackingScreenState extends State<ClientTrackingScreen> {
         elevation: 0,
         actions: [
           KeyedSubtree(
-            key: _tourKeys.loyaltyKey,
+            key: _effectiveTourKeys.loyaltyKey,
             child: Consumer<TrackingProvider>(
               builder: (_, trProv, __) => IconButton(
                 icon: Badge(
@@ -413,7 +422,7 @@ class _ClientTrackingScreenState extends State<ClientTrackingScreen> {
             onStartInteractiveTour: () =>
                 InteractiveTourService.startManualTour(
               context,
-              ClientTrackingTour.buildConfig(keys: _tourKeys),
+              ClientTrackingTour.buildConfig(keys: _effectiveTourKeys),
             ),
             tips: const [
               InfoTip(
@@ -439,7 +448,7 @@ class _ClientTrackingScreenState extends State<ClientTrackingScreen> {
             ],
           ),
           KeyedSubtree(
-            key: _tourKeys.addClientKey,
+            key: _effectiveTourKeys.addClientKey,
             child: IconButton(
               icon: const Icon(Icons.person_add, size: 28), 
               tooltip: "Nuevo Cliente", 
@@ -478,7 +487,7 @@ class _ClientTrackingScreenState extends State<ClientTrackingScreen> {
 
                 // 2. Buscador Fijo Superior (Siempre visible y accesible)
                 KeyedSubtree(
-                  key: _tourKeys.searchBarKey,
+                  key: _effectiveTourKeys.searchBarKey,
                   child: Padding(
                     padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
                     child: Container(
@@ -527,7 +536,7 @@ class _ClientTrackingScreenState extends State<ClientTrackingScreen> {
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               KeyedSubtree(
-                                key: _tourKeys.filterBarKey,
+                                key: _effectiveTourKeys.filterBarKey,
                                 child: const ClientFilterBar(),
                               ),
                               Container(
@@ -565,7 +574,7 @@ class _ClientTrackingScreenState extends State<ClientTrackingScreen> {
                 // 4. Lista de Clientes con Scroll Anti-Rebote y Margen Seguro Inferior
                 Expanded(
                   child: KeyedSubtree(
-                    key: _tourKeys.clientListKey,
+                    key: _effectiveTourKeys.clientListKey,
                     child: NotificationListener<ScrollNotification>(
                       onNotification: _onScrollNotification,
                       child: RefreshIndicator(

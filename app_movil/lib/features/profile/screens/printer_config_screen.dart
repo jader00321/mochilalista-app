@@ -5,9 +5,47 @@ import 'package:app_movil/core/providers/printer_provider.dart';
 import 'package:app_movil/core/providers/theme_provider.dart';
 import 'package:app_movil/core/widgets/custom_snackbar.dart';
 import 'package:app_movil/core/widgets/info_tooltip_button.dart';
+import 'package:app_movil/core/services/tour/interactive_tour_service.dart';
+import 'package:app_movil/core/widgets/tour/configs/printer_config_tour.dart';
 
-class PrinterConfigScreen extends StatelessWidget {
-  const PrinterConfigScreen({super.key});
+class PrinterConfigScreen extends StatefulWidget {
+  final bool autoTriggerTour;
+  final PrinterConfigTourKeys? tourKeys;
+
+  const PrinterConfigScreen({
+    super.key,
+    this.autoTriggerTour = true,
+    this.tourKeys,
+  });
+
+  @override
+  State<PrinterConfigScreen> createState() => _PrinterConfigScreenState();
+}
+
+class _PrinterConfigScreenState extends State<PrinterConfigScreen> {
+  late final PrinterConfigTourKeys _tourKeys;
+
+  @override
+  void initState() {
+    super.initState();
+    _tourKeys = widget.tourKeys ?? PrinterConfigTourKeys();
+    if (widget.autoTriggerTour) {
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        if (!mounted) return;
+        await InteractiveTourService.maybeStartAutomaticTour(
+          context,
+          PrinterConfigTour.buildConfig(keys: _tourKeys),
+        );
+      });
+    }
+  }
+
+  void _startTour(BuildContext context) {
+    InteractiveTourService.startManualTour(
+      context,
+      PrinterConfigTour.buildConfig(keys: _tourKeys),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -27,11 +65,12 @@ class PrinterConfigScreen extends StatelessWidget {
         elevation: 0,
         iconTheme: IconThemeData(color: textColor),
         actions: [
-          const InfoTooltipButton(
+          InfoTooltipButton(
             title: "Impresora Térmica Bluetooth",
             description:
                 "Conecta tu impresora de tickets portátil o de escritorio para imprimir comprobantes de venta y tickets de caja al instante.",
-            tips: [
+            onStartInteractiveTour: () => _startTour(context),
+            tips: const [
               InfoTip(
                 icon: Icons.bluetooth_searching_rounded,
                 text:
@@ -69,62 +108,76 @@ class PrinterConfigScreen extends StatelessWidget {
             if (printerProv.isBluetoothOff)
               _buildBluetoothBanner(isDark),
 
-            _buildStatusCard(context, printerProv, isDark, cardColor),
+            KeyedSubtree(
+              key: _tourKeys.statusCardKey,
+              child: _buildStatusCard(context, printerProv, isDark, cardColor),
+            ),
             const SizedBox(height: 30),
 
             Text("Configuración de Papel", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: isDark ? Colors.blue[300] : Colors.blue[800])),
             const SizedBox(height: 6),
             Text("Selecciona el ancho que usa tu impresora.", style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[600], fontSize: 13)),
             const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(child: _buildPaperOption("58mm", "Mini portátil", 58, printerProv.paperWidth, isDark, () => printerProv.setPaperWidth(58))),
-                const SizedBox(width: 15),
-                Expanded(child: _buildPaperOption("80mm", "De escritorio", 80, printerProv.paperWidth, isDark, () => printerProv.setPaperWidth(80))),
-              ],
+            KeyedSubtree(
+              key: _tourKeys.paperWidthKey,
+              child: Row(
+                children: [
+                  Expanded(child: _buildPaperOption("58mm", "Mini portátil", 58, printerProv.paperWidth, isDark, () => printerProv.setPaperWidth(58))),
+                  const SizedBox(width: 15),
+                  Expanded(child: _buildPaperOption("80mm", "De escritorio", 80, printerProv.paperWidth, isDark, () => printerProv.setPaperWidth(80))),
+                ],
+              ),
             ),
             const SizedBox(height: 35),
 
-            Text("Dispositivos Vinculados", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: isDark ? Colors.blue[300] : Colors.blue[800])),
-            const SizedBox(height: 6),
-            Text("Asegúrate de haber emparejado la impresora en los ajustes Bluetooth de tu celular primero.", style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[600], fontSize: 13)),
-            const SizedBox(height: 15),
+            KeyedSubtree(
+              key: _tourKeys.scanBluetoothKey,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text("Dispositivos Vinculados", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: isDark ? Colors.blue[300] : Colors.blue[800])),
+                  const SizedBox(height: 6),
+                  Text("Asegúrate de haber emparejado la impresora en los ajustes Bluetooth de tu celular primero.", style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[600], fontSize: 13)),
+                  const SizedBox(height: 15),
 
-            if (printerProv.isScanning)
-              const Center(child: Padding(padding: EdgeInsets.all(20), child: CircularProgressIndicator()))
-            else if (printerProv.printers.isEmpty && printerProv.otherDevices.isEmpty)
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(color: cardColor, borderRadius: BorderRadius.circular(16)),
-                child: Column(
-                  children: [
-                    Icon(Icons.bluetooth_disabled, size: 45, color: isDark ? Colors.grey[600] : Colors.grey),
-                    const SizedBox(height: 12),
-                    Text("No se encontraron dispositivos vinculados.", textAlign: TextAlign.center, style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey, fontSize: 15)),
-                  ],
-                ),
-              )
-            else ...[
-              if (printerProv.printers.isNotEmpty) ...[
-                Text("Posibles Impresoras", style: TextStyle(fontWeight: FontWeight.w600, color: isDark ? Colors.green[300] : Colors.green[700], fontSize: 14)),
-                const SizedBox(height: 8),
-                _buildDeviceList(context, printerProv.printers, printerProv, isDark, cardColor, textColor, true),
-                const SizedBox(height: 20),
-              ],
-              
-              if (printerProv.otherDevices.isNotEmpty)
-                Theme(
-                  data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
-                  child: ExpansionTile(
-                    tilePadding: EdgeInsets.zero,
-                    title: Text("Otros dispositivos Bluetooth", style: TextStyle(fontWeight: FontWeight.w600, color: isDark ? Colors.grey[400] : Colors.grey[700], fontSize: 14)),
-                    children: [
-                      _buildDeviceList(context, printerProv.otherDevices, printerProv, isDark, cardColor, textColor, false),
+                  if (printerProv.isScanning)
+                    const Center(child: Padding(padding: EdgeInsets.all(20), child: CircularProgressIndicator()))
+                  else if (printerProv.printers.isEmpty && printerProv.otherDevices.isEmpty)
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(20),
+                      decoration: BoxDecoration(color: cardColor, borderRadius: BorderRadius.circular(16)),
+                      child: Column(
+                        children: [
+                          Icon(Icons.bluetooth_disabled, size: 45, color: isDark ? Colors.grey[600] : Colors.grey),
+                          const SizedBox(height: 12),
+                          Text("No se encontraron dispositivos vinculados.", textAlign: TextAlign.center, style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey, fontSize: 15)),
+                        ],
+                      ),
+                    )
+                  else ...[
+                    if (printerProv.printers.isNotEmpty) ...[
+                      Text("Posibles Impresoras", style: TextStyle(fontWeight: FontWeight.w600, color: isDark ? Colors.green[300] : Colors.green[700], fontSize: 14)),
+                      const SizedBox(height: 8),
+                      _buildDeviceList(context, printerProv.printers, printerProv, isDark, cardColor, textColor, true),
+                      const SizedBox(height: 20),
                     ],
-                  ),
-                ),
-            ]
+                    
+                    if (printerProv.otherDevices.isNotEmpty)
+                      Theme(
+                        data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+                        child: ExpansionTile(
+                          tilePadding: EdgeInsets.zero,
+                          title: Text("Otros dispositivos Bluetooth", style: TextStyle(fontWeight: FontWeight.w600, color: isDark ? Colors.grey[400] : Colors.grey[700], fontSize: 14)),
+                          children: [
+                            _buildDeviceList(context, printerProv.otherDevices, printerProv, isDark, cardColor, textColor, false),
+                          ],
+                        ),
+                      ),
+                  ],
+                ],
+              ),
+            ),
           ],
         ),
       ),

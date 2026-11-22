@@ -58,8 +58,9 @@ class _ActionCardDef {
 
 class SmartActionGrid extends StatefulWidget {
   final Function(int)? onNavigateToTab;
+  final Key? tourKey;
 
-  const SmartActionGrid({super.key, this.onNavigateToTab});
+  const SmartActionGrid({super.key, this.onNavigateToTab, this.tourKey});
 
   @override
   State<SmartActionGrid> createState() => _SmartActionGridState();
@@ -524,7 +525,12 @@ class _SmartActionGridState extends State<SmartActionGrid> with SingleTickerProv
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         // Cabecera con Título, Botón Personalizar y Propuesta 3 (Punto azul indicador)
-        _buildSectionHeader(context, sectionTitle, isDark, isGuest),
+        widget.tourKey != null
+            ? KeyedSubtree(
+                key: widget.tourKey,
+                child: _buildSectionHeader(context, sectionTitle, isDark, isGuest),
+              )
+            : _buildSectionHeader(context, sectionTitle, isDark, isGuest),
         const SizedBox(height: 12),
 
         // Panel de Control Home Studio (si está en modo edición)

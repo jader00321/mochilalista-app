@@ -16,6 +16,9 @@ import 'package:app_movil/features/smart_quotation/widgets/checkout/checkout_sum
 import 'package:app_movil/features/smart_quotation/widgets/checkout/checkout_action_footer.dart';
 import 'package:app_movil/features/smart_quotation/providers/workbench_provider.dart';
 import 'package:app_movil/features/smart_quotation/services/client_service.dart';
+import 'package:app_movil/core/widgets/info_tooltip_button.dart';
+import 'package:app_movil/core/services/tour/interactive_tour_service.dart';
+import 'package:app_movil/core/widgets/tour/configs/sales_checkout_tour.dart';
 class _PhoneNumberFormatter extends TextInputFormatter {
   @override
   TextEditingValue formatEditUpdate(TextEditingValue oldValue, TextEditingValue newValue) {
@@ -32,14 +35,22 @@ class _PhoneNumberFormatter extends TextInputFormatter {
 
 class SalesCheckoutScreen extends StatefulWidget {
   final int quotationId;
+  final bool autoTriggerTour;
+  final SalesCheckoutTourKeys? tourKeys;
 
-  const SalesCheckoutScreen({super.key, required this.quotationId});
+  const SalesCheckoutScreen({
+    super.key,
+    required this.quotationId,
+    this.autoTriggerTour = true,
+    this.tourKeys,
+  });
 
   @override
   State<SalesCheckoutScreen> createState() => _SalesCheckoutScreenState();
 }
 
 class _SalesCheckoutScreenState extends State<SalesCheckoutScreen> {
+  late final SalesCheckoutTourKeys _tourKeys;
   SmartQuotationModel? _quotation;
   ClientModel? _selectedClient;
   bool _isLoadingQuote = true;
@@ -65,7 +76,15 @@ class _SalesCheckoutScreenState extends State<SalesCheckoutScreen> {
   @override
   void initState() {
     super.initState();
+    _tourKeys = widget.tourKeys ?? SalesCheckoutTourKeys();
     WidgetsBinding.instance.addPostFrameCallback((_) => _loadQuotation());
+  }
+
+  void _startTour(BuildContext context) {
+    InteractiveTourService.startManualTour(
+      context,
+      SalesCheckoutTour.buildConfig(keys: _tourKeys),
+    );
   }
 
   @override
@@ -107,6 +126,17 @@ class _SalesCheckoutScreenState extends State<SalesCheckoutScreen> {
       }
 
       setState(() => _isLoadingQuote = false);
+
+      if (widget.autoTriggerTour) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            InteractiveTourService.maybeStartAutomaticTour(
+              context,
+              SalesCheckoutTour.buildConfig(keys: _tourKeys),
+            );
+          }
+        });
+      }
     }
   }
 
@@ -446,6 +476,34 @@ class _SalesCheckoutScreenState extends State<SalesCheckoutScreen> {
             tooltip: "Agregar Nota de Venta",
             onPressed: _openSaleNoteModal,
           ),
+          InfoTooltipButton(
+            title: "Cobro de Venta (Checkout)",
+            description:
+                "Configura las condiciones de cobro, asigna el cliente, aplica descuentos y genera el comprobante de venta de forma rápida y segura.",
+            onStartInteractiveTour: () => _startTour(context),
+            tips: const [
+              InfoTip(
+                icon: Icons.person_pin_circle_outlined,
+                text:
+                    "Asigna el cliente para acumular puntos y controlar crédito.",
+              ),
+              InfoTip(
+                icon: Icons.credit_card_outlined,
+                text:
+                    "Elige pago al contado (efectivo, digital) o cuotas a crédito.",
+              ),
+              InfoTip(
+                icon: Icons.card_giftcard_outlined,
+                text:
+                    "Aplica descuentos especiales o canjea premios acumulados.",
+              ),
+              InfoTip(
+                icon: Icons.check_circle_outline,
+                text:
+                    "Confirma para descontar inventario y emitir comprobante.",
+              ),
+            ],
+          ),
           const SizedBox(width: 8),
         ],
       ),
@@ -453,28 +511,34 @@ class _SalesCheckoutScreenState extends State<SalesCheckoutScreen> {
         padding: const EdgeInsets.all(16),
         child: Column(
           children: [
-            ClientSelectionCard(
-              selectedClient: _selectedClient,
-              onSearchOrAddTap: _openClientSheet,
-              onEditTap: _editClientDetails,
-              approvedRewards: _approvedRewards,
-              appliedReward: _appliedReward,
-              onRewardSelected: _handleRewardSelected,
+            KeyedSubtree(
+              key: _tourKeys.clientSelectorKey,
+              child: ClientSelectionCard(
+                selectedClient: _selectedClient,
+                onSearchOrAddTap: _openClientSheet,
+                onEditTap: _editClientDetails,
+                approvedRewards: _approvedRewards,
+                appliedReward: _appliedReward,
+                onRewardSelected: _handleRewardSelected,
+              ),
             ),
             const SizedBox(height: 20),
 
-            PaymentConfigCard(
-              totalAmount: totalToPay,
-              onChanged: (method, status, paid, interest, installments, isDirty) {
-                setState(() {
-                  _paymentMethod = method;
-                  _paymentStatus = status;
-                  _paidAmount = paid;
-                  _interestRate = interest;
-                  _installments = installments;
-                  _isScheduleDirty = isDirty;
-                });
-              },
+            KeyedSubtree(
+              key: _tourKeys.paymentMethodsKey,
+              child: PaymentConfigCard(
+                totalAmount: totalToPay,
+                onChanged: (method, status, paid, interest, installments, isDirty) {
+                  setState(() {
+                    _paymentMethod = method;
+                    _paymentStatus = status;
+                    _paidAmount = paid;
+                    _interestRate = interest;
+                    _installments = installments;
+                    _isScheduleDirty = isDirty;
+                  });
+                },
+              ),
             ),
             const SizedBox(height: 20),
 
@@ -489,20 +553,25 @@ class _SalesCheckoutScreenState extends State<SalesCheckoutScreen> {
             ),
             const SizedBox(height: 20),
 
-            CheckoutSummaryCard(
-              subtotal: subtotal,
-              savings: _quotation!.totalSavings,
-              discountCtrl: _discountCtrl,
-              totalToPay: totalToPay,
-              paidAmount: _paidAmount,
-              onDiscountUpdated: () => setState(() {}),
+            KeyedSubtree(
+              key: _tourKeys.discountsLoyaltyKey,
+              child: CheckoutSummaryCard(
+                subtotal: subtotal,
+                savings: _quotation!.totalSavings,
+                discountCtrl: _discountCtrl,
+                totalToPay: totalToPay,
+                paidAmount: _paidAmount,
+                onDiscountUpdated: () => setState(() {}),
+              ),
             ),
             
             const SizedBox(height: 100),
           ],
         ),
       ),
-      bottomNavigationBar: CheckoutActionFooter(
+      bottomNavigationBar: KeyedSubtree(
+        key: _tourKeys.confirmSaleButtonKey,
+        child: CheckoutActionFooter(
         isDark: isDark,
         isMathValid: isMathValid,
         displayTotal: displayTotal,
@@ -540,8 +609,9 @@ class _SalesCheckoutScreenState extends State<SalesCheckoutScreen> {
           CustomSnackBar.show(context, message: "Cuotas recalculadas automáticamente.", isError: false);
         },
       ),
-    );
-  }
+    ),
+  );
+}
 }
 
 // ============================================================================

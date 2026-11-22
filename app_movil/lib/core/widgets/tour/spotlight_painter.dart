@@ -23,8 +23,8 @@ class SpotlightPainter extends CustomPainter {
     final fullRect = Offset.zero & size;
     final fullPath = Path()..addRect(fullRect);
 
-    if (targetRect.isEmpty || targetRect.width <= 0 || targetRect.height <= 0) {
-      // Si aún no hay target medido, pintar solo el velo oscuro
+    if (targetRect.isEmpty || targetRect.width < 12.0 || targetRect.height < 12.0) {
+      // Si aún no hay target medido o es degenerado (< 12dp), pintar solo el velo oscuro sin anillo
       canvas.drawRect(fullRect, Paint()..color = overlayColor);
       return;
     }

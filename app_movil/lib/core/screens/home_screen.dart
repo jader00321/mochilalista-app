@@ -30,7 +30,11 @@ import 'package:app_movil/core/widgets/explorer_conversion_dock.dart';
 import 'package:app_movil/core/services/lifecycle_resume_coordinator.dart';
 import 'package:app_movil/core/services/startup_flow_coordinator.dart';
 import 'package:app_movil/core/services/tour/interactive_tour_service.dart';
+import 'package:app_movil/core/widgets/tour/tour_step_model.dart';
 import 'package:app_movil/core/widgets/tour/configs/home_screen_tour.dart';
+import 'package:app_movil/core/widgets/tour/configs/inventory_tour.dart';
+import 'package:app_movil/core/widgets/tour/configs/catalog_tour.dart';
+import 'package:app_movil/core/widgets/tour/configs/client_tracking_tour.dart';
 import 'package:app_movil/core/providers/license_provider.dart';
 import 'package:app_movil/features/auth/screens/license/license_status_and_activation_screen.dart';
 import 'package:app_movil/features/auth/screens/license/license_locked_screen.dart';
@@ -46,11 +50,17 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   int _currentIndex = 0;
   final _tourKeys = HomeScreenTourKeys();
+  final _inventoryTourKeys = InventoryTourKeys();
+  final _catalogTourKeys = CatalogTourKeys();
+  final _clientTrackingTourKeys = ClientTrackingTourKeys();
+  final _catalogScreenKey = GlobalKey<CatalogScreenState>();
+  bool _pendingTourAfterReset = false;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    InteractiveTourService.tourResetEpoch.addListener(_onTourResetEpochChanged);
     // 🛡️ Precargar configuración de PIN en RAM para 0ms de latencia en resumed
     LifecycleResumeCoordinator.instance.prefetchPinConfig();
 
@@ -68,8 +78,79 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   @override
   void dispose() {
+    InteractiveTourService.tourResetEpoch.removeListener(_onTourResetEpochChanged);
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
+  }
+
+  void _onTourResetEpochChanged() {
+    if (!mounted) return;
+    final isCurrent = ModalRoute.of(context)?.isCurrent ?? true;
+    if (!isCurrent) {
+      _pendingTourAfterReset = true;
+    } else {
+      _dispatchTourForActiveTab();
+    }
+  }
+
+  void _onProfileReturned() {
+    if (_pendingTourAfterReset) {
+      _pendingTourAfterReset = false;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          _dispatchTourForActiveTab();
+        }
+      });
+    }
+  }
+
+  ScreenTourConfig _buildCatalogTourConfig() {
+    return CatalogTour.buildConfig(
+      keys: _catalogTourKeys,
+      onExpandOffers: () async {
+        await _catalogScreenKey.currentState?.expandOffersSection();
+      },
+      onCollapseOffers: () async {
+        await _catalogScreenKey.currentState?.collapseOffersSection();
+      },
+      onExpandBottomMenu: () async {
+        await _catalogScreenKey.currentState?.expandBottomMenu();
+      },
+      onCollapseBottomMenu: () async {
+        await _catalogScreenKey.currentState?.collapseBottomMenu();
+      },
+    );
+  }
+
+  void _dispatchTourForActiveTab() {
+    if (!mounted) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+      if (_currentIndex == 0) {
+        await InteractiveTourService.maybeStartAutomaticTour(
+          context,
+          HomeScreenTour.buildConfig(keys: _tourKeys),
+        );
+      } else if (_currentIndex == 1) {
+        await InteractiveTourService.maybeStartAutomaticTour(
+          context,
+          InventoryTour.buildConfig(keys: _inventoryTourKeys),
+        );
+      } else if (_currentIndex == 2) {
+        await InteractiveTourService.maybeStartAutomaticTour(
+          context,
+          _buildCatalogTourConfig(),
+        );
+      } else if (_currentIndex == 3) {
+        final auth = Provider.of<AuthProvider>(context, listen: false);
+        if (auth.canManageClients) {
+          await InteractiveTourService.maybeStartAutomaticTour(
+            context,
+            ClientTrackingTour.buildConfig(keys: _clientTrackingTourKeys),
+          );
+        }
+      }
+    });
   }
 
   @override
@@ -125,9 +206,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
     if (isGuest) {
       screens = [
-        _HomeDashboardView(tourKeys: _tourKeys),
-        const InventoryScreen(),    
-        const CatalogScreen(),      
+        _HomeDashboardView(tourKeys: _tourKeys, onProfileReturned: _onProfileReturned),
+        InventoryScreen(autoTriggerTour: false, tourKeys: _inventoryTourKeys),    
+        CatalogScreen(key: _catalogScreenKey, autoTriggerTour: false, tourKeys: _catalogTourKeys),      
       ];
       destinations = [
         const NavigationDestination(icon: Icon(Icons.explore_outlined), selectedIcon: Icon(Icons.explore), label: 'Explorar'),
@@ -136,8 +217,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       ];
     } else if (isCommunityClient) {
       screens = [
-        _HomeDashboardView(tourKeys: _tourKeys), 
-        const CatalogScreen(),      
+        _HomeDashboardView(tourKeys: _tourKeys, onProfileReturned: _onProfileReturned), 
+        CatalogScreen(key: _catalogScreenKey, autoTriggerTour: false, tourKeys: _catalogTourKeys),      
         const ClientOrdersScreen(), 
       ];
       destinations = [
@@ -147,10 +228,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       ];
     } else {
       screens = [
-        _HomeDashboardView(tourKeys: _tourKeys),
-        const InventoryScreen(),    
-        const CatalogScreen(),      
-        if (auth.canManageClients) const ClientTrackingScreen(), 
+        _HomeDashboardView(tourKeys: _tourKeys, onProfileReturned: _onProfileReturned),
+        InventoryScreen(autoTriggerTour: false, tourKeys: _inventoryTourKeys),    
+        CatalogScreen(key: _catalogScreenKey, autoTriggerTour: false, tourKeys: _catalogTourKeys),      
+        if (auth.canManageClients)
+          ClientTrackingScreen(autoTriggerTour: false, tourKeys: _clientTrackingTourKeys), 
       ];
       destinations = [
         const NavigationDestination(icon: Icon(Icons.dashboard_outlined), selectedIcon: Icon(Icons.dashboard), label: 'Inicio'),
@@ -181,6 +263,31 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
              Provider.of<NotificationProvider>(context, listen: false).fetchNotifications();
              // El DashboardHeader se encarga de recargar el resto si es necesario
           }
+          // Disparo centralizado de tours por pestaña seleccionada
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!mounted) return;
+            if (index == 0) {
+              InteractiveTourService.maybeStartAutomaticTour(
+                context,
+                HomeScreenTour.buildConfig(keys: _tourKeys),
+              );
+            } else if (index == 1) {
+              InteractiveTourService.maybeStartAutomaticTour(
+                context,
+                InventoryTour.buildConfig(keys: _inventoryTourKeys),
+              );
+            } else if (index == 2) {
+              InteractiveTourService.maybeStartAutomaticTour(
+                context,
+                _buildCatalogTourConfig(),
+              );
+            } else if (index == 3 && auth.canManageClients) {
+              InteractiveTourService.maybeStartAutomaticTour(
+                context,
+                ClientTrackingTour.buildConfig(keys: _clientTrackingTourKeys),
+              );
+            }
+          });
         },
         backgroundColor: isDark ? const Color(0xFF1A1A24) : Colors.white, 
         elevation: 15,
@@ -197,7 +304,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 // =========================================================================
 class _HomeDashboardView extends StatefulWidget {
   final HomeScreenTourKeys tourKeys;
-  const _HomeDashboardView({required this.tourKeys});
+  final VoidCallback? onProfileReturned;
+  const _HomeDashboardView({required this.tourKeys, this.onProfileReturned});
 
   @override
   State<_HomeDashboardView> createState() => _HomeDashboardViewState();
@@ -253,7 +361,12 @@ class _HomeDashboardViewState extends State<_HomeDashboardView> with SingleTicke
           children: [
             KeyedSubtree(
               key: widget.tourKeys.headerKey,
-              child: RepaintBoundary(child: DashboardHeader(tourKeys: widget.tourKeys)),
+              child: RepaintBoundary(
+                child: DashboardHeader(
+                  tourKeys: widget.tourKeys,
+                  onProfileReturned: widget.onProfileReturned,
+                ),
+              ),
             ),
             Padding(
               padding: const EdgeInsets.fromLTRB(20.0, 14.0, 20.0, 0.0),
@@ -276,10 +389,7 @@ class _HomeDashboardViewState extends State<_HomeDashboardView> with SingleTicke
                     ),
                   ),
                   const SizedBox(height: 12),
-                  KeyedSubtree(
-                    key: widget.tourKeys.licenseAlertKey,
-                    child: _buildLicenseBanner(context, isDark),
-                  ),
+                  _buildLicenseBanner(context, isDark),
                   const SizedBox(height: 4),
                   if (!isGuest && (auth.isOwner || auth.isWorker)) ...[
                     const RepaintBoundary(child: RestockSmartBanner()),
@@ -319,9 +429,10 @@ class _HomeDashboardViewState extends State<_HomeDashboardView> with SingleTicke
                     ),
 
                   const SizedBox(height: 24),
-                  KeyedSubtree(
-                    key: widget.tourKeys.smartActionsKey,
-                    child: const RepaintBoundary(child: SmartActionGrid()),
+                  RepaintBoundary(
+                    child: SmartActionGrid(
+                      tourKey: widget.tourKeys.smartActionsKey,
+                    ),
                   ),
                   if (!isGuest && (auth.isOwner || auth.isWorker)) ...[
                     const SizedBox(height: 32),

@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:app_movil/core/widgets/tour/tour_step_model.dart';
 import 'package:app_movil/core/widgets/tour/spotlight_painter.dart';
@@ -8,14 +9,17 @@ import 'package:app_movil/core/services/tour/interactive_tour_service.dart';
 class InteractiveTourOverlay {
   static OverlayEntry? _currentEntry;
 
-  /// Muestra el modal compacto de bienvenida al primer ingreso a una pantalla
-  static Future<void> showWelcomeModal(
+  /// Muestra el modal compacto de bienvenida al primer ingreso a una pantalla.
+  /// Retorna `true` si el usuario inició el tour mediante "Guíame", o `false` si lo omitió o cerró.
+  static Future<bool> showWelcomeModal(
     BuildContext context,
-    ScreenTourConfig config,
-  ) async {
+    ScreenTourConfig config, {
+    VoidCallback? onTourStarted,
+    VoidCallback? onTourCompleted,
+  }) async {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    await showDialog<void>(
+    final result = await showDialog<bool>(
       context: context,
       barrierDismissible: false,
       builder: (dialogCtx) => AlertDialog(
@@ -30,14 +34,17 @@ class InteractiveTourOverlay {
               width: 58,
               height: 58,
               decoration: BoxDecoration(
-                color: (isDark ? const Color(0xFF38BDF8) : const Color(0xFF2563EB))
-                    .withValues(alpha: 0.14),
+                color:
+                    (isDark ? const Color(0xFF38BDF8) : const Color(0xFF2563EB))
+                        .withValues(alpha: 0.14),
                 shape: BoxShape.circle,
               ),
               child: Icon(
                 config.icon,
                 size: 30,
-                color: isDark ? const Color(0xFF38BDF8) : const Color(0xFF2563EB),
+                color: isDark
+                    ? const Color(0xFF38BDF8)
+                    : const Color(0xFF2563EB),
               ),
             ),
             const SizedBox(height: 14),
@@ -62,7 +69,9 @@ class InteractiveTourOverlay {
               style: TextStyle(
                 fontSize: 13,
                 height: 1.45,
-                color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF475569),
+                color: isDark
+                    ? const Color(0xFF94A3B8)
+                    : const Color(0xFF475569),
               ),
             ),
             const SizedBox(height: 20),
@@ -72,10 +81,12 @@ class InteractiveTourOverlay {
               width: double.infinity,
               height: 44,
               child: ElevatedButton.icon(
-                onPressed: () {
-                  Navigator.of(dialogCtx).pop();
+                onPressed: () async {
+                  Navigator.of(dialogCtx).pop(true);
+                  await InteractiveTourService.markScreenSeen(config.screenId);
+                  onTourStarted?.call();
                   WidgetsBinding.instance.addPostFrameCallback((_) {
-                    startTour(context, config);
+                    startTour(context, config, onCompleted: onTourCompleted);
                   });
                 },
                 icon: const Icon(Icons.explore_rounded, size: 18),
@@ -84,8 +95,9 @@ class InteractiveTourOverlay {
                   style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5),
                 ),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor:
-                      isDark ? const Color(0xFF38BDF8) : const Color(0xFF2563EB),
+                  backgroundColor: isDark
+                      ? const Color(0xFF38BDF8)
+                      : const Color(0xFF2563EB),
                   foregroundColor: Colors.white,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
@@ -101,9 +113,9 @@ class InteractiveTourOverlay {
               width: double.infinity,
               height: 38,
               child: TextButton(
-                onPressed: () {
-                  Navigator.of(dialogCtx).pop();
-                  InteractiveTourService.markScreenSeen(config.screenId);
+                onPressed: () async {
+                  Navigator.of(dialogCtx).pop(false);
+                  await InteractiveTourService.markScreenSeen(config.screenId);
                 },
                 style: TextButton.styleFrom(
                   foregroundColor: isDark ? Colors.white70 : Colors.black54,
@@ -117,9 +129,10 @@ class InteractiveTourOverlay {
 
             // Enlace discreto: Omitir todas las guías
             TextButton(
-              onPressed: () {
-                Navigator.of(dialogCtx).pop();
-                InteractiveTourService.dismissAllAutomaticTours();
+              onPressed: () async {
+                Navigator.of(dialogCtx).pop(false);
+                await InteractiveTourService.markScreenSeen(config.screenId);
+                await InteractiveTourService.dismissAllAutomaticTours();
               },
               style: TextButton.styleFrom(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -129,29 +142,44 @@ class InteractiveTourOverlay {
               ),
               child: const Text(
                 'Omitir todas las guías automáticas',
-                style: TextStyle(fontSize: 11, decoration: TextDecoration.underline),
+                style: TextStyle(
+                  fontSize: 11,
+                  decoration: TextDecoration.underline,
+                ),
               ),
             ),
           ],
         ),
       ),
     );
+
+    if (result != true) {
+      await InteractiveTourService.markScreenSeen(config.screenId);
+    }
+    return result ?? false;
   }
 
-  /// Inicia el recorrido visual paso a paso directamente sobre el Overlay
-  static void startTour(
+  /// Inicia el recorrido visual paso a paso directamente sobre el Overlay.
+  /// Retorna `true` si el overlay fue montado exitosamente, o `false` en caso contrario.
+  static bool startTour(
     BuildContext context,
     ScreenTourConfig config, {
     int initialStep = 0,
     VoidCallback? onCompleted,
   }) {
-    if (config.steps.isEmpty) return;
+    if (config.steps.isEmpty) {
+      onCompleted?.call();
+      return false;
+    }
 
     // Remover cualquier overlay previo
     _removeCurrentEntry();
 
     final overlayState = Navigator.of(context, rootNavigator: true).overlay;
-    if (overlayState == null) return;
+    if (overlayState == null) {
+      onCompleted?.call();
+      return false;
+    }
 
     late OverlayEntry entry;
     entry = OverlayEntry(
@@ -168,6 +196,7 @@ class InteractiveTourOverlay {
 
     _currentEntry = entry;
     overlayState.insert(entry);
+    return true;
   }
 
   static void _removeCurrentEntry() {
@@ -175,6 +204,11 @@ class InteractiveTourOverlay {
       _currentEntry?.remove();
       _currentEntry = null;
     }
+  }
+
+  /// Cierra de forma inmediata cualquier recorrido activo
+  static void dismissCurrentTour() {
+    _removeCurrentEntry();
   }
 }
 
@@ -198,6 +232,7 @@ class _TourOverlayWidgetState extends State<_TourOverlayWidget> {
   Rect? _targetRect;
   double _borderRadius = 14.0;
   bool _isMeasuring = false;
+  bool _isMovingForward = true;
 
   @override
   void initState() {
@@ -208,10 +243,34 @@ class _TourOverlayWidgetState extends State<_TourOverlayWidget> {
     });
   }
 
+  void _skipStep() {
+    if (!mounted) return;
+    setState(() => _targetRect = null);
+    if (_isMovingForward) {
+      if (_currentIndex < widget.config.steps.length - 1) {
+        _currentIndex++;
+        _focusCurrentStep();
+      } else {
+        widget.onClose();
+      }
+    } else {
+      if (_currentIndex > 0) {
+        _currentIndex--;
+        _focusCurrentStep();
+      } else {
+        widget.onClose();
+      }
+    }
+  }
+
   Future<void> _focusCurrentStep() async {
     if (!mounted || _currentIndex >= widget.config.steps.length) return;
 
-    setState(() => _isMeasuring = true);
+    setState(() {
+      _isMeasuring = true;
+      _targetRect =
+          null; // Reiniciar siempre para evitar herencia o coordenadas fantasma
+    });
 
     final step = widget.config.steps[_currentIndex];
 
@@ -224,22 +283,16 @@ class _TourOverlayWidgetState extends State<_TourOverlayWidget> {
 
     if (!mounted) return;
 
-    // Esperar al final del frame para que el layout se asiente
+    // Esperar al final del frame para que el layout se asiente tras onBeforeStep
     await WidgetsBinding.instance.endOfFrame;
+    if (!mounted) return;
 
     final targetContext = step.targetKey.currentContext;
 
     // 2. Si el widget no está montado (p. ej. alerta condicional no visible), omitir graciosamente
     if (targetContext == null || !targetContext.mounted) {
-      if (_currentIndex < widget.config.steps.length - 1) {
-        _currentIndex++;
-        _focusCurrentStep();
-        return;
-      } else {
-        // Fin del tour
-        widget.onClose();
-        return;
-      }
+      _skipStep();
+      return;
     }
 
     // 3. Auto-scroll suave si está dentro de un scrollable
@@ -255,18 +308,45 @@ class _TourOverlayWidgetState extends State<_TourOverlayWidget> {
     await WidgetsBinding.instance.endOfFrame;
     if (!mounted || !targetContext.mounted) return;
 
-    // 4. Medir coordenadas globales
+    // 4. Medir coordenadas globales con validación estricta de RenderBox y dimensiones
     try {
-      final renderBox = targetContext.findRenderObject() as RenderBox?;
-      if (renderBox != null && renderBox.hasSize) {
-        final position = renderBox.localToGlobal(Offset.zero);
-        final baseRect = position & renderBox.size;
-        final paddedRect = Rect.fromLTRB(
+      final renderObject = targetContext.findRenderObject();
+      if (renderObject is RenderBox && renderObject.hasSize) {
+        final size = renderObject.size;
+        // Descartar widgets colapsados o invisibles (< 12x12 dp)
+        if (size.width < 12.0 || size.height < 12.0) {
+          _skipStep();
+          return;
+        }
+
+        final position = renderObject.localToGlobal(Offset.zero);
+        final baseRect = position & size;
+        var paddedRect = Rect.fromLTRB(
           baseRect.left - step.spotlightPadding.left,
           baseRect.top - step.spotlightPadding.top,
           baseRect.right + step.spotlightPadding.right,
           baseRect.bottom + step.spotlightPadding.bottom,
         );
+
+        // 5. Acotamiento inteligente de spotlights gigantes (> 55% del viewport)
+        final media = MediaQuery.of(context);
+        final viewportHeight = media.size.height;
+        final safeTop = media.padding.top + 10.0;
+        final safeBottom = viewportHeight - media.padding.bottom - 12.0;
+        final usableHeight = safeBottom - safeTop;
+
+        if (paddedRect.height > usableHeight * 0.55) {
+          final clampedHeight = usableHeight * 0.45;
+          final clampedTop = paddedRect.top
+              .clamp(safeTop, math.max(safeTop, safeBottom - clampedHeight))
+              .toDouble();
+          paddedRect = Rect.fromLTWH(
+            paddedRect.left,
+            clampedTop,
+            paddedRect.width,
+            clampedHeight,
+          );
+        }
 
         if (mounted) {
           setState(() {
@@ -274,10 +354,16 @@ class _TourOverlayWidgetState extends State<_TourOverlayWidget> {
             _borderRadius = step.borderRadius;
             _isMeasuring = false;
           });
+          return;
         }
+      } else {
+        _skipStep();
         return;
       }
-    } catch (_) {}
+    } catch (_) {
+      _skipStep();
+      return;
+    }
 
     if (mounted) {
       setState(() => _isMeasuring = false);
@@ -295,7 +381,11 @@ class _TourOverlayWidgetState extends State<_TourOverlayWidget> {
     }
 
     if (_currentIndex < widget.config.steps.length - 1) {
-      setState(() => _currentIndex++);
+      _isMovingForward = true;
+      setState(() {
+        _currentIndex++;
+        _targetRect = null;
+      });
       await _focusCurrentStep();
     } else {
       widget.onClose();
@@ -311,7 +401,11 @@ class _TourOverlayWidgetState extends State<_TourOverlayWidget> {
         } catch (_) {}
       }
 
-      setState(() => _currentIndex--);
+      _isMovingForward = false;
+      setState(() {
+        _currentIndex--;
+        _targetRect = null;
+      });
       await _focusCurrentStep();
     }
   }
@@ -325,7 +419,8 @@ class _TourOverlayWidgetState extends State<_TourOverlayWidget> {
 
     final step = widget.config.steps[_currentIndex];
 
-    final effectiveTargetRect = _targetRect ??
+    final effectiveTargetRect =
+        _targetRect ??
         Rect.fromCenter(
           center: Offset(viewportSize.width / 2.0, viewportSize.height / 2.0),
           width: 0,
@@ -345,7 +440,10 @@ class _TourOverlayWidgetState extends State<_TourOverlayWidget> {
         children: [
           // Capa Spotlight animada con transición suave de foco
           TweenAnimationBuilder<Rect?>(
-            tween: RectTween(begin: effectiveTargetRect, end: effectiveTargetRect),
+            tween: RectTween(
+              begin: effectiveTargetRect,
+              end: effectiveTargetRect,
+            ),
             duration: const Duration(milliseconds: 300),
             curve: Curves.easeOutCubic,
             builder: (context, animatedRect, _) {

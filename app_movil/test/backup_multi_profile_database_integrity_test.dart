@@ -154,7 +154,7 @@ void main() {
     } catch (_) {}
   });
 
-  group('Pilar 3.1: Integridad Multi-Perfil de .mlbg y Versión Dinámica v9.36.0+80', () {
+  group('Pilar 3.1: Integridad Multi-Perfil de .mlbg y Versión Dinámica v9.37.0+81', () {
     test('Empaquetado global .mlbg contiene toda la base SQLite con múltiples negocios y versión dinámica', () async {
       // 1. Insertar Negocio 1 y Usuario 1
       final neg1Id = await testDb.insert('negocios', {
@@ -256,7 +256,7 @@ void main() {
       expect(
         manifestJson['app_version'],
         equals(OwnerLegalIdentity.currentAppVersionWithBuild),
-        reason: 'El manifiesto debe reflejar dinámicamente la versión actual v9.36.0+80',
+        reason: 'El manifiesto debe reflejar dinámicamente la versión actual v9.37.0+81',
       );
       expect(manifestJson['device_fingerprint'], equals(testDeviceId));
 

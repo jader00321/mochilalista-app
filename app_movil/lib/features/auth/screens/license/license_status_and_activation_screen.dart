@@ -377,10 +377,7 @@ class _LicenseStatusAndActivationScreenState
               const SizedBox(height: 16),
 
               // Catálogo de Planes y Medios de Pago Peruanos
-              KeyedSubtree(
-                key: _tourKeys.pricingCatalogKey,
-                child: _buildPricingAndPaymentCatalog(fingerprint, isDark),
-              ),
+              _buildPricingAndPaymentCatalog(fingerprint, isDark),
               const SizedBox(height: 24),
             ],
           ),
@@ -1112,25 +1109,36 @@ class _LicenseStatusAndActivationScreenState
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              children: [
-                const Icon(
-                  Icons.local_offer_rounded,
-                  size: 20,
-                  color: Colors.blue,
+            KeyedSubtree(
+              key: _tourKeys.pricingCatalogKey,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                decoration: BoxDecoration(
+                  color: Colors.blue.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.blue.withValues(alpha: 0.2)),
                 ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    "Planes Comerciales Oficiales",
-                    style: TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.bold,
-                      color: isDark ? Colors.white : Colors.black87,
+                child: Row(
+                  children: [
+                    const Icon(
+                      Icons.local_offer_rounded,
+                      size: 20,
+                      color: Colors.blue,
                     ),
-                  ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        "Planes Comerciales Oficiales",
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.bold,
+                          color: isDark ? Colors.white : Colors.black87,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
-              ],
+              ),
             ),
             const SizedBox(height: 10),
 

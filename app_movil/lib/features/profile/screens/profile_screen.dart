@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:image_picker/image_picker.dart';
@@ -50,9 +51,18 @@ class ProfileScreen extends StatefulWidget {
 
 class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProviderStateMixin {
   final _tourKeys = ProfileScreenTourKeys();
+  final ScrollController _scrollController = ScrollController();
   late AnimationController _animController;
   late Animation<double> _fadeAnimation;
   bool _automaticToursEnabled = true;
+
+  void _onToursEnabledChanged() {
+    if (mounted) {
+      setState(() {
+        _automaticToursEnabled = InteractiveTourService.automaticToursEnabledNotifier.value;
+      });
+    }
+  }
 
   @override
   void initState() {
@@ -60,6 +70,9 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
     _animController = AnimationController(vsync: this, duration: const Duration(milliseconds: 800));
     _fadeAnimation = CurvedAnimation(parent: _animController, curve: Curves.easeOut);
     _animController.forward();
+
+    _automaticToursEnabled = InteractiveTourService.automaticToursEnabledNotifier.value;
+    InteractiveTourService.automaticToursEnabledNotifier.addListener(_onToursEnabledChanged);
 
     InteractiveTourService.areAutomaticToursEnabled().then((v) {
       if (mounted) setState(() => _automaticToursEnabled = v);
@@ -76,6 +89,8 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
 
   @override
   void dispose() {
+    InteractiveTourService.automaticToursEnabledNotifier.removeListener(_onToursEnabledChanged);
+    _scrollController.dispose();
     _animController.dispose();
     super.dispose();
   }
@@ -123,6 +138,7 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
         onRefresh: _refreshProfile,
         color: Colors.blue[800],
         child: SingleChildScrollView(
+          controller: _scrollController,
           physics: const AlwaysScrollableScrollPhysics(), 
           child: Column(
             children: [
@@ -439,7 +455,7 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
 
                       // 🏛️ Sello Legal de Derechos de Autor y Titularidad Intelectual
                       _buildLegalCopyrightCard(context, isDark, licenseProv),
-                      const SizedBox(height: 40),
+                      SizedBox(height: math.max(MediaQuery.viewPaddingOf(context).bottom + 24.0, 48.0)),
                     ],
                   ),
                 ),
@@ -1026,11 +1042,26 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
       await InteractiveTourService.resetAllTours();
       if (!context.mounted) return;
       setState(() => _automaticToursEnabled = true);
+      if (_scrollController.hasClients) {
+        _scrollController.animateTo(
+          0,
+          duration: const Duration(milliseconds: 400),
+          curve: Curves.easeOutCubic,
+        );
+      }
       CustomSnackBar.show(
         context,
         message: "Guías interactivas reiniciadas. Disfruta tu recorrido.",
         isError: false,
       );
+
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        if (!context.mounted) return;
+        await InteractiveTourService.maybeStartAutomaticTour(
+          context,
+          ProfileScreenTour.buildConfig(keys: _tourKeys),
+        );
+      });
     }
   }
 

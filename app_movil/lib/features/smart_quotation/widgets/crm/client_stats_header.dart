@@ -16,6 +16,7 @@ class ClientStatsHeader extends StatefulWidget {
   final VoidCallback onGoToQuickSale;
   final VoidCallback? onGoToQuotation;
   final VoidCallback onFinanceActionCompleted;
+  final Key? whatsappContactKey;
 
   const ClientStatsHeader({
     super.key,
@@ -26,6 +27,7 @@ class ClientStatsHeader extends StatefulWidget {
     required this.onGoToQuickSale,
     this.onGoToQuotation,
     required this.onFinanceActionCompleted,
+    this.whatsappContactKey,
   });
 
   @override
@@ -192,6 +194,7 @@ class _ClientStatsHeaderState extends State<ClientStatsHeader> with TickerProvid
                         ),
                         const Spacer(),
                         ScaleTransition(
+                          key: widget.whatsappContactKey,
                           scale: _bounceAnimationWpp,
                           child: _buildSmallActionButton(Icons.chat, const Color(0xFF25D366), _onWppTap),
                         ),
