@@ -259,6 +259,26 @@ class ConfigService {
     return current;
   }
 
+  /// Sincroniza atómicamente el correlativo para que sea como mínimo [nextValue] (Blindaje Anti-Colisión Plan 18.5)
+  Future<void> syncReceiptCorrelativeMin({
+    required bool isSandbox,
+    String voucherType = 'BOL',
+    required int nextValue,
+  }) async {
+    final rc = Map<String, dynamic>.from(receiptConfig);
+    final isInvoice = voucherType.toUpperCase() == 'FAC';
+    final key = isInvoice
+        ? (isSandbox ? 'sandbox_next_invoice_correlative' : 'next_invoice_correlative')
+        : (isSandbox ? 'sandbox_next_correlative' : 'next_correlative');
+    final current = (rc[key] as num?)?.toInt() ?? 1;
+    if (nextValue > current) {
+      rc[key] = nextValue;
+      final newConfig = Map<String, dynamic>.from(_config);
+      newConfig['receipt_config'] = rc;
+      await saveConfig(newConfig);
+    }
+  }
+
   /// Consulta la configuración de un plan específico del catálogo
   Map<String, dynamic>? getPlanConfig(String planSlug) {
     final norm = planSlug.toUpperCase().trim();

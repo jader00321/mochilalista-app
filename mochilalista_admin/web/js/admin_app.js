@@ -129,9 +129,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   await checkVaultInitialStatus();
   await loadConfig();
   await loadSystemMode();
+  await loadClients();
   await loadDashboard();
   await loadReleases();
-  await loadClients();
   await loadReleaseMatrix();
   initLicenseStudioEvents();
   initModalEvents();
@@ -220,6 +220,21 @@ function showConfirmModal(title, message, onConfirm, isDanger = false) {
   }
 
   modal.classList.add('open');
+}
+
+// =================== DETECCIÓN DE ENTORNO NATIVO / ESCRITORIO ===================
+/**
+ * Detecta si la interfaz se está ejecutando en Modo Aplicación de Escritorio
+ * (parámetro ?mode=app o modo standalone / minimal-ui de PWA/Chrome App).
+ */
+function isDesktopAppMode() {
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('mode') === 'app') return true;
+  if (window.matchMedia) {
+    if (window.matchMedia('(display-mode: standalone)').matches) return true;
+    if (window.matchMedia('(display-mode: minimal-ui)').matches) return true;
+  }
+  return false;
 }
 
 // =================== NAVEGACIÓN ENTRE PESTAÑAS Y SIDEBAR (FASE 4A) ===================
@@ -337,9 +352,12 @@ function initNavigation() {
     if (floatingTooltip) floatingTooltip.classList.remove('visible');
   });
 
-  // 5. Botón Discreto "Abrir en Chrome" en Sidebar Footer (Plan Maestro 18 - Fase 1)
+  // 5. Botón Discreto "Abrir en Chrome" en Sidebar Footer (Plan Maestro 18 - Fase 1 / Plan 18.5)
   const btnOpenChrome = document.getElementById('btnOpenInChrome');
   if (btnOpenChrome) {
+    // Visibilidad contextual: visible únicamente en modo app de escritorio (?mode=app o standalone)
+    btnOpenChrome.style.display = isDesktopAppMode() ? 'flex' : 'none';
+
     btnOpenChrome.addEventListener('mouseenter', () => {
       if (!sidebar?.classList.contains('collapsed') || !floatingTooltip) return;
       floatingTooltip.textContent = 'Abrir en Google Chrome';
@@ -496,8 +514,8 @@ function initModeSwitcher() {
           if (!res.ok) throw new Error('Error al restaurar sandbox');
           const data = await res.json();
           showToast(data.message || 'Datos de prueba restaurados.', 'success');
-          await loadDashboard();
           await loadClients();
+          await loadDashboard();
           await loadReleases();
           await loadReleaseMatrix();
           await loadFinances();
@@ -582,11 +600,11 @@ async function switchMode(newMode) {
     );
 
     // 3. Recarga limpia coordinada de todos los datos del entorno activo
-    // Cargar releases primero para sincronización inmediata de semver y contadores CRM
+    // Cargar releases y clientes primero para sincronización inmediata de semver, contadores CRM y dona del Dashboard
     await loadReleases();
+    await loadClients();
+    await loadDashboard();
     await Promise.allSettled([
-      loadDashboard(),
-      loadClients(),
       loadReleaseMatrix(),
       loadFinances(),
       loadBackups(),
@@ -695,7 +713,7 @@ async function loadDashboard() {
           <td><strong>${escapeHtml(action.business_name)}</strong></td>
           <td>${escapeHtml(action.owner_name)}</td>
           <td><span class="device-id-badge" title="Hardware ID (ANDROID_ID)">${escapeHtml(action.current_device_id)}</span></td>
-          <td><span class="badge badge-yellow">⏳ ${action.days_left} día(s)</span></td>
+          <td><span class="badge badge-yellow" style="display:inline-flex; align-items:center; gap:4px;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> ${action.days_left} día(s)</span></td>
           <td>${action.expires_date ? action.expires_date.substring(0, 10) : '-'}</td>
           <td>
             <button type="button" class="btn btn-wa btn-sm" onclick="openWhatsAppComposer('${action.client_id}', 'expiring')" title="Abrir Compositor de WhatsApp">
@@ -1047,6 +1065,9 @@ async function loadClients() {
     updateLiveLicenseProjection();
     const activeClient = globalClients.find(c => c.id === licSelect?.value);
     updateGeneratorRightColumn(activeClient || null);
+    if (typeof renderPlanDistributionChart === 'function') {
+      renderPlanDistributionChart(globalClients);
+    }
   } catch (e) {
     console.error('Error al cargar clientes:', e);
   }
@@ -1711,8 +1732,9 @@ function initLicenseStudioEvents() {
     updateLiveLicenseProjection();
   });
 
-  // Botón de emisión
-  document.getElementById('btnGenerateLicense')?.addEventListener('click', generateLicense);
+  // Botón de emisión (Interceptado con Modal de Confirmación Pre-Emisión - Fase 2 Plan 18.5)
+  document.getElementById('btnGenerateLicense')?.addEventListener('click', openConfirmEmissionModal);
+  document.getElementById('btnExecuteConfirmEmission')?.addEventListener('click', executeConfirmedEmission);
 
   // Botones de acción sobre la licencia emitida / activa
   document.getElementById('btnCopyCode')?.addEventListener('click', () => {
@@ -2395,22 +2417,222 @@ function downloadQrCode() {
   downloadQrWithQuietZone('#qrContainer', `QR_MochilaLista_${Date.now()}.png`, 32);
 }
 
-async function generateLicense() {
-  const clientId = document.getElementById('licClientSelect').value;
+// =================== MODAL DE CONFIRMACIÓN PRE-EMISIÓN Y FIRMA ED25519 (FASE 2 PLAN 18.5) ===================
+function openConfirmEmissionModal() {
+  const clientId = document.getElementById('licClientSelect')?.value;
   if (!clientId) {
     showToast('Por favor selecciona un cliente de la lista.', 'warning');
     return;
   }
 
   const client = globalClients.find(c => c.id === clientId);
-  const plan = document.getElementById('licPlanSelect').value;
+  if (!client) {
+    showToast('Cliente seleccionado no encontrado en el sistema.', 'warning');
+    return;
+  }
+
+  const devId = (client.current_device_id || '').trim();
+  if (!devId) {
+    showToast('El cliente seleccionado no cuenta con un Hardware ID vinculado.', 'warning');
+    return;
+  }
+
+  const plan = document.getElementById('licPlanSelect')?.value;
   const isBonoIa = plan === 'BONO_IA_PERSONALIZADO';
 
-  let paymentAmount = parseFloat(document.getElementById('licPaymentAmount').value) || 0;
-  let paymentMethod = document.getElementById('licPaymentMethod').value;
-  let paymentRef = document.getElementById('licPaymentRef').value.trim() || 'Op. Generada';
+  let paymentAmount = parseFloat(document.getElementById('licPaymentAmount')?.value);
+  if (isNaN(paymentAmount) || paymentAmount < 0) {
+    showToast('El monto de cobro debe ser un número válido mayor o igual a 0.', 'warning');
+    return;
+  }
 
-  // Leer ajustes personalizados estrictamente si el switch está activado y el plan no es Bono IA
+  const isCustomEnabled = (document.getElementById('chkEnableCustomSettings')?.checked === true) && !isBonoIa;
+  let customDaysVal = null;
+  let customAiBonus = 0;
+  let computationMode = 'cumulative';
+  let customExactDate = null;
+
+  if (isCustomEnabled) {
+    customDaysVal = parseInt(document.getElementById('licCustomDays')?.value) || null;
+    customAiBonus = parseInt(document.getElementById('licCustomAiBonus')?.value) || 0;
+    computationMode = document.getElementById('licCustomComputationMode')?.value || 'cumulative';
+    customExactDate = document.getElementById('licCustomExactDate')?.value || null;
+  }
+
+  let customAiScans = 0;
+  if (isBonoIa) {
+    customAiScans = parseInt(document.getElementById('licCustomAiAmount')?.value) || 20;
+    if (customAiScans <= 0) {
+      showToast('La cantidad de escaneos IA debe ser mayor a 0.', 'warning');
+      return;
+    }
+    const isFree = document.getElementById('ecoModeFree')?.checked ?? true;
+    if (isFree) {
+      paymentAmount = 0.0;
+    }
+  } else if (plan === 'EXTENSION_CORTESIA') {
+    paymentAmount = 0.0;
+  }
+
+  // 1. Cliente y Dispositivo
+  const elClientName = document.getElementById('confirmLicClientName');
+  const elOwnerDoc = document.getElementById('confirmLicOwnerDoc');
+  const elHwId = document.getElementById('confirmLicHardwareId');
+  const elAppVer = document.getElementById('confirmLicAppVersion');
+
+  if (elClientName) elClientName.textContent = client.business_name || 'Sin Nombre';
+  const docText = client.doc_id ? ` • DNI/RUC: ${client.doc_id}` : '';
+  if (elOwnerDoc) elOwnerDoc.textContent = `${client.owner_name || 'Sin Titular'}${docText}`;
+  if (elHwId) elHwId.textContent = devId;
+  if (elAppVer) elAppVer.textContent = client.installed_version ? `(v${client.installed_version})` : '(v9.34.0)';
+
+  // 2. Plan / Modalidad y Beneficios
+  const elPlanLabel = document.getElementById('confirmLicPlanLabel');
+  if (elPlanLabel) {
+    if (isBonoIa) {
+      elPlanLabel.innerHTML = `<strong>Bono / Recarga IA Personalizada (+${customAiScans} IA)</strong>`;
+    } else {
+      elPlanLabel.innerHTML = `<strong>${escapeHtml(formatPlanHumanLabel(plan))}</strong>`;
+    }
+  }
+
+  // Vigencia Proyectada
+  const elExpiration = document.getElementById('confirmLicExpiration');
+  const formatDateStr = (d) => {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${day}/${m}/${y}`;
+  };
+
+  const now = new Date();
+  let baseDate = now;
+  if (computationMode === 'cumulative' && client.license_expires) {
+    const exp = new Date(client.license_expires);
+    if (exp > now && client.license_type !== 'TRIAL_VENCIDO') {
+      baseDate = exp;
+    }
+  }
+
+  if (elExpiration) {
+    if (isBonoIa || plan === 'RECARGA_IA_150') {
+      const curExp = client.license_expires ? client.license_expires.substring(0, 10) : 'Activa';
+      const isTrial = client.license_type === 'TRIAL' || client.trial_days_remaining !== null;
+      const vig = isTrial ? `Trial (${client.trial_days_remaining ?? '-'}d restantes)` : curExp;
+      elExpiration.textContent = `${vig} (Sin cambio de días)`;
+    } else if (plan === 'PERPETUO_LIBERADO') {
+      elExpiration.textContent = 'De por Vida / Sin Caducidad';
+    } else if (customExactDate) {
+      elExpiration.textContent = `Sobrescrita fija al ${customExactDate}`;
+    } else {
+      const curExpStr = client.license_expires ? client.license_expires.substring(0, 10) : 'Nueva emisión';
+      const days = (customDaysVal && customDaysVal > 0)
+        ? customDaysVal
+        : (ownerConfig?.catalog?.[plan]?.days ?? (plan === 'EXTENSION_CORTESIA' ? 7 : 30));
+      const proj = new Date(baseDate.getTime() + days * 24 * 60 * 60 * 1000);
+      elExpiration.textContent = `${curExpStr} → ${formatDateStr(proj)} (+${days} días)`;
+    }
+  }
+
+  // Créditos IA Celular
+  const elAi = document.getElementById('confirmLicAiCredits');
+  const currentAi = (client.ai_reported_balance !== undefined && client.ai_reported_balance !== null)
+    ? client.ai_reported_balance
+    : (client.ai_accumulated_credits ?? client.ai_extra_credits ?? 0);
+
+  if (elAi) {
+    if (isBonoIa) {
+      const totalProj = currentAi + customAiScans;
+      elAi.textContent = `${currentAi} IA (celular) + ${customAiScans} IA = ${totalProj} IA proyectados`;
+    } else {
+      const basePlanAi = ownerConfig?.catalog?.[plan]?.ai_credits ?? (plan === 'TRIMESTRAL' ? 180 : (plan === 'SEMESTRAL' ? 450 : (plan === 'ANUAL' ? 1200 : (plan === 'PERPETUO_LIBERADO' ? 0 : 50))));
+      const toAdd = basePlanAi + customAiBonus;
+      if (toAdd > 0) {
+        const totalProj = currentAi + toAdd;
+        elAi.textContent = `${currentAi} IA (celular) + ${toAdd} IA = ${totalProj} IA proyectados`;
+      } else {
+        elAi.textContent = `${currentAi} IA (celular) (Sin bonos de escaneo)`;
+      }
+    }
+  }
+
+  // 3. Nonce Criptográfico (Estricto Plan 18/18.5: Último Nonce Emitido -> Próximo Nonce a Firmar)
+  const elNonce = document.getElementById('confirmLicNonce');
+  const nextNonce = client.next_nonce || 1;
+  const lastNonce = nextNonce > 1 ? nextNonce - 1 : 0;
+  if (elNonce) {
+    elNonce.textContent = `Último Nonce Emitido (#${lastNonce > 0 ? lastNonce : 'Ninguno'}) → Próximo Nonce a Firmar (#${nextNonce})`;
+  }
+
+  // 4. Impacto Financiero
+  const elFinancial = document.getElementById('confirmLicFinancial');
+  const paymentMethod = document.getElementById('licPaymentMethod')?.value || 'Yape';
+  const paymentRef = document.getElementById('licPaymentRef')?.value?.trim() || '';
+  if (elFinancial) {
+    if (paymentAmount > 0) {
+      const refText = paymentRef ? ` - ${paymentRef}` : '';
+      elFinancial.innerHTML = `<strong>S/ ${paymentAmount.toFixed(2)}</strong> (${escapeHtml(paymentMethod)}${escapeHtml(refText)})`;
+    } else {
+      elFinancial.textContent = 'Cortesía / Sin Costo (S/ 0.00)';
+    }
+  }
+
+  // 5. Badge de Ajustes Personalizados
+  const badgeBox = document.getElementById('confirmLicCustomBadgeBox');
+  const customDetails = document.getElementById('confirmLicCustomDetails');
+  if (isCustomEnabled && (customDaysVal !== null || customAiBonus > 0 || customExactDate || computationMode !== 'cumulative')) {
+    const details = [];
+    if (customDaysVal !== null && customDaysVal > 0) {
+      details.push(`Días manuales: +${customDaysVal} (${computationMode === 'from_today' ? 'desde hoy' : 'acumulativos'})`);
+    }
+    if (customAiBonus > 0) {
+      details.push(`Bono IA regalo: +${customAiBonus} escaneos`);
+    }
+    if (customExactDate) {
+      details.push(`Fecha fija exacta: ${customExactDate}`);
+    }
+    if (badgeBox && customDetails) {
+      customDetails.innerHTML = details.join(' • ') || 'Ajustes comerciales manuales aplicados';
+      badgeBox.style.display = 'block';
+    }
+  } else {
+    if (badgeBox) badgeBox.style.display = 'none';
+  }
+
+  // Restaurar vistas y habilitar botones
+  const summaryState = document.getElementById('confirmEmissionSummaryState');
+  const animState = document.getElementById('confirmEmissionAnimState');
+  const footer = document.getElementById('confirmEmissionFooter');
+  const btnCancel = document.getElementById('btnCancelConfirmEmission');
+  const btnExecute = document.getElementById('btnExecuteConfirmEmission');
+
+  if (summaryState) summaryState.style.display = 'block';
+  if (animState) animState.style.display = 'none';
+  if (footer) footer.style.display = 'flex';
+  if (btnCancel) btnCancel.disabled = false;
+  if (btnExecute) btnExecute.disabled = false;
+
+  openModal('modalConfirmLicenseEmission');
+}
+
+const generateLicense = openConfirmEmissionModal;
+
+async function executeConfirmedEmission() {
+  const clientId = document.getElementById('licClientSelect')?.value;
+  const client = globalClients.find(c => c.id === clientId);
+  if (!clientId || !client) {
+    showToast('Por favor selecciona un cliente válido.', 'warning');
+    closeModal('modalConfirmLicenseEmission');
+    return;
+  }
+
+  const plan = document.getElementById('licPlanSelect')?.value;
+  const isBonoIa = plan === 'BONO_IA_PERSONALIZADO';
+
+  let paymentAmount = parseFloat(document.getElementById('licPaymentAmount')?.value) || 0;
+  let paymentMethod = document.getElementById('licPaymentMethod')?.value || 'Yape';
+  let paymentRef = document.getElementById('licPaymentRef')?.value?.trim() || 'Op. Generada';
+
   const isCustomEnabled = (document.getElementById('chkEnableCustomSettings')?.checked === true) && !isBonoIa;
   let customDaysVal = null;
   let customAiBonus = 0;
@@ -2426,10 +2648,6 @@ async function generateLicense() {
 
   if (isBonoIa) {
     const customAiAmount = parseInt(document.getElementById('licCustomAiAmount')?.value) || 20;
-    if (customAiAmount <= 0) {
-      showToast('La cantidad de escaneos IA debe ser mayor a 0.', 'warning');
-      return;
-    }
     customAiBonus = customAiAmount;
     const isFree = document.getElementById('ecoModeFree')?.checked ?? true;
     if (isFree) {
@@ -2442,6 +2660,40 @@ async function generateLicense() {
     paymentMethod = 'Cortesia / Promocion';
     paymentRef = 'Extension Cortesia';
   }
+
+  // 1. Deshabilitar botones para impedir doble emisión accidental y activar vista animada
+  const btnCancel = document.getElementById('btnCancelConfirmEmission');
+  const btnExecute = document.getElementById('btnExecuteConfirmEmission');
+  const summaryState = document.getElementById('confirmEmissionSummaryState');
+  const animState = document.getElementById('confirmEmissionAnimState');
+  const footer = document.getElementById('confirmEmissionFooter');
+
+  if (btnCancel) btnCancel.disabled = true;
+  if (btnExecute) btnExecute.disabled = true;
+  if (summaryState) summaryState.style.display = 'none';
+  if (footer) footer.style.display = 'none';
+  if (animState) animState.style.display = 'block';
+
+  // Configurar animación en Etapa 1
+  const animTitle = document.getElementById('confirmEmissionAnimTitle');
+  const animSubtitle = document.getElementById('confirmEmissionAnimSubtitle');
+  const shieldSvg = animState?.querySelector('.shield-svg');
+  const shieldKeyHole = document.getElementById('shieldKeyHole');
+  const shieldCheckPath = document.getElementById('shieldCheckPath');
+
+  if (animTitle) animTitle.textContent = 'Validando correlativo Nonce y vinculación de Hardware...';
+  if (animSubtitle) animSubtitle.textContent = 'Sincronizando estado criptográfico seguro con la bóveda';
+  if (shieldKeyHole) shieldKeyHole.style.display = 'block';
+  if (shieldCheckPath) shieldCheckPath.style.display = 'none';
+  if (shieldSvg) shieldSvg.style.color = 'var(--primary)';
+
+  // Programar transición a Etapa 2 (~260ms)
+  const stage2Timer = setTimeout(() => {
+    if (animTitle) animTitle.textContent = 'Firmando criptográficamente con clave maestra Ed25519...';
+    if (animSubtitle) animSubtitle.textContent = 'Generando firma asimétrica de 64 bytes (Envelope DPAPI)';
+  }, 260);
+
+  const startTime = Date.now();
 
   try {
     const res = await fetch('/api/licenses/generate', {
@@ -2469,18 +2721,51 @@ async function generateLicense() {
     const data = await res.json();
     currentSelectedGeneratorCode = data;
 
-    // Actualizar clientes y dashboard
-    await loadClients();
-    await loadDashboard();
+    // Etapa 3: Asegurar tiempo mínimo (~650ms total) para fluidez profesional
+    const elapsed = Date.now() - startTime;
+    const waitTime = Math.max(0, 650 - elapsed);
 
-    const updatedClient = globalClients.find(c => c.id === clientId) || client || data.client;
+    setTimeout(async () => {
+      if (animTitle) animTitle.textContent = '¡Licencia y Credencial Emitidas con Éxito!';
+      if (animSubtitle) animSubtitle.textContent = 'Firma Ed25519 verificada e integrada en el historial comercial';
+      if (shieldKeyHole) shieldKeyHole.style.display = 'none';
+      if (shieldCheckPath) shieldCheckPath.style.display = 'block';
+      if (shieldSvg) shieldSvg.style.color = 'var(--success)';
 
-    // Renderizar la licencia emitida como activa / vigente en la columna derecha
-    renderSelectedGeneratorLicense(data, updatedClient, true);
-    updateGeneratorRightColumn(updatedClient);
+      // Cierre y transición suave a columna de resultado
+      setTimeout(async () => {
+        closeModal('modalConfirmLicenseEmission');
 
-    showToast('¡Licencia Ed25519 emitida y firmada con éxito!', 'success');
+        await loadClients();
+        await loadDashboard();
+
+        const updatedClient = globalClients.find(c => c.id === clientId) || client || data.client;
+        renderSelectedGeneratorLicense(data, updatedClient, true);
+        updateGeneratorRightColumn(updatedClient);
+
+        // Feedback visual en la columna derecha
+        const resultContainer = document.getElementById('licenseResultContainer');
+        if (resultContainer) {
+          resultContainer.classList.remove('license-result-highlight');
+          void resultContainer.offsetWidth; // Forzar reflow del DOM
+          resultContainer.classList.add('license-result-highlight');
+          setTimeout(() => {
+            resultContainer.classList.remove('license-result-highlight');
+          }, 1800);
+          resultContainer.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+
+        showToast('¡Licencia Ed25519 emitida y firmada con éxito!', 'success');
+      }, 250);
+    }, waitTime);
+
   } catch (e) {
+    clearTimeout(stage2Timer);
+    if (animState) animState.style.display = 'none';
+    if (summaryState) summaryState.style.display = 'block';
+    if (footer) footer.style.display = 'flex';
+    if (btnCancel) btnCancel.disabled = false;
+    if (btnExecute) btnExecute.disabled = false;
     showToast('Error al emitir licencia: ' + e.message, 'error');
   }
 }
@@ -3133,7 +3418,7 @@ function renderReceiptPreviewAndCanvas() {
   if (rdocClientDevId) rdocClientDevId.textContent = client.current_device_id || '-';
 
   const rdocConcept = document.getElementById('rdocPaymentConcept');
-  if (rdocConcept) rdocConcept.textContent = payment.plan || 'Pago Registrado';
+  if (rdocConcept) rdocConcept.textContent = formatPlanHumanLabel(payment.plan) || payment.plan || 'Pago Registrado';
   const rdocNote = document.getElementById('rdocPaymentCustomNote');
   if (rdocNote) {
     rdocNote.textContent = customNote;
@@ -3165,22 +3450,22 @@ function renderReceiptPreviewAndCanvas() {
       rdocTotalBox.classList.add('with-igv');
       rdocTotalBox.innerHTML = `
         <div class="rdoc-igv-row">
-          <span>Subtotal (Op. Gravada):</span>
-          <strong>S/ ${subtotalVal.toFixed(2)}</strong>
+          <span style="color:#475569;">Subtotal (Op. Gravada):</span>
+          <strong style="color:#1e293b;">S/ ${subtotalVal.toFixed(2)}</strong>
         </div>
         <div class="rdoc-igv-row">
-          <span>I.G.V. (18%):</span>
-          <strong>S/ ${igvVal.toFixed(2)}</strong>
+          <span style="color:#475569;">I.G.V. (18%):</span>
+          <strong style="color:#1e293b;">S/ ${igvVal.toFixed(2)}</strong>
         </div>
         <div class="rdoc-igv-total-row">
-          <span style="font-weight:700; color:var(--text-primary, #0f172a);">TOTAL A PAGAR:</span>
+          <span style="font-weight:700; color:#0f172a;">TOTAL A PAGAR:</span>
           <span id="rdocPaymentTotal" style="color:${accentColor}; font-weight:900; font-size:1.35rem;">S/ ${totalVal.toFixed(2)}</span>
         </div>
       `;
     } else {
       rdocTotalBox.classList.remove('with-igv');
       rdocTotalBox.innerHTML = `
-        <span style="font-size:0.8rem; font-weight:700; color:var(--text-secondary, #475569);">${isInvoice ? 'TOTAL FACTURADO:' : 'TOTAL RECIBIDO:'}</span>
+        <span style="font-size:0.8rem; font-weight:700; color:#334155;">${isInvoice ? 'TOTAL FACTURADO:' : 'TOTAL RECIBIDO:'}</span>
         <span id="rdocPaymentTotal" style="color:${accentColor}; font-weight:900; font-size:1.5rem;">S/ ${totalVal.toFixed(2)}</span>
       `;
     }
@@ -3434,7 +3719,7 @@ function drawReceiptOnCanvas() {
   ctx.textAlign = 'left';
   ctx.fillStyle = '#0f172a';
   ctx.font = 'bold 18px sans-serif';
-  ctx.fillText(payment.plan || 'Pago Registrado', 80, rowY + 30);
+  ctx.fillText(formatPlanHumanLabel(payment.plan) || payment.plan || 'Pago Registrado', 80, rowY + 30);
 
   if (showObservation && customNote) {
     ctx.fillStyle = '#64748b';
@@ -3454,29 +3739,35 @@ function drawReceiptOnCanvas() {
   ctx.fillText(`S/ ${totalVal.toFixed(2)}`, 60 + tableW - 20, rowY + 38);
   ctx.restore();
 
-  // Caja de Totales (con o sin desglose de IGV)
+  // Caja de Totales (con o sin desglose de IGV - Cero colisión con ancho >= 430px)
   if (showIgv) {
     ctx.save();
-    const boxW = 380;
-    const boxH = 110;
+    const boxW = Math.max(430, width - 120 > 430 ? 430 : width - 120);
+    const boxH = 115;
     const boxX = width - 60 - boxW;
-    const boxY = 475;
+    const boxY = 470;
     ctx.fillStyle = '#f8fafc';
     ctx.strokeStyle = accentColor;
     ctx.lineWidth = 2.5;
     roundRect(ctx, boxX, boxY, boxW, boxH, 10, true, true);
 
     ctx.font = '500 15px sans-serif';
-    ctx.fillStyle = '#64748b';
+    ctx.fillStyle = '#475569';
     ctx.textAlign = 'left';
-    ctx.fillText('SUBTOTAL (OP. GRAVADA):', boxX + 20, boxY + 30);
+    ctx.fillText('SUBTOTAL (OP. GRAVADA):', boxX + 24, boxY + 30);
+    ctx.font = 'bold 15px sans-serif';
+    ctx.fillStyle = '#1e293b';
     ctx.textAlign = 'right';
-    ctx.fillText(`S/ ${subtotalVal.toFixed(2)}`, boxX + boxW - 20, boxY + 30);
+    ctx.fillText(`S/ ${subtotalVal.toFixed(2)}`, boxX + boxW - 24, boxY + 30);
 
+    ctx.font = '500 15px sans-serif';
+    ctx.fillStyle = '#475569';
     ctx.textAlign = 'left';
-    ctx.fillText('I.G.V. (18%):', boxX + 20, boxY + 58);
+    ctx.fillText('I.G.V. (18%):', boxX + 24, boxY + 58);
+    ctx.font = 'bold 15px sans-serif';
+    ctx.fillStyle = '#1e293b';
     ctx.textAlign = 'right';
-    ctx.fillText(`S/ ${igvVal.toFixed(2)}`, boxX + boxW - 20, boxY + 58);
+    ctx.fillText(`S/ ${igvVal.toFixed(2)}`, boxX + boxW - 24, boxY + 58);
 
     ctx.strokeStyle = '#e2e8f0';
     ctx.lineWidth = 1;
@@ -3488,29 +3779,41 @@ function drawReceiptOnCanvas() {
     ctx.font = 'bold 17px sans-serif';
     ctx.fillStyle = '#0f172a';
     ctx.textAlign = 'left';
-    ctx.fillText('TOTAL A PAGAR:', boxX + 20, boxY + 95);
+    ctx.fillText('TOTAL A PAGAR:', boxX + 24, boxY + 95);
     ctx.font = '900 24px sans-serif';
     ctx.fillStyle = accentColor;
     ctx.textAlign = 'right';
-    ctx.fillText(`S/ ${totalVal.toFixed(2)}`, boxX + boxW - 20, boxY + 96);
+    ctx.fillText(`S/ ${totalVal.toFixed(2)}`, boxX + boxW - 24, boxY + 96);
     ctx.restore();
   } else {
     ctx.save();
+    const labelText = isInvoice ? 'TOTAL FACTURADO:' : 'TOTAL RECIBIDO:';
+    const amountText = `S/ ${totalVal.toFixed(2)}`;
+
+    ctx.font = 'bold 18px sans-serif';
+    const labelW = ctx.measureText(labelText).width;
+    ctx.font = '900 30px sans-serif';
+    const amountW = ctx.measureText(amountText).width;
+
+    const boxW = Math.max(430, labelW + amountW + 70);
+    const boxH = 75;
+    const boxX = width - 60 - boxW;
     const totalBoxY = 490;
+
     ctx.fillStyle = '#f8fafc';
     ctx.strokeStyle = accentColor;
     ctx.lineWidth = 3;
-    roundRect(ctx, width - 420, totalBoxY, 360, 75, 10, true, true);
+    roundRect(ctx, boxX, totalBoxY, boxW, boxH, 10, true, true);
 
     ctx.fillStyle = '#1e293b';
     ctx.font = 'bold 18px sans-serif';
     ctx.textAlign = 'left';
-    ctx.fillText(isInvoice ? 'TOTAL FACTURADO:' : 'TOTAL RECIBIDO:', width - 395, totalBoxY + 45);
+    ctx.fillText(labelText, boxX + 24, totalBoxY + 45);
 
     ctx.fillStyle = accentColor;
-    ctx.font = '900 32px sans-serif';
+    ctx.font = '900 30px sans-serif';
     ctx.textAlign = 'right';
-    ctx.fillText(`S/ ${totalVal.toFixed(2)}`, width - 85, totalBoxY + 47);
+    ctx.fillText(amountText, boxX + boxW - 24, totalBoxY + 47);
     ctx.restore();
   }
 
@@ -3954,18 +4257,50 @@ function initReceiptModalEvents() {
   document.getElementById('btnRcSendWhatsapp')?.addEventListener('click', sendReceiptViaWhatsapp);
 }
 
+// =================== GESTIÓN GLOBAL DE PESTAÑAS EN DRAWER 360° (FASE 2 PLAN 18.5) ===================
+function switchDrawerTab(targetTabId) {
+  const normalizedId = (targetTabId === 'drawerTabSummary') ? 'drawerTabOverview' : targetTabId;
+  currentDrawerTab = normalizedId;
+  const dtabs = document.querySelectorAll('.drawer-tab-btn');
+  dtabs.forEach(b => {
+    if (b.dataset.dtab === normalizedId) {
+      b.classList.add('active');
+    } else {
+      b.classList.remove('active');
+    }
+  });
+  document.querySelectorAll('.drawer-tab-pane').forEach(p => {
+    if (p.id === normalizedId) {
+      p.classList.add('active');
+    } else {
+      p.classList.remove('active');
+    }
+  });
+
+  if (normalizedId === 'drawerTabEdit') {
+    setTimeout(() => {
+      const followupInput = document.getElementById('drawerEditFollowupDate');
+      if (followupInput) {
+        followupInput.focus();
+        followupInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    }, 150);
+  }
+}
+window.switchDrawerTab = switchDrawerTab;
+
 function initDrawerEvents() {
   const dtabs = document.querySelectorAll('.drawer-tab-btn');
   dtabs.forEach(btn => {
     btn.addEventListener('click', () => {
-      dtabs.forEach(b => b.classList.remove('active'));
-      document.querySelectorAll('.drawer-tab-pane').forEach(p => p.classList.remove('active'));
-
-      btn.classList.add('active');
-      currentDrawerTab = btn.dataset.dtab;
-      const targetPane = document.getElementById(btn.dataset.dtab);
-      if (targetPane) targetPane.classList.add('active');
+      switchDrawerTab(btn.dataset.dtab);
     });
+  });
+
+  // Botón rápido en datos de contacto "Editar Seguimiento / Notas"
+  document.getElementById('btnDrawerQuickEditFollowup')?.addEventListener('click', (e) => {
+    e.preventDefault();
+    switchDrawerTab('drawerTabEdit');
   });
 
   // Control inteligente de Ventana Updates en cambio de plan
@@ -4171,22 +4506,7 @@ async function openClient360Drawer(clientId) {
 
   // Activar pestaña solicitada de inmediato (con soporte para alias drawerTabSummary)
   const targetTabId = (initialTab === 'drawerTabSummary') ? 'drawerTabOverview' : initialTab;
-  currentDrawerTab = targetTabId;
-  const dtabs = document.querySelectorAll('.drawer-tab-btn');
-  dtabs.forEach(b => {
-    if (b.dataset.dtab === targetTabId) {
-      b.classList.add('active');
-    } else {
-      b.classList.remove('active');
-    }
-  });
-  document.querySelectorAll('.drawer-tab-pane').forEach(p => {
-    if (p.id === targetTabId) {
-      p.classList.add('active');
-    } else {
-      p.classList.remove('active');
-    }
-  });
+  switchDrawerTab(targetTabId);
 
   // Cabecera Ficha 360°
   document.getElementById('drawerBizName').textContent = client.business_name || 'Sin Nombre';
@@ -4205,7 +4525,7 @@ async function openClient360Drawer(clientId) {
   const plan = (client.license_type || 'MENSUAL').toUpperCase();
 
   // Pestaña 1: Resumen y Licencia
-  document.getElementById('drawerKpiPlan').textContent = isProspect ? 'PROSPECTO' : plan.replace(/_/g, ' ');
+  document.getElementById('drawerKpiPlan').textContent = isProspect ? 'Prospecto' : formatPlanHumanLabel(client.license_type);
   document.getElementById('drawerKpiExpires').textContent = isProspect
     ? (client.expected_subscription_date ? `Seguimiento: ${client.expected_subscription_date}` : 'Sin vencimiento')
     : (isPerp ? 'De por Vida' : (client.license_expires ? client.license_expires.substring(0, 10) : 'Sin fecha'));
@@ -4215,19 +4535,17 @@ async function openClient360Drawer(clientId) {
     : (client.ai_accumulated_credits ?? client.ai_extra_credits ?? 0);
   const pendingAi = client.ai_pending_bonus || 0;
 
-  if (isTrial || client.ai_reported_balance !== undefined) {
-    document.getElementById('drawerKpiAiCredits').textContent = `${realAi} IA`;
-  } else {
-    document.getElementById('drawerKpiAiCredits').textContent = (client.ai_extra_credits || 0) > 0 ? `+${client.ai_extra_credits} IA` : '0 IA';
-  }
+  document.getElementById('drawerKpiAiCredits').textContent = `${realAi} IA`;
   document.getElementById('drawerKpiVersion').textContent = `v${client.installed_version || '9.35.0'}`;
   
   const drawerKpiUpdates = document.getElementById('drawerBoxUpdates')?.querySelector('.drawer-kpi-val') || document.getElementById('drawerKpiUpdates');
   if (drawerKpiUpdates) {
-    if (isProspect || isTrial) {
+    if (isPerp || plan === 'PASE_ACTUALIZACION_ANUAL') {
+      drawerKpiUpdates.textContent = client.updates_until ? client.updates_until.substring(0, 10) : 'Vigente';
+    } else if (isProspect || isTrial) {
       drawerKpiUpdates.textContent = 'No aplica';
     } else {
-      drawerKpiUpdates.textContent = client.updates_until ? client.updates_until.substring(0, 10) : '-';
+      drawerKpiUpdates.textContent = 'Incluido en suscripción';
     }
   }
 
@@ -6083,6 +6401,22 @@ function renderFinancesTable() {
           <span>Emitir</span>
         </button>
       `;
+    }
+
+    let prevCorrelativeHtml = '';
+    if (searchVal) {
+      const activeNum = (f.receipt_number || '').toLowerCase();
+      const bolNum = (f.receipt_bol_number || '').toLowerCase();
+      const facNum = (f.receipt_fac_number || '').toLowerCase();
+
+      if (bolNum && bolNum !== activeNum && bolNum.includes(searchVal)) {
+        prevCorrelativeHtml = `<small class="receipt-matched-prev">Previo: ${escapeHtml(f.receipt_bol_number)}</small>`;
+      } else if (facNum && facNum !== activeNum && facNum.includes(searchVal)) {
+        prevCorrelativeHtml = `<small class="receipt-matched-prev">Previo: ${escapeHtml(f.receipt_fac_number)}</small>`;
+      }
+    }
+    if (prevCorrelativeHtml) {
+      receiptCellHtml = `<div style="display:flex; flex-direction:column; align-items:center; gap:2px;">${receiptCellHtml}${prevCorrelativeHtml}</div>`;
     }
 
     const planLabel = typeof formatPlanHumanLabel === 'function' ? formatPlanHumanLabel(f.plan) : (f.plan || '-');

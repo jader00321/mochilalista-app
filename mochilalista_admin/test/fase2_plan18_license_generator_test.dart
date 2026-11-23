@@ -121,7 +121,7 @@ void main() {
       }
 
       final content = ascii.decode(bytes);
-      expect(content, contains('cmd /c "cd /d "%ADMIN_DIR%" && dart run server.dart || pause"'),
+      expect(content, contains('cmd /c "dart run server.dart || pause"'),
           reason: 'Debe usar cmd /c con pause condicional');
       expect(content, contains('http://localhost:8080/api/vault/health'),
           reason: 'Debe sonder el endpoint health HTTP');

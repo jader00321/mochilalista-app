@@ -59,10 +59,26 @@ void main() {
       expect(edgeIndex, isNonNegative, reason: 'Debe buscar Microsoft Edge como respaldo');
       expect(chromeIndex < edgeIndex, isTrue, reason: 'Google Chrome debe preceder a Edge');
 
-      // Modos de ejecucion
-      expect(content.contains('--app=http://localhost:8080'), isTrue);
+      // Modos de ejecucion con soporte determinista ?mode=app
+      expect(content.contains('--app=http://localhost:8080/?mode=app'), isTrue);
       expect(content.contains('--browser'), isTrue);
       expect(content.contains('-b'), isTrue);
+
+      // Plan 18.5: Cero bloques parentizados if (...) ( ... ) en todo el archivo .bat
+      final lines = content.split('\r\n');
+      for (final line in lines) {
+        final trimmed = line.trim();
+        if (trimmed.startsWith('if ') || trimmed.startsWith('if/i ')) {
+          expect(
+            trimmed.endsWith('('),
+            isFalse,
+            reason: 'Prohibido usar bloques if parentizados en .bat por colisiones de parser: "$trimmed"',
+          );
+        }
+      }
+
+      // Uso de flag /D "%ADMIN_DIR%" para evitar comillas anidadas en start
+      expect(content.contains('/D "%ADMIN_DIR%"'), isTrue);
     });
 
     test('1.3. Crear_Acceso_Directo_Escritorio.ps1 tiene codificacion valida y propiedades oficiales', () {
@@ -115,6 +131,8 @@ void main() {
 
       excelService = ExcelExportService(dbService: dbService, configService: configService);
       vaultStorage = VaultStorageService(
+        projectRootDir: tempDir.path,
+        mirrorDir: '${tempDir.path}/mirror',
         dbService: dbService,
         configService: configService,
         signer: signer,
@@ -208,16 +226,21 @@ void main() {
       expect(buttonSlice.contains('<line'), isTrue);
     });
 
-    test('1.7. styles.css define estilos de .btn-open-in-chrome, modo colapsado y tema claro', () {
+    test('1.7. styles.css define estilos de .btn-open-in-chrome, maquetacion vertical y modo colapsado', () {
       expect(cssFile.existsSync(), isTrue);
       final css = cssFile.readAsStringSync();
 
       expect(css.contains('.btn-open-in-chrome'), isTrue);
       expect(css.contains('.app-sidebar.collapsed .btn-open-in-chrome'), isTrue);
       expect(css.contains('[data-theme="light"] .btn-open-in-chrome'), isTrue);
+
+      // Plan 18.5: .sidebar-footer estructurado verticalmente con height auto
+      expect(css.contains('flex-direction: column'), isTrue);
+      expect(css.contains('height: auto'), isTrue);
+      expect(css.contains('width: 38px'), isTrue, reason: 'Modo colapsado debe usar botones cuadrados centrados');
     });
 
-    test('1.8. admin_app.js registra listeners para #btnOpenInChrome con fallback window.open', () {
+    test('1.8. admin_app.js contiene isDesktopAppMode y visibilidad contextual para #btnOpenInChrome', () {
       expect(jsFile.existsSync(), isTrue);
       final js = jsFile.readAsStringSync();
 
@@ -225,6 +248,12 @@ void main() {
       expect(js.contains("fetch('/api/system/open-browser'"), isTrue);
       expect(js.contains("window.open('http://localhost:8080', '_blank')"), isTrue);
       expect(js.contains("'Abrir en Google Chrome'"), isTrue);
+
+      // Plan 18.5: Helper isDesktopAppMode con deteccion de ?mode=app y display-mode standalone
+      expect(js.contains('function isDesktopAppMode()'), isTrue);
+      expect(js.contains("get('mode') === 'app'"), isTrue);
+      expect(js.contains("'(display-mode: standalone)'"), isTrue);
+      expect(js.contains("isDesktopAppMode() ? 'flex' : 'none'"), isTrue);
     });
   });
 }

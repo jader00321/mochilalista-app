@@ -95,7 +95,7 @@
       </div>
 
       <div class="sidebar-footer">
-        <button type="button" class="btn-open-in-chrome" id="btnOpenInChrome" title="Abrir en Google Chrome" aria-label="Abrir en Google Chrome">
+        <button type="button" class="btn-open-in-chrome" id="btnOpenInChrome" title="Abrir en Google Chrome" aria-label="Abrir en Google Chrome" style="display: none;">
           <svg class="chrome-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <circle cx="12" cy="12" r="10"></circle>
             <circle cx="12" cy="12" r="4"></circle>
@@ -2654,6 +2654,108 @@
       <div class="modal-footer">
         <button class="btn btn-outline" onclick="closeModal('modalEditRelease')">Cancelar</button>
         <button class="btn btn-primary" id="btnSubmitEditRelease">Guardar Cambios</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: CONFIRMAR EMISIÓN DE LICENCIA CRIPTOGRÁFICA ED25519 (PLAN 18.5) -->
+  <div class="modal-overlay" id="modalConfirmLicenseEmission" onclick="if(event.target===this) closeModal('modalConfirmLicenseEmission')">
+    <div class="modal-dialog" style="max-width: 580px;">
+      <div class="modal-header">
+        <div style="display:flex; align-items:center; gap:0.5rem;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:20px; height:20px; color:var(--primary);"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          <h3 style="margin:0;">Confirmar Emisión de Licencia Ed25519</h3>
+        </div>
+        <button type="button" class="btn btn-outline btn-sm" onclick="closeModal('modalConfirmLicenseEmission')">&times;</button>
+      </div>
+      <div class="modal-body" style="padding: 1.25rem 1.5rem 1.5rem 1.5rem;">
+        <!-- Vista de Resumen Pre-Emisión -->
+        <div id="confirmEmissionSummaryState">
+          <p style="font-size:0.85rem; color:var(--text-secondary); margin-bottom:1rem; line-height:1.45;">
+            Revisa el resumen técnico y contable antes de firmar con la clave maestra privada Ed25519. Esta acción incrementará el Nonce criptográfico y registrará la emisión en la base de datos.
+          </p>
+
+          <div class="confirm-emission-card">
+            <!-- 1. Cliente y Dispositivo -->
+            <div class="confirm-row">
+              <span class="confirm-label">Cliente / Negocio</span>
+              <span class="confirm-value" id="confirmLicClientName">-</span>
+            </div>
+            <div class="confirm-row">
+              <span class="confirm-label">Titular & Documento</span>
+              <span class="confirm-value" id="confirmLicOwnerDoc">-</span>
+            </div>
+            <div class="confirm-row">
+              <span class="confirm-label">Hardware ID Vinculado</span>
+              <span class="confirm-value"><code id="confirmLicHardwareId" style="font-family:var(--font-mono); font-weight:700; color:var(--primary);">-</code> <small id="confirmLicAppVersion" style="color:var(--text-muted); margin-left:4px;">(v9.34.0)</small></span>
+            </div>
+
+            <div class="confirm-divider"></div>
+
+            <!-- 2. Plan / Modalidad y Beneficios -->
+            <div class="confirm-row">
+              <span class="confirm-label">Plan / Modalidad</span>
+              <span class="confirm-value" id="confirmLicPlanLabel"><strong>-</strong></span>
+            </div>
+            <div class="confirm-row">
+              <span class="confirm-label">Vigencia Proyectada</span>
+              <span class="confirm-value" id="confirmLicExpiration">-</span>
+            </div>
+            <div class="confirm-row">
+              <span class="confirm-label">Créditos IA Celular</span>
+              <span class="confirm-value" id="confirmLicAiCredits" style="color:var(--purple); font-weight:700;">-</span>
+            </div>
+            <div class="confirm-row">
+              <span class="confirm-label">Nonce Criptográfico</span>
+              <span class="confirm-value"><code id="confirmLicNonce" style="font-family:var(--font-mono); font-weight:700;">-</code></span>
+            </div>
+
+            <div class="confirm-divider"></div>
+
+            <!-- 3. Impacto Financiero -->
+            <div class="confirm-row">
+              <span class="confirm-label">Cobro Contable</span>
+              <span class="confirm-value" id="confirmLicFinancial">-</span>
+            </div>
+
+            <!-- 4. Badge de Ajustes Personalizados -->
+            <div id="confirmLicCustomBadgeBox" style="display:none; margin-top:0.75rem; padding:0.6rem 0.8rem; background:rgba(168,85,247,0.1); border:1px solid rgba(168,85,247,0.3); border-radius:8px;">
+              <div style="display:flex; align-items:center; gap:0.4rem; font-size:0.75rem; font-weight:700; color:var(--purple); text-transform:uppercase;">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+                <span>Ajustes Comerciales Personalizados Aplicados</span>
+              </div>
+              <div id="confirmLicCustomDetails" style="font-size:0.8rem; color:var(--text-secondary); margin-top:0.35rem; line-height:1.35;"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Vista Animada de Firma Criptográfica Ed25519 -->
+        <div id="confirmEmissionAnimState" style="display:none; text-align:center; padding:1.75rem 1rem;">
+          <div class="ed25519-shield-anim">
+            <div class="shield-pulse-ring"></div>
+            <svg class="shield-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+              <path d="m9 12 2 2 4-4" id="shieldCheckPath" style="display:none;"/>
+              <circle cx="12" cy="12" r="3" id="shieldKeyHole"/>
+            </svg>
+          </div>
+          <h4 id="confirmEmissionAnimTitle" style="font-size:1.05rem; font-weight:700; color:var(--text-primary); margin-top:1.25rem; margin-bottom:0.35rem;">
+            Validando correlativo Nonce y vinculación de Hardware...
+          </h4>
+          <p id="confirmEmissionAnimSubtitle" style="font-size:0.83rem; color:var(--text-secondary); margin:0;">
+            Sincronizando estado criptográfico seguro con la bóveda
+          </p>
+        </div>
+      </div>
+
+      <div class="modal-footer" id="confirmEmissionFooter" style="display:flex; justify-content:space-between; align-items:center;">
+        <button type="button" class="btn btn-outline" id="btnCancelConfirmEmission" onclick="closeModal('modalConfirmLicenseEmission')">
+          Volver y Corregir
+        </button>
+        <button type="button" class="btn btn-primary" id="btnExecuteConfirmEmission" style="padding:0.65rem 1.25rem;">
+          <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+          Confirmar y Firmar Licencia
+        </button>
       </div>
     </div>
   </div>

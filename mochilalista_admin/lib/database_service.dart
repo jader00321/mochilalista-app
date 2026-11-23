@@ -994,13 +994,44 @@ class DatabaseService {
     bool needsSave = false;
 
     if (!alreadyIssuedForType) {
+      // Escanear todos los pagos de todos los clientes para hallar el correlativo máximo existente (Blindaje Anti-Colisión Plan 18.5)
+      final prefix = '$vType-';
+      int maxExisting = 0;
+      for (final c in clients) {
+        final pList = (c['payment_history'] as List? ?? []);
+        for (final pItem in pList) {
+          if (pItem is Map) {
+            final rNum = pItem['receipt_number'] as String?;
+            final rBol = pItem['receipt_bol_number'] as String?;
+            final rFac = pItem['receipt_fac_number'] as String?;
+            for (final cand in [rNum, rBol, rFac]) {
+              if (cand != null && cand.trim().startsWith(prefix)) {
+                final numPart = cand.trim().substring(prefix.length);
+                final val = int.tryParse(numPart);
+                if (val != null && val > maxExisting) {
+                  maxExisting = val;
+                }
+              }
+            }
+          }
+        }
+      }
+
       // Asignar nuevo correlativo consumiendo contador del tipo solicitado
       final isSandbox = currentMode == 'sandbox';
-      final correlative = await configService.consumeReceiptCorrelative(
+      final configNum = await configService.consumeReceiptCorrelative(
         isSandbox: isSandbox,
         voucherType: vType,
       );
-      final formattedNum = '$vType-${correlative.toString().padLeft(4, '0')}';
+      final safeNum = (configNum <= maxExisting) ? (maxExisting + 1) : configNum;
+      if (safeNum > configNum) {
+        await configService.syncReceiptCorrelativeMin(
+          isSandbox: isSandbox,
+          voucherType: vType,
+          nextValue: safeNum + 1,
+        );
+      }
+      final formattedNum = '$vType-${safeNum.toString().padLeft(4, '0')}';
       if (vType == 'FAC') {
         payment['receipt_fac_number'] = formattedNum;
       } else {
