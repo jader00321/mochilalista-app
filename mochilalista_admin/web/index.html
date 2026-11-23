@@ -324,6 +324,10 @@
             <button class="btn-clear-search" id="btnClearClientSearch" title="Limpiar búsqueda">✕</button>
           </div>
           <div style="display:flex; gap:0.5rem; flex-wrap:wrap;">
+            <button class="btn btn-outline" id="btnImportClientSync" title="Importar Ficha de Sincronización Offline (.mlsync o MLS1-...)">
+              <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              Importar Ficha (.mlsync / MLS1)
+            </button>
             <button class="btn btn-outline" id="btnCrmExportExcel" title="Exportar Cartera Completa a Microsoft Excel (.xlsx)">
               <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="16" y2="17"/><line x1="10" y1="9" x2="8" y2="9"/></svg>
               Exportar Excel (.xlsx)
@@ -693,20 +697,65 @@
           </button>
         </div>
 
-        <p style="font-size:0.88rem; color:var(--text-secondary); margin-bottom:1.25rem;">
+        <p style="font-size:0.88rem; color:var(--text-secondary); margin-bottom:1rem;">
           Compara en tiempo real la versión instalada de cada cliente contra el último APK lanzado. Los <strong>HOTFIX</strong> son gratuitos vitalicios para todos los clientes; los <strong>FEATURE RELEASE</strong> aplican a suscripciones activas o licencias perpetuas con pase de actualización vigente.
         </p>
+
+        <!-- BARRA DE PROGRESO DE DESPLIEGUE GLOBAL (PLAN 19) -->
+        <div class="rollout-card" id="releasesRolloutProgress">
+          <div class="rollout-kpis">
+            <div class="rollout-kpi-item" onclick="setMatrixFilter('ALL')" title="Mostrar todos los clientes evaluados">
+              <span class="rollout-kpi-label">Clientes en Cartera:</span>
+              <span class="rollout-kpi-val" id="rolloutTotal">0</span>
+            </div>
+            <div class="rollout-kpi-item" onclick="setMatrixFilter('UP_TO_DATE')" title="Filtrar clientes al día o con versión superior">
+              <span class="rollout-dot green"></span>
+              <span class="rollout-kpi-label">Al Día / Superior:</span>
+              <span class="rollout-kpi-val" id="rolloutUpToDate">0 (0%)</span>
+            </div>
+            <div class="rollout-kpi-item" onclick="setMatrixFilter('SENT')" title="Filtrar clientes con APK enviado pendiente de confirmar">
+              <span class="rollout-dot blue"></span>
+              <span class="rollout-kpi-label">APK Enviado:</span>
+              <span class="rollout-kpi-val" id="rolloutSent">0 (0%)</span>
+            </div>
+            <div class="rollout-kpi-item" onclick="setMatrixFilter('OUTDATED')" title="Filtrar clientes pendientes de actualización">
+              <span class="rollout-dot amber"></span>
+              <span class="rollout-kpi-label">Pendientes:</span>
+              <span class="rollout-kpi-val" id="rolloutPending">0 (0%)</span>
+            </div>
+          </div>
+          <div class="rollout-segmented-bar">
+            <div class="rollout-segment green" id="segmentUpToDate" style="width:0%;" onclick="setMatrixFilter('UP_TO_DATE')" title="Al Día"></div>
+            <div class="rollout-segment blue" id="segmentSent" style="width:0%;" onclick="setMatrixFilter('SENT')" title="APK Enviado"></div>
+            <div class="rollout-segment amber" id="segmentPending" style="width:100%;" onclick="setMatrixFilter('OUTDATED')" title="Pendientes"></div>
+          </div>
+        </div>
+
+        <!-- TOOLBAR DE BÚSQUEDA Y FILTROS RÁPIDOS DE MATRIZ -->
+        <div class="rel-matrix-toolbar">
+          <div class="search-input-wrap" style="max-width:340px;">
+            <input type="text" id="inputRelMatrixSearch" class="search-input" placeholder="Buscar por cliente, WhatsApp o versión...">
+            <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+          </div>
+          <div class="rel-filter-chips" id="matrixFilterChips">
+            <button type="button" class="rel-chip active" data-filter="ALL" onclick="setMatrixFilter('ALL')">Todos</button>
+            <button type="button" class="rel-chip" data-filter="OUTDATED" onclick="setMatrixFilter('OUTDATED')">Solo Desactualizados</button>
+            <button type="button" class="rel-chip" data-filter="REQUIRES_PASS" onclick="setMatrixFilter('REQUIRES_PASS')">Requieren Pase</button>
+            <button type="button" class="rel-chip" data-filter="SENT" onclick="setMatrixFilter('SENT')">APK Enviado</button>
+            <button type="button" class="rel-chip" data-filter="UP_TO_DATE" onclick="setMatrixFilter('UP_TO_DATE')">Al Día</button>
+          </div>
+        </div>
 
         <div class="table-responsive">
           <table class="data-table" id="matrixTable">
             <thead>
               <tr>
-                <th>Cliente</th>
+                <th>Cliente / Negocio</th>
                 <th>WhatsApp</th>
                 <th>Versión Actual</th>
                 <th>Última Disponible</th>
                 <th>Tipo de Versión</th>
-                <th>Derecho a Update</th>
+                <th>Estado & Derecho</th>
                 <th>Acción Comercial</th>
               </tr>
             </thead>
@@ -734,12 +783,13 @@
                 <th>Esquema DB</th>
                 <th>Tipo</th>
                 <th>Fecha</th>
+                <th>Variantes & Integridad</th>
                 <th>Tamaño / SHA-256</th>
                 <th>Acciones APK</th>
               </tr>
             </thead>
             <tbody id="releasesTableBody">
-              <tr><td colspan="7" style="text-align:center;">Cargando catálogo...</td></tr>
+              <tr><td colspan="8" style="text-align:center;">Cargando catálogo...</td></tr>
             </tbody>
           </table>
         </div>
@@ -756,26 +806,26 @@
           </h2>
         </div>
         <p style="font-size:0.88rem; color:var(--text-secondary); margin-bottom:1.25rem;">
-          Pega cualquier código de acceso o arrastra una imagen de código QR / Credencial PNG para auditar matemáticamente su firma digital, verificar la clave privada maestra e inspeccionar todas sus directivas.
+          Pega cualquier código de acceso (licencias Ed25519 o fichas de sincronización offline MLS1), arrastra una imagen QR / Credencial PNG o sube un archivo <code>.mlsync</code> para auditar matemáticamente su firma digital e inspeccionar directivas.
         </p>
 
-        <!-- LECTOR ÓPTICO DE IMAGEN QR / CREDENCIAL PNG -->
+        <!-- LECTOR ÓPTICO DE IMAGEN QR / CREDENCIAL PNG / ARCHIVO MLSYNC -->
         <div class="qr-optical-drop-zone" id="qrOpticalDropZone">
           <svg style="width:36px; height:36px; color:var(--primary); margin-bottom:0.35rem;" viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
-          <div style="font-weight:700; color:var(--text-primary); font-size:0.92rem;">Arrastra aquí la imagen del Código QR o la Credencial PNG (o haz clic para subir)</div>
-          <div style="font-size:0.78rem; color:var(--text-muted); margin-top:0.25rem;">Decodificación óptica instantánea offline mediante jsQR local</div>
-          <input type="file" id="qrOpticalFileInput" accept="image/*" style="display:none;">
+          <div style="font-weight:700; color:var(--text-primary); font-size:0.92rem;">Arrastra aquí una imagen QR, Credencial PNG o archivo .mlsync (o haz clic para subir)</div>
+          <div style="font-size:0.78rem; color:var(--text-muted); margin-top:0.25rem;">Decodificación óptica instantánea offline de QR y análisis criptográfico de .mlsync</div>
+          <input type="file" id="qrOpticalFileInput" accept="image/*,.mlsync,.json" style="display:none;">
         </div>
 
         <div style="display:flex; flex-direction:column; gap:1rem;">
           <div class="form-group">
-            <label for="inspectTokenInput">Código o Token a Inspeccionar:</label>
-            <textarea id="inspectTokenInput" rows="3" placeholder="Pega aquí el código ML9-... o suelta una imagen arriba" style="font-family:var(--font-mono); font-size:0.85rem;"></textarea>
+            <label for="inspectTokenInput">Código o Ficha a Inspeccionar:</label>
+            <textarea id="inspectTokenInput" rows="3" placeholder="Pega aquí el código ML9-..., token MLS1-..., mensaje de WhatsApp o suelta un archivo arriba" style="font-family:var(--font-mono); font-size:0.85rem;"></textarea>
           </div>
           <div style="display:flex; gap:0.75rem; flex-wrap:wrap;">
             <button class="btn btn-primary" id="btnInspectToken">
               <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
-              Auditar y Decodificar Token
+              Auditar y Decodificar Token / Ficha
             </button>
             <button class="btn btn-outline" id="btnClearInspectToken">
               Limpiar
@@ -787,24 +837,31 @@
         <div id="inspectResultContainer" style="display:none; margin-top:1.5rem; border-top:1px solid var(--border-color); padding-top:1.25rem;">
           <div id="inspectStatusBadge" style="padding:0.75rem 1rem; border-radius:10px; font-weight:700; margin-bottom:1rem; display:flex; align-items:center; gap:0.5rem;"></div>
 
-          <!-- TABLA UNIFICADA DE CLAIMS -->
-          <h4 style="font-size:0.95rem; font-weight:700; color:var(--text-primary); margin-bottom:0.5rem;">
-            Directivas Criptográficas Decodificadas (Claims Ed25519)
-          </h4>
-          <div class="table-responsive">
-            <table class="claims-table" id="inspectClaimsTable">
-              <thead>
-                <tr>
-                  <th style="width:100px;">Clave</th>
-                  <th style="width:160px;">Nombre Técnico</th>
-                  <th>Descripción del Claim</th>
-                  <th style="width:240px;">Valor Decodificado</th>
-                </tr>
-              </thead>
-              <tbody id="inspectClaimsTableBody">
-                <!-- Rellenado dinámicamente -->
-              </tbody>
-            </table>
+          <!-- CONTENEDOR ESPECÍFICO PARA FICHAS DE SINCRONIZACIÓN CLIENT_SYNC -->
+          <div id="inspectSyncAuditCard" style="display:none; margin-bottom:1rem;">
+            <!-- Renderizado dinámico para CLIENT_SYNC -->
+          </div>
+
+          <!-- TABLA UNIFICADA DE CLAIMS DE LICENCIA (Ed25519) -->
+          <div id="inspectLicenseClaimsWrapper">
+            <h4 style="font-size:0.95rem; font-weight:700; color:var(--text-primary); margin-bottom:0.5rem;">
+              Directivas Criptográficas Decodificadas (Claims Ed25519)
+            </h4>
+            <div class="table-responsive">
+              <table class="claims-table" id="inspectClaimsTable">
+                <thead>
+                  <tr>
+                    <th style="width:100px;">Clave</th>
+                    <th style="width:160px;">Nombre Técnico</th>
+                    <th>Descripción del Claim</th>
+                    <th style="width:240px;">Valor Decodificado</th>
+                  </tr>
+                </thead>
+                <tbody id="inspectClaimsTableBody">
+                  <!-- Rellenado dinámicamente -->
+                </tbody>
+              </table>
+            </div>
           </div>
 
           <div id="inspectMatchingClientBox" style="display:none; margin-top:1rem; padding:1rem; background:rgba(37,99,235,0.08); border:1px solid rgba(37,99,235,0.25); border-radius:10px;"></div>
@@ -1110,7 +1167,7 @@
                   </div>
                 </div>
                 <div class="wa-preview-footer">
-                  <span>⚡ Renderizado reactivo mediante API con supresión de cuentas vacías</span>
+                  <span>Renderizado reactivo mediante API con supresión de cuentas vacías</span>
                 </div>
               </div>
             </div>
@@ -1670,11 +1727,11 @@
             <small class="field-hint">Referencia física del equipo del cliente.</small>
           </div>
 
-          <!-- VERSIÓN DE APP INSTALADA -->
+          <!-- VERSIÓN DE APP INSTALADA (PLAN 19: DINÁMICA SEGÚN ÚLTIMO RELEASE) -->
           <div class="form-group" id="grpInstalledVersion">
             <label for="newInstalledVersion">Versión de App Instalada:</label>
-            <input type="text" id="newInstalledVersion" value="9.36.0" placeholder="9.36.0">
-            <small class="field-hint">Versión APK reportada o instalada.</small>
+            <input type="text" id="newInstalledVersion" placeholder="Última versión oficial">
+            <small class="field-hint">Versión APK reportada o instalada (autocompleta con el último lanzamiento).</small>
           </div>
 
           <!-- BLOQUE DE CRÉDITOS IA TRANSPARENTE -->
@@ -2302,9 +2359,9 @@
     </div>
   </div>
 
-  <!-- MODAL: SINCRONIZAR DATOS REPORTADOS DEL CELULAR (FASE 5) -->
+  <!-- MODAL: SINCRONIZAR DATOS REPORTADOS DEL CELULAR (FASE 4 Y 5) -->
   <div class="modal-overlay" id="modalSyncReported">
-    <div class="modal-dialog" style="max-width: 540px;">
+    <div class="modal-dialog" style="max-width: 600px;">
       <div class="modal-header">
         <div style="display:flex; align-items:center; gap:0.5rem;">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" style="width:20px; height:20px; color:var(--primary);"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 21h5v-5"/></svg>
@@ -2328,44 +2385,167 @@
           </div>
         </div>
 
-        <p style="font-size:0.83rem; color:var(--text-secondary); margin-bottom:1rem;">
-          Actualiza los datos reales que la aplicación móvil ha reportado en el teléfono (Hardware ID, saldo de créditos IA, versión APK, modelo de celular y días de evaluación).
-        </p>
-        <form id="formSyncReported" class="form-grid">
-          <input type="hidden" id="syncRepClientId">
-          <div class="form-group">
-            <label for="syncRepDeviceId">Hardware ID (ML-XXXX):</label>
-            <input type="text" id="syncRepDeviceId" placeholder="Ej: ML-9K4B" style="font-family:var(--font-mono); text-transform:uppercase;">
+        <!-- Pestañas de Selección de Modo: Importar Ficha vs Ajuste Manual -->
+        <div class="sync-tabs-nav" style="display:flex; gap:0.5rem; margin-bottom:1rem; border-bottom:1px solid var(--border-color); padding-bottom:0.5rem;">
+          <button type="button" class="btn btn-sm btn-primary sync-tab-btn active" id="tabBtnSyncImport" onclick="switchSyncReportedTab('import')">
+            <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            Importar Ficha (.mlsync / MLS1)
+          </button>
+          <button type="button" class="btn btn-sm btn-outline sync-tab-btn" id="tabBtnSyncManual" onclick="switchSyncReportedTab('manual')">
+            <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+            Ajuste Manual
+          </button>
+        </div>
+
+        <!-- PANE 1: IMPORTAR FICHA CRIPTOGRÁFICA (.mlsync o MLS1-...) -->
+        <div id="syncPaneImport">
+          <p style="font-size:0.83rem; color:var(--text-secondary); margin-bottom:0.75rem;">
+            Arrastra el archivo <code>.mlsync</code> exportado por el celular o pega el código <code>MLS1-...</code> / mensaje completo recibido por WhatsApp.
+          </p>
+          <div class="sync-drop-zone" id="syncDropZone">
+            <svg style="width:32px; height:32px; color:var(--primary); margin-bottom:0.35rem;" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            <div style="font-weight:700; color:var(--text-primary); font-size:0.88rem;">Arrastra aquí el archivo .mlsync (o haz clic para seleccionar)</div>
+            <div style="font-size:0.75rem; color:var(--text-muted); margin-top:0.2rem;">Firma criptográfica HMAC-SHA256 verificada offline</div>
+            <input type="file" id="syncFileInput" accept=".mlsync,.json" style="display:none;">
           </div>
-          <div class="form-group">
-            <label for="syncRepDeviceModel">Modelo de Celular:</label>
-            <input type="text" id="syncRepDeviceModel" placeholder="Ej: Samsung Galaxy A54 5G">
+          <div class="form-group" style="margin-top:0.75rem;">
+            <label for="syncRawInput">O pega el código MLS1-... o mensaje de WhatsApp:</label>
+            <textarea id="syncRawInput" rows="2" placeholder="Pega aquí el código MLS1-... o el texto completo recibido..." style="font-family:var(--font-mono); font-size:0.82rem;"></textarea>
           </div>
-          <div class="form-group">
-            <label for="syncRepVersion">Versión APK Instalada:</label>
-            <input type="text" id="syncRepVersion" placeholder="Ej: 9.31.0">
+          <div style="display:flex; gap:0.5rem; margin-top:0.5rem;">
+            <button type="button" class="btn btn-primary btn-sm" id="btnAnalyzeSyncReported">
+              <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+              Analizar Ficha
+            </button>
+            <button type="button" class="btn btn-outline btn-sm" id="btnClearSyncInput">Limpiar</button>
           </div>
-          <div class="form-group">
-            <label for="syncRepAiBalance">Saldo Créditos IA Reportado:</label>
-            <input type="number" id="syncRepAiBalance" min="0" placeholder="Ej: 42">
+
+          <!-- Contenedor dinámico de resultados del análisis -->
+          <div id="syncAnalysisResult" style="display:none; margin-top:1rem;">
+            <!-- Sello HMAC -->
+            <div id="syncHmacBadge" class="sync-hmac-badge" style="margin-bottom:0.75rem;"></div>
+
+            <!-- Alerta si el hardware ID no coincide con el cliente actual -->
+            <div id="syncHwMismatchAlert" style="display:none; margin-bottom:0.75rem;" class="alert-box alert-warning"></div>
+
+            <!-- Rescate 1-clic PENDIENTE_MIGRACION -->
+            <div id="syncRescueCard" style="display:none; margin-bottom:0.75rem;" class="sync-migration-rescue-card">
+              <button type="button" class="btn btn-warning btn-sm" id="btnSyncRescueMigrate" style="display:none;">
+                <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>
+                Migrar Dispositivo (Restauración — 0 días)
+              </button>
+            </div>
+
+            <!-- Alerta anti-sobreescritura por reporte antiguo -->
+            <div id="syncStaleWarning" style="display:none; margin-bottom:0.75rem;" class="alert-box alert-warning"></div>
+
+            <!-- Comparador visual: Antes (Admin) -> Real (Celular) -->
+            <div id="syncDiffContainer" style="margin-bottom:0.75rem;"></div>
+
+            <!-- Botón para aplicar sincronización -->
+            <div style="display:flex; justify-content:flex-end; gap:0.5rem; margin-top:0.75rem;">
+              <button type="button" class="btn btn-primary" id="btnApplySyncReported">
+                <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M20 6L9 17l-5-5"/></svg>
+                Aplicar Sincronización en Ficha
+              </button>
+            </div>
           </div>
-          <div class="form-group">
-            <label for="syncRepTrialDays">Días Trial Restantes (opcional):</label>
-            <input type="number" id="syncRepTrialDays" min="0" max="365" placeholder="Ej: 28">
-          </div>
-          <div class="form-group">
-            <label for="syncRepExpires">Fecha Vencimiento (opcional):</label>
-            <input type="date" id="syncRepExpires">
-          </div>
-          <div class="form-group" style="grid-column: 1 / -1;">
-            <label for="syncRepNotes">Notas / Observaciones:</label>
-            <textarea id="syncRepNotes" rows="2" placeholder="Notas de sincronización..."></textarea>
-          </div>
-        </form>
+        </div>
+
+        <!-- PANE 2: AJUSTE MANUAL TRADICIONAL -->
+        <div id="syncPaneManual" style="display:none;">
+          <p style="font-size:0.83rem; color:var(--text-secondary); margin-bottom:1rem;">
+            Ajusta los datos del teléfono manualmente en casos excepcionales donde el cliente no pueda exportar su ficha.
+          </p>
+          <form id="formSyncReported" class="form-grid">
+            <input type="hidden" id="syncRepClientId">
+            <div class="form-group">
+              <label for="syncRepDeviceId">Hardware ID (ML-XXXX):</label>
+              <input type="text" id="syncRepDeviceId" placeholder="Ej: ML-9K4B" style="font-family:var(--font-mono); text-transform:uppercase;">
+            </div>
+            <div class="form-group">
+              <label for="syncRepDeviceModel">Modelo de Celular:</label>
+              <input type="text" id="syncRepDeviceModel" placeholder="Ej: Samsung Galaxy A54 5G">
+            </div>
+            <div class="form-group">
+              <label for="syncRepVersion">Versión APK Instalada:</label>
+              <input type="text" id="syncRepVersion" placeholder="Ej: 9.31.0">
+            </div>
+            <div class="form-group">
+              <label for="syncRepAiBalance">Saldo Créditos IA Reportado:</label>
+              <input type="number" id="syncRepAiBalance" min="0" placeholder="Ej: 42">
+            </div>
+            <div class="form-group">
+              <label for="syncRepTrialDays">Días Trial Restantes (opcional):</label>
+              <input type="number" id="syncRepTrialDays" min="0" max="365" placeholder="Ej: 28">
+            </div>
+            <div class="form-group">
+              <label for="syncRepExpires">Fecha Vencimiento (opcional):</label>
+              <input type="date" id="syncRepExpires">
+            </div>
+            <div class="form-group" style="grid-column: 1 / -1;">
+              <label for="syncRepNotes">Notas / Observaciones:</label>
+              <textarea id="syncRepNotes" rows="2" placeholder="Notas de sincronización..."></textarea>
+            </div>
+            <div class="form-group" style="grid-column: 1 / -1; display:flex; justify-content:flex-end;">
+              <button type="button" class="btn btn-primary" id="btnSubmitSyncReported">Guardar Ajuste Manual</button>
+            </div>
+          </form>
+        </div>
       </div>
       <div class="modal-footer">
-        <button class="btn btn-outline" onclick="closeModal('modalSyncReported')">Cancelar</button>
-        <button class="btn btn-primary" id="btnSubmitSyncReported">Sincronizar Ahora</button>
+        <button class="btn btn-outline" onclick="closeModal('modalSyncReported')">Cerrar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: IMPORTAR FICHA GLOBAL DE CLIENTE (.mlsync / MLS1) -->
+  <div class="modal-overlay" id="modalGlobalClientSync">
+    <div class="modal-dialog" style="max-width: 620px;">
+      <div class="modal-header">
+        <div style="display:flex; align-items:center; gap:0.5rem;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" style="width:20px; height:20px; color:var(--primary);"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          <h3 style="margin:0;">Importar Ficha Offline de Celular (.mlsync / MLS1)</h3>
+        </div>
+        <button class="btn btn-outline btn-sm" onclick="closeModal('modalGlobalClientSync')">✕</button>
+      </div>
+      <div class="modal-body">
+        <p style="font-size:0.83rem; color:var(--text-secondary); margin-bottom:1rem;">
+          Autodetecta al cliente por Hardware ID (o rescata migraciones pendientes). Pega el mensaje recibido por WhatsApp o suelta el archivo .mlsync.
+        </p>
+        <div class="sync-drop-zone" id="globalSyncDropZone">
+          <svg style="width:36px; height:36px; color:var(--primary); margin-bottom:0.35rem;" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          <div style="font-weight:700; color:var(--text-primary); font-size:0.92rem;">Arrastra aquí el archivo .mlsync (o haz clic para seleccionar)</div>
+          <div style="font-size:0.78rem; color:var(--text-muted); margin-top:0.25rem;">Reporte firmado criptográficamente por la app móvil</div>
+          <input type="file" id="globalSyncFileInput" accept=".mlsync,.json" style="display:none;">
+        </div>
+        <div class="form-group" style="margin-top:0.75rem;">
+          <label for="globalSyncRawInput">O pega el token MLS1-... o el mensaje completo de WhatsApp:</label>
+          <textarea id="globalSyncRawInput" rows="3" placeholder="Pega aquí el texto completo copiado de WhatsApp..." style="font-family:var(--font-mono); font-size:0.85rem;"></textarea>
+        </div>
+        <div style="display:flex; gap:0.5rem; margin-top:0.5rem;">
+          <button class="btn btn-primary" id="btnAnalyzeGlobalSync">
+            <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+            Analizar Ficha
+          </button>
+          <button class="btn btn-outline" id="btnClearGlobalSync">Limpiar</button>
+        </div>
+        <div id="globalSyncResultContainer" style="display:none; margin-top:1.25rem;">
+          <!-- Sello HMAC -->
+          <div id="globalSyncHmacBadge" style="margin-bottom:0.75rem;"></div>
+          <!-- Rescue Card si st == PENDIENTE_MIGRACION -->
+          <div id="globalSyncRescueCard" style="display:none; margin-bottom:0.75rem;"></div>
+          <!-- Matched Client Info Card -->
+          <div id="globalSyncClientMatchCard" style="margin-bottom:0.75rem;"></div>
+          <!-- Diff Table -->
+          <div id="globalSyncDiffContainer" style="margin-bottom:0.75rem;"></div>
+          <!-- Stale sync checkbox -->
+          <div id="globalSyncStaleWarning" style="display:none; margin-bottom:0.75rem;"></div>
+        </div>
+      </div>
+      <div class="modal-footer" id="globalSyncModalFooter" style="display:none;">
+        <button class="btn btn-outline" onclick="closeModal('modalGlobalClientSync')">Cerrar</button>
+        <button class="btn btn-primary" id="btnApplyGlobalSync">Aplicar Sincronización</button>
       </div>
     </div>
   </div>
@@ -2533,11 +2713,14 @@
     </div>
   </div>
 
-  <!-- MODAL: REGISTRAR / SUBIR NUEVA VERSIÓN DEL APK -->
+  <!-- MODAL: REGISTRAR / SUBIR NUEVA VERSIÓN DEL APK (PLAN 19) -->
   <div class="modal-overlay" id="modalCreateRelease">
-    <div class="modal-dialog" style="max-width:740px;">
+    <div class="modal-dialog" style="max-width:780px;">
       <div class="modal-header">
-        <h3>Subir y Registrar Nueva Versión del APK</h3>
+        <div style="display:flex; align-items:center; gap:0.5rem;">
+          <svg class="icon-svg" style="color:var(--primary); width:20px; height:20px;" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
+          <h3 style="margin:0;">Subir y Registrar Nueva Versión del APK</h3>
+        </div>
         <button class="btn btn-outline btn-sm" onclick="closeModal('modalCreateRelease')">✕</button>
       </div>
       <div class="modal-body">
@@ -2545,40 +2728,52 @@
         <!-- ZONA DRAG & DROP DE APK DIRECTO -->
         <div class="apk-drop-zone" id="apkDropZone">
           <div class="drop-icon">
-            <svg style="width:40px; height:40px; color:var(--primary);" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
+            <svg style="width:38px; height:38px; color:var(--primary);" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
           </div>
           <div class="drop-title">Arrastra tu archivo .APK aquí o haz clic para seleccionarlo</div>
-          <div class="drop-subtitle">Sube directamente tu compilación (15-40 MB) a la carpeta de releases del servidor</div>
+          <div class="drop-subtitle">Compatible con APK Universal (~110 MB) y APK Ligero ARM64 (~30 MB)</div>
           <input type="file" id="apkFileInput" accept=".apk" style="display:none;">
           <div id="apkUploadProgress" style="display:none; width:100%; margin-top:0.5rem;">
             <div style="background:rgba(255,255,255,0.1); border-radius:4px; height:8px; overflow:hidden;">
               <div id="apkProgressBar" style="width:0%; background:var(--primary); height:100%; transition:width 0.2s;"></div>
             </div>
-            <span id="apkUploadStatusText" style="font-size:0.75rem; color:var(--text-secondary); margin-top:0.25rem; display:block;">Subiendo archivo...</span>
+            <span id="apkUploadStatusText" style="font-size:0.75rem; color:var(--text-secondary); margin-top:0.25rem; display:block;">Procesando archivo e inspeccionando metadatos...</span>
           </div>
         </div>
 
-        <!-- AUTODETECCIÓN INTELIGENTE DESDE APP_MOVIL -->
-        <div style="margin: 1rem 0; background:rgba(37,99,235,0.08); border:1px solid rgba(37,99,235,0.25); border-radius:10px; padding:0.75rem 1rem; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.5rem;">
-          <div>
-            <strong style="color:var(--primary); font-size:0.88rem;">Autodetección de Build Local (ARM64 / Universal):</strong>
-            <p style="font-size:0.78rem; color:var(--text-secondary); margin:0;" id="detectApkStatus">Lee app_movil/build/... detectando app-arm64-v8a-release.apk o app-release.apk con SHA-256 real.</p>
-            <div id="detectApkButtonsContainer" style="display:none; gap:0.4rem; margin-top:0.4rem; flex-wrap:wrap;"></div>
+        <!-- ESCUDO ANTI-DEBUG.APK BANNER DINÁMICO -->
+        <div id="apkSignatureBanner" style="display:none;" class="apk-signature-banner"></div>
+
+        <!-- SECCIÓN DE AUTODETECCIÓN TRANSPARENTE DESDE BIBLIOTECA Y APP_MOVIL -->
+        <div style="margin: 0.85rem 0; background:rgba(37,99,235,0.06); border:1px solid rgba(37,99,235,0.22); border-radius:10px; padding:0.85rem 1rem;">
+          <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.5rem;">
+            <div>
+              <strong style="color:var(--primary); font-size:0.88rem;">Autodetección Transparente de APKs Locales:</strong>
+              <p style="font-size:0.78rem; color:var(--text-secondary); margin:0;" id="detectApkStatus">Escanea la biblioteca oficial y compilaciones de app_movil/build con fecha, SHA-256 y firma real.</p>
+            </div>
+            <button type="button" class="btn btn-outline btn-sm" id="btnDetectLocalBuild">
+              <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+              Autodetectar APKs Locales
+            </button>
           </div>
-          <button type="button" class="btn btn-outline btn-sm" id="btnDetectLocalBuild">
-            <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-            Autodetectar APK de app_movil
-          </button>
+          <div id="localBuildsGrid" class="local-builds-grid" style="display:none;"></div>
         </div>
 
         <form id="formCreateRelease" class="form-grid">
+          <input type="hidden" id="relUploadedPath">
+          <input type="hidden" id="relAbiVariant" value="UNIVERSAL">
+          <input type="hidden" id="relSignatureVerified">
+          <input type="hidden" id="relSignatureStatus">
+          <input type="hidden" id="relSignerSha256">
+          <input type="hidden" id="relSignerDn">
+
           <div class="form-group">
             <label for="relVersionName">Versión (Version Name):</label>
-            <input type="text" id="relVersionName" required placeholder="Ej: 9.36.0">
+            <input type="text" id="relVersionName" required placeholder="Ej: 9.38.0">
           </div>
           <div class="form-group">
             <label for="relVersionCode">Código de Build (Version Code):</label>
-            <input type="number" id="relVersionCode" required placeholder="Ej: 75">
+            <input type="number" id="relVersionCode" required placeholder="Ej: 82">
           </div>
           <div class="form-group">
             <label for="relMinRequiredVersion">Versión Mínima Requerida:</label>
@@ -2588,16 +2783,26 @@
             <label for="relDbSchema">Esquema SQLite Requerido:</label>
             <input type="number" id="relDbSchema" required value="36">
           </div>
-          <div class="form-group">
+          <div class="form-group" style="grid-column: 1 / -1;">
             <label for="relType">Tipo de Lanzamiento:</label>
             <select id="relType">
               <option value="FEATURE_RELEASE">FEATURE_RELEASE (Nuevas Funciones Comerciales)</option>
               <option value="HOTFIX">HOTFIX (Parche de Corrección Gratuito Vitalicio)</option>
             </select>
+            <div id="relTypeInfoCard" class="release-type-info-card">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+              <span id="relTypeInfoText">Nuevas funciones comerciales. Gratis para suscripciones activas, Trial y Perpetuos con pase de updates vigente; requiere Pase Anual (S/ 150.00) o cortesía para Perpetuos con pase vencido.</span>
+            </div>
           </div>
           <div class="form-group">
             <label for="relSizeMb">Tamaño del APK (MB):</label>
-            <input type="text" id="relSizeMb" placeholder="Ej: 32.4 MB">
+            <input type="text" id="relSizeMb" placeholder="Ej: 109.05 MB">
+          </div>
+          <div class="form-group">
+            <label>Variante Arquitectura Detectada:</label>
+            <div style="display:flex; align-items:center; height:38px;">
+              <span id="badgeRelVariantDisplay" class="badge badge-universal">UNIVERSAL</span>
+            </div>
           </div>
           <div class="form-group" style="grid-column: 1 / -1;">
             <label for="relSha256">Hash Criptográfico SHA-256 del APK:</label>
@@ -2608,8 +2813,12 @@
             <input type="url" id="relDownloadUrl" placeholder="https://drive.google.com/file/d/.../view">
           </div>
           <div class="form-group" style="grid-column: 1 / -1;">
-            <label for="relChangelog">Novedades y Mejoras (Changelog):</label>
-            <textarea id="relChangelog" rows="3" placeholder="Detalla los puntos nuevos que recibirá el usuario..."></textarea>
+            <label for="relChangelog">Novedades y Mejoras Comerciales (Changelog para Clientes):</label>
+            <textarea id="relChangelog" rows="3" placeholder="Detalla los puntos nuevos que recibirá el usuario por WhatsApp..."></textarea>
+          </div>
+          <div class="form-group" style="grid-column: 1 / -1;">
+            <label for="relInternalNotes">Notas Internas de Ingeniería (Privadas — no se envían al cliente):</label>
+            <textarea id="relInternalNotes" rows="2" placeholder="Detalles de commits, branches, flags de compilación o notas técnicas..."></textarea>
           </div>
         </form>
       </div>
@@ -2620,19 +2829,34 @@
     </div>
   </div>
 
-  <!-- MODAL: EDITAR VERSIÓN / CHANGELOG -->
+  <!-- MODAL: EDITAR VERSIÓN / CHANGELOG (PLAN 19) -->
   <div class="modal-overlay" id="modalEditRelease">
-    <div class="modal-dialog">
+    <div class="modal-dialog" style="max-width:760px;">
       <div class="modal-header">
-        <h3>Editar Versión & Changelog</h3>
+        <div style="display:flex; align-items:center; gap:0.5rem;">
+          <svg class="icon-svg" style="color:var(--primary); width:20px; height:20px;" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+          <h3 style="margin:0;">Editar Versión Publicada & Changelog</h3>
+        </div>
         <button class="btn btn-outline btn-sm" onclick="closeModal('modalEditRelease')">✕</button>
       </div>
       <div class="modal-body">
         <form id="formEditRelease" class="form-grid">
           <input type="hidden" id="editRelVersionName">
-          <div class="form-group" style="grid-column: 1 / -1;">
-            <label>Versión:</label>
-            <input type="text" id="editRelVersionDisplay" readonly style="opacity:0.8; font-weight:700;">
+          <div class="form-group">
+            <label>Versión (Inmutable):</label>
+            <input type="text" id="editRelVersionDisplay" readonly style="opacity:0.85; font-weight:700;">
+          </div>
+          <div class="form-group">
+            <label for="editRelVersionCode">Código de Build (Version Code):</label>
+            <input type="number" id="editRelVersionCode" required placeholder="Ej: 82">
+          </div>
+          <div class="form-group">
+            <label for="editRelDbSchema">Esquema SQLite Requerido:</label>
+            <input type="number" id="editRelDbSchema" required placeholder="36">
+          </div>
+          <div class="form-group">
+            <label for="editRelMinRequiredVersion">Versión Mínima Requerida:</label>
+            <input type="text" id="editRelMinRequiredVersion" placeholder="9.0.0">
           </div>
           <div class="form-group" style="grid-column: 1 / -1;">
             <label for="editRelType">Tipo de Lanzamiento:</label>
@@ -2640,14 +2864,30 @@
               <option value="FEATURE_RELEASE">FEATURE_RELEASE (Nuevas Funciones Comerciales)</option>
               <option value="HOTFIX">HOTFIX (Parche Gratuito Vitalicio)</option>
             </select>
+            <div id="editRelTypeInfoCard" class="release-type-info-card">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+              <span id="editRelTypeInfoText">Nuevas funciones comerciales. Aplica a suscripciones activas y perpetuos con pase vigente.</span>
+            </div>
           </div>
           <div class="form-group" style="grid-column: 1 / -1;">
-            <label for="editRelDownloadUrl">Enlace de Descarga Externo (Opcional):</label>
-            <input type="url" id="editRelDownloadUrl">
+            <label for="editRelDownloadUrl">Enlace de Descarga Externo (Google Drive / Web):</label>
+            <input type="url" id="editRelDownloadUrl" placeholder="https://drive.google.com/file/d/.../view">
           </div>
           <div class="form-group" style="grid-column: 1 / -1;">
-            <label for="editRelChangelog">Changelog / Novedades:</label>
-            <textarea id="editRelChangelog" rows="4"></textarea>
+            <label for="editRelChangelog">Changelog Comercial para Clientes:</label>
+            <textarea id="editRelChangelog" rows="4" placeholder="Novedades que se enviarán por WhatsApp..."></textarea>
+          </div>
+          <div class="form-group" style="grid-column: 1 / -1;">
+            <label for="editRelInternalNotes">Notas Internas de Ingeniería (Privadas):</label>
+            <textarea id="editRelInternalNotes" rows="2" placeholder="Notas de build, branches o incidencias resueltas..."></textarea>
+          </div>
+          <div class="form-group" style="grid-column: 1 / -1;">
+            <label>Archivos APK Físicos en Disco (Variantes Universal & ARM64):</label>
+            <input type="file" id="editRelUniversalInput" accept=".apk" style="display:none;">
+            <input type="file" id="editRelArm64Input" accept=".apk" style="display:none;">
+            <div id="editRelVariantsContainer" style="background:var(--bg-secondary); border:1px solid var(--border-color); border-radius:8px; padding:0.75rem; font-size:0.8rem;">
+              Cargando estado de archivos...
+            </div>
           </div>
         </form>
       </div>
@@ -2819,6 +3059,45 @@
           <span><strong>Teléfono no registrado:</strong> Este cliente no tiene un teléfono válido. Puedes redactar y copiar el mensaje, pero para abrir WhatsApp debes actualizar el teléfono en la Ficha 360°.</span>
         </div>
 
+        <!-- PANEL EXCLUSIVO: DESPACHO ASISTIDO DE APK (PLAN 19 FASE 3) -->
+        <div id="waApkDispatchPanel" style="display:none; background:var(--bg-secondary); border:1.5px solid var(--border-color); border-radius:10px; padding:0.85rem 1.1rem;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.6rem; flex-wrap:wrap; gap:0.5rem;">
+            <div style="display:flex; align-items:center; gap:0.5rem;">
+              <svg class="icon-svg" style="color:var(--primary); width:20px; height:20px;" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
+              <strong id="waApkVersionTitle" style="font-size:0.95rem; color:var(--text-primary);">Despacho de APK: v9.38.0 (Build 82)</strong>
+            </div>
+            <div id="waApkSigBadge" style="display:flex; align-items:center; gap:0.35rem;"></div>
+          </div>
+
+          <div id="waApkDetailsRow" style="font-size:0.8rem; color:var(--text-secondary); margin-bottom:0.75rem; display:flex; gap:1.25rem; flex-wrap:wrap;">
+            <div>Tamaño: <span id="waApkSizeText" style="font-weight:600; color:var(--text-primary);">-</span></div>
+            <div>Esquema DB: <span id="waApkDbSchema" style="font-weight:600; color:var(--text-primary);">-</span></div>
+            <div>Estado en Disco: <span id="waApkDiskStatus" style="font-weight:600; color:#22c55e;">Verificado</span></div>
+          </div>
+
+          <div>
+            <label style="display:block; font-size:0.8rem; font-weight:700; margin-bottom:0.4rem; color:var(--text-secondary); text-transform:uppercase;">
+              Variante del Binario a Despachar:
+            </label>
+            <div class="wa-variant-selector-grid" id="waVariantSelectorGrid">
+              <div class="wa-variant-card active" id="waVariantCardUniversal" onclick="setDispatchVariant('universal')">
+                <div class="wa-variant-title">
+                  <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+                  <span>Universal (~110 MB)</span>
+                </div>
+                <div class="wa-variant-desc" id="waVariantDescUniversal">Compatible con cualquier procesador y celular Android</div>
+              </div>
+              <div class="wa-variant-card" id="waVariantCardArm64" onclick="setDispatchVariant('arm64')">
+                <div class="wa-variant-title">
+                  <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="4" y="4" width="16" height="16" rx="2" ry="2"/><rect x="9" y="9" width="6" height="6"/><line x1="9" y1="1" x2="9" y2="4"/><line x1="15" y1="1" x2="15" y2="4"/><line x1="9" y1="20" x2="9" y2="23"/><line x1="15" y1="20" x2="15" y2="23"/><line x1="20" y1="9" x2="23" y2="9"/><line x1="20" y1="14" x2="23" y2="14"/><line x1="1" y1="9" x2="4" y2="9"/><line x1="1" y1="14" x2="4" y2="14"/></svg>
+                  <span>ARM64 Ligero (~30 MB)</span>
+                </div>
+                <div class="wa-variant-desc" id="waVariantDescArm64">Rápido para transferir por WhatsApp (celulares modernos)</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <!-- Selector de Plantillas Rápidas -->
         <div>
           <label style="display:block; font-size:0.82rem; font-weight:700; margin-bottom:0.4rem; color:var(--text-secondary); text-transform:uppercase;">
@@ -2896,7 +3175,8 @@
 
       <div class="modal-footer" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:nowrap; gap:0.75rem;">
         <button type="button" class="btn btn-outline" onclick="closeModal('modalWaComposer')">Cancelar</button>
-        <div style="display:flex; gap:0.5rem; align-items:center; flex-wrap:nowrap;">
+        <!-- Acciones estándar del Compositor (CRM, Licencias, Comprobantes) -->
+        <div id="waStandardFooterActions" style="display:flex; gap:0.5rem; align-items:center; flex-wrap:nowrap;">
           <button type="button" class="btn btn-outline" id="btnWaCompCopy" onclick="copyWaComposerMessage()" title="Copiar texto al portapapeles">
             <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
             Copiar Mensaje
@@ -2908,6 +3188,20 @@
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" style="width:16px; height:16px;"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
             Abrir en WhatsApp
           </a>
+        </div>
+        <!-- Acciones exclusivas de Despacho Asistido de APK (Plan 19 Fase 3) -->
+        <div id="waApkDispatchFooterActions" style="display:none; gap:0.5rem; align-items:center; flex-wrap:nowrap;">
+          <button type="button" class="btn btn-outline" id="btnWaRevealApkFolder" onclick="revealCurrentDispatchApkFolder()" title="Abrir la carpeta en Windows donde se encuentra el binario .APK">
+            <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+            Abrir Carpeta
+          </button>
+          <button type="button" class="btn btn-outline" id="btnWaSendTextOnly" onclick="sendWaDispatchTextOnly()" title="Abrir WhatsApp únicamente con el mensaje de texto sin copiar archivo">
+            Solo Abrir WhatsApp
+          </button>
+          <button type="button" class="btn btn-wa" id="btnWaCopyApkAndSend" onclick="copyApkAndOpenWhatsApp()" title="Copiar el archivo .APK al portapapeles y abrir WhatsApp">
+            <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+            Copiar Archivo .APK y Abrir WhatsApp
+          </button>
         </div>
       </div>
     </div>
@@ -2951,7 +3245,8 @@
             Descargar Credencial (@2x)
           </button>
           <a class="btn btn-wa btn-sm" id="btnQuickSendWa" target="_blank" href="#" title="Enviar por WhatsApp">
-            <span>📲 WhatsApp</span>
+            <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+            <span>WhatsApp</span>
           </a>
         </div>
 
@@ -3320,6 +3615,8 @@
           <div style="font-size:0.85rem; color:var(--text-primary);"><strong style="color:var(--text-secondary);">RUC / DNI:</strong> <span id="drawerDocId">-</span></div>
           <div style="font-size:0.85rem; color:var(--text-primary);"><strong style="color:var(--text-secondary);">Modelo Celular:</strong> <span id="drawerDeviceModel">No registrado</span></div>
           <div style="font-size:0.85rem; color:var(--text-primary);"><strong style="color:var(--text-secondary);">Créditos IA Desglose:</strong> <span id="drawerAiBreakdown">-</span></div>
+          <div style="font-size:0.85rem; color:var(--text-primary);"><strong style="color:var(--text-secondary);">Última Sincronización Real:</strong> <span id="drawerLastSync">Nunca sincronizado</span></div>
+          <div style="font-size:0.85rem; color:var(--text-primary);"><strong style="color:var(--text-secondary);">Respaldo Drive:</strong> <span id="drawerBackupDrive">No vinculado</span></div>
           <div style="font-size:0.85rem; color:var(--text-primary);"><strong style="color:var(--text-secondary);">Próximo Seguimiento:</strong> <span id="drawerFollowup">-</span></div>
           <div style="font-size:0.85rem; color:var(--text-primary);"><strong style="color:var(--text-secondary);">Notas:</strong> <span id="drawerNotes" style="color:var(--text-secondary);">-</span></div>
           <div style="margin-top:0.35rem;">

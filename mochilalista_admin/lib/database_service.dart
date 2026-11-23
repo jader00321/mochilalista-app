@@ -4,6 +4,22 @@ import 'dart:math' as math;
 import 'license_signer.dart';
 import 'config_service.dart';
 
+/// Excepción de protección anti-sobreescritura para fichas de sincronización cronológicamente desfasadas
+class StaleSyncException implements Exception {
+  final String message;
+  final DateTime syncTimestamp;
+  final DateTime lastSyncAt;
+
+  StaleSyncException(
+    this.message, {
+    required this.syncTimestamp,
+    required this.lastSyncAt,
+  });
+
+  @override
+  String toString() => message;
+}
+
 /// Servicio de Persistencia Real en Disco Duro con Arquitectura de Doble Estado
 /// Soporta 'sandbox' (Modo Pruebas) y 'prod' (Modo Producción Real)
 class DatabaseService {
@@ -491,6 +507,92 @@ class DatabaseService {
     return client;
   }
 
+  /// Aplica el snapshot del estado real del cliente recibido mediante el protocolo MLS1 / .mlsync
+  ///
+  /// Valida anti-sobreescritura: si [ts] es anterior a [last_sync_at] y [forceOlder] != true,
+  /// lanza [StaleSyncException] para responder HTTP 409 Conflict.
+  /// Persiste: ai_reported_balance, ai_credits_used_total, uses_byok, installed_version,
+  /// device_model, android_version, profiles_count, backup_drive_linked, backup_health_status,
+  /// last_backup_at, last_sync_at (ISO UTC desde ts) y last_sync_payload.
+  Future<Map<String, dynamic>?> applyClientSyncSnapshot(
+    String clientId,
+    Map<String, dynamic> payload, {
+    bool forceOlder = false,
+  }) async {
+    final clients = await getClients();
+    final index = clients.indexWhere((c) => c['id'] == clientId);
+    if (index == -1) return null;
+
+    final client = clients[index];
+
+    final tsEpoch = payload['ts'] as int? ?? 0;
+    final syncDateTime = DateTime.fromMillisecondsSinceEpoch(tsEpoch, isUtc: true);
+
+    if (client['last_sync_at'] != null && !forceOlder) {
+      final lastSync = DateTime.tryParse(client['last_sync_at'].toString());
+      if (lastSync != null && syncDateTime.isBefore(lastSync)) {
+        throw StaleSyncException(
+          'La ficha de sincronización (${syncDateTime.toIso8601String()}) es anterior a la última registrada (${lastSync.toIso8601String()}).',
+          syncTimestamp: syncDateTime,
+          lastSyncAt: lastSync,
+        );
+      }
+    }
+
+    // Persistir métricas operativas y técnicas reales
+    if (payload.containsKey('ai')) {
+      client['ai_reported_balance'] = (payload['ai'] as num).toInt();
+    }
+    if (payload.containsKey('aiu')) {
+      client['ai_credits_used_total'] = (payload['aiu'] as num).toInt();
+    }
+    if (payload.containsKey('byok')) {
+      client['uses_byok'] = payload['byok'] == true;
+    }
+    if (payload.containsKey('av') && (payload['av'] as String? ?? '').isNotEmpty) {
+      client['installed_version'] = (payload['av'] as String).trim();
+    }
+    if (payload.containsKey('mod') && (payload['mod'] as String? ?? '').isNotEmpty) {
+      client['device_model'] = (payload['mod'] as String).trim();
+    }
+    if (payload.containsKey('os') && (payload['os'] as String? ?? '').isNotEmpty) {
+      client['android_version'] = (payload['os'] as String).trim();
+    }
+    if (payload.containsKey('pc')) {
+      client['profiles_count'] = (payload['pc'] as num).toInt();
+    }
+    if (payload.containsKey('drv')) {
+      client['backup_drive_linked'] = payload['drv'] == true;
+    }
+    if (payload.containsKey('bh') && (payload['bh'] as String? ?? '').isNotEmpty) {
+      client['backup_health_status'] = (payload['bh'] as String).trim();
+    }
+    if (payload.containsKey('lb')) {
+      client['last_backup_at'] = payload['lb'];
+    }
+    if (payload.containsKey('n')) {
+      client['ultimo_nonce'] = (payload['n'] as num).toInt();
+    }
+
+    client['last_sync_at'] = syncDateTime.toIso8601String();
+    client['last_sync_payload'] = {
+      'version': payload['av'],
+      'version_code': payload['bc'],
+      'sqlite_schema': payload['db'],
+      'ai_balance': payload['ai'],
+      'ai_used': payload['aiu'],
+      'status': payload['st'],
+      'backup_health': payload['bh'],
+      'device_model': payload['mod'],
+      'android_version': payload['os'],
+      'sync_ts': tsEpoch,
+    };
+
+    clients[index] = client;
+    await saveClients(clients, reason: 'apply_sync_$clientId');
+    return client;
+  }
+
   Future<bool> deleteClient(String id) async {
     final clients = await getClients();
     final initialLength = clients.length;
@@ -814,9 +916,26 @@ class DatabaseService {
     return client;
   }
 
-  /// Marcar que el cliente actualizó su versión de app instalada
-  Future<Map<String, dynamic>?> markClientUpdated(String clientId, String versionName) async {
+  /// Marcar que el cliente actualizó su versión de app instalada con blindaje anti-degradación
+  Future<Map<String, dynamic>?> markClientUpdated(String clientId, String versionName, {bool force = false}) async {
+    final client = await getClientById(clientId);
+    if (client == null) return null;
+    final currentInstalled = client['installed_version'] as String? ?? '9.0.0';
+    if (!force && compareSemVer(currentInstalled, versionName) > 0) {
+      // Blindaje: No degradar a un cliente que ya tiene una versión superior instalada
+      return client;
+    }
     return updateClient(clientId, {'installed_version': versionName});
+  }
+
+  /// Registra la trazabilidad del APK enviado por WhatsApp
+  Future<Map<String, dynamic>?> recordApkDispatched(String clientId, String version, {String? variant}) async {
+    final nowIso = DateTime.now().toUtc().toIso8601String();
+    return updateClient(clientId, {
+      'last_apk_sent_version': version,
+      'last_apk_sent_at': nowIso,
+      if (variant != null) 'last_apk_sent_variant': variant,
+    });
   }
 
   /// Eliminar un pago o anular transacción del historial de un cliente
@@ -1245,13 +1364,66 @@ class DatabaseService {
     return false;
   }
 
-  // =================== LANZAMIENTOS (RELEASES) ===================
+  // =================== LANZAMIENTOS (RELEASES) Y SEMVER ===================
+
+  /// Comparador Semver numérico determinista (ignora prefijos 'v' y sufijos '+build')
+  static int compareSemVer(String? a, String? b) {
+    if (a == null && b == null) return 0;
+    if (a == null || a.trim().isEmpty) return -1;
+    if (b == null || b.trim().isEmpty) return 1;
+
+    final pa = _parseSemVerParts(a);
+    final pb = _parseSemVerParts(b);
+
+    if (pa.major != pb.major) return pa.major.compareTo(pb.major);
+    if (pa.minor != pb.minor) return pa.minor.compareTo(pb.minor);
+    if (pa.patch != pb.patch) return pa.patch.compareTo(pb.patch);
+
+    if (pa.buildCode != null && pb.buildCode != null && pa.buildCode != pb.buildCode) {
+      return pa.buildCode!.compareTo(pb.buildCode!);
+    }
+
+    return 0;
+  }
+
+  static _SemVerParts _parseSemVerParts(String s) {
+    final clean = s.trim().replaceAll(RegExp(r'^[vV]'), '');
+    final withoutSuffix = clean.split('-')[0];
+    final buildSplit = withoutSuffix.split('+');
+    final mainPart = buildSplit[0];
+    final buildCode = buildSplit.length > 1 ? int.tryParse(buildSplit[1]) : null;
+
+    final segments = mainPart.split('.');
+    final major = segments.isNotEmpty ? (int.tryParse(segments[0]) ?? 0) : 0;
+    final minor = segments.length > 1 ? (int.tryParse(segments[1]) ?? 0) : 0;
+    final patch = segments.length > 2 ? (int.tryParse(segments[2]) ?? 0) : 0;
+
+    return _SemVerParts(major: major, minor: minor, patch: patch, buildCode: buildCode);
+  }
 
   Future<List<Map<String, dynamic>>> getReleases() async {
     if (!await _releasesFile.exists()) return [];
     final content = await _releasesFile.readAsString();
     final list = jsonDecode(content) as List;
-    return list.cast<Map<String, dynamic>>();
+    final releases = list.cast<Map<String, dynamic>>();
+
+    for (final r in releases) {
+      final p = r['apk_file_path'] as String?;
+      final u = r['universal_apk'] as Map<String, dynamic>?;
+      final a = r['arm64_apk'] as Map<String, dynamic>?;
+
+      bool exists = false;
+      if (p != null && p.isNotEmpty && File(p).existsSync()) {
+        exists = true;
+      } else if (u != null && (u['file_path'] as String? ?? '').isNotEmpty && File(u['file_path'] as String).existsSync()) {
+        exists = true;
+      } else if (a != null && (a['file_path'] as String? ?? '').isNotEmpty && File(a['file_path'] as String).existsSync()) {
+        exists = true;
+      }
+      r['file_exists'] = exists;
+    }
+
+    return releases;
   }
 
   Future<void> saveReleases(List<Map<String, dynamic>> releases, {String reason = 'update_releases'}) async {
@@ -1284,16 +1456,25 @@ class DatabaseService {
 
     final newRelease = {
       'version_name': versionName,
-      'version_code': (releaseData['version_code'] as num?)?.toInt() ?? 24,
-      'db_schema_version': (releaseData['db_schema_version'] as num?)?.toInt() ?? 35,
-      'release_date': DateTime.now().toUtc().toIso8601String(),
+      'version_code': (releaseData['version_code'] as num?)?.toInt() ?? 82,
+      'db_schema_version': (releaseData['db_schema_version'] as num?)?.toInt() ?? 36,
+      'release_date': releaseData['release_date'] ?? DateTime.now().toUtc().toIso8601String(),
       'type': releaseData['type'] == 'HOTFIX' ? 'HOTFIX' : 'FEATURE_RELEASE',
       'apk_file_path': releaseData['apk_file_path'] ?? '',
       'apk_download_url': releaseData['apk_download_url'] ?? '',
       'apk_sha256': (releaseData['apk_sha256'] ?? '').toString().toLowerCase(),
       'file_size_mb': releaseData['file_size_mb'] ?? '',
       'changelog': releaseData['changelog'] ?? '',
+      'internal_notes': releaseData['internal_notes'] ?? '',
       'min_required_version': releaseData['min_required_version'] ?? '9.0.0',
+      'signature_verified': releaseData['signature_verified'],
+      'signature_status': releaseData['signature_status'] ?? 'TOOL_UNAVAILABLE',
+      'signer_sha256': releaseData['signer_sha256'],
+      'signer_dn': releaseData['signer_dn'],
+      if (releaseData['universal_apk'] != null)
+        'universal_apk': releaseData['universal_apk'],
+      if (releaseData['arm64_apk'] != null)
+        'arm64_apk': releaseData['arm64_apk'],
     };
 
     releases.insert(0, newRelease); // Más recientes primero
@@ -1309,7 +1490,17 @@ class DatabaseService {
     final release = releases[index];
     updates.forEach((key, value) {
       if (key != 'version_name') {
-        release[key] = value;
+        if (key == 'version_code' || key == 'db_schema_version') {
+          if (value is num) {
+            release[key] = value.toInt();
+          } else if (value is String) {
+            release[key] = int.tryParse(value) ?? release[key];
+          } else {
+            release[key] = value;
+          }
+        } else {
+          release[key] = value;
+        }
       }
     });
 
@@ -1325,14 +1516,21 @@ class DatabaseService {
 
     final rel = releases.removeAt(index);
 
-    // Si tiene archivo APK en disco, eliminarlo
-    final filePath = rel['apk_file_path'] as String?;
-    if (filePath != null && filePath.isNotEmpty) {
-      final f = File(filePath);
-      if (await f.exists()) {
-        try {
-          await f.delete();
-        } catch (_) {}
+    // Si tiene archivo APK en disco, eliminarlo (principal y variantes)
+    final pathsToDelete = [
+      rel['apk_file_path'] as String?,
+      (rel['universal_apk'] as Map<String, dynamic>?)?['file_path'] as String?,
+      (rel['arm64_apk'] as Map<String, dynamic>?)?['file_path'] as String?,
+    ];
+
+    for (final p in pathsToDelete) {
+      if (p != null && p.isNotEmpty) {
+        final f = File(p);
+        if (await f.exists()) {
+          try {
+            await f.delete();
+          } catch (_) {}
+        }
       }
     }
 
@@ -1340,12 +1538,13 @@ class DatabaseService {
     return true;
   }
 
-  /// Matriz Inteligente de Distribución de Versiones
+  /// Matriz Inteligente de Distribución de Versiones con Semver Real
   Future<List<Map<String, dynamic>>> getUpdateDistributionMatrix() async {
     final releases = await getReleases();
     if (releases.isEmpty) return [];
 
     final latestRelease = releases.first;
+    final latestVersion = latestRelease['version_name'] as String? ?? '9.0.0';
     final clients = await getClients();
     final now = DateTime.now();
 
@@ -1353,9 +1552,13 @@ class DatabaseService {
 
     for (final client in clients) {
       final installedVersion = (client['installed_version'] as String? ?? '9.0.0');
-      final isUpToDate = installedVersion == latestRelease['version_name'];
+      final cmp = compareSemVer(installedVersion, latestVersion);
+      final lastSentVersion = client['last_apk_sent_version'] as String?;
+      final isSentForLatest = lastSentVersion != null && lastSentVersion == latestVersion;
 
       final licenseType = (client['license_type'] as String? ?? 'MENSUAL').toUpperCase();
+      final situation = (client['situation'] as String? ?? '').toUpperCase();
+      final isProspect = situation == 'PROSPECTO' || licenseType == 'PROSPECTO';
       final isPerpetual = licenseType == 'PERPETUO_LIBERADO' || licenseType == 'PERPETUO';
 
       final expiresStr = client['license_expires'] as String?;
@@ -1366,39 +1569,73 @@ class DatabaseService {
       final updatesUntil = updatesUntilStr != null ? DateTime.tryParse(updatesUntilStr) : null;
       final hasActiveUpdatePass = updatesUntil != null && updatesUntil.isAfter(now);
 
+      String updateStatus;
+      bool isUpToDate;
+      bool canDowngrade = false;
       bool isEligibleForFree = false;
       String eligibilityReason = '';
       String requiredAction = 'Ninguna (Al día)';
 
-      if (isUpToDate) {
+      if (isProspect) {
+        updateStatus = 'PROSPECT';
+        isUpToDate = false;
+        isEligibleForFree = false;
+        eligibilityReason = 'Prospecto comercial sin app vinculada todavía.';
+        requiredAction = 'Vincular y Activar App';
+      } else if (cmp > 0) {
+        // Versión estrictamente superior instalada (jamás degradable)
+        updateStatus = 'AHEAD';
+        isUpToDate = true;
+        isEligibleForFree = true;
+        eligibilityReason = 'Tiene instalada una versión superior a la publicada en este catálogo.';
+        requiredAction = 'Versión Superior (Al día)';
+        canDowngrade = false;
+      } else if (cmp == 0) {
+        // Al día
+        updateStatus = 'UP_TO_DATE';
+        isUpToDate = true;
         isEligibleForFree = true;
         eligibilityReason = 'Ya tiene instalada la última versión.';
         requiredAction = 'Al día';
-      } else if (latestRelease['type'] == 'HOTFIX') {
-        isEligibleForFree = true;
-        eligibilityReason = 'Hotfix / Parche de estabilidad (Gratuito vitalicio).';
-        requiredAction = 'Enviar Actualización Gratuita';
       } else {
-        // FEATURE_RELEASE
-        if (isPerpetual) {
-          if (hasActiveUpdatePass) {
-            isEligibleForFree = true;
-            eligibilityReason = 'Licencia Perpetua con Pase de Actualizaciones vigente.';
-            requiredAction = 'Enviar Nueva Versión';
-          } else {
-            isEligibleForFree = false;
-            eligibilityReason = 'Licencia Perpetua: Periodo de 1 año de updates vencido.';
-            requiredAction = 'Ofrecer Pase Anual de Updates (S/ 150.00)';
-          }
+        // cmp < 0 (Versión instalada inferior a la última disponible)
+        if (isSentForLatest) {
+          updateStatus = 'SENT';
+          isUpToDate = false;
+          isEligibleForFree = isSubscriptionActive || hasActiveUpdatePass || latestRelease['type'] == 'HOTFIX';
+          final sentDate = client['last_apk_sent_at'] != null ? client['last_apk_sent_at'].toString().substring(0, 10) : '';
+          eligibilityReason = 'APK ya enviado${sentDate.isNotEmpty ? " el $sentDate" : ""}. Pendiente de instalación por el cliente.';
+          requiredAction = 'APK Enviado (Esperando instalación)';
         } else {
-          if (isSubscriptionActive) {
+          updateStatus = 'OUTDATED';
+          isUpToDate = false;
+          if (latestRelease['type'] == 'HOTFIX') {
             isEligibleForFree = true;
-            eligibilityReason = 'Suscripción activa incluye todas las actualizaciones.';
-            requiredAction = 'Enviar Nueva Versión';
+            eligibilityReason = 'Hotfix / Parche de estabilidad (Gratuito vitalicio).';
+            requiredAction = 'Enviar Actualización Gratuita';
           } else {
-            isEligibleForFree = false;
-            eligibilityReason = 'Suscripción vencida. Requiere renovar el plan.';
-            requiredAction = 'Renovar Suscripción para Actualizar';
+            // FEATURE_RELEASE
+            if (isPerpetual) {
+              if (hasActiveUpdatePass) {
+                isEligibleForFree = true;
+                eligibilityReason = 'Licencia Perpetua con Pase de Actualizaciones vigente.';
+                requiredAction = 'Enviar Nueva Versión';
+              } else {
+                isEligibleForFree = false;
+                eligibilityReason = 'Licencia Perpetua: Periodo de 1 año de updates vencido.';
+                requiredAction = 'Ofrecer Pase Anual de Updates (S/ 150.00)';
+              }
+            } else {
+              if (isSubscriptionActive) {
+                isEligibleForFree = true;
+                eligibilityReason = 'Suscripción activa incluye todas las actualizaciones.';
+                requiredAction = 'Enviar Nueva Versión';
+              } else {
+                isEligibleForFree = false;
+                eligibilityReason = 'Suscripción vencida. Requiere renovar el plan.';
+                requiredAction = 'Renovar Suscripción para Actualizar';
+              }
+            }
           }
         }
       }
@@ -1410,15 +1647,25 @@ class DatabaseService {
         'phone': client['phone'],
         'device_id': client['current_device_id'],
         'installed_version': installedVersion,
-        'latest_version': latestRelease['version_name'],
+        'latest_version': latestVersion,
         'release_type': latestRelease['type'],
+        'update_status': updateStatus,
+        'can_downgrade': canDowngrade,
         'is_up_to_date': isUpToDate,
         'is_eligible_for_free': isEligibleForFree,
         'eligibility_reason': eligibilityReason,
         'required_action': requiredAction,
         'download_url': latestRelease['apk_download_url'],
         'changelog': latestRelease['changelog'],
-        'has_local_apk': (latestRelease['apk_file_path'] as String? ?? '').isNotEmpty,
+        'has_local_apk': (latestRelease['apk_file_path'] as String? ?? '').isNotEmpty ||
+            latestRelease['universal_apk'] != null ||
+            latestRelease['arm64_apk'] != null,
+        'last_apk_sent_version': client['last_apk_sent_version'],
+        'last_apk_sent_at': client['last_apk_sent_at'],
+        'universal_apk': latestRelease['universal_apk'],
+        'arm64_apk': latestRelease['arm64_apk'],
+        'has_universal_apk': latestRelease['universal_apk'] != null,
+        'has_arm64_apk': latestRelease['arm64_apk'] != null,
       });
     }
 
@@ -1633,3 +1880,18 @@ class DatabaseService {
     ];
   }
 }
+
+class _SemVerParts {
+  final int major;
+  final int minor;
+  final int patch;
+  final int? buildCode;
+
+  const _SemVerParts({
+    required this.major,
+    required this.minor,
+    required this.patch,
+    this.buildCode,
+  });
+}
+

@@ -133,7 +133,7 @@ void main() {
         matching: find.byType(TextField),
       );
       expect(textFieldFinder, findsOneWidget);
-      expect(find.text(defaultExpectedMsg), findsOneWidget);
+      expect(find.textContaining(defaultExpectedMsg), findsOneWidget);
 
       // 3. Editar texto en el TextField
       const String customUserMsg = "Hola Julio, adjunto captura Yape por S/ 90.00 para Bodega Los Andes. ID: ML-4K9B";
@@ -161,7 +161,7 @@ void main() {
       expect(resetMsgBtn, findsOneWidget);
       await tester.tap(resetMsgBtn);
       await tester.pumpAndSettle();
-      expect(find.text(defaultExpectedMsg), findsOneWidget);
+      expect(find.textContaining(defaultExpectedMsg), findsOneWidget);
 
       // 7. Cerrar modal con botón cerrar
       final closeBtn = find.byTooltip("Cerrar");
@@ -268,6 +268,7 @@ void main() {
       // 3. Probar Chip 2: "Pedir BCP/BBVA"
       final chipBank = find.text("Pedir BCP/BBVA");
       expect(chipBank, findsOneWidget);
+      await tester.ensureVisible(chipBank);
       await tester.tap(chipBank);
       await tester.pumpAndSettle();
 
@@ -276,12 +277,14 @@ void main() {
       // 4. Probar Chip 3: "Necesito Factura"
       final chipInvoice = find.text("Necesito Factura");
       expect(chipInvoice, findsOneWidget);
+      await tester.ensureVisible(chipInvoice);
       await tester.tap(chipInvoice);
       await tester.pumpAndSettle();
 
       expect(find.textContaining("Solicito emisión de Factura con RUC."), findsOneWidget);
 
       // 5. Destocar Chip 1 (Toggle OFF)
+      await tester.ensureVisible(chipYape);
       await tester.tap(chipYape);
       await tester.pumpAndSettle();
       expect(find.textContaining("Pago realizado vía Yape/Plin. Adjunto comprobante."), findsNothing);
@@ -299,7 +302,7 @@ void main() {
         price: "S/ 35.00",
         hardwareId: mockDeviceId,
       );
-      expect(find.text(defaultExpectedMsg), findsOneWidget);
+      expect(find.textContaining(defaultExpectedMsg), findsOneWidget);
       expect(find.textContaining("Pago realizado vía Yape/Plin"), findsNothing);
       expect(find.textContaining("Solicito números de cuenta"), findsNothing);
       expect(find.textContaining("Solicito emisión de Factura"), findsNothing);

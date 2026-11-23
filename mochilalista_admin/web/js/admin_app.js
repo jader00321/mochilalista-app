@@ -137,6 +137,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   initModalEvents();
   initWaComposerEvents();
   initInspectorEvents();
+  initClientSyncEvents();
   initReleaseUploadAndAutoDetect();
   initFinancesAndBackupsEvents();
 });
@@ -4559,6 +4560,23 @@ async function openClient360Drawer(clientId) {
   if (drawerAiBreakdown) {
     drawerAiBreakdown.textContent = `En celular: ${realAi} IA | Bono pendiente: +${pendingAi} IA`;
   }
+  const drawerLastSync = document.getElementById('drawerLastSync');
+  if (drawerLastSync) {
+    if (client.last_sync_at) {
+      drawerLastSync.textContent = client.last_sync_at.replace('T', ' ').substring(0, 19) + ' UTC';
+    } else {
+      drawerLastSync.textContent = 'Nunca sincronizado';
+    }
+  }
+  const drawerBackupDrive = document.getElementById('drawerBackupDrive');
+  if (drawerBackupDrive) {
+    if (client.backup_drive_linked) {
+      const bh = client.backup_health_status || 'OK';
+      drawerBackupDrive.textContent = `Vinculado (${bh})`;
+    } else {
+      drawerBackupDrive.textContent = 'No vinculado';
+    }
+  }
   const drawerFollowup = document.getElementById('drawerFollowup');
   if (drawerFollowup) {
     if (client.next_followup_date) {
@@ -5195,7 +5213,7 @@ function confirmDeletePayment(clientId, paymentId) {
 }
 
 /**
- * Apertura del Modal para Sincronizar Datos Reportados en Celular
+ * Apertura del Modal para Sincronizar Datos Reportados en Celular (Fase 4 Plan 19)
  */
 function openSyncReportedModal(clientId) {
   const client = globalClients.find(c => c.id === clientId);
@@ -5216,6 +5234,19 @@ function openSyncReportedModal(clientId) {
     badgeEl.textContent = badgeInfo.text;
   }
 
+  // Limpiar panel de importación y análisis previo
+  const syncRawInput = document.getElementById('syncRawInput');
+  if (syncRawInput) syncRawInput.value = '';
+  const syncAnalysisResult = document.getElementById('syncAnalysisResult');
+  if (syncAnalysisResult) {
+    syncAnalysisResult.style.display = 'none';
+    syncAnalysisResult.dataset.parsedToken = '';
+  }
+
+  // Activar pestaña principal de importación por defecto
+  switchSyncReportedTab('import');
+
+  // Rellenar formulario manual existente como fallback
   document.getElementById('syncRepDeviceId').value = (client.current_device_id && client.current_device_id !== 'PENDIENTE') ? client.current_device_id : '';
   document.getElementById('syncRepDeviceModel').value = client.device_model || '';
   document.getElementById('syncRepVersion').value = client.installed_version || '';
@@ -5233,6 +5264,590 @@ function openSyncReportedModal(clientId) {
   document.getElementById('syncRepExpires').value = client.license_expires ? client.license_expires.substring(0, 10) : '';
   document.getElementById('syncRepNotes').value = '';
   openModal('modalSyncReported');
+}
+
+/**
+ * Conmutador de Pestañas en Modal de Sincronización
+ */
+function switchSyncReportedTab(tab) {
+  const btnImport = document.getElementById('tabBtnSyncImport');
+  const btnManual = document.getElementById('tabBtnSyncManual');
+  const paneImport = document.getElementById('syncPaneImport');
+  const paneManual = document.getElementById('syncPaneManual');
+
+  if (tab === 'import') {
+    btnImport?.classList.add('active', 'btn-primary');
+    btnImport?.classList.remove('btn-outline');
+    btnManual?.classList.remove('active', 'btn-primary');
+    btnManual?.classList.add('btn-outline');
+    if (paneImport) paneImport.style.display = 'block';
+    if (paneManual) paneManual.style.display = 'none';
+  } else {
+    btnManual?.classList.add('active', 'btn-primary');
+    btnManual?.classList.remove('btn-outline');
+    btnImport?.classList.remove('active', 'btn-primary');
+    btnImport?.classList.add('btn-outline');
+    if (paneImport) paneImport.style.display = 'none';
+    if (paneManual) paneManual.style.display = 'block';
+  }
+}
+
+/**
+ * Generador HTML de Tabla Diff Estructurada: Antes (Admin) -> Real (Celular)
+ */
+function renderSyncDiffTable(changes) {
+  if (!changes || !changes.length) {
+    return '<p style="color:var(--text-muted); font-size:0.83rem;">No se detectaron diferencias respecto a los datos actuales.</p>';
+  }
+  let rowsHtml = '';
+  changes.forEach(c => {
+    const isChanged = c.changed;
+    const rowClass = isChanged ? 'sync-diff-row-changed' : '';
+    const badgeHtml = isChanged
+      ? '<span class="sync-diff-badge-changed">Modificado</span>'
+      : '<span class="sync-diff-badge-same">Sin cambios</span>';
+    const beforeStr = c.before !== null && c.before !== undefined && c.before !== '' ? String(c.before) : '-';
+    const afterStr = c.after !== null && c.after !== undefined && c.after !== '' ? String(c.after) : '-';
+    rowsHtml += `
+      <tr class="${rowClass}">
+        <td><strong>${escapeHtml(c.label || c.field)}</strong></td>
+        <td class="sync-diff-before">${escapeHtml(beforeStr)}</td>
+        <td class="sync-diff-after">${escapeHtml(afterStr)}</td>
+        <td>${badgeHtml}</td>
+      </tr>
+    `;
+  });
+  return `
+    <div style="font-weight:700; font-size:0.86rem; color:var(--text-primary); margin-bottom:0.35rem;">
+      Comparador: Antes (Admin) &rarr; Real (Celular)
+    </div>
+    <div class="table-responsive">
+      <table class="sync-diff-table">
+        <thead>
+          <tr>
+            <th>Métrica / Campo</th>
+            <th>Antes (Admin)</th>
+            <th>Real (Celular)</th>
+            <th>Estado</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rowsHtml}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+/**
+ * Analizar Ficha de Sincronización en #modalSyncReported
+ */
+async function analyzeSyncReported() {
+  const clientId = document.getElementById('syncRepClientId').value;
+  if (!clientId) return;
+  const rawInput = document.getElementById('syncRawInput').value.trim();
+  if (!rawInput) {
+    showToast('Pega el código MLS1-... o arrastra un archivo .mlsync primero.', 'warning');
+    return;
+  }
+
+  try {
+    const res = await fetch('/api/sync/parse', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        raw_input: rawInput,
+        expected_client_id: clientId,
+      }),
+    });
+
+    const data = await res.json();
+    if (!res.ok) {
+      throw new Error(data.error || 'Error al analizar ficha de sincronización');
+    }
+
+    const container = document.getElementById('syncAnalysisResult');
+    const badgeEl = document.getElementById('syncHmacBadge');
+    const hwMismatchEl = document.getElementById('syncHwMismatchAlert');
+    const rescueEl = document.getElementById('syncRescueCard');
+    const staleEl = document.getElementById('syncStaleWarning');
+    const diffContainer = document.getElementById('syncDiffContainer');
+
+    container.style.display = 'block';
+    container.dataset.parsedRaw = rawInput;
+
+    // 1. Sello HMAC
+    if (data.valid) {
+      badgeEl.className = 'sync-hmac-badge valid';
+      badgeEl.innerHTML = `
+        <svg class="sync-hmac-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg>
+        <span>Integridad HMAC-SHA256 Verificada con éxito. Reporte auténtico de la app móvil.</span>
+      `;
+    } else {
+      badgeEl.className = 'sync-hmac-badge invalid';
+      badgeEl.innerHTML = `
+        <svg class="sync-hmac-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+        <span>Firma HMAC-SHA256 Inválida o Alterada (${escapeHtml(data.error_code || 'INVALID_SIGNATURE')}).</span>
+      `;
+    }
+
+    // 2. Hardware ID Mismatch Warning
+    const client = globalClients.find(c => c.id === clientId);
+    const p = data.payload || {};
+    if (p.hw && client && client.current_device_id && client.current_device_id !== 'PENDIENTE' && p.hw !== client.current_device_id && data.match_type !== 'MIGRATION_SOURCE') {
+      hwMismatchEl.style.display = 'block';
+      hwMismatchEl.innerHTML = `
+        <strong>Advertencia de Hardware:</strong> El reporte pertenece a <code>${escapeHtml(p.hw)}</code>, pero la ficha abierta es <code>${escapeHtml(client.current_device_id)}</code>.
+      `;
+    } else {
+      hwMismatchEl.style.display = 'none';
+    }
+
+    // 3. Rescate PENDIENTE_MIGRACION
+    if (data.migration_rescue && data.migration_rescue.detected) {
+      rescueEl.style.display = 'block';
+      const mr = data.migration_rescue;
+      const oldHw = escapeHtml(mr.old_hardware_id || '-');
+      const newHw = escapeHtml(mr.new_hardware_id || '-');
+      const modelStr = mr.device_model ? ` • ${escapeHtml(mr.device_model)}` : '';
+      rescueEl.innerHTML = `
+        <div class="sync-rescue-header">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+          <span>Dispositivo Bloqueado por Migración / Restauración</span>
+        </div>
+        <div class="sync-rescue-body">
+          <div class="sync-rescue-hw-flow">
+            <span class="sync-rescue-hw-old">Celular anterior (bhw): ${oldHw}</span>
+            <span class="sync-rescue-hw-arrow">&rarr;</span>
+            <span class="sync-rescue-hw-new">Nuevo celular (hw): ${newHw}${modelStr}</span>
+          </div>
+          <p style="margin:0.25rem 0 0.5rem 0; font-size:0.8rem; color:var(--text-secondary);">
+            La app móvil reporta estado <code>PENDIENTE_MIGRACION</code> tras restaurar un respaldo en un equipo diferente. Puedes transferir la licencia y autorizar el nuevo equipo sin costo y sin duplicar días.
+          </p>
+        </div>
+        <div style="display:flex; justify-content:flex-end;">
+          <button type="button" class="btn btn-warning btn-sm" id="btnSyncRescueMigrate">
+            <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>
+            Migrar Dispositivo (Restauración — 0 días)
+          </button>
+        </div>
+      `;
+
+      document.getElementById('btnSyncRescueMigrate')?.addEventListener('click', () => {
+        closeModal('modalSyncReported');
+        const targetClientId = (data.matched_client && data.matched_client.id) ? data.matched_client.id : clientId;
+        openMigrateModal(targetClientId, {
+          newDeviceId: mr.new_hardware_id,
+          newDeviceModel: mr.device_model,
+          scenario: 'RESTORED_BACKUP'
+        });
+      });
+    } else {
+      rescueEl.style.display = 'none';
+    }
+
+    // 4. Anti-Sobreescritura por reporte antiguo
+    if (data.is_older_than_last_sync) {
+      staleEl.style.display = 'block';
+      staleEl.innerHTML = `
+        <div class="sync-stale-banner">
+          <strong>Aviso Anti-Sobreescritura:</strong> Esta ficha técnica tiene fecha de reporte anterior a la última sincronización guardada.
+          <div style="margin-top:0.4rem;">
+            <label style="display:inline-flex; align-items:center; gap:0.4rem; cursor:pointer; font-weight:600;">
+              <input type="checkbox" id="chkForceOlderSync"> Confirmar sobrescritura con ficha más antigua
+            </label>
+          </div>
+        </div>
+      `;
+    } else {
+      staleEl.style.display = 'none';
+    }
+
+    // 5. Tabla Diff
+    diffContainer.innerHTML = renderSyncDiffTable(data.changes || []);
+    showToast('Ficha de sincronización analizada.', 'success');
+  } catch (err) {
+    showToast('Error al analizar ficha: ' + err.message, 'error');
+  }
+}
+
+/**
+ * Aplicar Sincronización en #modalSyncReported
+ */
+async function applySyncReported() {
+  const clientId = document.getElementById('syncRepClientId').value;
+  if (!clientId) return;
+  const container = document.getElementById('syncAnalysisResult');
+  const rawInput = container?.dataset.parsedRaw || document.getElementById('syncRawInput').value.trim();
+  if (!rawInput) {
+    showToast('Por favor analiza una ficha de sincronización primero.', 'warning');
+    return;
+  }
+
+  const forceOlder = document.getElementById('chkForceOlderSync')?.checked || false;
+
+  try {
+    const res = await fetch('/api/sync/apply', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        client_id: clientId,
+        raw_input: rawInput,
+        force_older: forceOlder,
+      }),
+    });
+
+    const data = await res.json();
+    if (!res.ok) {
+      if (res.status === 409) {
+        showToast('Conflicto: El reporte es anterior a la última sincronización. Marca la casilla de confirmación para sobrescribir.', 'warning');
+        return;
+      }
+      throw new Error(data.error || 'Error al aplicar sincronización');
+    }
+
+    showToast('¡Datos del celular sincronizados con éxito!', 'success');
+    await loadClients();
+    await loadDashboard();
+    await loadReleaseMatrix();
+    if (currentDrawerClientId === clientId) {
+      await openClient360Drawer(clientId, 'drawerTabOverview');
+    }
+    closeModal('modalSyncReported');
+  } catch (err) {
+    showToast('Error al aplicar sincronización: ' + err.message, 'error');
+  }
+}
+
+/**
+ * Modal Global de Importación de Ficha Offline (.mlsync / MLS1)
+ */
+function openGlobalClientSyncModal() {
+  const rawInput = document.getElementById('globalSyncRawInput');
+  if (rawInput) rawInput.value = '';
+  const resultContainer = document.getElementById('globalSyncResultContainer');
+  if (resultContainer) {
+    resultContainer.style.display = 'none';
+    resultContainer.dataset.parsedRaw = '';
+    resultContainer.dataset.targetClientId = '';
+  }
+  const footer = document.getElementById('globalSyncModalFooter');
+  if (footer) footer.style.display = 'none';
+  openModal('modalGlobalClientSync');
+}
+
+async function analyzeGlobalSync() {
+  const rawInput = document.getElementById('globalSyncRawInput').value.trim();
+  if (!rawInput) {
+    showToast('Pega el código MLS1-... o arrastra un archivo .mlsync primero.', 'warning');
+    return;
+  }
+
+  try {
+    const res = await fetch('/api/sync/parse', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ raw_input: rawInput }),
+    });
+
+    const data = await res.json();
+    if (!res.ok) {
+      throw new Error(data.error || 'Error al analizar ficha');
+    }
+
+    const container = document.getElementById('globalSyncResultContainer');
+    const badgeEl = document.getElementById('globalSyncHmacBadge');
+    const rescueEl = document.getElementById('globalSyncRescueCard');
+    const matchEl = document.getElementById('globalSyncClientMatchCard');
+    const diffContainer = document.getElementById('globalSyncDiffContainer');
+    const staleEl = document.getElementById('globalSyncStaleWarning');
+    const footer = document.getElementById('globalSyncModalFooter');
+
+    container.style.display = 'block';
+    container.dataset.parsedRaw = rawInput;
+
+    // 1. Sello HMAC
+    if (data.valid) {
+      badgeEl.className = 'sync-hmac-badge valid';
+      badgeEl.innerHTML = `
+        <svg class="sync-hmac-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg>
+        <span>Integridad HMAC-SHA256 Verificada con éxito. Reporte auténtico de la app móvil.</span>
+      `;
+    } else {
+      badgeEl.className = 'sync-hmac-badge invalid';
+      badgeEl.innerHTML = `
+        <svg class="sync-hmac-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+        <span>Firma HMAC-SHA256 Inválida o Alterada (${escapeHtml(data.error_code || 'INVALID_SIGNATURE')}).</span>
+      `;
+    }
+
+    const p = data.payload || {};
+
+    // 2. Rescate PENDIENTE_MIGRACION
+    if (data.migration_rescue && data.migration_rescue.detected) {
+      rescueEl.style.display = 'block';
+      const mr = data.migration_rescue;
+      const oldHw = escapeHtml(mr.old_hardware_id || '-');
+      const newHw = escapeHtml(mr.new_hardware_id || '-');
+      const modelStr = mr.device_model ? ` • ${escapeHtml(mr.device_model)}` : '';
+      const clientName = data.matched_client ? `${escapeHtml(data.matched_client.business_name)} (${escapeHtml(data.matched_client.owner_name)})` : 'Cliente Origen';
+      rescueEl.innerHTML = `
+        <div class="sync-rescue-header">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+          <span>Dispositivo Bloqueado por Migración / Restauración</span>
+        </div>
+        <div class="sync-rescue-body">
+          <div><strong>Titular Detectado:</strong> ${clientName}</div>
+          <div class="sync-rescue-hw-flow">
+            <span class="sync-rescue-hw-old">Celular anterior (bhw): ${oldHw}</span>
+            <span class="sync-rescue-hw-arrow">&rarr;</span>
+            <span class="sync-rescue-hw-new">Nuevo celular (hw): ${newHw}${modelStr}</span>
+          </div>
+          <p style="margin:0.25rem 0 0.5rem 0; font-size:0.8rem; color:var(--text-secondary);">
+            La app móvil reporta estado <code>PENDIENTE_MIGRACION</code>. Puedes reactivar el nuevo celular transfiriendo sus derechos comerciales con 0 días extra.
+          </p>
+        </div>
+        <div style="display:flex; justify-content:flex-end;">
+          <button type="button" class="btn btn-warning btn-sm" id="btnGlobalSyncRescueMigrate">
+            <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>
+            Migrar Dispositivo (Restauración — 0 días)
+          </button>
+        </div>
+      `;
+
+      document.getElementById('btnGlobalSyncRescueMigrate')?.addEventListener('click', () => {
+        closeModal('modalGlobalClientSync');
+        if (data.matched_client && data.matched_client.id) {
+          openMigrateModal(data.matched_client.id, {
+            newDeviceId: mr.new_hardware_id,
+            newDeviceModel: mr.device_model,
+            scenario: 'RESTORED_BACKUP'
+          });
+        }
+      });
+      if (footer) footer.style.display = 'none';
+      matchEl.style.display = 'none';
+      diffContainer.innerHTML = '';
+      staleEl.style.display = 'none';
+      return;
+    } else {
+      rescueEl.style.display = 'none';
+    }
+
+    // 3. Cliente Coincidente o Nuevo Cliente
+    if (data.matched_client) {
+      const c = data.matched_client;
+      container.dataset.targetClientId = c.id;
+      matchEl.style.display = 'block';
+      matchEl.innerHTML = `
+        <div class="sync-client-match-card">
+          <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.5rem;">
+            <div>
+              <strong style="color:var(--text-primary); font-size:1rem;">${escapeHtml(c.business_name)}</strong>
+              <div style="font-size:0.82rem; color:var(--text-secondary); margin-top:2px;">
+                ${escapeHtml(c.owner_name)} • WhatsApp: <strong>${escapeHtml(c.phone)}</strong>
+              </div>
+            </div>
+            <code style="font-family:var(--font-mono); color:var(--primary); font-weight:700;">${escapeHtml(c.current_device_id || '-')}</code>
+          </div>
+        </div>
+      `;
+
+      // Anti-Sobreescritura
+      if (data.is_older_than_last_sync) {
+        staleEl.style.display = 'block';
+        staleEl.innerHTML = `
+          <div class="sync-stale-banner">
+            <strong>Aviso Anti-Sobreescritura:</strong> Esta ficha técnica tiene fecha de reporte anterior a la última sincronización guardada.
+            <div style="margin-top:0.4rem;">
+              <label style="display:inline-flex; align-items:center; gap:0.4rem; cursor:pointer; font-weight:600;">
+                <input type="checkbox" id="chkGlobalForceOlderSync"> Confirmar sobrescritura con ficha más antigua
+              </label>
+            </div>
+          </div>
+        `;
+      } else {
+        staleEl.style.display = 'none';
+      }
+
+      diffContainer.innerHTML = renderSyncDiffTable(data.changes || []);
+      if (footer) footer.style.display = 'flex';
+    } else {
+      // Nuevo cliente no registrado
+      container.dataset.targetClientId = '';
+      matchEl.style.display = 'block';
+      matchEl.innerHTML = `
+        <div class="sync-client-match-card" style="border-left:4px solid var(--primary);">
+          <div style="font-weight:700; color:var(--primary); font-size:0.95rem; margin-bottom:0.25rem;">
+            Nuevo Celular No Registrado en Cartera
+          </div>
+          <div style="font-size:0.84rem; color:var(--text-secondary); margin-bottom:0.75rem;">
+            Hardware ID: <code style="font-family:var(--font-mono); font-weight:700; color:var(--text-primary);">${escapeHtml(p.hw || '-')}</code>
+            • Modelo: <strong>${escapeHtml(p.mod || 'No especificado')}</strong>
+            • Versión APK: <strong>v${escapeHtml(p.av || '-')}</strong>
+            • Saldo IA: <strong>${p.ai || 0} IA</strong>
+          </div>
+          <button type="button" class="btn btn-primary btn-sm" id="btnGlobalSyncCreateClient">
+            <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            Registrar Nuevo Cliente con estos datos
+          </button>
+        </div>
+      `;
+
+      document.getElementById('btnGlobalSyncCreateClient')?.addEventListener('click', () => {
+        closeModal('modalGlobalClientSync');
+        const modalCreate = document.getElementById('modalCreateClient');
+        if (modalCreate) {
+          openModal('modalCreateClient');
+          const devInp = document.getElementById('clientDeviceId') || document.getElementById('newClientDeviceId');
+          if (devInp) devInp.value = p.hw || '';
+          const modInp = document.getElementById('clientDeviceModel') || document.getElementById('newClientDeviceModel');
+          if (modInp) modInp.value = p.mod || '';
+          const aiInp = document.getElementById('clientAiBalance') || document.getElementById('newClientAiBalance');
+          if (aiInp) aiInp.value = p.ai || 0;
+        }
+      });
+
+      diffContainer.innerHTML = '';
+      staleEl.style.display = 'none';
+      if (footer) footer.style.display = 'none';
+    }
+
+    showToast('Ficha de sincronización analizada.', 'success');
+  } catch (err) {
+    showToast('Error al analizar ficha: ' + err.message, 'error');
+  }
+}
+
+async function applyGlobalSync() {
+  const container = document.getElementById('globalSyncResultContainer');
+  const clientId = container?.dataset.targetClientId;
+  if (!clientId) {
+    showToast('No hay cliente seleccionado para aplicar la sincronización.', 'warning');
+    return;
+  }
+  const rawInput = container?.dataset.parsedRaw || document.getElementById('globalSyncRawInput').value.trim();
+  const forceOlder = document.getElementById('chkGlobalForceOlderSync')?.checked || false;
+
+  try {
+    const res = await fetch('/api/sync/apply', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        client_id: clientId,
+        raw_input: rawInput,
+        force_older: forceOlder,
+      }),
+    });
+
+    const data = await res.json();
+    if (!res.ok) {
+      if (res.status === 409) {
+        showToast('Conflicto: El reporte es anterior a la última sincronización. Marca la casilla para confirmar sobrescritura.', 'warning');
+        return;
+      }
+      throw new Error(data.error || 'Error al aplicar sincronización');
+    }
+
+    showToast('¡Sincronización aplicada exitosamente!', 'success');
+    await loadClients();
+    await loadDashboard();
+    await loadReleaseMatrix();
+    closeModal('modalGlobalClientSync');
+  } catch (err) {
+    showToast('Error al aplicar sincronización: ' + err.message, 'error');
+  }
+}
+
+/**
+ * Inicialización de Eventos de Sincronización Offline (Fase 4 Plan 19)
+ */
+function initClientSyncEvents() {
+  // 1. Botón global en Cartera CRM
+  document.getElementById('btnImportClientSync')?.addEventListener('click', openGlobalClientSyncModal);
+
+  // 2. Eventos en modal local de sincronización
+  document.getElementById('btnAnalyzeSyncReported')?.addEventListener('click', analyzeSyncReported);
+  document.getElementById('btnClearSyncInput')?.addEventListener('click', () => {
+    document.getElementById('syncRawInput').value = '';
+    document.getElementById('syncAnalysisResult').style.display = 'none';
+  });
+  document.getElementById('btnApplySyncReported')?.addEventListener('click', applySyncReported);
+
+  // Drag & drop en modal local
+  const syncDropZone = document.getElementById('syncDropZone');
+  const syncFileInput = document.getElementById('syncFileInput');
+  syncDropZone?.addEventListener('click', () => syncFileInput?.click());
+  syncDropZone?.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    syncDropZone.classList.add('dragover');
+  });
+  syncDropZone?.addEventListener('dragleave', () => syncDropZone.classList.remove('dragover'));
+  syncDropZone?.addEventListener('drop', (e) => {
+    e.preventDefault();
+    syncDropZone.classList.remove('dragover');
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      const file = e.dataTransfer.files[0];
+      const reader = new FileReader();
+      reader.onload = (evt) => {
+        document.getElementById('syncRawInput').value = evt.target.result;
+        analyzeSyncReported();
+      };
+      reader.readAsText(file);
+    }
+  });
+  syncFileInput?.addEventListener('change', () => {
+    if (syncFileInput.files && syncFileInput.files.length > 0) {
+      const reader = new FileReader();
+      reader.onload = (evt) => {
+        document.getElementById('syncRawInput').value = evt.target.result;
+        analyzeSyncReported();
+      };
+      reader.readAsText(syncFileInput.files[0]);
+    }
+  });
+
+  // 3. Eventos en modal global
+  document.getElementById('btnAnalyzeGlobalSync')?.addEventListener('click', analyzeGlobalSync);
+  document.getElementById('btnClearGlobalSync')?.addEventListener('click', () => {
+    document.getElementById('globalSyncRawInput').value = '';
+    document.getElementById('globalSyncResultContainer').style.display = 'none';
+    document.getElementById('globalSyncModalFooter').style.display = 'none';
+  });
+  document.getElementById('btnApplyGlobalSync')?.addEventListener('click', applyGlobalSync);
+
+  // Drag & drop en modal global
+  const globalDropZone = document.getElementById('globalSyncDropZone');
+  const globalFileInput = document.getElementById('globalSyncFileInput');
+  globalDropZone?.addEventListener('click', () => globalFileInput?.click());
+  globalDropZone?.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    globalDropZone.classList.add('dragover');
+  });
+  globalDropZone?.addEventListener('dragleave', () => globalDropZone.classList.remove('dragover'));
+  globalDropZone?.addEventListener('drop', (e) => {
+    e.preventDefault();
+    globalDropZone.classList.remove('dragover');
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      const file = e.dataTransfer.files[0];
+      const reader = new FileReader();
+      reader.onload = (evt) => {
+        document.getElementById('globalSyncRawInput').value = evt.target.result;
+        analyzeGlobalSync();
+      };
+      reader.readAsText(file);
+    }
+  });
+  globalFileInput?.addEventListener('change', () => {
+    if (globalFileInput.files && globalFileInput.files.length > 0) {
+      const reader = new FileReader();
+      reader.onload = (evt) => {
+        document.getElementById('globalSyncRawInput').value = evt.target.result;
+        analyzeGlobalSync();
+      };
+      reader.readAsText(globalFileInput.files[0]);
+    }
+  });
 }
 
 /**
@@ -5260,6 +5875,11 @@ function auditTokenInInspector(token) {
 // =================== 3B. COMPOSITOR UNIVERSAL DE WHATSAPP (FASE 4) ===================
 let currentWaComposerClientId = null;
 let currentWaComposerTemplateKey = 'welcome';
+let currentDispatchRelease = null;
+let currentDispatchClient = null;
+let currentDispatchMode = 'eligible';
+let currentDispatchVariant = 'universal';
+let isApkDispatchMode = false;
 
 const WA_TEMPLATES = {
   welcome: {
@@ -5312,7 +5932,9 @@ function formatPlanLabel(plan) {
 }
 
 async function openWhatsAppComposer(clientId, defaultTemplateKey = null, options = {}) {
-  const client = globalClients.find(c => c.id === clientId);
+  const client = (globalClients && globalClients.find(c => c.id === clientId)) ||
+                 (globalReleaseMatrix && globalReleaseMatrix.find(r => r.client_id === clientId)) ||
+                 currentDispatchClient;
   if (!client) {
     showToast('Cliente no encontrado.', 'error');
     return;
@@ -5401,6 +6023,22 @@ async function openWhatsAppComposer(clientId, defaultTemplateKey = null, options
     modalEl.dataset.cleanPhone = cleanDigits;
     modalEl.dataset.aiCredits = options.aiCredits !== undefined ? String(options.aiCredits) : '';
     modalEl.dataset.diasExtension = options.diasExtension !== undefined ? String(options.diasExtension) : '';
+  }
+
+  // Alternar panel y footer exclusivo de Despacho Asistido de APK (Plan 19 Fase 3)
+  isApkDispatchMode = options.isApkDispatch === true;
+  const dispatchPanel = document.getElementById('waApkDispatchPanel');
+  const standardFooter = document.getElementById('waStandardFooterActions');
+  const dispatchFooter = document.getElementById('waApkDispatchFooterActions');
+
+  if (isApkDispatchMode) {
+    if (dispatchPanel) dispatchPanel.style.display = 'block';
+    if (standardFooter) standardFooter.style.display = 'none';
+    if (dispatchFooter) dispatchFooter.style.display = 'flex';
+  } else {
+    if (dispatchPanel) dispatchPanel.style.display = 'none';
+    if (standardFooter) standardFooter.style.display = 'flex';
+    if (dispatchFooter) dispatchFooter.style.display = 'none';
   }
 
   if (options.customMessage) {
@@ -5609,7 +6247,46 @@ function initWaComposerEvents() {
   document.getElementById('btnWaCompCopy')?.addEventListener('click', copyWaComposerMessage);
 }
 
-// =================== 4. RELEASE MANAGER & SUBIDA DE APK DIRECTA ===================
+// =================== 4. RELEASE MANAGER & MATRIZ INTELIGENTE (PLAN 19) ===================
+let globalReleaseMatrix = [];
+let currentMatrixFilter = 'ALL';
+let currentMatrixSearch = '';
+
+/**
+ * Comparador SemVer numérico client-side determinista
+ */
+function compareSemVer(a, b) {
+  if (!a && !b) return 0;
+  if (!a) return -1;
+  if (!b) return 1;
+
+  const parseParts = (s) => {
+    const clean = String(s).trim().replace(/^[vV]/, '');
+    const withoutSuffix = clean.split('-')[0];
+    const buildSplit = withoutSuffix.split('+');
+    const segs = buildSplit[0].split('.');
+    const major = parseInt(segs[0], 10) || 0;
+    const minor = segs.length > 1 ? parseInt(segs[1], 10) || 0 : 0;
+    const patch = segs.length > 2 ? parseInt(segs[2], 10) || 0 : 0;
+    const build = buildSplit.length > 1 ? parseInt(buildSplit[1], 10) || null : null;
+    return { major, minor, patch, build };
+  };
+
+  const pa = parseParts(a);
+  const pb = parseParts(b);
+
+  if (pa.major !== pb.major) return pa.major - pb.major;
+  if (pa.minor !== pb.minor) return pa.minor - pb.minor;
+  if (pa.patch !== pb.patch) return pa.patch - pb.patch;
+  if (pa.build != null && pb.build != null && pa.build !== pb.build) {
+    return pa.build - pb.build;
+  }
+  return 0;
+}
+
+/**
+ * Carga el catálogo de versiones publicadas
+ */
 async function loadReleases() {
   try {
     const res = await fetch('/api/releases', {
@@ -5619,10 +6296,11 @@ async function loadReleases() {
     globalReleases = await res.json();
 
     const tbody = document.getElementById('releasesTableBody');
+    if (!tbody) return;
     tbody.innerHTML = '';
 
     if (globalReleases.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; padding:1.5rem; color:var(--text-muted);">No hay versiones registradas en este entorno.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="8" style="text-align:center; padding:1.5rem; color:var(--text-muted);">No hay versiones registradas en este entorno.</td></tr>';
       if (globalClients && globalClients.length > 0) {
         updateFilterCounts();
         renderClientsTable();
@@ -5637,31 +6315,90 @@ async function loadReleases() {
         : '<span class="badge badge-purple">FEATURE RELEASE</span>';
 
       const shortSha = r.apk_sha256 ? `${r.apk_sha256.substring(0, 12)}...` : '-';
-      const sizeInfo = r.file_size_mb ? `${r.file_size_mb} MB` : '-';
+      const sizeInfo = r.file_size_mb ? `${r.file_size_mb}` : '-';
+
+      // Badges de variantes
+      const variantsBadges = [];
+      if (r.universal_apk || r.abi_variant === 'UNIVERSAL' || (!r.universal_apk && !r.arm64_apk)) {
+        variantsBadges.push('<span class="badge badge-universal" title="Compatible con todos los procesadores">Universal</span>');
+      }
+      if (r.arm64_apk || r.abi_variant === 'ARM64') {
+        variantsBadges.push('<span class="badge badge-arm64" title="Optimizado para 64 bits (30 MB)">ARM64</span>');
+      }
+
+      // Badge de firma oficial
+      let sigBadge = '<span class="badge" style="background:rgba(245,158,11,0.15); color:#f59e0b; border:1px solid rgba(245,158,11,0.3);" title="Firma no verificada"><svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg> Sin Verificar</span>';
+      if (r.signature_status === 'OFFICIAL_RELEASE' || r.signature_verified === true) {
+        sigBadge = '<span class="badge badge-official-sig" title="Firma Oficial Verificada (RSA-4096 — Julio Angello Vasquez Navarro)"><svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><polyline points="9 12 11 14 15 10"/></svg> Oficial</span>';
+      } else if (r.signature_status === 'UNOFFICIAL_SIGNATURE' || r.signature_verified === false) {
+        sigBadge = '<span class="badge badge-unofficial-sig" title="Firma No Oficial / Debug Keystore"><svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg> No Oficial</span>';
+      }
 
       tr.innerHTML = `
         <td><strong>v${escapeHtml(r.version_name)}</strong></td>
-        <td>${r.version_code}</td>
-        <td>Esquema v${r.db_schema_version}</td>
+        <td>${r.version_code || '-'}</td>
+        <td>Esquema v${r.db_schema_version || 36}</td>
         <td>${badge}</td>
-        <td>${r.release_date ? r.release_date.substring(0, 10) : '-'}</td>
+        <td style="white-space:nowrap;">${r.release_date ? r.release_date.substring(0, 10) : '-'}</td>
         <td>
-          <div style="font-size:0.75rem; color:var(--text-secondary);">${sizeInfo}</div>
-          <code style="font-family:var(--font-mono); font-size:0.75rem;" title="${escapeHtml(r.apk_sha256)}">${shortSha}</code>
+          <div style="display:flex; gap:0.3rem; flex-wrap:wrap; align-items:center;">
+            ${variantsBadges.join(' ')}
+            ${sigBadge}
+          </div>
         </td>
         <td>
-          <div style="display:flex; gap:0.35rem; flex-wrap:wrap;">
-            <a href="/api/releases/download/${encodeURIComponent(r.version_name)}" class="btn btn-outline btn-sm" title="Descargar APK directo del servidor">
-              ⬇️ APK
-            </a>
-            <button class="btn btn-outline btn-sm" onclick="revealReleaseInExplorer('${escapeHtml(r.version_name)}')" title="Mostrar en Carpeta de Windows">
-              📂 Carpeta
+          <div style="font-size:0.75rem; color:var(--text-secondary);">${sizeInfo}</div>
+          <code style="font-family:var(--font-mono); font-size:0.72rem;" title="${escapeHtml(r.apk_sha256 || '')}">${shortSha}</code>
+        </td>
+        <td>
+          <div style="display:flex; gap:0.35rem; flex-wrap:wrap; align-items:center;">
+            ${(() => {
+              const hasUniversal = !!r.universal_apk || (!r.universal_apk && !r.arm64_apk);
+              const hasArm64 = !!r.arm64_apk;
+              if (hasUniversal && hasArm64) {
+                return `
+                  <div class="variant-btn-group" title="Descargar APK directo del servidor">
+                    <a href="/api/releases/download/${encodeURIComponent(r.version_name)}?variant=universal" class="btn btn-outline btn-sm" title="Descargar APK Universal">Univ</a>
+                    <a href="/api/releases/download/${encodeURIComponent(r.version_name)}?variant=arm64" class="btn btn-outline btn-sm" title="Descargar APK ARM64 Ligero">ARM64</a>
+                  </div>
+                  <div class="variant-btn-group" title="Copiar archivo APK al portapapeles">
+                    <button type="button" class="btn btn-outline btn-sm" onclick="copyReleaseApkToClipboard('${escapeHtml(r.version_name)}', 'universal')" title="Copiar APK Universal al portapapeles">Copiar Univ</button>
+                    <button type="button" class="btn btn-outline btn-sm" onclick="copyReleaseApkToClipboard('${escapeHtml(r.version_name)}', 'arm64')" title="Copiar APK ARM64 Ligero al portapapeles">ARM64</button>
+                  </div>
+                `;
+              } else if (hasArm64) {
+                return `
+                  <a href="/api/releases/download/${encodeURIComponent(r.version_name)}?variant=arm64" class="btn btn-outline btn-sm" title="Descargar APK ARM64 Ligero">
+                    <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                    APK ARM64
+                  </a>
+                  <button type="button" class="btn btn-outline btn-sm" onclick="copyReleaseApkToClipboard('${escapeHtml(r.version_name)}', 'arm64')" title="Copiar APK ARM64 Ligero al portapapeles">
+                    <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                    Copiar ARM64
+                  </button>
+                `;
+              } else {
+                return `
+                  <a href="/api/releases/download/${encodeURIComponent(r.version_name)}?variant=universal" class="btn btn-outline btn-sm" title="Descargar APK directo del servidor">
+                    <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                    APK
+                  </a>
+                  <button type="button" class="btn btn-outline btn-sm" onclick="copyReleaseApkToClipboard('${escapeHtml(r.version_name)}', 'universal')" title="Copiar archivo APK binario al portapapeles para pegar en WhatsApp">
+                    <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                    Copiar
+                  </button>
+                `;
+              }
+            })()}
+            <button type="button" class="btn btn-outline btn-sm" onclick="revealReleaseInExplorer('${escapeHtml(r.version_name)}')" title="Mostrar en Carpeta de Windows">
+              <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+              Carpeta
             </button>
-            <button class="btn btn-outline btn-sm" onclick="openEditReleaseModal('${escapeHtml(r.version_name)}')" title="Editar Changelog">
-              ✏️
+            <button type="button" class="btn btn-outline btn-sm" onclick="openEditReleaseModal('${escapeHtml(r.version_name)}')" title="Editar Versión y Changelog">
+              <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
             </button>
-            <button class="btn btn-outline btn-sm" style="color:var(--danger); border-color:var(--danger);" onclick="deleteRelease('${escapeHtml(r.version_name)}')" title="Eliminar Versión">
-              🗑️
+            <button type="button" class="btn btn-outline btn-sm" style="color:var(--danger); border-color:var(--danger);" onclick="deleteRelease('${escapeHtml(r.version_name)}')" title="Eliminar Versión">
+              <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
             </button>
           </div>
         </td>
@@ -5678,12 +6415,34 @@ async function loadReleases() {
   }
 }
 
-async function revealReleaseInExplorer(versionName) {
+/**
+ * Copia el archivo APK al portapapeles de Windows vía /copy-file
+ */
+async function copyReleaseApkToClipboard(versionName, variant = 'universal') {
+  try {
+    const res = await fetch(`/api/releases/${encodeURIComponent(versionName)}/copy-file?variant=${encodeURIComponent(variant)}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' }
+    });
+    const data = await res.json();
+    if (!res.ok || !data.ok) {
+      throw new Error(data.error || 'No se pudo copiar el archivo al portapapeles');
+    }
+    showToast(`Archivo .apk copiado: presiona Ctrl + V en WhatsApp para enviarlo (${data.file_name || versionName}).`, 'success');
+  } catch (e) {
+    showToast('Error al copiar APK: ' + e.message, 'error');
+  }
+}
+
+/**
+ * Abre el explorador de Windows resaltando el APK de la versión
+ */
+async function revealReleaseInExplorer(versionName, variant = null) {
   try {
     const res = await fetch('/api/releases/reveal-file', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ version_name: versionName }),
+      body: JSON.stringify({ version_name: versionName, variant: variant }),
     });
     if (!res.ok) throw new Error('No se pudo abrir el explorador');
     showToast(`Mostrando versión v${versionName} en el Explorador de Windows.`, 'info');
@@ -5692,19 +6451,177 @@ async function revealReleaseInExplorer(versionName) {
   }
 }
 
+let currentUploadVariantVersion = null;
+let currentUploadVariantType = 'universal';
+
+/**
+ * Renderiza el estado y acciones de variantes físicas dentro del modal de edición
+ */
+function renderEditReleaseVariants(rel) {
+  const container = document.getElementById('editRelVariantsContainer');
+  if (!container) return;
+
+  const universalData = rel.universal_apk || (rel.apk_file_path && rel.abi_variant !== 'ARM64' ? {
+    file_path: rel.apk_file_path,
+    file_size_mb: rel.file_size_mb,
+    sha256: rel.apk_sha256,
+    signature_status: rel.signature_status,
+    signature_verified: rel.signature_verified,
+  } : null);
+
+  const arm64Data = rel.arm64_apk || (rel.apk_file_path && rel.abi_variant === 'ARM64' ? {
+    file_path: rel.apk_file_path,
+    file_size_mb: rel.file_size_mb,
+    sha256: rel.apk_sha256,
+    signature_status: rel.signature_status,
+    signature_verified: rel.signature_verified,
+  } : null);
+
+  container.innerHTML = `
+    <div style="display:flex; flex-direction:column; gap:0.75rem;">
+      <!-- Variante Universal -->
+      <div style="background:var(--bg-primary); border:1px solid var(--border-color); border-radius:6px; padding:0.6rem 0.75rem;">
+        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.4rem; margin-bottom:0.35rem;">
+          <div style="display:flex; align-items:center; gap:0.4rem;">
+            <span class="badge badge-universal">Universal (~110 MB)</span>
+            <small style="color:var(--text-secondary);">${universalData ? (universalData.file_size_mb || '') : 'Sin archivo físico'}</small>
+          </div>
+          <div style="display:flex; gap:0.3rem;">
+            <button type="button" class="btn btn-outline btn-xs" onclick="triggerVariantUpload('universal', '${escapeHtml(rel.version_name)}')">
+              ${universalData ? 'Reemplazar APK' : '+ Adjuntar APK'}
+            </button>
+            ${universalData ? `
+              <button type="button" class="btn btn-outline btn-xs" onclick="copyReleaseApkToClipboard('${escapeHtml(rel.version_name)}', 'universal')">Copiar</button>
+              <button type="button" class="btn btn-outline btn-xs" onclick="revealReleaseInExplorer('${escapeHtml(rel.version_name)}', 'universal')">Carpeta</button>
+            ` : ''}
+          </div>
+        </div>
+        ${universalData ? `
+          <div style="font-size:0.73rem; color:var(--text-secondary); font-family:var(--font-mono); word-break:break-all;">
+            ${escapeHtml(universalData.file_path || '')}
+          </div>
+        ` : '<div style="font-size:0.73rem; color:var(--text-muted);">No registrado en disco para esta versión.</div>'}
+      </div>
+
+      <!-- Variante ARM64 Ligero -->
+      <div style="background:var(--bg-primary); border:1px solid var(--border-color); border-radius:6px; padding:0.6rem 0.75rem;">
+        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.4rem; margin-bottom:0.35rem;">
+          <div style="display:flex; align-items:center; gap:0.4rem;">
+            <span class="badge badge-arm64">ARM64 Ligero (~30 MB)</span>
+            <small style="color:var(--text-secondary);">${arm64Data ? (arm64Data.file_size_mb || '') : 'Sin archivo físico'}</small>
+          </div>
+          <div style="display:flex; gap:0.3rem;">
+            <button type="button" class="btn btn-outline btn-xs" onclick="triggerVariantUpload('arm64', '${escapeHtml(rel.version_name)}')">
+              ${arm64Data ? 'Reemplazar APK' : '+ Adjuntar APK'}
+            </button>
+            ${arm64Data ? `
+              <button type="button" class="btn btn-outline btn-xs" onclick="copyReleaseApkToClipboard('${escapeHtml(rel.version_name)}', 'arm64')">Copiar</button>
+              <button type="button" class="btn btn-outline btn-xs" onclick="revealReleaseInExplorer('${escapeHtml(rel.version_name)}', 'arm64')">Carpeta</button>
+            ` : ''}
+          </div>
+        </div>
+        ${arm64Data ? `
+          <div style="font-size:0.73rem; color:var(--text-secondary); font-family:var(--font-mono); word-break:break-all;">
+            ${escapeHtml(arm64Data.file_path || '')}
+          </div>
+        ` : '<div style="font-size:0.73rem; color:var(--text-muted);">No registrado en disco para esta versión.</div>'}
+      </div>
+    </div>
+  `;
+}
+
+function triggerVariantUpload(variant, versionName) {
+  currentUploadVariantVersion = versionName;
+  currentUploadVariantType = variant;
+  const inputId = variant === 'arm64' ? 'editRelArm64Input' : 'editRelUniversalInput';
+  const input = document.getElementById(inputId);
+  if (input) {
+    input.value = '';
+    input.click();
+  }
+}
+
+async function handleVariantFileSelected(file, variant, versionName) {
+  if (!file || !versionName) return;
+  showToast(`Subiendo variante ${variant.toUpperCase()} para v${versionName}...`, 'info');
+  try {
+    const res = await fetch(`/api/releases/upload-apk?filename=${encodeURIComponent(file.name)}`, {
+      method: 'POST',
+      body: file,
+    });
+    const data = await res.json();
+    if (!res.ok || !data.ok) {
+      throw new Error(data.error || 'Error al inspeccionar archivo subido');
+    }
+
+    const variantData = {
+      file_path: data.file_path,
+      file_size_mb: data.file_size_mb,
+      sha256: data.sha256,
+      signature_status: data.signature_status,
+      signature_verified: data.signature_verified,
+    };
+
+    const updates = {};
+    if (variant === 'arm64') {
+      updates.arm64_apk = variantData;
+    } else {
+      updates.universal_apk = variantData;
+      updates.apk_file_path = data.file_path;
+      updates.file_size_mb = data.file_size_mb;
+      updates.apk_sha256 = data.sha256;
+      updates.signature_status = data.signature_status;
+      updates.signature_verified = data.signature_verified;
+    }
+
+    const putRes = await fetch(`/api/releases/${encodeURIComponent(versionName)}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updates),
+    });
+    if (!putRes.ok) throw new Error('Error al vincular variante en el release');
+    const updatedRel = await putRes.json();
+
+    const idx = globalReleases.findIndex(r => r.version_name === versionName);
+    if (idx !== -1) globalReleases[idx] = updatedRel;
+
+    renderEditReleaseVariants(updatedRel);
+    await loadReleases();
+    showToast(`Variante ${variant.toUpperCase()} vinculada con éxito (${data.file_size_mb || ''}).`, 'success');
+  } catch (err) {
+    showToast('Error al actualizar variante: ' + err.message, 'error');
+  }
+}
+
+/**
+ * Abre el modal de edición de versión
+ */
 function openEditReleaseModal(versionName) {
   const rel = globalReleases.find(r => r.version_name === versionName);
   if (!rel) return;
 
   document.getElementById('editRelVersionName').value = rel.version_name;
-  document.getElementById('editRelVersionDisplay').value = `v${rel.version_name} (Build ${rel.version_code})`;
+  document.getElementById('editRelVersionDisplay').value = `v${rel.version_name}`;
+  document.getElementById('editRelVersionCode').value = rel.version_code || 82;
+  document.getElementById('editRelDbSchema').value = rel.db_schema_version || 36;
+  document.getElementById('editRelMinRequiredVersion').value = rel.min_required_version || '9.0.0';
   document.getElementById('editRelType').value = rel.type || 'FEATURE_RELEASE';
   document.getElementById('editRelDownloadUrl').value = rel.apk_download_url || '';
   document.getElementById('editRelChangelog').value = rel.changelog || '';
+  document.getElementById('editRelInternalNotes').value = rel.internal_notes || '';
+
+  // Actualizar tarjeta explicativa reactiva
+  updateReleaseTypeInfo('editRelType', 'editRelTypeInfoText');
+
+  // Variantes físicas en disco con soporte de reemplazo/subida
+  renderEditReleaseVariants(rel);
 
   openModal('modalEditRelease');
 }
 
+/**
+ * Elimina una versión
+ */
 function deleteRelease(versionName) {
   showConfirmModal(
     'Eliminar Versión del Catálogo',
@@ -5727,104 +6644,259 @@ function deleteRelease(versionName) {
   );
 }
 
+/**
+ * Actualiza la información explicativa de tipo de release
+ */
+function updateReleaseTypeInfo(selectId, textId) {
+  const sel = document.getElementById(selectId);
+  const textEl = document.getElementById(textId);
+  if (!sel || !textEl) return;
+
+  if (sel.value === 'HOTFIX') {
+    textEl.textContent = 'Parche de corrección o estabilidad. Derecho gratuito vitalicio para todos los clientes con la app instalada, incluidos Perpetuos sin pase vigente.';
+  } else {
+    textEl.textContent = 'Nuevas funciones comerciales. Gratis para suscripciones activas, Trial y Perpetuos con pase de updates vigente; requiere Pase Anual (S/ 150.00) o cortesía para Perpetuos con pase vencido.';
+  }
+}
+
+/**
+ * Carga la matriz de distribución desde el backend
+ */
 async function loadReleaseMatrix() {
   try {
     const res = await fetch('/api/releases/matrix', {
       headers: { 'X-App-Mode': currentMode }
     });
     if (!res.ok) throw new Error('Error al cargar matriz');
-    const matrix = await res.json();
-
-    const tbody = document.getElementById('matrixTableBody');
-    tbody.innerHTML = '';
-
-    if (matrix.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; padding:1.5rem; color:var(--text-muted);">Sin clientes para evaluar matriz.</td></tr>';
-      return;
-    }
-
-    matrix.forEach(row => {
-      const tr = document.createElement('tr');
-
-      let statusBadge = '<span class="badge badge-green">✓ Al Día</span>';
-      if (!row.is_up_to_date) {
-        statusBadge = row.is_eligible_for_free
-          ? '<span class="badge badge-green">Derecho Gratuito</span>'
-          : '<span class="badge badge-yellow">Requiere Pase / Renovación</span>';
-      }
-
-      const cleanPhone = (row.phone || '').replace(/[^0-9]/g, '');
-      const downloadLink = row.download_url || `http://localhost:8080/api/releases/download/${encodeURIComponent(row.latest_version)}`;
-
-      // Mensaje WA para elegibles
-      const waMsgEligible = encodeURIComponent(
-        renderConfigTemplate('apk_update_eligible', {
-          titular: row.owner_name,
-          negocio: row.business_name,
-          version: row.latest_version,
-          changelog: row.changelog || 'Mejoras de rendimiento, seguridad y nuevas funciones.',
-          link_descarga: downloadLink,
-        })
-      );
-
-      // Mensaje WA para NO elegibles (cotización)
-      const passPrice = (ownerConfig?.catalog?.PASE_ACTUALIZACION_ANUAL?.price || 150).toFixed(2);
-      const waMsgQuote = encodeURIComponent(
-        renderConfigTemplate('apk_update_quote', {
-          titular: row.owner_name,
-          negocio: row.business_name,
-          version: row.latest_version,
-          version_actual: row.installed_version,
-          precio_pase: passPrice,
-        })
-      );
-
-      let actionButtons = '<span style="color:var(--text-muted); font-size:0.8rem;">Sin acción requerida</span>';
-
-      if (!row.is_up_to_date) {
-        if (row.is_eligible_for_free) {
-          actionButtons = `
-            <a href="https://api.whatsapp.com/send?phone=${cleanPhone}&text=${waMsgEligible}" target="_blank" class="btn btn-wa btn-sm">
-              📲 Enviar APK
-            </a>
-            <button class="btn btn-outline btn-sm" onclick="markClientUpdated('${row.client_id}', '${row.latest_version}')" title="Marcar como actualizado a v${row.latest_version}">
-              ✓ Marcar Actualizado
-            </button>
-          `;
-        } else {
-          // Requiere pase, pero con botón secundario discreto de autorización de cortesía
-          actionButtons = `
-            <a href="https://api.whatsapp.com/send?phone=${cleanPhone}&text=${waMsgQuote}" target="_blank" class="btn btn-outline btn-sm">
-              💳 Cotizar Pase
-            </a>
-            <button class="btn btn-primary btn-sm" onclick="jumpToIssuePass('${row.client_id}')" title="Ir a Emitir Pase Anual">
-              🔑 Emitir Pase
-            </button>
-            <button class="btn btn-outline btn-sm" style="opacity:0.85;" onclick="authorizeCourtesyUpdate('${row.client_id}', '${row.latest_version}', '${escapeHtml(row.business_name)}', '${cleanPhone}', '${escapeHtml(row.owner_name)}')" title="Autorizar Envío de Cortesía Excepcional">
-              🎁 Cortesía
-            </button>
-          `;
-        }
-      }
-
-      tr.innerHTML = `
-        <td><strong>${escapeHtml(row.business_name)}</strong></td>
-        <td>${escapeHtml(row.phone)}</td>
-        <td>v${escapeHtml(row.installed_version)}</td>
-        <td>v${escapeHtml(row.latest_version)}</td>
-        <td>${escapeHtml(row.release_type)}</td>
-        <td>${statusBadge}</td>
-        <td>
-          <div style="display:flex; gap:0.4rem; flex-wrap:wrap;">
-            ${actionButtons}
-          </div>
-        </td>
-      `;
-      tbody.appendChild(tr);
-    });
+    globalReleaseMatrix = await res.json();
+    renderReleaseMatrix();
   } catch (e) {
     console.error('Error al cargar matriz:', e);
   }
+}
+
+/**
+ * Establece el filtro activo de la matriz
+ */
+function setMatrixFilter(filterType) {
+  currentMatrixFilter = filterType;
+  const chips = document.querySelectorAll('#matrixFilterChips .rel-chip');
+  chips.forEach(c => {
+    if (c.getAttribute('data-filter') === filterType) {
+      c.classList.add('active');
+    } else {
+      c.classList.remove('active');
+    }
+  });
+  renderReleaseMatrix();
+}
+
+/**
+ * Renderiza la matriz de distribución y la barra de progreso de despliegue
+ */
+function renderReleaseMatrix() {
+  const tbody = document.getElementById('matrixTableBody');
+  if (!tbody) return;
+  tbody.innerHTML = '';
+
+  if (!globalReleaseMatrix || globalReleaseMatrix.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; padding:1.5rem; color:var(--text-muted);">Sin clientes para evaluar matriz.</td></tr>';
+    updateRolloutProgress(0, 0, 0, 0);
+    return;
+  }
+
+  // Identificar última versión lanzada
+  const latestRelease = globalReleases?.[0];
+  const latestVersion = latestRelease?.version_name || (globalReleaseMatrix[0]?.latest_version || '9.38.0');
+
+  // Calcular métricas de despliegue global (excluyendo prospectos sin app instalada)
+  let totalWithApp = 0;
+  let countUpToDate = 0;
+  let countSent = 0;
+  let countOutdated = 0;
+
+  globalReleaseMatrix.forEach(row => {
+    const isProspect = (row.situation === 'PROSPECTO') || (row.license_type === 'PROSPECTO') || (row.update_status === 'PROSPECT');
+    if (isProspect) return;
+
+    totalWithApp++;
+    const status = row.update_status || (row.is_up_to_date ? 'UP_TO_DATE' : 'OUTDATED');
+    if (status === 'UP_TO_DATE' || status === 'AHEAD') {
+      countUpToDate++;
+    } else if (status === 'SENT') {
+      countSent++;
+    } else {
+      countOutdated++;
+    }
+  });
+
+  updateRolloutProgress(totalWithApp, countUpToDate, countSent, countOutdated);
+
+  // Filtrado de filas
+  const term = currentMatrixSearch.trim().toLowerCase();
+  const filtered = globalReleaseMatrix.filter(row => {
+    // Filtro por texto
+    if (term) {
+      const matchText = (row.business_name || '').toLowerCase().includes(term) ||
+                        (row.owner_name || '').toLowerCase().includes(term) ||
+                        (row.phone || '').includes(term) ||
+                        (row.installed_version || '').includes(term);
+      if (!matchText) return false;
+    }
+
+    const isProspect = (row.situation === 'PROSPECTO') || (row.license_type === 'PROSPECTO') || (row.update_status === 'PROSPECT');
+    const status = row.update_status || (row.is_up_to_date ? 'UP_TO_DATE' : 'OUTDATED');
+
+    if (currentMatrixFilter === 'ALL') {
+      return true;
+    } else if (currentMatrixFilter === 'OUTDATED') {
+      return !isProspect && (status === 'OUTDATED');
+    } else if (currentMatrixFilter === 'REQUIRES_PASS') {
+      return !isProspect && !row.is_eligible_for_free && (status === 'OUTDATED');
+    } else if (currentMatrixFilter === 'SENT') {
+      return !isProspect && (status === 'SENT');
+    } else if (currentMatrixFilter === 'UP_TO_DATE') {
+      return !isProspect && (status === 'UP_TO_DATE' || status === 'AHEAD');
+    }
+    return true;
+  });
+
+  if (filtered.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; padding:1.5rem; color:var(--text-muted);">No se encontraron clientes con el filtro aplicado.</td></tr>';
+    return;
+  }
+
+  filtered.forEach(row => {
+    const tr = document.createElement('tr');
+    const isProspect = (row.situation === 'PROSPECTO') || (row.license_type === 'PROSPECTO') || (row.update_status === 'PROSPECT');
+    const status = row.update_status || (row.is_up_to_date ? 'UP_TO_DATE' : 'OUTDATED');
+    const cmp = compareSemVer(row.installed_version, row.latest_version);
+
+    // Estado & Derecho Badge
+    let statusBadge = '';
+    if (isProspect) {
+      statusBadge = '<span class="badge" style="background:rgba(148,163,184,0.15); color:var(--text-muted);">Prospecto (Sin App)</span>';
+    } else if (status === 'AHEAD' || cmp > 0) {
+      statusBadge = `<span class="badge badge-ahead" title="Cliente cuenta con versión superior de prueba o desarrollo">Versión superior (v${escapeHtml(row.installed_version)})</span>`;
+    } else if (status === 'UP_TO_DATE' || row.is_up_to_date) {
+      statusBadge = '<span class="badge badge-green">✓ Al Día</span>';
+    } else if (status === 'SENT') {
+      const sentDate = row.last_apk_sent_at ? row.last_apk_sent_at.substring(5, 10).replace('-', '/') : '';
+      statusBadge = `<span class="badge badge-sent" title="APK enviado: pendiente de confirmación en cliente">Enviado ${sentDate}</span>`;
+    } else {
+      statusBadge = row.is_eligible_for_free
+        ? '<span class="badge badge-yellow">Desactualizado (Derecho Gratuito)</span>'
+        : '<span class="badge" style="background:rgba(239,68,68,0.15); color:#ef4444; border:1px solid rgba(239,68,68,0.3);">Requiere Pase</span>';
+    }
+
+    const cleanPhone = (row.phone || '').replace(/[^0-9]/g, '');
+    const phoneDisplay = formatPeruvianPhoneDisplay(row.phone);
+
+    let actionButtons = '<span style="color:var(--text-muted); font-size:0.8rem;">Sin acción requerida</span>';
+
+    if (!isProspect && (status === 'OUTDATED' || status === 'SENT')) {
+      if (row.is_eligible_for_free) {
+        const sendLabel = status === 'SENT' ? 'Reenviar APK' : 'Enviar APK';
+        actionButtons = `
+          <button type="button" class="btn btn-wa btn-sm" onclick="openApkDispatchComposer('${row.client_id}', '${row.latest_version}', 'eligible')" title="${sendLabel} por WhatsApp con copia de binario APK al portapapeles">
+            <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M22 2L11 13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+            ${sendLabel}
+          </button>
+          <button type="button" class="btn btn-outline btn-sm" onclick="markClientUpdated('${row.client_id}', '${row.latest_version}')" title="Marcar como actualizado a v${row.latest_version}">
+            <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="20 6 9 17 4 12"/></svg>
+            Marcar Actualizado
+          </button>
+        `;
+      } else {
+        actionButtons = `
+          <button type="button" class="btn btn-outline btn-sm" onclick="openApkDispatchComposer('${row.client_id}', '${row.latest_version}', 'quote')" title="Cotizar Pase Anual de Actualizaciones por WhatsApp">
+            <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
+            Cotizar Pase
+          </button>
+          <button type="button" class="btn btn-primary btn-sm" onclick="jumpToIssuePass('${row.client_id}')" title="Ir a Emitir Pase Anual">
+            <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>
+            Emitir Pase
+          </button>
+          <button type="button" class="btn btn-outline btn-sm" style="opacity:0.85;" onclick="authorizeCourtesyUpdate('${row.client_id}', '${row.latest_version}', '${escapeHtml(row.business_name)}', '${cleanPhone}', '${escapeHtml(row.owner_name)}')" title="Autorizar Envío de Cortesía Excepcional">
+            <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="20 12 20 22 4 22 4 12"/><rect x="2" y="7" width="20" height="5"/><line x1="12" y1="22" x2="12" y2="7"/></svg>
+            Cortesía
+          </button>
+        `;
+      }
+    } else if (status === 'AHEAD') {
+      actionButtons = '<span style="color:var(--text-muted); font-size:0.78rem;">Versión anticipada (sin acciones)</span>';
+    }
+
+    tr.innerHTML = `
+      <td>
+        <strong>${escapeHtml(row.business_name)}</strong>
+        <div style="font-size:0.75rem; color:var(--text-muted);">${escapeHtml(row.owner_name || '')}</div>
+      </td>
+      <td>${escapeHtml(phoneDisplay)}</td>
+      <td>v${escapeHtml(row.installed_version)}</td>
+      <td>v${escapeHtml(row.latest_version)}</td>
+      <td>${escapeHtml(row.release_type || 'FEATURE_RELEASE')}</td>
+      <td>${statusBadge}</td>
+      <td>
+        <div style="display:flex; gap:0.4rem; flex-wrap:wrap; align-items:center;">
+          ${actionButtons}
+        </div>
+      </td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+/**
+ * Actualiza los contadores y barra segmentada de despliegue
+ */
+function updateRolloutProgress(total, upToDate, sent, pending) {
+  const totalEl = document.getElementById('rolloutTotal');
+  const upToDateEl = document.getElementById('rolloutUpToDate');
+  const sentEl = document.getElementById('rolloutSent');
+  const pendingEl = document.getElementById('rolloutPending');
+
+  const segUp = document.getElementById('segmentUpToDate');
+  const segSent = document.getElementById('segmentSent');
+  const segPen = document.getElementById('segmentPending');
+
+  if (totalEl) totalEl.textContent = total;
+
+  if (total === 0) {
+    if (upToDateEl) upToDateEl.textContent = '0 (0%)';
+    if (sentEl) sentEl.textContent = '0 (0%)';
+    if (pendingEl) pendingEl.textContent = '0 (0%)';
+    if (segUp) segUp.style.width = '0%';
+    if (segSent) segSent.style.width = '0%';
+    if (segPen) segPen.style.width = '100%';
+    return;
+  }
+
+  const pctUp = Math.round((upToDate / total) * 100);
+  const pctSent = Math.round((sent / total) * 100);
+  const pctPen = Math.max(0, 100 - pctUp - pctSent);
+
+  if (upToDateEl) upToDateEl.textContent = `${upToDate} (${pctUp}%)`;
+  if (sentEl) sentEl.textContent = `${sent} (${pctSent}%)`;
+  if (pendingEl) pendingEl.textContent = `${pending} (${pctPen}%)`;
+
+  if (segUp) segUp.style.width = `${pctUp}%`;
+  if (segSent) segSent.style.width = `${pctSent}%`;
+  if (segPen) segPen.style.width = `${pctPen}%`;
+}
+
+/**
+ * Registra despacho comercial de APK en backend
+ */
+async function recordApkSent(clientId, version, variant = 'universal') {
+  try {
+    await fetch('/api/releases/mark-sent', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ client_id: clientId, version: version, variant: variant })
+    });
+    await loadReleaseMatrix();
+  } catch (_) {}
 }
 
 function jumpToIssuePass(clientId) {
@@ -5842,19 +6914,298 @@ function authorizeCourtesyUpdate(clientId, latestVersion, businessName, cleanPho
     `¿Deseas autorizar excepcionalmente el envío gratuito de la versión v${latestVersion} a "${businessName}" sin requerir el pago del pase anual?`,
     async () => {
       await markClientUpdated(clientId, latestVersion);
-      const downloadLink = `http://localhost:8080/api/releases/download/${encodeURIComponent(latestVersion)}`;
-      const waMsg = encodeURIComponent(
-        `Hola ${ownerName}, te saluda Julio Angello Vasquez Navarro de MochilaLista.\n\n` +
-        `Como cortesía especial por tu fidelidad comercial, te hemos liberado el acceso directo a la nueva versión *v${latestVersion}* para tu negocio *${businessName}*.\n\n` +
-        `📥 *Enlace de descarga:* ${downloadLink}\n\n` +
-        `¡Disfruta de las nuevas funciones!`
-      );
-      if (cleanPhone) {
-        window.open(`https://api.whatsapp.com/send?phone=${cleanPhone}&text=${waMsg}`, '_blank');
-      }
-      showToast(`Cortesía autorizada para ${businessName}.`, 'success');
+      showToast(`Cortesía autorizada para ${businessName}. Abriendo compositor de despacho...`, 'success');
+      openApkDispatchComposer(clientId, latestVersion, 'courtesy');
     }
   );
+}
+
+/**
+ * Cambia la variante activa en el compositor de despacho APK
+ */
+function setDispatchVariant(variant) {
+  currentDispatchVariant = variant;
+  const univCard = document.getElementById('waVariantCardUniversal');
+  const armCard = document.getElementById('waVariantCardArm64');
+
+  if (univCard) {
+    if (variant === 'universal') univCard.classList.add('active');
+    else univCard.classList.remove('active');
+  }
+  if (armCard) {
+    if (variant === 'arm64') armCard.classList.add('active');
+    else armCard.classList.remove('active');
+  }
+
+  // Actualizar tamaño de APK mostrado
+  const sizeEl = document.getElementById('waApkSizeText');
+  if (sizeEl && currentDispatchRelease) {
+    if (variant === 'arm64' && currentDispatchRelease.arm64_apk?.file_size_mb) {
+      sizeEl.textContent = currentDispatchRelease.arm64_apk.file_size_mb;
+    } else if (variant === 'universal' && currentDispatchRelease.universal_apk?.file_size_mb) {
+      sizeEl.textContent = currentDispatchRelease.universal_apk.file_size_mb;
+    } else {
+      sizeEl.textContent = currentDispatchRelease.file_size_mb || '109 MB';
+    }
+  }
+}
+
+/**
+ * Abre el Compositor Universal en modo Despacho Asistido de APK (Plan 19 Fase 3)
+ */
+function openApkDispatchComposer(clientId, versionName, mode = 'eligible') {
+  const client = (globalClients && globalClients.find(c => c.id === clientId)) ||
+                 (globalReleaseMatrix && globalReleaseMatrix.find(r => r.client_id === clientId));
+  if (!client) {
+    showToast('Cliente no encontrado para despacho de APK.', 'error');
+    return;
+  }
+
+  const rel = (globalReleases && globalReleases.find(r => r.version_name === versionName)) ||
+              (globalReleases && globalReleases[0]) || {
+                version_name: versionName,
+                version_code: 82,
+                db_schema_version: 36,
+                type: 'FEATURE_RELEASE',
+                file_size_mb: '109 MB',
+                changelog: 'Mejoras clave de rendimiento, estabilidad y nuevas funciones comerciales.',
+                signature_status: 'OFFICIAL_RELEASE',
+              };
+
+  currentDispatchRelease = rel;
+  currentDispatchClient = client;
+  currentDispatchMode = mode;
+
+  // Evaluar disponibilidad de variantes
+  const hasUniversal = !!rel.universal_apk || (!rel.universal_apk && !rel.arm64_apk);
+  const hasArm64 = !!rel.arm64_apk;
+
+  const univCard = document.getElementById('waVariantCardUniversal');
+  const armCard = document.getElementById('waVariantCardArm64');
+  const univDesc = document.getElementById('waVariantDescUniversal');
+  const armDesc = document.getElementById('waVariantDescArm64');
+
+  if (univCard) {
+    if (hasUniversal) {
+      univCard.classList.remove('disabled');
+      if (univDesc) {
+        univDesc.textContent = rel.universal_apk?.file_size_mb
+          ? `Compatible con cualquier celular Android (${rel.universal_apk.file_size_mb})`
+          : 'Compatible con cualquier celular Android';
+      }
+    } else {
+      univCard.classList.add('disabled');
+      if (univDesc) univDesc.textContent = 'No disponible para esta versión';
+    }
+  }
+
+  if (armCard) {
+    if (hasArm64) {
+      armCard.classList.remove('disabled');
+      if (armDesc) {
+        armDesc.textContent = rel.arm64_apk?.file_size_mb
+          ? `Rápido para transferir por WhatsApp (${rel.arm64_apk.file_size_mb})`
+          : 'Rápido para transferir por WhatsApp (celulares modernos)';
+      }
+    } else {
+      armCard.classList.add('disabled');
+      if (armDesc) armDesc.textContent = 'No disponible para esta versión';
+    }
+  }
+
+  // Selección inteligente por defecto
+  if (hasUniversal) {
+    setDispatchVariant('universal');
+  } else if (hasArm64) {
+    setDispatchVariant('arm64');
+  } else {
+    setDispatchVariant('universal');
+  }
+
+  // Encabezado técnico
+  const titleEl = document.getElementById('waApkVersionTitle');
+  if (titleEl) {
+    titleEl.textContent = `Despacho de APK: v${rel.version_name} (Build ${rel.version_code || 82})`;
+  }
+
+  const dbSchemaEl = document.getElementById('waApkDbSchema');
+  if (dbSchemaEl) {
+    dbSchemaEl.textContent = `Esquema v${rel.db_schema_version || 36}`;
+  }
+
+  const diskStatusEl = document.getElementById('waApkDiskStatus');
+  if (diskStatusEl) {
+    const hasAnyFile = !!(rel.apk_file_path || rel.universal_apk?.file_path || rel.arm64_apk?.file_path);
+    if (hasAnyFile) {
+      diskStatusEl.textContent = 'Verificado en Disco';
+      diskStatusEl.style.color = '#22c55e';
+    } else {
+      diskStatusEl.textContent = 'Sin Binario en Disco';
+      diskStatusEl.style.color = '#ef4444';
+    }
+  }
+
+  const sigBadgeEl = document.getElementById('waApkSigBadge');
+  if (sigBadgeEl) {
+    if (rel.signature_status === 'OFFICIAL_RELEASE' || rel.signature_verified === true) {
+      sigBadgeEl.innerHTML = '<span class="badge badge-official-sig" title="Firma Oficial Verificada (Julio Angello Vasquez Navarro)"><svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><polyline points="9 12 11 14 15 10"/></svg> Oficial</span>';
+    } else if (rel.signature_status === 'UNOFFICIAL_SIGNATURE' || rel.signature_verified === false) {
+      sigBadgeEl.innerHTML = '<span class="badge badge-unofficial-sig" title="Firma No Oficial / Debug Keystore"><svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg> No Oficial</span>';
+    } else {
+      sigBadgeEl.innerHTML = '<span class="badge" style="background:rgba(245,158,11,0.15); color:#f59e0b; border:1px solid rgba(245,158,11,0.3);" title="Firma sin verificar"><svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg> Sin Verificar</span>';
+    }
+  }
+
+  // Redacción comercial sin URLs localhost ni notas internas
+  const author = ownerConfig?.legal_identity?.author_full_name || 'Julio Angello Vasquez Navarro';
+  const ownerName = client.owner_name || 'Estimado(a) Cliente';
+  const bizName = client.business_name || 'tu negocio';
+  let customMessage = '';
+
+  if (mode === 'quote') {
+    const passPrice = (ownerConfig?.catalog?.PASE_ACTUALIZACION_ANUAL?.price || 150).toFixed(2);
+    const installedVer = client.installed_version || client.version || '9.0.0';
+    customMessage = `Hola ${ownerName}, te saluda ${author} de MochilaLista.\n\n` +
+      `Acabamos de lanzar la versión oficial *v${rel.version_name}* con mejoras avanzadas.\n` +
+      `Tu negocio *${bizName}* cuenta actualmente con la versión v${installedVer}.\n\n` +
+      `Para acceder a este paquete de nuevas funciones y soporte continuo, puedes adquirir tu *Pase Anual de Actualizaciones* por solo S/ ${passPrice}.\n\n` +
+      `¿Deseas que coordinemos la activación del pase hoy mismo?`;
+  } else if (mode === 'courtesy') {
+    const downloadPart = (rel.apk_download_url && rel.apk_download_url.startsWith('http') && !rel.apk_download_url.includes('localhost'))
+      ? `*Enlace de Descarga Directa:*\n${rel.apk_download_url}\n\n`
+      : `*Archivo APK:* Se adjunta directamente en este chat como cortesía especial para tu negocio.\n\n`;
+    const changelogText = rel.changelog || 'Mejoras clave de rendimiento, estabilidad y nuevas funciones comerciales.';
+    customMessage = `Hola ${ownerName}, te saluda ${author} de MochilaLista.\n\n` +
+      `Como cortesía especial por tu fidelidad comercial, te hemos liberado el acceso directo a la nueva versión *v${rel.version_name}* para tu negocio *${bizName}*.\n\n` +
+      `*Versión:* MochilaLista v${rel.version_name}\n` +
+      `*Novedades:*\n${changelogText}\n\n` +
+      `${downloadPart}` +
+      `*Garantía Cero Pérdida:* Al instalar este APK sobre el actual, tu base de datos y productos se mantienen 100% intactos.`;
+  } else {
+    // Modo eligible
+    const downloadPart = (rel.apk_download_url && rel.apk_download_url.startsWith('http') && !rel.apk_download_url.includes('localhost'))
+      ? `*Enlace de Descarga Directa:*\n${rel.apk_download_url}\n\n`
+      : `*Archivo APK:* Se adjunta directamente en este chat para su instalación.\n\n`;
+    const changelogText = rel.changelog || 'Mejoras clave de rendimiento, estabilidad y nuevas funciones comerciales.';
+    customMessage = `Hola ${ownerName}, te saluda ${author} de MochilaLista.\n\n` +
+      `¡Tenemos lista una nueva actualización oficial para *${bizName}*!\n\n` +
+      `*Versión:* MochilaLista v${rel.version_name} (Build ${rel.version_code || 82})\n` +
+      `*Novedades:*\n${changelogText}\n\n` +
+      `${downloadPart}` +
+      `*Garantía Cero Pérdida:* Al instalar este APK sobre el actual, tu base de datos y productos se mantienen 100% intactos.`;
+  }
+
+  openWhatsAppComposer(clientId, 'update', {
+    isApkDispatch: true,
+    release: rel,
+    customMessage: customMessage,
+  });
+}
+
+/**
+ * Copia el binario .APK al portapapeles de Windows y abre WhatsApp (Acción Principal de Fase 3)
+ */
+async function copyApkAndOpenWhatsApp() {
+  if (!currentDispatchRelease) return;
+  const versionName = currentDispatchRelease.version_name;
+  const variant = currentDispatchVariant || 'universal';
+  const clientId = currentWaComposerClientId;
+  const client = (globalClients && globalClients.find(c => c.id === clientId)) ||
+                 (globalReleaseMatrix && globalReleaseMatrix.find(r => r.client_id === clientId)) ||
+                 currentDispatchClient;
+
+  let rawPhone = (client?.phone || '').trim();
+  let cleanDigits = rawPhone.replace(/[^0-9]/g, '');
+  if (cleanDigits.length === 9 && !cleanDigits.startsWith('51')) {
+    cleanDigits = '51' + cleanDigits;
+  }
+  const hasValidPhone = cleanDigits.length >= 9;
+
+  const btn = document.getElementById('btnWaCopyApkAndSend');
+  if (btn) btn.disabled = true;
+
+  try {
+    // 1. Invocar POST /api/releases/:version/copy-file?variant=...
+    const copyRes = await fetch(`/api/releases/${encodeURIComponent(versionName)}/copy-file?variant=${encodeURIComponent(variant)}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' }
+    });
+
+    const copyData = await copyRes.json().catch(() => ({}));
+
+    if (!copyRes.ok || !copyData.ok) {
+      if (copyRes.status === 404) {
+        showToast(`Archivo APK físico no encontrado en disco (${versionName} - ${variant}). Puedes enviar el mensaje de texto o generar la compilación.`, 'warning');
+      } else {
+        showToast(`Aviso al copiar APK: ${copyData.error || 'No se pudo copiar el archivo al portapapeles'}.`, 'warning');
+      }
+    } else {
+      showToast(`Archivo .APK copiado al portapapeles: presiona Ctrl + V en WhatsApp para adjuntarlo (${copyData.file_name || versionName}).`, 'success');
+    }
+
+    // 2. Registrar trazabilidad comercial de despacho en backend
+    if (clientId) {
+      await recordApkSent(clientId, versionName, variant);
+    }
+
+    // 3. Abrir WhatsApp oficial si el cliente tiene teléfono registrado
+    const text = document.getElementById('waCompMessage')?.value || '';
+    if (hasValidPhone) {
+      const waUrl = `https://api.whatsapp.com/send?phone=${cleanDigits}&text=${encodeURIComponent(text)}`;
+      window.open(waUrl, '_blank');
+    } else {
+      showToast('Teléfono no registrado: mensaje redactado pero WhatsApp no se abrió automáticamente.', 'info');
+    }
+
+    // 4. Cerrar modal y refrescar la matriz en tiempo real (pasa a "Enviado DD/MM")
+    closeModal('modalWaComposer');
+    await loadReleaseMatrix();
+  } catch (e) {
+    showToast('Error en despacho asistido: ' + e.message, 'error');
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+/**
+ * Abre en el explorador de Windows la carpeta del APK a despachar
+ */
+function revealCurrentDispatchApkFolder() {
+  if (!currentDispatchRelease) return;
+  revealReleaseInExplorer(currentDispatchRelease.version_name, currentDispatchVariant);
+}
+
+/**
+ * Despacha únicamente el mensaje de texto por WhatsApp sin copiar binario
+ */
+async function sendWaDispatchTextOnly() {
+  if (!currentDispatchRelease) return;
+  const versionName = currentDispatchRelease.version_name;
+  const variant = currentDispatchVariant || 'universal';
+  const clientId = currentWaComposerClientId;
+  const client = (globalClients && globalClients.find(c => c.id === clientId)) ||
+                 (globalReleaseMatrix && globalReleaseMatrix.find(r => r.client_id === clientId)) ||
+                 currentDispatchClient;
+
+  let rawPhone = (client?.phone || '').trim();
+  let cleanDigits = rawPhone.replace(/[^0-9]/g, '');
+  if (cleanDigits.length === 9 && !cleanDigits.startsWith('51')) {
+    cleanDigits = '51' + cleanDigits;
+  }
+  const hasValidPhone = cleanDigits.length >= 9;
+
+  if (clientId) {
+    await recordApkSent(clientId, versionName, variant);
+  }
+
+  const text = document.getElementById('waCompMessage')?.value || '';
+  if (hasValidPhone) {
+    const waUrl = `https://api.whatsapp.com/send?phone=${cleanDigits}&text=${encodeURIComponent(text)}`;
+    window.open(waUrl, '_blank');
+  }
+
+  closeModal('modalWaComposer');
+  await loadReleaseMatrix();
 }
 
 async function markClientUpdated(clientId, versionName) {
@@ -5874,12 +7225,30 @@ async function markClientUpdated(clientId, versionName) {
   }
 }
 
+/**
+ * Inicializa los controladores de carga, drag & drop y autodetección de APK
+ */
 function initReleaseUploadAndAutoDetect() {
   const dropZone = document.getElementById('apkDropZone');
   const fileInput = document.getElementById('apkFileInput');
-  const progressBar = document.getElementById('apkProgressBar');
-  const progressContainer = document.getElementById('apkUploadProgress');
-  const progressText = document.getElementById('apkUploadStatusText');
+  const relTypeSelect = document.getElementById('relType');
+  const editRelTypeSelect = document.getElementById('editRelType');
+  const matrixSearchInput = document.getElementById('inputRelMatrixSearch');
+
+  // Listeners reactivos de tipo de release
+  relTypeSelect?.addEventListener('change', () => {
+    updateReleaseTypeInfo('relType', 'relTypeInfoText');
+  });
+
+  editRelTypeSelect?.addEventListener('change', () => {
+    updateReleaseTypeInfo('editRelType', 'editRelTypeInfoText');
+  });
+
+  // Búsqueda en vivo en matriz de distribución
+  matrixSearchInput?.addEventListener('input', (e) => {
+    currentMatrixSearch = e.target.value;
+    renderReleaseMatrix();
+  });
 
   // Drag & drop handlers
   dropZone?.addEventListener('click', () => fileInput?.click());
@@ -5907,56 +7276,73 @@ function initReleaseUploadAndAutoDetect() {
     }
   });
 
-  // Autodetectar build local
+  // Autodetectar builds locales desde biblioteca oficial y app_movil/build
   document.getElementById('btnDetectLocalBuild')?.addEventListener('click', async () => {
     const statusEl = document.getElementById('detectApkStatus');
-    const buttonsContainer = document.getElementById('detectApkButtonsContainer');
-    if (statusEl) statusEl.textContent = 'Buscando compilaciones locales en app_movil...';
+    const gridEl = document.getElementById('localBuildsGrid');
+    if (statusEl) statusEl.textContent = 'Escaneando biblioteca oficial y app_movil/build/...';
 
     try {
       const res = await fetch('/api/releases/detect-local-build');
       if (!res.ok) throw new Error('Error al autodetectar build');
       const data = await res.json();
 
-      document.getElementById('relVersionName').value = data.version_name || '';
-      document.getElementById('relVersionCode').value = data.version_code || 24;
-
-      if (data.apk_found) {
-        document.getElementById('relSha256').value = data.sha256 || '';
-        document.getElementById('relSizeMb').value = data.file_size_mb || '';
-
+      if (data.apk_found && data.available_builds && data.available_builds.length > 0) {
         if (statusEl) {
-          statusEl.innerHTML = `✅ <strong style="color:var(--success);">${data.file_name} (${data.file_size_mb})</strong> seleccionado.`;
+          statusEl.textContent = `Se encontraron ${data.total_found} APK(s) recientes. Selecciona uno para importar:`;
         }
+        if (gridEl) {
+          gridEl.style.display = 'grid';
+          gridEl.innerHTML = '';
 
-        // Si existen múltiples compilaciones (ARM64 vs Universal)
-        if (buttonsContainer && data.available_builds && data.available_builds.length > 1) {
-          buttonsContainer.style.display = 'flex';
-          buttonsContainer.innerHTML = '';
           data.available_builds.forEach(b => {
-            const btn = document.createElement('button');
-            btn.type = 'button';
-            btn.className = 'btn btn-outline btn-sm';
-            btn.innerHTML = `${b.architecture === 'arm64-v8a' ? '🚀 ARM64 Ligero' : '📦 Universal'} (${b.size_mb})`;
-            btn.onclick = () => {
-              document.getElementById('relSha256').value = b.sha256;
-              document.getElementById('relSizeMb').value = b.size_mb;
-              if (statusEl) {
-                statusEl.innerHTML = `✅ <strong style="color:var(--success);">${b.file_name} (${b.size_mb})</strong> seleccionado.`;
-              }
-              showToast(`Seleccionado ${b.label}`, 'info');
-            };
-            buttonsContainer.appendChild(btn);
+            const card = document.createElement('div');
+            card.className = 'local-build-card';
+
+            const variantBadge = b.abi_variant === 'ARM64'
+              ? '<span class="badge badge-arm64">ARM64 Ligero</span>'
+              : '<span class="badge badge-universal">Universal</span>';
+
+            let sigBadge = '<span class="badge" style="background:rgba(245,158,11,0.15); color:#f59e0b;">Sin Verificar</span>';
+            if (b.signature_status === 'OFFICIAL_RELEASE' || b.signature_verified === true) {
+              sigBadge = '<span class="badge badge-official-sig">Oficial RSA-4096</span>';
+            } else if (b.signature_status === 'UNOFFICIAL_SIGNATURE' || b.signature_verified === false) {
+              sigBadge = '<span class="badge badge-unofficial-sig">No Oficial</span>';
+            }
+
+            const modDate = b.modified_at ? b.modified_at.substring(0, 16).replace('T', ' ') : '-';
+            const shortSha = b.sha256 ? `${b.sha256.substring(0, 10)}...` : '-';
+
+            card.innerHTML = `
+              <div class="local-build-header">
+                <strong style="color:var(--text-primary); font-size:0.85rem;">v${escapeHtml(b.version_name || '')} (Build ${b.version_code || '-'})</strong>
+                <div style="display:flex; gap:0.25rem;">
+                  ${variantBadge}
+                  ${sigBadge}
+                </div>
+              </div>
+              <div class="local-build-path" title="${escapeHtml(b.file_path || '')}">${escapeHtml(b.file_path || b.file_name)}</div>
+              <div class="local-build-meta">
+                <span>${b.size_mb || '-'}</span>
+                <span>•</span>
+                <span>${modDate}</span>
+                <span>•</span>
+                <code style="font-size:0.7rem;">${shortSha}</code>
+              </div>
+              <button type="button" class="btn btn-outline btn-sm" style="margin-top:0.4rem; width:100%;" onclick="importLocalApkDirectly('${escapeHtml(b.file_path)}')">
+                <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                Seleccionar e Importar
+              </button>
+            `;
+            gridEl.appendChild(card);
           });
         }
-
-        showToast(`APK detectado: ${data.file_name} (${data.file_size_mb})`, 'success');
       } else {
         if (statusEl) {
-          statusEl.innerHTML = `ℹ️ Versión detectada <strong>v${data.version_name}</strong>. No se encontró APK en app_movil/build/... (compila con compilar_apk_arm64.bat).`;
+          statusEl.textContent = 'No se encontraron archivos APK en la biblioteca oficial ni en build/app/outputs/flutter-apk/.';
         }
-        if (buttonsContainer) buttonsContainer.style.display = 'none';
-        showToast(`Versión encontrada: v${data.version_name} (sin archivo APK compilado)`, 'info');
+        if (gridEl) gridEl.style.display = 'none';
+        showToast('No se encontraron compilaciones APK locales.', 'info');
       }
     } catch (e) {
       if (statusEl) statusEl.textContent = 'Error: ' + e.message;
@@ -5965,6 +7351,117 @@ function initReleaseUploadAndAutoDetect() {
   });
 }
 
+/**
+ * Importa atómicamente un build local en disco sin subirlo por la red
+ */
+async function importLocalApkDirectly(sourcePath) {
+  try {
+    const res = await fetch('/api/releases/import-local-apk', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ source_path: sourcePath })
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error || 'Error al importar APK local');
+    }
+    const data = await res.json();
+    populateCreateReleaseFormFromInspection(data);
+    showToast(`APK importado exitosamente: ${data.file_name} (${data.size_mb}).`, 'success');
+  } catch (e) {
+    showToast('Error: ' + e.message, 'error');
+  }
+}
+
+/**
+ * Rellena el formulario de nuevo release a partir de la inspección real
+ */
+function populateCreateReleaseFormFromInspection(data) {
+  document.getElementById('relUploadedPath').value = data.imported_path || data.file_path || '';
+  document.getElementById('relVersionName').value = data.version_name || '';
+  document.getElementById('relVersionCode').value = data.version_code || 82;
+  document.getElementById('relDbSchema').value = data.db_schema_version || 36;
+  document.getElementById('relMinRequiredVersion').value = data.min_required_version || '9.0.0';
+  document.getElementById('relSizeMb').value = data.size_mb || '';
+  document.getElementById('relSha256').value = data.sha256 || '';
+
+  const variant = data.abi_variant || 'UNIVERSAL';
+  document.getElementById('relAbiVariant').value = variant;
+  const variantBadge = document.getElementById('badgeRelVariantDisplay');
+  if (variantBadge) {
+    variantBadge.className = variant === 'ARM64' ? 'badge badge-arm64' : 'badge badge-universal';
+    variantBadge.textContent = variant === 'ARM64' ? 'ARM64 LIGERO' : 'UNIVERSAL';
+  }
+
+  // Sugerencia de changelog
+  const changelogInput = document.getElementById('relChangelog');
+  if (changelogInput && !changelogInput.value.trim() && data.suggested_changelog) {
+    changelogInput.value = data.suggested_changelog;
+  }
+
+  // Escudo Anti-debug.apk Banner
+  renderSignatureShieldBanner(data);
+}
+
+/**
+ * Renderiza el banner del escudo anti-debug según signature_status
+ */
+function renderSignatureShieldBanner(data) {
+  const banner = document.getElementById('apkSignatureBanner');
+  if (!banner) return;
+
+  const status = data.signature_status;
+  document.getElementById('relSignatureVerified').value = data.signature_verified;
+  document.getElementById('relSignatureStatus').value = status;
+  document.getElementById('relSignerSha256').value = data.signer_sha256 || '';
+  document.getElementById('relSignerDn').value = data.signer_dn || '';
+
+  banner.style.display = 'block';
+
+  if (status === 'OFFICIAL_RELEASE' || data.signature_verified === true) {
+    banner.className = 'apk-signature-banner sig-official';
+    banner.innerHTML = `
+      <div style="display:flex; align-items:center; gap:0.5rem; font-weight:700;">
+        <svg style="width:18px; height:18px;" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><polyline points="9 12 11 14 15 10"/></svg>
+        Firma Oficial Verificada (RSA-4096 — Julio Angello Vasquez Navarro)
+      </div>
+      <div style="font-size:0.75rem; opacity:0.9;">
+        El certificado criptográfico coincide con la clave comercial maestra. Este APK es seguro para distribución pública.
+      </div>
+    `;
+  } else if (status === 'UNOFFICIAL_SIGNATURE' || data.signature_verified === false) {
+    banner.className = 'apk-signature-banner sig-unofficial';
+    banner.innerHTML = `
+      <div style="display:flex; align-items:center; gap:0.5rem; font-weight:700;">
+        <svg style="width:18px; height:18px;" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+        ¡ATENCIÓN! Este APK no cuenta con la firma comercial oficial (posible debug.apk).
+      </div>
+      <div style="font-size:0.76rem;">
+        ${data.signer_dn ? `Firmado por: <code>${escapeHtml(data.signer_dn)}</code>. ` : ''}
+        No distribuyas este binario a clientes comerciales de producción.
+      </div>
+      <label style="display:flex; align-items:center; gap:0.5rem; margin-top:0.4rem; cursor:pointer; font-weight:600; font-size:0.78rem;">
+        <input type="checkbox" id="chkAcknowledgeUnofficialApk">
+        <span>Comprendo los riesgos y autorizo publicar este APK no oficial</span>
+      </label>
+    `;
+  } else {
+    banner.className = 'apk-signature-banner sig-unverified';
+    banner.innerHTML = `
+      <div style="display:flex; align-items:center; gap:0.5rem; font-weight:600;">
+        <svg style="width:18px; height:18px;" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+        Firma No Verificada (apksigner no disponible en el servidor)
+      </div>
+      <div style="font-size:0.75rem; opacity:0.85;">
+        Los metadatos SemVer, tamaño y SHA-256 fueron extraídos correctamente en Dart puro.
+      </div>
+    `;
+  }
+}
+
+/**
+ * Carga directa de archivo APK desde el navegador con análisis forense
+ */
 async function handleApkUpload(file) {
   if (!file.name.toLowerCase().endsWith('.apk')) {
     showToast('El archivo seleccionado no es un archivo .APK válido.', 'error');
@@ -5995,21 +7492,14 @@ async function handleApkUpload(file) {
     const data = await res.json();
 
     if (progressBar) progressBar.style.width = '100%';
-    if (progressText) progressText.textContent = `✅ ${data.file_name} guardado con éxito (${data.file_size_mb}).`;
+    if (progressText) progressText.textContent = `${data.file_name} verificado e inspeccionado (${data.size_mb}).`;
 
-    document.getElementById('relSha256').value = data.sha256 || '';
-    document.getElementById('relSizeMb').value = data.file_size_mb || '';
+    populateCreateReleaseFormFromInspection(data);
 
-    // Inferir versión si viene en el nombre
-    const match = file.name.match(/(\d+\.\d+\.\d+)/);
-    if (match && !document.getElementById('relVersionName').value) {
-      document.getElementById('relVersionName').value = match[1];
-    }
-
-    showToast(`APK ${data.file_name} subido y verificado criptográficamente.`, 'success');
+    showToast(`APK ${data.file_name} subido y analizado con éxito.`, 'success');
   } catch (e) {
     if (progressBar) progressBar.style.width = '0%';
-    if (progressText) progressText.textContent = '❌ Error al subir APK.';
+    if (progressText) progressText.textContent = 'Error al subir APK.';
     showToast('Error al subir APK: ' + e.message, 'error');
   }
 }
@@ -6053,8 +7543,20 @@ function initInspectorEvents() {
 }
 
 async function handleOpticalQrFile(file) {
+  // Soporte directo para archivos de sincronización .mlsync o JSON
+  if (file.name.endsWith('.mlsync') || file.name.endsWith('.json') || file.type === 'application/json') {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      document.getElementById('inspectTokenInput').value = e.target.result;
+      showToast('Archivo .mlsync cargado en Inspector Forense.', 'success');
+      inspectToken();
+    };
+    reader.readAsText(file);
+    return;
+  }
+
   if (!file.type.startsWith('image/')) {
-    showToast('El archivo no es una imagen válida (PNG, JPG, etc.).', 'error');
+    showToast('El archivo no es una imagen válida ni un archivo .mlsync.', 'error');
     return;
   }
 
@@ -6113,10 +7615,227 @@ async function handleOpticalQrFile(file) {
   reader.readAsDataURL(file);
 }
 
+/**
+ * Renderizado de Auditoría para Fichas de Sincronización Offline (CLIENT_SYNC)
+ */
+function renderInspectClientSync(data, rawToken) {
+  const container = document.getElementById('inspectResultContainer');
+  const badge = document.getElementById('inspectStatusBadge');
+  const syncAuditCard = document.getElementById('inspectSyncAuditCard');
+  const licenseClaimsWrapper = document.getElementById('inspectLicenseClaimsWrapper');
+  const matchBox = document.getElementById('inspectMatchingClientBox');
+
+  container.style.display = 'block';
+  if (licenseClaimsWrapper) licenseClaimsWrapper.style.display = 'none';
+  if (syncAuditCard) syncAuditCard.style.display = 'block';
+
+  // 1. Sello de Integridad HMAC
+  if (data.valid) {
+    badge.style.background = 'rgba(16, 185, 129, 0.15)';
+    badge.style.border = '1px solid rgba(16, 185, 129, 0.4)';
+    badge.style.color = '#10b981';
+    badge.innerHTML = `
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg>
+      <span><strong>FICHA DE SINCRONIZACIÓN OFFLINE VÁLIDA:</strong> ${escapeHtml(data.message || 'Integridad HMAC-SHA256 verificada.')}</span>
+    `;
+  } else {
+    badge.style.background = 'rgba(239, 68, 68, 0.15)';
+    badge.style.border = '1px solid rgba(239, 68, 68, 0.4)';
+    badge.style.color = '#ef4444';
+    badge.innerHTML = `
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+      <span><strong>FIRMA ALTERADA O CORRUPTA (${escapeHtml(data.error_code || 'INVALID_SIGNATURE')}):</strong> ${escapeHtml(data.message || 'Firma inválida')}</span>
+    `;
+  }
+
+  const p = data.payload || {};
+  let rescueCardHtml = '';
+  if (data.migration_rescue && data.migration_rescue.detected) {
+    const mr = data.migration_rescue;
+    const oldHw = escapeHtml(mr.old_hardware_id || '-');
+    const newHw = escapeHtml(mr.new_hardware_id || '-');
+    const modelStr = mr.device_model ? ` • ${escapeHtml(mr.device_model)}` : '';
+    const clientName = data.matched_client ? `${escapeHtml(data.matched_client.business_name)} (${escapeHtml(data.matched_client.owner_name)})` : 'Cliente Origen';
+    rescueCardHtml = `
+      <div class="sync-migration-rescue-card" style="margin-bottom:1rem;">
+        <div class="sync-rescue-header">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+          <span>Dispositivo Bloqueado por Migración / Restauración</span>
+        </div>
+        <div class="sync-rescue-body">
+          <div><strong>Titular Detectado:</strong> ${clientName}</div>
+          <div class="sync-rescue-hw-flow">
+            <span class="sync-rescue-hw-old">Celular anterior (bhw): ${oldHw}</span>
+            <span class="sync-rescue-hw-arrow">&rarr;</span>
+            <span class="sync-rescue-hw-new">Nuevo celular (hw): ${newHw}${modelStr}</span>
+          </div>
+          <p style="margin:0.25rem 0 0.5rem 0; font-size:0.8rem; color:var(--text-secondary);">
+            La app móvil reporta estado <code>PENDIENTE_MIGRACION</code>. Puedes reactivar el nuevo celular en 1 clic.
+          </p>
+        </div>
+        <div style="display:flex; justify-content:flex-end;">
+          <button type="button" class="btn btn-warning btn-sm" id="btnInspectRescueMigrate">
+            <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>
+            Migrar Dispositivo (Restauración — 0 días)
+          </button>
+        </div>
+      </div>
+    `;
+  }
+
+  // 21 campos técnicos del payload .mlsync
+  const syncFields = [
+    { key: 'v', name: 'version_protocolo', desc: 'Versión del protocolo de sincronización', val: p.v || 1 },
+    { key: 'hw', name: 'hardware_id', desc: 'Identificador único del hardware actual', val: p.hw || '-' },
+    { key: 'bhw', name: 'bound_hardware_id', desc: 'Hardware ID previo si proviene de backup restaurado', val: p.bhw || 'No aplica' },
+    { key: 'mod', name: 'device_model', desc: 'Marca y modelo del dispositivo móvil', val: p.mod || '-' },
+    { key: 'os', name: 'android_version', desc: 'Versión del sistema operativo Android', val: p.os || '-' },
+    { key: 'av', name: 'installed_version', desc: 'Versión del APK instalada en el celular', val: `v${p.av || '-'}` },
+    { key: 'bc', name: 'build_code', desc: 'Código de compilación (versionCode)', val: p.bc !== undefined ? p.bc : '-' },
+    { key: 'db', name: 'sqlite_schema', desc: 'Versión del esquema de base de datos SQLite', val: `Esquema v${p.db || '-'}` },
+    { key: 'pl', name: 'license_plan', desc: 'Plan comercial activo en el teléfono', val: p.pl || '-' },
+    { key: 'st', name: 'license_status', desc: 'Estado operativo de la licencia', val: p.st || '-' },
+    { key: 'exp', name: 'license_expires', desc: 'Fecha límite de vigencia de la licencia', val: p.exp || 'Sin vencimiento' },
+    { key: 'dr', name: 'days_remaining', desc: 'Días de evaluación o suscripción restantes', val: `${p.dr !== undefined ? p.dr : 0} días` },
+    { key: 'n', name: 'last_nonce', desc: 'Último Nonce criptográfico consumido', val: `#${p.n !== undefined ? p.n : 0}` },
+    { key: 'ai', name: 'ai_balance', desc: 'Saldo real disponible de créditos IA', val: `${p.ai !== undefined ? p.ai : 0} IA` },
+    { key: 'aiu', name: 'ai_used_total', desc: 'Total histórico de consultas IA consumidas', val: `${p.aiu !== undefined ? p.aiu : 0} IA` },
+    { key: 'byok', name: 'uses_byok', desc: 'Utiliza clave de API propia (Bring Your Own Key)', val: p.byok ? 'Sí (Clave Propia)' : 'No (Gestionado)' },
+    { key: 'pc', name: 'profiles_count', desc: 'Cantidad de perfiles de negocio creados', val: p.pc !== undefined ? p.pc : 1 },
+    { key: 'drv', name: 'drive_linked', desc: 'Copia de seguridad en Google Drive activa', val: p.drv ? 'Vinculado' : 'No vinculado' },
+    { key: 'bh', name: 'backup_health', desc: 'Estado de salud del respaldo en la nube', val: p.bh || 'OK' },
+    { key: 'lb', name: 'last_backup_at', desc: 'Fecha y hora del último respaldo exitoso', val: p.lb || 'Sin copias registradas' },
+    { key: 'ts', name: 'generated_at', desc: 'Marca de tiempo UTC de generación del reporte', val: p.ts ? new Date(p.ts).toISOString() : '-' },
+  ];
+
+  let syncTableRows = '';
+  syncFields.forEach(f => {
+    syncTableRows += `
+      <tr>
+        <td><span class="claims-compact-key">${escapeHtml(f.key)}</span></td>
+        <td><code>${escapeHtml(f.name)}</code></td>
+        <td style="color:var(--text-secondary);">${escapeHtml(f.desc)}</td>
+        <td><strong>${escapeHtml(String(f.val))}</strong></td>
+      </tr>
+    `;
+  });
+
+  syncAuditCard.innerHTML = `
+    ${rescueCardHtml}
+    <h4 style="font-size:0.95rem; font-weight:700; color:var(--text-primary); margin-bottom:0.5rem;">
+      Métricas Técnicas & Operativas Reportadas (.mlsync)
+    </h4>
+    <div class="table-responsive">
+      <table class="claims-table">
+        <thead>
+          <tr>
+            <th style="width:100px;">Clave</th>
+            <th style="width:160px;">Campo Técnico</th>
+            <th>Descripción de Métrica</th>
+            <th style="width:240px;">Valor Reportado</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${syncTableRows}
+        </tbody>
+      </table>
+    </div>
+  `;
+
+  // Botón rescate en Inspector
+  document.getElementById('btnInspectRescueMigrate')?.addEventListener('click', () => {
+    if (data.matched_client && data.matched_client.id) {
+      openMigrateModal(data.matched_client.id, {
+        newDeviceId: data.migration_rescue.new_hardware_id,
+        newDeviceModel: data.migration_rescue.device_model,
+        scenario: 'RESTORED_BACKUP'
+      });
+    }
+  });
+
+  // 3. Cruce con Cartera CRM
+  const matchedClient = data.matched_client;
+  if (matchedClient) {
+    matchBox.style.display = 'block';
+    const canApplyDirectly = data.valid && data.match_type === 'EXACT_HARDWARE';
+    matchBox.innerHTML = `
+      <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.5rem; margin-bottom:0.4rem;">
+        <div style="display:flex; align-items:center; gap:6px;">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--primary);"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+          <strong style="color:var(--primary); font-size:0.95rem;">Cliente Coincidente en Cartera:</strong>
+        </div>
+        ${canApplyDirectly ? `
+          <button type="button" class="btn btn-primary btn-sm" id="btnInspectApplySync">
+            <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M20 6L9 17l-5-5"/></svg>
+            Aplicar Sincronización en Cartera CRM
+          </button>
+        ` : ''}
+      </div>
+      <p style="margin:0; color:var(--text-primary); font-size:0.88rem;">
+        <strong>${escapeHtml(matchedClient.business_name)}</strong> (${escapeHtml(matchedClient.owner_name)})
+        • WhatsApp: <strong>${escapeHtml(matchedClient.phone)}</strong>
+        • Hardware ID: <code style="font-family:var(--font-mono); font-weight:700;">${escapeHtml(matchedClient.current_device_id || '-')}</code>
+        • Plan: <span class="badge badge-mono">${escapeHtml(matchedClient.license_type)}</span>
+      </p>
+    `;
+
+    document.getElementById('btnInspectApplySync')?.addEventListener('click', async () => {
+      try {
+        const res = await fetch('/api/sync/apply', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            client_id: matchedClient.id,
+            raw_input: rawToken,
+            force_older: false,
+          }),
+        });
+        const resData = await res.json();
+        if (!res.ok) {
+          if (res.status === 409) {
+            showToast('Conflicto: El reporte es anterior a la última sincronización guardada.', 'warning');
+            return;
+          }
+          throw new Error(resData.error || 'Error al aplicar sincronización');
+        }
+        showToast(`¡Sincronización aplicada exitosamente para ${matchedClient.business_name}!`, 'success');
+        await loadClients();
+        await loadDashboard();
+        await loadReleaseMatrix();
+      } catch (err) {
+        showToast('Error: ' + err.message, 'error');
+      }
+    });
+  } else {
+    matchBox.style.display = 'block';
+    matchBox.innerHTML = `
+      <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.5rem;">
+        <span style="color:var(--text-muted); font-size:0.85rem;">
+          Hardware ID <code>${escapeHtml(p.hw || '-')}</code> no está registrado en la Cartera CRM actual.
+        </span>
+        <button type="button" class="btn btn-outline btn-sm" id="btnInspectCreateClient">
+          <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Registrar Nuevo Cliente
+        </button>
+      </div>
+    `;
+
+    document.getElementById('btnInspectCreateClient')?.addEventListener('click', () => {
+      openModal('modalCreateClient');
+      const devInp = document.getElementById('clientDeviceId') || document.getElementById('newClientDeviceId');
+      if (devInp) devInp.value = p.hw || '';
+      const modInp = document.getElementById('clientDeviceModel') || document.getElementById('newClientDeviceModel');
+      if (modInp) modInp.value = p.mod || '';
+      const aiInp = document.getElementById('clientAiBalance') || document.getElementById('newClientAiBalance');
+      if (aiInp) aiInp.value = p.ai || 0;
+    });
+  }
+}
+
 async function inspectToken() {
   const token = document.getElementById('inspectTokenInput').value.trim();
   if (!token) {
-    showToast('Por favor pega un código de licencia o sube una imagen con QR.', 'warning');
+    showToast('Por favor pega un código de licencia, token MLS1 o sube un archivo.', 'warning');
     return;
   }
 
@@ -6130,23 +7849,39 @@ async function inspectToken() {
     if (!res.ok) throw new Error('Error al auditar el código');
     const data = await res.json();
 
+    // Enrutamiento DUAL: Si es CLIENT_SYNC, delegar al renderizado especializado
+    if (data.input_kind === 'CLIENT_SYNC') {
+      renderInspectClientSync(data, token);
+      return;
+    }
+
     const container = document.getElementById('inspectResultContainer');
     const badge = document.getElementById('inspectStatusBadge');
     const tbody = document.getElementById('inspectClaimsTableBody');
     const matchBox = document.getElementById('inspectMatchingClientBox');
+    const syncAuditCard = document.getElementById('inspectSyncAuditCard');
+    const licenseClaimsWrapper = document.getElementById('inspectLicenseClaimsWrapper');
 
     container.style.display = 'block';
+    if (syncAuditCard) syncAuditCard.style.display = 'none';
+    if (licenseClaimsWrapper) licenseClaimsWrapper.style.display = 'block';
 
     if (data.valid || data.isValid) {
       badge.style.background = 'rgba(16, 185, 129, 0.15)';
       badge.style.border = '1px solid rgba(16, 185, 129, 0.4)';
       badge.style.color = '#10b981';
-      badge.innerHTML = `✅ <strong>TOKEN VÁLIDO:</strong> ${escapeHtml(data.message || 'Firma criptográfica Ed25519 auténtica.')}`;
+      badge.innerHTML = `
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg>
+        <span><strong>TOKEN VÁLIDO:</strong> ${escapeHtml(data.message || 'Firma criptográfica Ed25519 auténtica.')}</span>
+      `;
     } else {
       badge.style.background = 'rgba(239, 68, 68, 0.15)';
       badge.style.border = '1px solid rgba(239, 68, 68, 0.4)';
       badge.style.color = '#ef4444';
-      badge.innerHTML = `❌ <strong>TOKEN INVÁLIDO (${escapeHtml(data.status || 'ERROR')}):</strong> ${escapeHtml(data.message || data.error)}`;
+      badge.innerHTML = `
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+        <span><strong>TOKEN INVÁLIDO (${escapeHtml(data.status || 'ERROR')}):</strong> ${escapeHtml(data.message || data.error)}</span>
+      `;
     }
 
     if (!data.payload) {
@@ -6190,16 +7925,19 @@ async function inspectToken() {
       let nonceStatusBadge = '';
 
       if (tNonce === cNonce - 1) {
-        nonceStatusBadge = '<span class="badge badge-green">✓ Nonce vigente (última emitida)</span>';
+        nonceStatusBadge = '<span class="badge badge-green">Nonce vigente (última emitida)</span>';
       } else if (tNonce >= cNonce) {
-        nonceStatusBadge = '<span class="badge badge-yellow">⚡ Nonce futuro listo para canje</span>';
+        nonceStatusBadge = '<span class="badge badge-yellow">Nonce futuro listo para canje</span>';
       } else {
-        nonceStatusBadge = '<span class="badge badge-purple">ℹ️ Nonce histórico ya superado</span>';
+        nonceStatusBadge = '<span class="badge badge-purple">Nonce histórico ya superado</span>';
       }
 
       matchBox.innerHTML = `
         <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.5rem; margin-bottom:0.4rem;">
-          <strong style="color:var(--primary); font-size:0.95rem;">🏢 Cliente Coincidente en Cartera:</strong>
+          <div style="display:flex; align-items:center; gap:6px;">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--primary);"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+            <strong style="color:var(--primary); font-size:0.95rem;">Cliente Coincidente en Cartera:</strong>
+          </div>
           ${nonceStatusBadge}
         </div>
         <p style="margin:0; color:var(--text-primary); font-size:0.88rem;">
@@ -6213,7 +7951,7 @@ async function inspectToken() {
       matchBox.style.display = 'block';
       matchBox.innerHTML = `
         <span style="color:var(--text-muted); font-size:0.85rem;">
-          ℹ️ El token fue firmado válidamente con tu clave maestra pero el Device ID <code>${escapeHtml(p.d || '-')}</code> no coincide con ningún cliente registrado en este entorno.
+          El token fue firmado válidamente con tu clave maestra pero el Device ID <code>${escapeHtml(p.d || '-')}</code> no coincide con ningún cliente registrado en este entorno.
         </span>
       `;
     }
@@ -6647,6 +8385,13 @@ function initModalEvents() {
     const notice = document.getElementById('noticeAiBonus');
     if (notice) notice.style.display = 'none';
     updateSituationFields();
+
+    // Versión instalada dinámica según último release publicado (Plan 19)
+    const verInput = document.getElementById('newInstalledVersion');
+    if (verInput) {
+      verInput.value = (globalReleases && globalReleases.length > 0) ? (globalReleases[0].version_name || '9.38.0') : '9.38.0';
+    }
+
     openModal('modalCreateClient');
   });
 
@@ -6783,19 +8528,57 @@ function initModalEvents() {
 
   // Modal Crear Release
   document.getElementById('btnOpenCreateRelease')?.addEventListener('click', () => {
+    document.getElementById('formCreateRelease')?.reset();
+    const banner = document.getElementById('apkSignatureBanner');
+    if (banner) {
+      banner.style.display = 'none';
+      banner.innerHTML = '';
+    }
+    const grid = document.getElementById('localBuildsGrid');
+    if (grid) {
+      grid.style.display = 'none';
+      grid.innerHTML = '';
+    }
+    const statusEl = document.getElementById('detectApkStatus');
+    if (statusEl) {
+      statusEl.textContent = 'Escanea la biblioteca oficial y compilaciones de app_movil/build con fecha, SHA-256 y firma real.';
+    }
+    const badge = document.getElementById('badgeRelVariantDisplay');
+    if (badge) {
+      badge.className = 'badge badge-universal';
+      badge.textContent = 'UNIVERSAL';
+    }
+    updateReleaseTypeInfo('relType', 'relTypeInfoText');
     openModal('modalCreateRelease');
   });
 
   document.getElementById('btnSubmitCreateRelease')?.addEventListener('click', async () => {
     const versionName = document.getElementById('relVersionName').value.trim();
-    const versionCode = parseInt(document.getElementById('relVersionCode').value) || 24;
+    const versionCode = parseInt(document.getElementById('relVersionCode').value, 10) || 82;
     const minRequired = document.getElementById('relMinRequiredVersion').value.trim() || '9.0.0';
-    const schemaVersion = parseInt(document.getElementById('relDbSchema').value) || 35;
+    const schemaVersion = parseInt(document.getElementById('relDbSchema').value, 10) || 36;
     const type = document.getElementById('relType').value;
-    const sizeMb = parseFloat(document.getElementById('relSizeMb').value) || null;
+    const sizeMb = document.getElementById('relSizeMb').value.trim();
     const url = document.getElementById('relDownloadUrl').value.trim();
     const sha = document.getElementById('relSha256').value.trim();
     const changelog = document.getElementById('relChangelog').value.trim();
+    const internalNotes = document.getElementById('relInternalNotes').value.trim();
+    const uploadedPath = document.getElementById('relUploadedPath').value.trim();
+    const abiVariant = document.getElementById('relAbiVariant').value || 'UNIVERSAL';
+
+    const sigStatus = document.getElementById('relSignatureStatus')?.value;
+    const sigVerified = document.getElementById('relSignatureVerified')?.value === 'true';
+    const signerSha = document.getElementById('relSignerSha256')?.value;
+    const signerDn = document.getElementById('relSignerDn')?.value;
+
+    // Escudo Anti-debug.apk: Bloqueo preventivo de firmas no oficiales
+    if (sigStatus === 'UNOFFICIAL_SIGNATURE') {
+      const chkAck = document.getElementById('chkAcknowledgeUnofficialApk');
+      if (!chkAck || !chkAck.checked) {
+        showToast('ATENCIÓN: Este APK no cuenta con la firma comercial oficial. Debes confirmar la casilla de advertencia para poder publicarlo.', 'error');
+        return;
+      }
+    }
 
     if (!versionName) {
       showToast('Por favor completa el nombre de la versión.', 'warning');
@@ -6813,9 +8596,16 @@ function initModalEvents() {
           db_schema_version: schemaVersion,
           type: type,
           file_size_mb: sizeMb,
+          apk_file_path: uploadedPath,
           apk_download_url: url,
           apk_sha256: sha,
           changelog: changelog,
+          internal_notes: internalNotes,
+          abi_variant: abiVariant,
+          signature_verified: sigVerified,
+          signature_status: sigStatus || 'UNVERIFIED',
+          signer_sha256: signerSha,
+          signer_dn: signerDn,
         }),
       });
 
@@ -6834,18 +8624,26 @@ function initModalEvents() {
   // Modal Editar Release / Changelog (Guardar)
   document.getElementById('btnSubmitEditRelease')?.addEventListener('click', async () => {
     const versionName = document.getElementById('editRelVersionName').value;
+    const versionCode = parseInt(document.getElementById('editRelVersionCode').value, 10) || 82;
+    const dbSchema = parseInt(document.getElementById('editRelDbSchema').value, 10) || 36;
+    const minRequired = document.getElementById('editRelMinRequiredVersion').value.trim() || '9.0.0';
     const type = document.getElementById('editRelType').value;
     const url = document.getElementById('editRelDownloadUrl').value.trim();
     const changelog = document.getElementById('editRelChangelog').value.trim();
+    const internalNotes = document.getElementById('editRelInternalNotes').value.trim();
 
     try {
       const res = await fetch(`/api/releases/${encodeURIComponent(versionName)}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          version_code: versionCode,
+          db_schema_version: dbSchema,
+          min_required_version: minRequired,
           type: type,
           apk_download_url: url,
           changelog: changelog,
+          internal_notes: internalNotes,
         }),
       });
 
@@ -6856,6 +8654,19 @@ function initModalEvents() {
       await loadReleaseMatrix();
     } catch (e) {
       showToast('Error: ' + e.message, 'error');
+    }
+  });
+
+  // Inputs ocultos para subida de variantes en modal de edición
+  document.getElementById('editRelUniversalInput')?.addEventListener('change', (e) => {
+    if (e.target.files && e.target.files[0]) {
+      handleVariantFileSelected(e.target.files[0], 'universal', currentUploadVariantVersion);
+    }
+  });
+
+  document.getElementById('editRelArm64Input')?.addEventListener('change', (e) => {
+    if (e.target.files && e.target.files[0]) {
+      handleVariantFileSelected(e.target.files[0], 'arm64', currentUploadVariantVersion);
     }
   });
 
@@ -7422,15 +9233,15 @@ async function handleMigrateDeviceSubmit() {
   }
 }
 
-function openMigrateModal(clientId) {
+function openMigrateModal(clientId, options = {}) {
   const client = globalClients.find(c => c.id === clientId);
   if (!client) return;
 
   document.getElementById('migClientId').value = client.id;
   document.getElementById('migClientName').value = `${client.business_name} (${client.owner_name})`;
   document.getElementById('migOldDeviceId').value = client.current_device_id || '';
-  document.getElementById('migNewDeviceId').value = '';
-  document.getElementById('migNewDeviceModel').value = '';
+  document.getElementById('migNewDeviceId').value = options.newDeviceId || '';
+  document.getElementById('migNewDeviceModel').value = options.newDeviceModel || '';
 
   // Poblar Tarjeta Resumen de Preservación
   const planEl = document.getElementById('migPreservePlan');
@@ -7463,9 +9274,9 @@ function openMigrateModal(clientId) {
     updatesWrapper.style.display = 'none';
   }
 
-  // Escenario por defecto
+  // Escenario por defecto o prellenado desde rescate
   const scenarioSel = document.getElementById('migScenario');
-  if (scenarioSel) scenarioSel.value = 'RESTORED_BACKUP';
+  if (scenarioSel) scenarioSel.value = options.scenario || 'RESTORED_BACKUP';
   const hint = document.getElementById('migScenarioHint');
   if (hint) {
     hint.textContent = 'Recomendado si el cliente restauró su copia de Google Drive o .mlbg: reactiva el nuevo equipo preservando exactamente su vencimiento con cero duplicación de días.';
@@ -7686,7 +9497,7 @@ async function renderTemplatePreview() {
           version_actual: '9.32.0',
           device_id: 'ML-9K4B',
           changelog: 'Mejoras en el escáner IA y velocidad.',
-          link_descarga: 'http://localhost:8080/api/releases/download/9.35.0',
+          link_descarga: 'https://drive.google.com/file/d/demo/view (o adjunto en chat)',
           precio_pase: '150.00',
         },
       }),

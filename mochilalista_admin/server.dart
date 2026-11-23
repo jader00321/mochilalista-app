@@ -1,13 +1,14 @@
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
-import 'package:crypto/crypto.dart';
 import 'lib/license_signer.dart';
 import 'lib/database_service.dart';
 import 'lib/config_service.dart';
 import 'lib/excel_export_service.dart';
 import 'lib/vault_crypto_service.dart';
 import 'lib/vault_storage_service.dart';
+import 'lib/apk_inspector_service.dart';
+import 'lib/client_sync_service.dart';
 
 Future<void> main(List<String> args) async {
   final port = int.tryParse(Platform.environment['PORT'] ?? '8080') ?? 8080;
@@ -160,6 +161,9 @@ Future<void> handleRequest(
   VaultStorageService vaultStorage, {
   void Function(int code)? onExitOverride,
   Future<void> Function(String url)? onOpenBrowserOverride,
+  ApkInspectorService? apkInspectorService,
+  Future<bool> Function(String filePath)? onCopyFileOverride,
+  ClientSyncService? clientSyncService,
 }) async {
   final path = request.uri.path;
   final method = request.method;
@@ -191,7 +195,10 @@ Future<void> handleRequest(
       await _handleApiRoute(request, path, method, dbService, signer,
           configService, excelService, vaultStorage,
           onExitOverride: onExitOverride,
-          onOpenBrowserOverride: onOpenBrowserOverride);
+          onOpenBrowserOverride: onOpenBrowserOverride,
+          apkInspectorService: apkInspectorService,
+          onCopyFileOverride: onCopyFileOverride,
+          clientSyncService: clientSyncService);
       return;
     }
 
@@ -225,7 +232,12 @@ Future<void> _handleApiRoute(
   VaultStorageService vaultStorage, {
   void Function(int code)? onExitOverride,
   Future<void> Function(String url)? onOpenBrowserOverride,
+  ApkInspectorService? apkInspectorService,
+  Future<bool> Function(String filePath)? onCopyFileOverride,
+  ClientSyncService? clientSyncService,
 }) async {
+  final inspector = apkInspectorService ?? ApkInspectorService();
+  final syncService = clientSyncService ?? ClientSyncService();
   request.response.headers.contentType = ContentType.json;
 
   // =================== MIDDLEWARE DE BLOQUEO PIN REAL (HTTP 423 LOCKED) ===================
@@ -1237,13 +1249,51 @@ Future<void> _handleApiRoute(
     return;
   }
 
-  // Inspección de Token Forense
+  // Inspección de Token Forense (Soporte Dual: Tokens de Licencia ML9-... y Fichas de Sincronización MLS1-...)
   if (path == '/api/licenses/inspect' && method == 'POST') {
     final bodyStr = await utf8.decodeStream(request);
     final body = jsonDecode(bodyStr) as Map<String, dynamic>;
     final token = (body['token'] as String? ?? '').trim();
 
+    // Detección automática de ficha de sincronización offline (.mlsync o token MLS1-...)
+    if (token.contains('MLS1-') ||
+        token.contains('MLSYNC_V1') ||
+        token.contains('"format": "MLSYNC_V1"') ||
+        token.contains('"format":"MLSYNC_V1"')) {
+      final syncResult = syncService.parseRawInput(token);
+      if (syncResult.valid && syncResult.payload != null) {
+        final clients = await dbService.getClients();
+        final analysis = syncService.analyzeForClients(syncResult.payload!, clients);
+        request.response.write(jsonEncode({
+          'ok': true,
+          'input_kind': 'CLIENT_SYNC',
+          'valid': true,
+          'isValid': true,
+          'token': syncResult.token,
+          'payload': syncResult.payload,
+          'matched_client': analysis['matched_client'],
+          'match_type': analysis['match_type'],
+          'migration_rescue': analysis['migration_rescue'],
+          'changes': analysis['changes'],
+          'is_older_than_last_sync': analysis['is_older_than_last_sync'],
+          'analysis': analysis,
+        }));
+      } else {
+        request.response.write(jsonEncode({
+          'ok': false,
+          'input_kind': 'CLIENT_SYNC',
+          'valid': false,
+          'isValid': false,
+          'error_code': syncResult.errorCode,
+          'error': syncResult.errorMessage,
+        }));
+      }
+      await request.response.close();
+      return;
+    }
+
     final result = await signer.inspectToken(token);
+    result['input_kind'] = 'LICENSE_TOKEN';
 
     // Si es válido, cruzar con la base de datos de clientes
     if (result['isValid'] == true && result['deviceId'] != null) {
@@ -1267,6 +1317,117 @@ Future<void> _handleApiRoute(
     }
 
     request.response.write(jsonEncode(result));
+    await request.response.close();
+    return;
+  }
+
+  // =================== 3C. PROTOCOLO DUAL DE SINCRONIZACIÓN OFFLINE (.mlsync / MLS1-...) (PLAN 19 FASE 4) ===================
+  // Parser universal: extrae, valida firma HMAC-SHA256, cruza con clientes, calcula diff y rescate de migración
+  if (path == '/api/sync/parse' && method == 'POST') {
+    final bodyStr = await utf8.decodeStream(request);
+    final body = jsonDecode(bodyStr) as Map<String, dynamic>;
+    final rawInput = (body['raw_input'] as String? ?? '').trim();
+    final expectedClientId = (body['expected_client_id'] as String?)?.trim();
+
+    final parseResult = syncService.parseRawInput(rawInput);
+    if (!parseResult.valid || parseResult.payload == null) {
+      request.response.statusCode = HttpStatus.badRequest;
+      request.response.write(jsonEncode({
+        'ok': false,
+        'error_code': parseResult.errorCode ?? 'PARSE_ERROR',
+        'error': parseResult.errorMessage ?? 'Entrada inválida',
+      }));
+      await request.response.close();
+      return;
+    }
+
+    final clients = await dbService.getClients();
+    final analysis = syncService.analyzeForClients(
+      parseResult.payload!,
+      clients,
+      expectedClientId: expectedClientId,
+    );
+
+    request.response.write(jsonEncode({
+      'ok': true,
+      'valid': true,
+      'isValid': true,
+      'token': parseResult.token,
+      'payload': parseResult.payload,
+      'match_type': analysis['match_type'],
+      'matched_client': analysis['matched_client'],
+      'migration_rescue': analysis['migration_rescue'],
+      'changes': analysis['changes'],
+      'is_older_than_last_sync': analysis['is_older_than_last_sync'],
+      'analysis': analysis,
+    }));
+    await request.response.close();
+    return;
+  }
+
+  // Aplicar sincronización real verificada en servidor con protección anti-sobreescritura
+  if (path == '/api/sync/apply' && method == 'POST') {
+    final bodyStr = await utf8.decodeStream(request);
+    final body = jsonDecode(bodyStr) as Map<String, dynamic>;
+    final clientId = (body['client_id'] as String? ?? '').trim();
+    final rawInput = (body['raw_input'] as String? ?? '').trim();
+    final forceOlder = body['force_older'] == true;
+
+    if (clientId.isEmpty || rawInput.isEmpty) {
+      request.response.statusCode = HttpStatus.badRequest;
+      request.response.write(jsonEncode({
+        'ok': false,
+        'error_code': 'MISSING_FIELDS',
+        'error': 'Se requiere client_id y raw_input (ficha .mlsync o token MLS1-...).',
+      }));
+      await request.response.close();
+      return;
+    }
+
+    // Re-verificar firma HMAC en servidor (defensa en profundidad)
+    final parseResult = syncService.parseRawInput(rawInput);
+    if (!parseResult.valid || parseResult.payload == null) {
+      request.response.statusCode = HttpStatus.badRequest;
+      request.response.write(jsonEncode({
+        'ok': false,
+        'error_code': parseResult.errorCode ?? 'INVALID_TOKEN',
+        'error': parseResult.errorMessage ?? 'Token inválido',
+      }));
+      await request.response.close();
+      return;
+    }
+
+    try {
+      final updated = await dbService.applyClientSyncSnapshot(
+        clientId,
+        parseResult.payload!,
+        forceOlder: forceOlder,
+      );
+
+      if (updated == null) {
+        request.response.statusCode = HttpStatus.notFound;
+        request.response.write(jsonEncode({
+          'ok': false,
+          'error': 'Cliente no encontrado.',
+        }));
+      } else {
+        request.response.write(jsonEncode({
+          'ok': true,
+          'client': updated,
+          'message': 'Sincronización aplicada exitosamente.',
+        }));
+      }
+    } on StaleSyncException catch (e) {
+      request.response.statusCode = HttpStatus.conflict; // 409
+      request.response.write(jsonEncode({
+        'ok': false,
+        'error_code': 'STALE_SYNC',
+        'error': e.message,
+        'sync_timestamp': e.syncTimestamp.toIso8601String(),
+        'last_sync_at': e.lastSyncAt.toIso8601String(),
+      }));
+    }
+
     await request.response.close();
     return;
   }
@@ -1398,7 +1559,7 @@ Future<void> _handleApiRoute(
   }
 
   // =================== 6. LANZAMIENTOS (RELEASES) Y APKS ===================
-  // Carga directa de APK desde PC (Binary stream)
+  // Carga directa de APK desde PC (Binary stream) con inspección forense automática
   if (path == '/api/releases/upload-apk' && method == 'POST') {
     final queryName = request.uri.queryParameters['filename'] ??
         request.headers.value('X-File-Name') ??
@@ -1416,161 +1577,141 @@ Future<void> _handleApiRoute(
     final allBytes = bytesBuilder.takeBytes();
     await targetFile.writeAsBytes(allBytes);
 
-    final sha256Digest = sha256.convert(allBytes).toString().toLowerCase();
-    final sizeMb = (allBytes.length / (1024 * 1024)).toStringAsFixed(2);
+    // Inspección forense multicapa automática
+    final inspection = await inspector.inspectApk(targetFile);
 
     request.response.write(jsonEncode({
-      'ok': true,
-      'file_name': safeFileName,
-      'file_path': targetFile.path,
-      'sha256': sha256Digest,
-      'file_size_mb': '$sizeMb MB',
+      'ok': inspection.success,
+      ...inspection.toJson(),
     }));
     await request.response.close();
     return;
   }
 
-  // Autodetectar e importar build local compilado con Flutter (priorizando arm64-v8a ligero)
+  // Autodetectar e inspeccionar builds locales (Biblioteca Oficial + app_movil/build)
   if (path == '/api/releases/detect-local-build' && method == 'GET') {
-    final candidateFiles = [
-      File(
-          '../app_movil/build/app/outputs/flutter-apk/app-arm64-v8a-release.apk'),
-      File('../app_movil/build/app/outputs/flutter-apk/app-release.apk'),
-      File('releases_apks/${dbService.currentMode}/mochilalista-release.apk'),
-    ];
+    final libDir = Directory(configService.apkLibraryDir);
+    final candidates = await inspector.detectLocalApks(apkLibraryDir: libDir);
 
-    String versionName = '9.34.0';
-    int versionCode = 78;
-    final pubspec = File('../app_movil/pubspec.yaml');
-    if (await pubspec.exists()) {
-      final lines = await pubspec.readAsLines();
-      for (final line in lines) {
-        if (line.trim().startsWith('version:')) {
-          final vPart = line.replaceFirst('version:', '').trim();
-          final parts = vPart.split('+');
-          if (parts.isNotEmpty) versionName = parts[0];
-          if (parts.length > 1) versionCode = int.tryParse(parts[1]) ?? 78;
-          break;
-        }
-      }
-    }
+    final hasApk = candidates.isNotEmpty;
+    final top = hasApk ? candidates.first : null;
 
-    // Lector auxiliar no destructivo de novedades comerciales desde app_changelog_registry.dart
-    String suggestedChangelog = '';
-    final changelogFile =
-        File('../app_movil/lib/core/config/app_changelog_registry.dart');
-    if (await changelogFile.exists()) {
-      try {
-        final content = await changelogFile.readAsString();
-        final matches = RegExp(
-                r'title:\s*["\x27](.+?)["\x27],\s*description:\s*["\x27](.+?)["\x27]',
-                dotAll: true)
-            .allMatches(content);
-        final bullets = <String>[];
-        for (final m in matches) {
-          final title = m.group(1)?.trim() ?? '';
-          final desc = m.group(2)?.replaceAll(RegExp(r'\s+'), ' ').trim() ?? '';
-          if (title.isNotEmpty) {
-            bullets.add('• $title: $desc');
-          }
-          if (bullets.length >= 4) break;
-        }
-        if (bullets.isNotEmpty) {
-          suggestedChangelog = bullets.join('\n');
-        }
-      } catch (_) {}
-    }
-
-    final List<Map<String, dynamic>> availableBuilds = [];
-    File? selectedFile;
-
-    for (final f in candidateFiles) {
-      if (await f.exists()) {
-        final b = await f.readAsBytes();
-        final s = sha256.convert(b).toString().toLowerCase();
-        final mb = (b.length / (1024 * 1024)).toStringAsFixed(2);
-        final fname = f.uri.pathSegments.last;
-        final isArm64 = fname.contains('arm64');
-        final type = isArm64 ? 'arm64_light' : 'universal';
-        final label = isArm64
-            ? 'APK Ligero ARM64 (Optimizado WhatsApp)'
-            : 'APK Universal (Todas las arquitecturas)';
-
-        final info = {
-          'file_name': fname,
-          'file_path': f.path,
-          'size_mb': '$mb MB',
-          'sha256': s,
-          'architecture': isArm64 ? 'arm64-v8a' : 'universal',
-          'type': type,
-          'label': label,
-        };
-        availableBuilds.add(info);
-
-        selectedFile ??= f;
-      }
-    }
-
-    if (selectedFile != null) {
-      final bytes = await selectedFile.readAsBytes();
-      final sha = sha256.convert(bytes).toString().toLowerCase();
-      final sizeMb = (bytes.length / (1024 * 1024)).toStringAsFixed(2);
-
-      // Copiar al almacén físico del modo activo
-      final targetDir = dbService.currentReleasesApkDir;
-      await targetDir.create(recursive: true);
-      final destFile = File('${targetDir.path}/mochilalista-v$versionName.apk');
-      await selectedFile.copy(destFile.path);
-
-      request.response.write(jsonEncode({
-        'apk_found': true,
-        'version_name': versionName,
-        'version_code': versionCode,
-        'db_schema_version': 36,
-        'min_required_version': '9.0.0',
-        'file_name': selectedFile.uri.pathSegments.last,
-        'file_path': destFile.path,
-        'file_size_mb': '$sizeMb MB',
-        'sha256': sha,
-        'suggested_changelog': suggestedChangelog,
-        'available_builds': availableBuilds,
-      }));
-    } else {
-      request.response.write(jsonEncode({
-        'apk_found': false,
-        'version_name': versionName,
-        'version_code': versionCode,
-        'db_schema_version': 36,
-        'min_required_version': '9.0.0',
-        'suggested_changelog': suggestedChangelog,
-        'available_builds': [],
+    request.response.write(jsonEncode({
+      'ok': true,
+      'apk_found': hasApk,
+      'version_name': top?.versionName ?? '9.38.0',
+      'version_code': top?.versionCode ?? 82,
+      'db_schema_version': top?.dbSchemaVersion ?? 36,
+      'min_required_version': top?.minRequiredVersion ?? '9.0.0',
+      'file_name': top?.fileName,
+      'file_path': top?.filePath,
+      'file_size_mb': top?.sizeMb,
+      'sha256': top?.sha256,
+      'signature_verified': top?.signatureVerified,
+      'signature_status': top?.signatureStatus,
+      'signer_sha256': top?.signerSha256,
+      'signer_dn': top?.signerDn,
+      'suggested_changelog': top?.suggestedChangelog ?? '',
+      'available_builds': candidates.map((c) => c.toJson()).toList(),
+      'total_found': candidates.length,
+      if (!hasApk)
         'message':
-            'No se encontró archivo APK en build/app/outputs/flutter-apk/ (ejecute compilar_apk_arm64.bat o compilar_apk_comercial.bat).',
-      }));
-    }
+            'No se encontraron archivos APK en la biblioteca oficial ni en build/app/outputs/flutter-apk/.',
+    }));
     await request.response.close();
     return;
   }
 
-  // Descarga directa del APK almacenado físicamente
+  // Importar build local seleccionado directamente a releases_apks/<env>/ sin re-subirlo
+  if (path == '/api/releases/import-local-apk' && method == 'POST') {
+    final bodyStr = await _readRequestBody(request);
+    final body = jsonDecode(bodyStr) as Map<String, dynamic>;
+    final sourcePath = (body['source_path'] as String? ?? '').trim();
+
+    if (sourcePath.isEmpty || !sourcePath.toLowerCase().endsWith('.apk')) {
+      request.response.statusCode = HttpStatus.badRequest;
+      request.response.write(jsonEncode({
+        'error': 'Ruta de archivo .apk inválida',
+      }));
+      await request.response.close();
+      return;
+    }
+
+    final sourceFile = File(sourcePath);
+    if (!await sourceFile.exists()) {
+      request.response.statusCode = HttpStatus.notFound;
+      request.response.write(jsonEncode({
+        'error': 'El archivo APK de origen no existe en disco',
+      }));
+      await request.response.close();
+      return;
+    }
+
+    // Validación de seguridad de ruta (evitar path traversal fuera de áreas autorizadas)
+    final canonicalSource = sourceFile.resolveSymbolicLinksSync().toLowerCase();
+    final allowedRoots = [
+      Directory(configService.apkLibraryDir).absolute.path.toLowerCase(),
+      Directory('../app_movil/build').absolute.path.toLowerCase(),
+      Directory('releases_apks').absolute.path.toLowerCase(),
+      Directory.systemTemp.absolute.path.toLowerCase(),
+    ];
+
+    final isAllowed = allowedRoots.any((root) => canonicalSource.startsWith(root));
+    if (!isAllowed) {
+      request.response.statusCode = HttpStatus.forbidden;
+      request.response.write(jsonEncode({
+        'error': 'Acceso denegado: el archivo debe residir en la biblioteca de APKs o directorio de build.',
+      }));
+      await request.response.close();
+      return;
+    }
+
+    // Copiar atómicamente al directorio de releases del entorno
+    final targetDir = dbService.currentReleasesApkDir;
+    await targetDir.create(recursive: true);
+    final safeFileName = sourceFile.uri.pathSegments.last.replaceAll(RegExp(r'[^a-zA-Z0-9_\.-]'), '_');
+    final destFile = File('${targetDir.path}/$safeFileName');
+    await sourceFile.copy(destFile.path);
+
+    // Inspección forense del archivo importado
+    final inspection = await inspector.inspectApk(destFile);
+
+    request.response.write(jsonEncode({
+      'ok': true,
+      'imported_path': destFile.path,
+      ...inspection.toJson(),
+    }));
+    await request.response.close();
+    return;
+  }
+
+  // Descarga directa del APK almacenado físicamente (con soporte de variantes universal / arm64)
   if (path.startsWith('/api/releases/download/') && method == 'GET') {
     final versionName = path.replaceFirst('/api/releases/download/', '').trim();
+    final variant = request.uri.queryParameters['variant']?.toLowerCase();
     final release = await dbService.getReleaseByVersion(versionName);
 
     File? apkFile;
-    if (release != null &&
-        (release['apk_file_path'] as String? ?? '').isNotEmpty) {
-      final f = File(release['apk_file_path'] as String);
-      if (await f.exists()) apkFile = f;
+    if (release != null) {
+      if (variant == 'arm64' && release['arm64_apk'] != null) {
+        final p = (release['arm64_apk'] as Map<String, dynamic>)['file_path'] as String?;
+        if (p != null && File(p).existsSync()) apkFile = File(p);
+      } else if (variant == 'universal' && release['universal_apk'] != null) {
+        final p = (release['universal_apk'] as Map<String, dynamic>)['file_path'] as String?;
+        if (p != null && File(p).existsSync()) apkFile = File(p);
+      }
+
+      if (apkFile == null && (release['apk_file_path'] as String? ?? '').isNotEmpty) {
+        final f = File(release['apk_file_path'] as String);
+        if (await f.exists()) apkFile = f;
+      }
     }
 
     if (apkFile == null) {
       // Buscar en releases_apks/{mode}/
       final candidates = [
-        File(
-            'releases_apks/${dbService.currentMode}/mochilalista-v$versionName.apk'),
-        File(
-            'releases_apks/${dbService.currentMode}/mochilalista-$versionName.apk'),
+        File('releases_apks/${dbService.currentMode}/mochilalista-v$versionName.apk'),
+        File('releases_apks/${dbService.currentMode}/mochilalista-$versionName.apk'),
         File('../app_movil/build/app/outputs/flutter-apk/app-release.apk'),
       ];
       for (final c in candidates) {
@@ -1584,8 +1725,7 @@ Future<void> _handleApiRoute(
     if (apkFile == null || !await apkFile.exists()) {
       request.response.statusCode = HttpStatus.notFound;
       request.response.write(jsonEncode({
-        'error':
-            'Archivo APK no encontrado en disco para la versión $versionName'
+        'error': 'Archivo APK no encontrado en disco para la versión $versionName'
       }));
       await request.response.close();
       return;
@@ -1595,9 +1735,110 @@ Future<void> _handleApiRoute(
         ContentType('application', 'vnd.android.package-archive');
     request.response.headers.add(
       'Content-Disposition',
-      'attachment; filename="mochilalista-v$versionName.apk"',
+      'attachment; filename="${apkFile.uri.pathSegments.last}"',
     );
     await apkFile.openRead().pipe(request.response);
+    return;
+  }
+
+  // Copiar archivo APK binario real al portapapeles de Windows (Set-Clipboard -LiteralPath)
+  final copyFileMatch = RegExp(r'^/api/releases/([^/]+)/copy-file$').firstMatch(path);
+  if (copyFileMatch != null && method == 'POST') {
+    final versionName = copyFileMatch.group(1)!;
+    final variant = request.uri.queryParameters['variant']?.toLowerCase();
+    final release = await dbService.getReleaseByVersion(versionName);
+
+    File? apkFile;
+    if (release != null) {
+      if (variant == 'arm64' && release['arm64_apk'] != null) {
+        final p = (release['arm64_apk'] as Map<String, dynamic>)['file_path'] as String?;
+        if (p != null && File(p).existsSync()) apkFile = File(p);
+      } else if (variant == 'universal' && release['universal_apk'] != null) {
+        final p = (release['universal_apk'] as Map<String, dynamic>)['file_path'] as String?;
+        if (p != null && File(p).existsSync()) apkFile = File(p);
+      }
+
+      if (apkFile == null && (release['apk_file_path'] as String? ?? '').isNotEmpty) {
+        final f = File(release['apk_file_path'] as String);
+        if (await f.exists()) apkFile = f;
+      }
+    }
+
+    if (apkFile == null || !await apkFile.exists()) {
+      final local = File('releases_apks/${dbService.currentMode}/mochilalista-v$versionName.apk');
+      if (await local.exists()) apkFile = local;
+    }
+
+    if (apkFile == null || !await apkFile.exists()) {
+      request.response.statusCode = HttpStatus.notFound;
+      request.response.write(jsonEncode({
+        'error': 'No se encontró archivo APK en disco para copiar al portapapeles',
+      }));
+      await request.response.close();
+      return;
+    }
+
+    final fullPath = apkFile.absolute.path;
+    bool copiedOk = false;
+
+    if (onCopyFileOverride != null) {
+      copiedOk = await onCopyFileOverride(fullPath);
+    } else if (Platform.isWindows) {
+      try {
+        final escaped = fullPath.replaceAll("'", "''");
+        final proc = await Process.run(
+          'powershell',
+          ['-NoProfile', '-Command', "Set-Clipboard -LiteralPath '$escaped'"],
+        ).timeout(const Duration(seconds: 10));
+        copiedOk = proc.exitCode == 0;
+      } catch (_) {
+        copiedOk = false;
+      }
+    } else {
+      copiedOk = true; // Simulado en sistemas no-Windows
+    }
+
+    request.response.write(jsonEncode({
+      'ok': copiedOk,
+      'copied_path': fullPath,
+      'file_name': apkFile.uri.pathSegments.last,
+      'variant': variant ?? 'universal',
+    }));
+    await request.response.close();
+    return;
+  }
+
+  // Registrar trazabilidad de despacho de APK (mark-sent)
+  if (path == '/api/releases/mark-sent' && method == 'POST') {
+    final bodyStr = await _readRequestBody(request);
+    final body = jsonDecode(bodyStr) as Map<String, dynamic>;
+    final clientId = body['client_id'] as String? ?? '';
+    final version = body['version'] as String? ?? '';
+    final variant = body['variant'] as String?;
+
+    if (clientId.isEmpty || version.isEmpty) {
+      request.response.statusCode = HttpStatus.badRequest;
+      request.response.write(jsonEncode({
+        'error': 'client_id y version son requeridos',
+      }));
+      await request.response.close();
+      return;
+    }
+
+    final updated = await dbService.recordApkDispatched(clientId, version, variant: variant);
+    if (updated == null) {
+      request.response.statusCode = HttpStatus.notFound;
+      request.response.write(jsonEncode({'error': 'Cliente no encontrado'}));
+    } else {
+      request.response.write(jsonEncode({
+        'ok': true,
+        'client_id': clientId,
+        'version': version,
+        'variant': variant,
+        'marked_at': DateTime.now().toUtc().toIso8601String(),
+      }));
+    }
+    await request.response.close();
     return;
   }
 
@@ -1606,9 +1847,25 @@ Future<void> _handleApiRoute(
     final bodyStr = await utf8.decodeStream(request);
     final body = jsonDecode(bodyStr) as Map<String, dynamic>;
     final versionName = body['version_name'] as String? ?? '';
+    final variant = (request.uri.queryParameters['variant'] ?? body['variant'] as String?)?.toLowerCase();
     final release = await dbService.getReleaseByVersion(versionName);
 
-    String? fullPath = release?['apk_file_path'] as String?;
+    String? fullPath;
+    if (release != null) {
+      if (variant == 'arm64' && release['arm64_apk'] != null) {
+        final p = (release['arm64_apk'] as Map<String, dynamic>)['file_path'] as String?;
+        if (p != null && File(p).existsSync()) fullPath = p;
+      } else if (variant == 'universal' && release['universal_apk'] != null) {
+        final p = (release['universal_apk'] as Map<String, dynamic>)['file_path'] as String?;
+        if (p != null && File(p).existsSync()) fullPath = p;
+      }
+
+      if (fullPath == null && (release['apk_file_path'] as String? ?? '').isNotEmpty) {
+        final p = release['apk_file_path'] as String;
+        if (File(p).existsSync()) fullPath = p;
+      }
+    }
+
     if (fullPath == null || !File(fullPath).existsSync()) {
       final local = File(
           'releases_apks/${dbService.currentMode}/mochilalista-v$versionName.apk');
@@ -1622,7 +1879,7 @@ Future<void> _handleApiRoute(
               'explorer.exe', ['/select,', File(fullPath).absolute.path]);
         } catch (_) {}
       }
-      request.response.write(jsonEncode({'ok': true, 'path': fullPath}));
+      request.response.write(jsonEncode({'ok': true, 'path': fullPath, 'variant': variant ?? 'universal'}));
     } else {
       request.response.statusCode = HttpStatus.notFound;
       request.response.write(jsonEncode(
@@ -1660,7 +1917,7 @@ Future<void> _handleApiRoute(
     }
   }
 
-  // Operaciones sobre versión individual: PUT (editar changelog) y DELETE (eliminar)
+  // Operaciones sobre versión individual: PUT (editar changelog/metadatos) y DELETE (eliminar)
   final releaseSingleMatch =
       RegExp(r'^/api/releases/([^/]+)$').firstMatch(path);
   if (releaseSingleMatch != null) {

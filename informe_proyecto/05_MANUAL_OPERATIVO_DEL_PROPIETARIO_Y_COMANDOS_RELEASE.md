@@ -440,54 +440,84 @@ Certifica que las firmas v1, v2 y v3 corresponden exclusivamente al certificado 
 
 ---
 
-## GUÍA 3: PUBLICACIÓN Y NOTIFICACIÓN DE ACTUALIZACIONES (RELEASE MANAGER)
+## GUÍA 3: PUBLICACIÓN Y NOTIFICACIÓN DE ACTUALIZACIONES (RELEASE MANAGER & PLAN MAESTRO 19)
 
 ### 3.1. Diferenciación Estricta: `HOTFIX` vs. `FEATURE_RELEASE`
 
 | Categoría | Ejemplos | ¿Quién tiene derecho a instalarla? | Vigencia |
 | :--- | :--- | :--- | :--- |
 | **HOTFIX** (Estabilidad) | `9.23.1`, `9.24.1` | **TODOS los clientes**, tanto con suscripción como con **Licencia Perpetua vitalicia**. | **Vitalicio** (Garantía de software funcional). |
-| **FEATURE_RELEASE** (Nuevas Funciones) | `9.24.0`, `10.0.0` | Clientes con **suscripción activa** o Licencia Perpetua con pase vigente (`updates_until`). | Requiere suscripción o Pase Anual de Updates (S/ 150.00). |
+| **FEATURE_RELEASE** (Nuevas Funciones) | `9.38.0`, `10.0.0` | Clientes con **suscripción activa** o Licencia Perpetua con pase vigente (`updates_until`). | Requiere suscripción o Pase Anual de Updates (S/ 150.00). |
 
 ---
 
-### 3.2. Carga Directa Drag & Drop de APKs y Autodetección 1-Clic
+### 3.2. Carga Inteligente de APKs, Auto-Lectura Forense y Escudo Anti-debug.apk
 En la pestaña **Gestor de Versiones**, presiona **`[Subir / Registrar Nueva Versión]`**:
-1. **Drag & Drop Directo:** Arrastra tu archivo `.apk` directamente a la zona punteada. El servidor calculará en tiempo real el SHA-256 y el tamaño en MB.
-2. **Autodetección 1-Clic:** Presiona **`[Autodetectar APK de app_movil]`**. El sistema detectará automáticamente si existen `app-arm64-v8a-release.apk` o `app-release.apk`, mostrándote botones para elegir cuál importar con sus respectivos pesos y hashes.
-3. Completa el tipo de lanzamiento (`FEATURE_RELEASE` o `HOTFIX`), el changelog de novedades y presiona **"Publicar Versión"**.
+1. **Drag & Drop con Auto-Lectura Real:** Al arrastrar tu archivo `.apk` a la zona punteada, el motor forense (`ApkInspectorService`) extrae de inmediato:
+   * **Nombre de Versión (`version_name`) y Código de Build (`version_code`):** Parseo real vía `aapt2 dump badging` o manifiesto ZIP, eliminando errores manuales (cero discrepancias como `Build 24`).
+   * **Arquitectura de Variante:** Detección automática en Dart puro inspeccionando `lib/` (`ARM64 Ligero` vs. `Universal`).
+   * **Tamaño Exacto en MB y Hash SHA-256:** Calculados de forma determinista sobre el binario.
+   * **Sugerencia Automática de Changelog Comercial:** Lectura de notas comerciales limpias desde archivos compañeros `*_cambios.txt` en la biblioteca oficial.
+2. **Escudo Anti-debug.apk con Firma Oficial RSA-4096:**
+   * El sistema audita la firma con `apksigner verify --verbose --print-certs`.
+   * Si el certificado coincide con la huella oficial de Julio Angello Vasquez Navarro (`7c43addc34776f3974eac23fdacc47599efd5393a4dbb28672d06899833ffd20`), se despliega un escudo verde **`Firma Oficial Verificada`**.
+   * Si es un `app-debug.apk` o una firma desconocida, se activa un banner rojo preventivo que **bloquea la publicación** protegiendo a los comerciantes en producción.
+3. **Autodetección Multi-Directorio:**
+   * Al pulsar **`[Autodetectar APKs Compilados]`**, el sistema busca tanto en la biblioteca oficial del propietario (`C:\Users\vjuli\Documents\v-app-offline apks\`) como en `app_movil/build/app/outputs/flutter-apk/`, ordenando los binarios de más reciente a más antiguo para importación en 1 clic.
 
 ---
 
-### 3.3. Acciones del Catálogo: Descarga Directa y Apertura en Carpeta de Windows
+### 3.3. Catálogo de Versiones Publicadas y Edición Total (`#modalEditRelease`)
 En la tabla de versiones publicadas:
-- **`[⬇️ APK]`:** Descarga el binario directo desde el servidor local.
-- **`[📂 Carpeta]`:** Invoca `explorer.exe /select,"<ruta_apk>"` en Windows para abrir la carpeta con el archivo resaltado listo para arrastrar a WhatsApp Web.
-- **`[✏️]`:** Permite actualizar las notas de changelog o el tipo de lanzamiento.
-- **`[🗑️]`:** Elimina el registro y el archivo en disco tras confirmación modal.
+- **Acciones 100% SVG:** Descarga de binario (`APK`), revelado en Explorador de Windows (`Carpeta`), edición completa (`Editar`) y eliminación protegida (`Eliminar`).
+- **Edición Completa sin Bloqueos:** El modal de edición permite corregir `version_code`, `min_required_version`, `db_schema_version`, alternar entre `HOTFIX` y `FEATURE_RELEASE`, y segregar claramente el **Changelog Comercial para Clientes** de las **Notas Técnicas Internas**.
+- **Doble Variante Oficial:** Soporte nativo para almacenar binario Universal y binario ARM64 con indicadores visuales de integridad física en disco.
 
 ---
 
-### 3.4. Matriz Inteligente de Distribución y Botón de Cortesía Excepcional
-La matriz compara la versión instalada de cada cliente contra el último lanzamiento:
-* **Clientes Elegibles:** Botones **`[📲 Enviar APK]`** (mensaje con enlace) y **`[✓ Marcar Actualizado]`**.
-* **Clientes que Requieren Pase:** Botones **`[💳 Cotizar Pase]`** (cotización de S/ 150.00), **`[🔑 Emitir Pase]`** (redirección al Generador con el plan `PASE_ACTUALIZACION_ANUAL`) y el botón discreto:
-  ```
-  [🎁 Cortesía]
-  ```
-  Permite autorizar el envío de la nueva versión como excepción comercial gratuita si decides premiar la fidelidad del comerciante.
+### 3.4. Matriz Inteligente SemVer y Barra de Progreso de Despliegue
+La matriz compara la versión instalada de cada cliente contra el último lanzamiento bajo 5 estados exhaustivos:
+* **`AL DÍA` (Verde):** El cliente cuenta con la versión más reciente o superior.
+* **`ACTUALIZACIÓN PENDIENTE` (Naranja):** El cliente tiene derecho a la versión y aún no ha sido despachada.
+* **`VERSIÓN SUPERIOR` (Azul):** El cliente posee una versión mayor a la última registrada en BD (ej. piloto); **se bloquea preventivamente cualquier degradación**.
+* **`APK ENVIADO` (Púrpura):** Ya se despachó el APK por WhatsApp con badge de fecha (`Enviado DD/MM`).
+* **`REQUIERE PASE` (Ámbar):** Licencias perpetuas con pase vencido ante un `FEATURE_RELEASE` (ofrece cotizar o emitir pase, o autorizar botón de **Cortesía**).
+* **Barra de Progreso Tricolor (`#releasesRolloutProgress`):** Muestra el porcentaje consolidado de clientes al día, clientes con APK enviado y pendientes de actualización.
 
 ---
 
-### 3.5. Comportamiento en la App Móvil: Snapshot `.bak` y Modal Post-Actualización
+### 3.5. Despacho Asistido de APK por WhatsApp y Portapapeles Windows
+Al pulsar **`[Enviar APK]`** en la matriz o en la ficha del cliente:
+1. **Compositor Especializado (`#modalWaComposer`):** Abre un modal interactivo con el mensaje formateado, saludo personalizado, changelog comercial limpio y garantía de cero pérdida de datos.
+2. **Cero Enlaces Inútiles:** Erradicación total de links `http://localhost:8080`.
+3. **Selector de Variante:** Permite elegir entre el APK **Universal** (~109 MB) o el APK **ARM64 Ligero** (~35 MB).
+4. **Copia Real al Portapapeles (`Set-Clipboard -LiteralPath`):**
+   * El botón principal copia el archivo físico `.apk` al portapapeles de Windows y abre WhatsApp Web o Desktop en el chat del cliente.
+   * **Acción:** Solo debes pulsar **`Ctrl + V`** en el chat para adjuntar el archivo directamente como documento, sin necesidad de arrastrarlo.
+5. **Apertura de Carpeta:** Botón secundario para mostrar el archivo resaltado en el Explorador si se prefiere arrastrar manualmente.
+6. **Trazabilidad Automática:** Al despachar, el cliente pasa a estado `APK Enviado` con registro de fecha y variante enviada.
+
+---
+
+### 3.6. Protocolo Dual de Sincronización Offline (`.mlsync` / `MLS1-...`) y Rescate 1-Clic
+Permite auditar el estado real del celular del cliente sin conexión a internet y sin vulnerar su privacidad:
+1. **Formato Dual:** Admite archivos `.mlsync` (JSON estructurado) y tokens ultracompactos `MLS1-...` (HMAC-SHA256 en Base64Url).
+2. **Lista Blanca Estricta de 21 Claves Técnicas:** Solo incluye telemetría de soporte (versión instalada, build code, modelo de celular, versión de Android, saldo IA, vigencia de plan y estado de respaldos Drive). **CERO datos de productos, ventas o inventarios**.
+3. **Tres Puntos de Entrada en el Admin:**
+   * **Botón en Ficha 360°:** Para sincronizar al cliente que se está atendiendo.
+   * **Botón Global en Cartera CRM:** Para pegar un token o soltar un archivo `.mlsync` y detectar automáticamente a qué cliente pertenece.
+   * **Pestaña Inspector Forense (`#tabInspector`):** Soporta tanto tokens de licencia `ML9-...` como fichas de sincronización `MLS1-...`.
+4. **Comparador Visual "Antes (Admin) ➔ Real (Celular)":** Resalta discrepancias en verde/ámbar y cuenta con escudo anti-sobreescritura si se intenta aplicar un reporte más antiguo que el último registrado.
+5. **Rescate 1-Clic de `PENDIENTE_MIGRACION`:** Si un comerciante restauró su copia en un celular nuevo, su reporte incluye el hardware actual (`hw`) y el anterior (`bhw`). El Admin detecta al cliente original de inmediato y ofrece el botón **`[Rescatar y Migrar Dispositivo]`**, migrándolo en 1 clic con 0 días de costo adicional.
+
+---
+
+### 3.7. Comportamiento en la App Móvil: Snapshot `.bak` y Novedades v9.38.0
 1. **Snapshot `.bak` Transparente:** La app crea una copia `mochilalista.db_pre_upgrade_vX.bak` antes de aplicar migraciones de esquema SQLite. Si ocurre un fallo eléctrico o de hardware durante la migración, la app restaura el `.bak` automáticamente sin perder ningún dato de venta o inventario.
-2. **Modal Festivo Post-Actualización:** Tras iniciar la nueva versión, se despliega el modal no intrusivo con las novedades de la versión.
-3. **Novedades Operativas de UX, Guías y Seguridad (v9.37.0 — Plan Maestro 17):**
-   * **Guía Turística Interactiva Ampliada a 19 Pantallas Oficiales:** Cobertura integral 1:1 en las 19 pantallas del sistema (Inicio, Perfil, Crear Producto, Caja Rápida, Inventario, Cotizador Escolar, Clientes CRM, Historial de Ventas, Respaldos, Licencias, Catálogo de Ofertas, Escanear Factura, Escanear Lista, Checkout de Venta, Detalle de Cliente y Abonos, Centro de Fidelización, Dashboard de Analíticas, Creador de Combos y Configuración de Impresora Térmica).
-   * **Estabilización Geométrica y Foco Spotlight:** Tarjeta flotante con flecha soldada directamente al elemento enfocado en posiciones superior e inferior, eliminando separaciones indebidas y acotando el foco iluminado a un máximo del 55% de pantalla. Omisión limpia de elementos colapsados sin generar círculos vacíos.
-   * **Persistencia Hermética y Control Global:** Las guías se muestran de forma exclusiva a usuarios nuevos y jamás reaparecen tras alternar perfiles comerciales o restaurar respaldos locales o de Google Drive. Enlace `"Omitir todas las guías"` de propagación inmediata y reactivación instantánea desde `"Reiniciar guías de aprendizaje"` en Perfil mediante `tourResetEpoch`.
-   * **Rediseño Profesional de "Escanear Factura":** Reestructuración vertical que elimina vacíos con saldo IA en vivo, acceso al Historial de Facturas, botones de Cámara y Galería mejorados y guía didáctica de procesamiento OCR, manteniendo 100% inalterada la pantalla `"Escanear Lista"`.
-   * **Historial Operativo Previo (v9.36.0):** Escáner QR optimizado para pantallas de PC con linterna y zoom táctil, feedback animado de activación de licencias comerciales y bonos IA, y rediseño de zona de perfiles y Google Drive.
+2. **Novedades Comerciales Oficiales (v9.38.0+82 — Plan Maestro 19):**
+   * **Compartir Estado de Licencia y Créditos en 1 Toque (`.mlsync`):** Botón en pantalla de Licencia para despachar el diagnóstico seguro a Soporte Técnico.
+   * **Atención Más Ágil en Pedidos por WhatsApp:** Switch amigable en pedidos de plan o recargas IA que anexa dinámicamente la referencia técnica protegida.
+   * **Rescate Directo de Migración:** Botón en `LicenseLockedScreen` para enviar la solicitud de desbloqueo oficial con un solo toque al cambiar de celular.
 
 ---
 
@@ -497,11 +527,15 @@ La matriz compara la versión instalada de cada cliente contra el último lanzam
 - **Causa:** El usuario retrasó la fecha de su celular o la batería llegó a 0% desconfigurando el reloj de hardware a 1970.
 - **Solución:** Indicar al cliente que active **"Usar la hora proporcionada por la red"** y **"Zona horaria automática (GMT-5)"** en los ajustes de su teléfono. Al reabrir la app, se desbloquea de inmediato.
 
-### 4.2. Incidente: Pantalla de "Licencia Pendiente de Migración" (Anti-Clonación)
-- **Causa:** Un comerciante intentó restaurar un backup o clonar su base de datos en otro teléfono.
-- **Solución:**
-  * Si es un cliente legítimo que cambió de equipo: solicita su nuevo Device ID, ejecuta la **Reasignación de Dispositivo** (S/ 40.00 o garantía) y emítele su nuevo código.
-  * Si es piratería: el teléfono receptor queda inoperable y debe comprar su propia licencia.
+### 4.2. Incidente: Pantalla de "Licencia Pendiente de Migración" (Doble Candado Anti-Clonación & Rescate 1-Clic)
+- **Causa:** Un comerciante intentó restaurar un backup o clonar su base de datos en otro teléfono, activando la protección anti-clonación.
+- **Protocolo de Rescate 1-Clic (Plan Maestro 19):**
+  1. El cliente pulsa en su celular el botón **`[Enviar solicitud de migración por WhatsApp]`** (disponible directamente en la pantalla de bloqueo).
+  2. El mensaje llega al WhatsApp de Soporte con el token protegido `Ref. soporte: MLS1-...` que incluye automáticamente el nuevo Hardware ID (`hw`), el Hardware ID anterior (`bhw`) y el estado `PENDIENTE_MIGRACION`.
+  3. En **MochilaLista Admin**, abre el modal **`[Sincronizar Estado Real]`** (desde Cartera CRM o la Ficha del Cliente) o la pestaña **Inspector Forense**, y pega el mensaje o token.
+  4. El sistema detecta automáticamente al cliente original y despliega el botón **`[Rescatar y Migrar Dispositivo]`**.
+  5. Al hacer clic, el sistema reasigna la licencia al nuevo celular conservando intactos sus días de vigencia y saldo IA con **0 días adicionales de costo**.
+  6. *Si es piratería:* El teléfono receptor permanece bloqueado y debe adquirir una licencia independiente.
 
 ### 4.3. Incidente: Agotamiento de la Bolsa de Escaneos con IA
 - **Alternativa A:** Compra de Bolsa Extra (+150 escaneos por S/ 20.00 sin caducidad).

@@ -1320,7 +1320,7 @@ footer {
   to { opacity: 1; transform: translateY(0) scale(1); }
 }
 
-/* =================== CARGADOR DRAG & DROP DE APK =================== */
+/* =================== CARGADOR DRAG & DROP DE APK & PLAN 19 RELEASES =================== */
 .apk-drop-zone {
   border: 2px dashed var(--border-color);
   border-radius: 12px;
@@ -1352,6 +1352,266 @@ footer {
   font-size: 0.78rem;
   color: var(--text-muted);
   margin-bottom: 0.75rem;
+}
+
+/* Selector Tipo de Lanzamiento sin truncar */
+#relType,
+#editRelType {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+/* Tarjeta Explicativa Reactiva de Tipo de Lanzamiento */
+.release-type-info-card {
+  margin-top: 0.5rem;
+  padding: 0.65rem 0.85rem;
+  border-radius: 8px;
+  font-size: 0.8rem;
+  line-height: 1.4;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  border: 1px solid rgba(37, 99, 235, 0.2);
+  background: rgba(37, 99, 235, 0.06);
+  color: var(--text-secondary);
+}
+
+.release-type-info-card svg {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  margin-top: 2px;
+  color: var(--primary);
+}
+
+/* Escudo Anti-debug.apk Banner */
+.apk-signature-banner {
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+  margin: 0.85rem 0;
+  font-size: 0.82rem;
+  line-height: 1.45;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.apk-signature-banner.sig-official {
+  background: rgba(16, 185, 129, 0.1);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  color: #10b981;
+}
+
+.apk-signature-banner.sig-unofficial {
+  background: rgba(239, 68, 68, 0.12);
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  color: #ef4444;
+}
+
+.apk-signature-banner.sig-unverified {
+  background: rgba(245, 158, 11, 0.1);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  color: #f59e0b;
+}
+
+/* Autodetección Transparente de Builds Locales */
+.local-builds-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 0.65rem;
+  margin-top: 0.75rem;
+}
+
+.local-build-card {
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 0.75rem;
+  background: var(--bg-secondary);
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  transition: border-color 0.2s, background 0.2s;
+}
+
+.local-build-card:hover {
+  border-color: var(--primary);
+}
+
+.local-build-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.local-build-path {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  word-break: break-all;
+  white-space: normal;
+  max-height: 2.8em;
+  overflow: hidden;
+}
+
+.local-build-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+
+/* Barra de Progreso de Despliegue Global (Rollout) */
+.rollout-card {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  padding: 1rem 1.25rem;
+  margin-bottom: 1.25rem;
+}
+
+.rollout-kpis {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.85rem;
+}
+
+.rollout-kpi-item {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  cursor: pointer;
+  padding: 0.35rem 0.6rem;
+  border-radius: 8px;
+  transition: background 0.2s;
+}
+
+.rollout-kpi-item:hover {
+  background: var(--bg-hover);
+}
+
+.rollout-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.rollout-dot.green { background: #10b981; }
+.rollout-dot.blue { background: #3b82f6; }
+.rollout-dot.amber { background: #f59e0b; }
+
+.rollout-kpi-label {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+
+.rollout-kpi-val {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.rollout-segmented-bar {
+  display: flex;
+  height: 10px;
+  border-radius: 5px;
+  overflow: hidden;
+  background: var(--bg-hover);
+  margin-bottom: 0.4rem;
+}
+
+.rollout-segment {
+  height: 100%;
+  transition: width 0.3s ease;
+  cursor: pointer;
+}
+
+.rollout-segment.green { background: #10b981; }
+.rollout-segment.blue { background: #3b82f6; }
+.rollout-segment.amber { background: #f59e0b; }
+
+/* Toolbar y Filtros de Matriz */
+.rel-matrix-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+}
+
+.rel-filter-chips {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+.rel-chip {
+  padding: 0.35rem 0.75rem;
+  border-radius: 20px;
+  font-size: 0.78rem;
+  font-weight: 500;
+  cursor: pointer;
+  border: 1px solid var(--border-color);
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  transition: all 0.2s ease;
+}
+
+.rel-chip:hover {
+  border-color: var(--primary);
+  color: var(--text-primary);
+}
+
+.rel-chip.active {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: #ffffff;
+}
+
+/* Badges específicos de Releases */
+.badge-arm64 {
+  background: rgba(139, 92, 246, 0.15);
+  color: #a78bfa;
+  border: 1px solid rgba(139, 92, 246, 0.3);
+}
+
+.badge-universal {
+  background: rgba(59, 130, 246, 0.15);
+  color: #60a5fa;
+  border: 1px solid rgba(59, 130, 246, 0.3);
+}
+
+.badge-official-sig {
+  background: rgba(16, 185, 129, 0.12);
+  color: #10b981;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.badge-unofficial-sig {
+  background: rgba(239, 68, 68, 0.12);
+  color: #ef4444;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.badge-ahead {
+  background: rgba(6, 182, 212, 0.15);
+  color: #06b6d4;
+  border: 1px solid rgba(6, 182, 212, 0.3);
+}
+
+.badge-sent {
+  background: rgba(59, 130, 246, 0.15);
+  color: #3b82f6;
+  border: 1px solid rgba(59, 130, 246, 0.3);
 }
 
 /* =================== BUSCADOR OMNICANAL EN CRM =================== */
@@ -2046,6 +2306,87 @@ footer {
   align-items: center;
   flex-wrap: nowrap;
   gap: 0.75rem;
+}
+
+/* ========================================================
+   SELECTOR DE VARIANTES: DESPACHO APK WHATSAPP (PLAN 19 FASE 3)
+   ======================================================== */
+.wa-variant-selector-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.65rem;
+}
+
+.wa-variant-card {
+  background: var(--bg-primary);
+  border: 1.5px solid var(--border-color);
+  border-radius: 8px;
+  padding: 0.65rem 0.85rem;
+  cursor: pointer;
+  transition: all 0.18s ease;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  user-select: none;
+}
+
+.wa-variant-card:hover {
+  border-color: var(--primary);
+  background: var(--bg-hover);
+}
+
+.wa-variant-card.active {
+  border-color: var(--primary);
+  background: rgba(37, 99, 235, 0.09);
+  box-shadow: 0 0 0 1px var(--primary);
+}
+
+.wa-variant-card.disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  pointer-events: none;
+  border-style: dashed;
+}
+
+.wa-variant-title {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-weight: 700;
+  font-size: 0.84rem;
+  color: var(--text-primary);
+}
+
+.wa-variant-title svg {
+  width: 15px;
+  height: 15px;
+  color: var(--primary);
+  flex-shrink: 0;
+}
+
+.wa-variant-desc {
+  font-size: 0.74rem;
+  color: var(--text-secondary);
+  line-height: 1.35;
+}
+
+/* Grupos compactos de botones de variante para catálogo */
+.variant-btn-group {
+  display: inline-flex;
+  border-radius: 6px;
+  overflow: hidden;
+  border: 1px solid var(--border-color);
+}
+
+.variant-btn-group .btn {
+  border: none;
+  border-radius: 0;
+  padding: 0.25rem 0.5rem;
+  font-size: 0.72rem;
+}
+
+.variant-btn-group .btn:not(:last-child) {
+  border-right: 1px solid var(--border-color);
 }
 
 /* 4. Modal Rápido Ver QR / Credencial */
@@ -4083,6 +4424,217 @@ footer {
   margin-top: 2px;
   white-space: nowrap;
 }
+
+/* ==========================================================================
+   FASE 4 PLAN 19: SINCRONIZACIÓN OFFLINE (.mlsync / MLS1) Y RESCATE MIGRACIÓN
+   ========================================================================== */
+
+/* Zona de Drag & Drop para archivos .mlsync */
+.sync-drop-zone {
+  border: 2px dashed rgba(37, 99, 235, 0.4);
+  border-radius: 12px;
+  padding: 1.25rem 1rem;
+  text-align: center;
+  background: rgba(37, 99, 235, 0.04);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  user-select: none;
+}
+
+.sync-drop-zone:hover,
+.sync-drop-zone.dragover {
+  border-color: var(--primary);
+  background: rgba(37, 99, 235, 0.1);
+}
+
+/* Sello de Integridad HMAC-SHA256 */
+.sync-hmac-badge {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.75rem 1rem;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.sync-hmac-badge.valid {
+  background: rgba(16, 185, 129, 0.12);
+  border: 1px solid rgba(16, 185, 129, 0.35);
+  color: #10b981;
+}
+
+.sync-hmac-badge.invalid {
+  background: rgba(239, 68, 68, 0.12);
+  border: 1px solid rgba(239, 68, 68, 0.35);
+  color: #ef4444;
+}
+
+.sync-hmac-icon {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+}
+
+/* Tarjeta Destacada de Rescate 1-Clic PENDIENTE_MIGRACION */
+.sync-migration-rescue-card {
+  background: rgba(245, 158, 11, 0.08);
+  border: 1.5px solid rgba(245, 158, 11, 0.4);
+  border-radius: 10px;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.sync-rescue-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: #f59e0b;
+  font-weight: 700;
+  font-size: 0.95rem;
+}
+
+.sync-rescue-body {
+  font-size: 0.84rem;
+  color: var(--text-primary);
+  line-height: 1.45;
+}
+
+.sync-rescue-hw-flow {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0.4rem 0;
+  font-family: var(--font-mono, monospace);
+  font-weight: 700;
+  font-size: 0.9rem;
+}
+
+.sync-rescue-hw-old {
+  color: var(--text-muted);
+  text-decoration: line-through;
+}
+
+.sync-rescue-hw-arrow {
+  color: #f59e0b;
+}
+
+.sync-rescue-hw-new {
+  color: var(--primary);
+  background: rgba(37, 99, 235, 0.15);
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+/* Tabla Comparativa: Antes (Admin) -> Real (Celular) */
+.sync-diff-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.82rem;
+  margin-top: 0.5rem;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid var(--border-color);
+}
+
+.sync-diff-table th {
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  font-weight: 700;
+  padding: 0.5rem 0.75rem;
+  text-align: left;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.sync-diff-table td {
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid var(--border-color);
+  color: var(--text-primary);
+}
+
+.sync-diff-table tr:last-child td {
+  border-bottom: none;
+}
+
+.sync-diff-row-changed {
+  background: rgba(37, 99, 235, 0.05);
+}
+
+.sync-diff-before {
+  color: var(--text-muted);
+  font-family: var(--font-mono, monospace);
+}
+
+.sync-diff-after {
+  color: var(--primary);
+  font-weight: 700;
+  font-family: var(--font-mono, monospace);
+}
+
+.sync-diff-badge-changed {
+  display: inline-block;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  background: rgba(37, 99, 235, 0.15);
+  color: var(--primary);
+}
+
+.sync-diff-badge-same {
+  display: inline-block;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+
+/* Banner de Alerta Anti-Sobreescritura */
+.sync-stale-banner {
+  background: rgba(245, 158, 11, 0.1);
+  border: 1px solid rgba(245, 158, 11, 0.4);
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+  color: var(--text-primary);
+  font-size: 0.84rem;
+}
+
+.sync-stale-banner strong {
+  color: #f59e0b;
+}
+
+/* Tarjeta de Coincidencia de Cliente en Global Sync */
+.sync-client-match-card {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  padding: 0.85rem 1rem;
+}
+
+/* Soporte Tema Claro para Fase 4 */
+[data-theme="light"] .sync-migration-rescue-card {
+  background: #fffbeb;
+  border-color: #fde68a;
+}
+
+[data-theme="light"] .sync-drop-zone {
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+}
+
+[data-theme="light"] .sync-drop-zone:hover,
+[data-theme="light"] .sync-drop-zone.dragover {
+  background: #e0f2fe;
+  border-color: #0284c7;
+}
+
+[data-theme="light"] .sync-stale-banner {
+  background: #fffbeb;
+  border-color: #fde68a;
+}
+
 
 
 

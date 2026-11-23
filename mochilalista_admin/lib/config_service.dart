@@ -31,6 +31,17 @@ class ConfigService {
   Map<String, dynamic> get templates => (_config['templates'] as Map<String, dynamic>?) ?? {};
   Map<String, dynamic> get receiptConfig => (_config['receipt_config'] as Map<String, dynamic>?) ?? {};
 
+  /// Directorio de la biblioteca oficial local de APKs
+  String get apkLibraryDir {
+    final configured = system['apk_library_dir'] as String?;
+    if (configured != null && configured.trim().isNotEmpty) {
+      return configured.trim();
+    }
+    return Platform.isWindows
+        ? r'C:\Users\vjuli\Documents\v-app-offline apks'
+        : 'releases_apks';
+  }
+
   /// Tarifa técnica oficial de migración de hardware
   double get migrationFee =>
       (catalog['HARDWARE_MIGRATION_FEE']?['price'] as num?)?.toDouble() ?? 40.0;
@@ -69,6 +80,7 @@ class ConfigService {
         'theme': 'dark',
         'table_density': 'comfortable',
         'version': '1.0.0',
+        'apk_library_dir': r'C:\Users\vjuli\Documents\v-app-offline apks',
       },
       'legal_identity': {
         'author_full_name': 'Julio Angello Vasquez Navarro',

@@ -22,33 +22,27 @@ class AppChangelogRegistry {
   static const String currentVersion = OwnerLegalIdentity.currentAppVersionWithBuild;
 
   // =========================================================================
-  // 🚀 NOVEDADES ACTIVAS DE LA VERSIÓN ACTUAL (v9.37.0+81)
-  // Plan Maestro 17: Estabilización de Guía Interactiva, Persistencia Hermética, Escanear Factura y Cobertura 19 Pantallas
+  // 🚀 NOVEDADES ACTIVAS DE LA VERSIÓN ACTUAL (v9.38.0+82)
+  // Plan Maestro 19: Sincronización Offline, Diagnóstico Seguro y Rescate de Migración
   // =========================================================================
   static const List<AppChangelogItem> activeChangelog = [
     AppChangelogItem(
-      icon: Icons.explore_rounded,
-      title: "Guía Interactiva Estabilizada y Ampliada a 19 Pantallas",
+      icon: Icons.sync_rounded,
+      title: "Compartir estado de licencia y créditos en 1 toque",
       description:
-          "Cobertura completa en Catálogo, Escáner IA, Checkout, Detalle de Cliente, Fidelización, Analíticas, Ofertas/Combos e Impresora Térmica, con apertura automática de secciones plegables y tarjetas con flecha precisa en cualquier pantalla.",
+          "Envía a Soporte Técnico tu ficha de diagnóstico segura (.mlsync) con tu balance de IA y vigencia para resolver cualquier consulta al instante y sin complicaciones.",
     ),
     AppChangelogItem(
       icon: Icons.verified_user_rounded,
-      title: "Persistencia Definitiva y Control Total",
+      title: "Atención más ágil en pedidos por WhatsApp",
       description:
-          "Las guías automáticas solo se muestran a usuarios nuevos y jamás reaparecen tras cerrar la app, omitir todas las guías o restaurar respaldos; además \"Reiniciar guías de aprendizaje\" en Perfil ahora relanza de inmediato el recorrido desde Perfil y actualiza Inicio al volver.",
+          "Tus solicitudes de plan o bolsas extra pueden incluir automáticamente una referencia técnica protegida para agilizar la activación de tu negocio.",
     ),
     AppChangelogItem(
-      icon: Icons.document_scanner_rounded,
-      title: "Pantalla Escanear Factura Rediseñada",
+      icon: Icons.phone_android_rounded,
+      title: "Rescate directo al migrar a un celular nuevo",
       description:
-          "Nueva distribución equilibrada con saldo de escaneos IA en vivo, acceso directo al Historial de Facturas, botones mejorados de Cámara/Galería y guía rápida de procesamiento automático.",
-    ),
-    AppChangelogItem(
-      icon: Icons.auto_fix_high_rounded,
-      title: "Correcciones de Interfaz y Navegación",
-      description:
-          "Corrección de navegación completa en Respaldos y Seguridad, anclajes precisos en Inventario/Licencias y margen inferior seguro en Perfil sobre la barra de navegación Android.",
+          "Si cambiaste de dispositivo o restauraste una copia, ahora puedes enviar tu solicitud de desbloqueo oficial directamente por WhatsApp con un solo toque.",
     ),
   ];
 

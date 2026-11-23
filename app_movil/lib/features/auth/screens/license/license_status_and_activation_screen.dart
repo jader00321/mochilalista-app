@@ -21,6 +21,8 @@ import 'package:app_movil/features/profile/screens/ai_settings_screen.dart';
 import 'package:app_movil/core/widgets/info_tooltip_button.dart';
 import 'package:app_movil/core/services/tour/interactive_tour_service.dart';
 import 'package:app_movil/core/widgets/tour/configs/license_status_tour.dart';
+import 'package:app_movil/core/services/sync/client_sync_service.dart';
+import 'package:app_movil/core/providers/google_drive_backup_provider.dart';
 
 /// Pantalla de Estado de Licencia, Activación Dual (QR / Portapapeles) y Catálogo Comercial
 class LicenseStatusAndActivationScreen extends StatefulWidget {
@@ -71,7 +73,9 @@ class _LicenseStatusAndActivationScreenState
       final data = await Clipboard.getData(Clipboard.kTextPlain);
       final text = data?.text?.trim() ?? '';
       if (_isValidCandidateCode(text)) {
-        final extracted = Ed25519LicenseValidator.extractClipboardLicenseToken(text);
+        final extracted = Ed25519LicenseValidator.extractClipboardLicenseToken(
+          text,
+        );
         if (mounted) {
           setState(() {
             _detectedClipboardCode = extracted;
@@ -92,10 +96,14 @@ class _LicenseStatusAndActivationScreenState
 
   bool _isValidCandidateCode(String text) {
     if (text.isEmpty) return false;
-    return Ed25519LicenseValidator.extractClipboardLicenseToken(text).isNotEmpty;
+    return Ed25519LicenseValidator.extractClipboardLicenseToken(
+      text,
+    ).isNotEmpty;
   }
 
-  Future<void> _handleSupportContactForResult(LicenseRedeemResult result) async {
+  Future<void> _handleSupportContactForResult(
+    LicenseRedeemResult result,
+  ) async {
     String msg;
     if (result.status == LicenseRedeemStatus.hardwareMismatch) {
       msg =
@@ -196,6 +204,56 @@ class _LicenseStatusAndActivationScreenState
           isError: false,
         );
       }
+    }
+  }
+
+  bool _isSharingSyncState = false;
+
+  /// Vía A: Genera la ficha offline .mlsync y la comparte mediante el menú nativo del SO.
+  Future<void> _shareClientState(
+    LicenseProvider? licenseProv,
+    String fingerprint,
+  ) async {
+    if (_isSharingSyncState) return;
+    setState(() => _isSharingSyncState = true);
+    try {
+      GoogleDriveBackupProvider? driveProv;
+      try {
+        driveProv = Provider.of<GoogleDriveBackupProvider?>(
+          context,
+          listen: false,
+        );
+      } catch (_) {}
+      final syncService = ClientSyncService();
+      final snapshot = await syncService.buildCurrentSnapshot(
+        licenseProv: licenseProv,
+        driveProv: driveProv,
+        overrideHw: fingerprint,
+      );
+      final file = await syncService.createMlsyncTempFile(snapshot);
+      final shared = await syncService.shareMlsyncFile(
+        file,
+        hardwareId: fingerprint,
+      );
+      if (mounted) {
+        CustomSnackBar.show(
+          context,
+          message: shared
+              ? "Ficha de estado generada y compartida exitosamente"
+              : "Menú de compartir cerrado",
+          isError: false,
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        CustomSnackBar.show(
+          context,
+          message: "No se pudo compartir la ficha de estado: $e",
+          isError: true,
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isSharingSyncState = false);
     }
   }
 
@@ -312,9 +370,9 @@ class _LicenseStatusAndActivationScreenState
                 "Gestiona tu suscripción oficial, consulta tu saldo de escaneos IA, activa códigos y comunícate con soporte.",
             onStartInteractiveTour: () =>
                 InteractiveTourService.startManualTour(
-              context,
-              LicenseStatusTour.buildConfig(keys: _tourKeys),
-            ),
+                  context,
+                  LicenseStatusTour.buildConfig(keys: _tourKeys),
+                ),
             tips: const [
               InfoTip(
                 icon: Icons.card_membership_rounded,
@@ -653,7 +711,9 @@ class _LicenseStatusAndActivationScreenState
                       child: LinearProgressIndicator(
                         value: progress,
                         minHeight: 8,
-                        backgroundColor: isDark ? Colors.white10 : Colors.black12,
+                        backgroundColor: isDark
+                            ? Colors.white10
+                            : Colors.black12,
                         valueColor: AlwaysStoppedAnimation<Color>(
                           daysRemaining <= 5 ? Colors.amber : Colors.blue,
                         ),
@@ -695,7 +755,9 @@ class _LicenseStatusAndActivationScreenState
                   decoration: BoxDecoration(
                     color: Colors.blue.withValues(alpha: 0.08),
                     borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: Colors.blue.withValues(alpha: 0.2)),
+                    border: Border.all(
+                      color: Colors.blue.withValues(alpha: 0.2),
+                    ),
                   ),
                   child: Row(
                     children: [
@@ -762,7 +824,10 @@ class _LicenseStatusAndActivationScreenState
                   ),
                   const SizedBox(height: 6),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 8,
+                    ),
                     decoration: BoxDecoration(
                       color: isDark
                           ? const Color(0xFF14141C)
@@ -837,6 +902,48 @@ class _LicenseStatusAndActivationScreenState
                       fontSize: 10.5,
                       fontStyle: FontStyle.italic,
                       color: isDark ? Colors.grey[500] : Colors.grey[600],
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  // Vía A: Botón para compartir ficha de estado offline (.mlsync)
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      key: const ValueKey("btn_share_client_sync_state"),
+                      icon: _isSharingSyncState
+                          ? const SizedBox(
+                              width: 14,
+                              height: 14,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.sync_rounded, size: 16),
+                      label: const Text(
+                        "Compartir estado con Soporte",
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: isDark
+                            ? Colors.lightBlue[300]
+                            : Colors.blue[800],
+                        side: BorderSide(
+                          color: isDark
+                              ? Colors.blue.withValues(alpha: 0.3)
+                              : Colors.blue.withValues(alpha: 0.4),
+                        ),
+                        padding: const EdgeInsets.symmetric(
+                          vertical: 9,
+                          horizontal: 12,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                      ),
+                      onPressed: _isSharingSyncState
+                          ? null
+                          : () => _shareClientState(licenseProv, fingerprint),
                     ),
                   ),
                 ],
@@ -1112,7 +1219,10 @@ class _LicenseStatusAndActivationScreenState
             KeyedSubtree(
               key: _tourKeys.pricingCatalogKey,
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 10,
+                ),
                 decoration: BoxDecoration(
                   color: Colors.blue.withValues(alpha: 0.08),
                   borderRadius: BorderRadius.circular(12),
@@ -1650,19 +1760,43 @@ class _LicenseStatusAndActivationScreenState
     );
   }
 
-  void _showOrderPlanModal({
+  Future<void> _showOrderPlanModal({
     required String planName,
     required String price,
     required String desc,
     required String aiScansBadge,
     required String fingerprint,
     required bool isDark,
-  }) {
+  }) async {
+    LicenseProvider? licenseProv;
+    try {
+      licenseProv = Provider.of<LicenseProvider?>(context, listen: false);
+    } catch (_) {}
+    GoogleDriveBackupProvider? driveProv;
+    try {
+      driveProv = Provider.of<GoogleDriveBackupProvider?>(
+        context,
+        listen: false,
+      );
+    } catch (_) {}
+    final syncService = ClientSyncService();
+    String? syncToken;
+    try {
+      final snapshot = await syncService.buildCurrentSnapshot(
+        licenseProv: licenseProv,
+        driveProv: driveProv,
+        overrideHw: fingerprint,
+      );
+      syncToken = syncService.generateSyncToken(snapshot);
+    } catch (_) {}
+
     final defaultMessage = OwnerLegalIdentity.buildPlanOrderMessage(
       planName: planName,
       price: price,
       hardwareId: fingerprint,
     );
+
+    if (!mounted) return;
 
     showModalBottomSheet(
       context: context,
@@ -1676,6 +1810,7 @@ class _LicenseStatusAndActivationScreenState
         aiScansBadge: aiScansBadge,
         hardwareId: fingerprint,
         defaultMessage: defaultMessage,
+        syncToken: syncToken,
         isDark: isDark,
         onSendWhatsApp: (msg) {
           Navigator.of(ctx).pop();
@@ -1696,6 +1831,7 @@ class OrderPlanBottomSheet extends StatefulWidget {
   final String aiScansBadge;
   final String hardwareId;
   final String defaultMessage;
+  final String? syncToken;
   final bool isDark;
   final ValueChanged<String> onSendWhatsApp;
 
@@ -1707,6 +1843,7 @@ class OrderPlanBottomSheet extends StatefulWidget {
     required this.aiScansBadge,
     required this.hardwareId,
     required this.defaultMessage,
+    this.syncToken,
     required this.isDark,
     required this.onSendWhatsApp,
   });
@@ -1721,6 +1858,7 @@ class _OrderPlanBottomSheetState extends State<OrderPlanBottomSheet> {
   bool _yapePlinActive = false;
   bool _bankAccountsActive = false;
   bool _commercialInvoiceActive = false;
+  bool _includeLicenseRef = true;
 
   static const String _yapePlinLine =
       "\n• Estado: Pago realizado vía Yape/Plin. Adjunto comprobante.";
@@ -1732,7 +1870,16 @@ class _OrderPlanBottomSheetState extends State<OrderPlanBottomSheet> {
   @override
   void initState() {
     super.initState();
-    _msgController = TextEditingController(text: widget.defaultMessage);
+    String initialMessage = widget.defaultMessage;
+    if (_includeLicenseRef &&
+        widget.syncToken != null &&
+        widget.syncToken!.isNotEmpty) {
+      initialMessage = ClientSyncService().appendSyncTokenToMessage(
+        initialMessage,
+        widget.syncToken!,
+      );
+    }
+    _msgController = TextEditingController(text: initialMessage);
     _msgController.addListener(_onTextChanged);
   }
 
@@ -1750,13 +1897,16 @@ class _OrderPlanBottomSheetState extends State<OrderPlanBottomSheet> {
       "Solicito números de cuenta para transferencia bancaria",
     );
     final hasInv = text.contains("Solicito emisión de Factura con RUC");
+    final hasSync = ClientSyncService().messageContainsSyncToken(text);
     if (hasYape != _yapePlinActive ||
         hasBank != _bankAccountsActive ||
-        hasInv != _commercialInvoiceActive) {
+        hasInv != _commercialInvoiceActive ||
+        hasSync != _includeLicenseRef) {
       setState(() {
         _yapePlinActive = hasYape;
         _bankAccountsActive = hasBank;
         _commercialInvoiceActive = hasInv;
+        _includeLicenseRef = hasSync;
       });
     } else {
       setState(() {});
@@ -1787,7 +1937,18 @@ class _OrderPlanBottomSheetState extends State<OrderPlanBottomSheet> {
   void _resetText() {
     FocusManager.instance.primaryFocus?.unfocus();
     setState(() {
-      _msgController.text = widget.defaultMessage;
+      String base = widget.defaultMessage;
+      if (_includeLicenseRef &&
+          widget.syncToken != null &&
+          widget.syncToken!.isNotEmpty) {
+        base = ClientSyncService().appendSyncTokenToMessage(
+          base,
+          widget.syncToken!,
+        );
+      } else {
+        base = ClientSyncService().removeSyncTokenFromMessage(base);
+      }
+      _msgController.text = base;
       _yapePlinActive = false;
       _bankAccountsActive = false;
       _commercialInvoiceActive = false;
@@ -1796,6 +1957,84 @@ class _OrderPlanBottomSheetState extends State<OrderPlanBottomSheet> {
       context,
       message: "Texto restablecido al formato oficial",
       isError: false,
+    );
+  }
+
+  Widget _buildLicenseRefSwitch(bool isDark) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF14141C) : const Color(0xFFF1F5F9),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: _includeLicenseRef
+              ? Colors.green.withValues(alpha: 0.35)
+              : (isDark ? Colors.white10 : Colors.black12),
+        ),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(7),
+            decoration: BoxDecoration(
+              color: (_includeLicenseRef ? Colors.green : Colors.grey)
+                  .withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(
+              Icons.verified_user_outlined,
+              size: 18,
+              color: _includeLicenseRef ? Colors.green[700] : Colors.grey,
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  "Incluir datos de mi licencia para atención rápida",
+                  style: TextStyle(
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.bold,
+                    color: isDark ? Colors.white : Colors.black87,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  "Ayuda a verificar tu plan y agilizar tu solicitud",
+                  style: TextStyle(
+                    fontSize: 10.5,
+                    color: isDark ? Colors.grey[400] : Colors.grey[600],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Switch(
+            key: const ValueKey("switch_include_license_ref"),
+            value: _includeLicenseRef,
+            activeThumbColor: Colors.green,
+            activeTrackColor: Colors.green.withValues(alpha: 0.3),
+            onChanged: (val) {
+              setState(() {
+                _includeLicenseRef = val;
+                final current = _msgController.text;
+                if (val &&
+                    widget.syncToken != null &&
+                    widget.syncToken!.isNotEmpty) {
+                  _msgController.text = ClientSyncService()
+                      .appendSyncTokenToMessage(current, widget.syncToken!);
+                } else {
+                  _msgController.text = ClientSyncService()
+                      .removeSyncTokenFromMessage(current);
+                }
+              });
+            },
+          ),
+        ],
+      ),
     );
   }
 
@@ -1840,12 +2079,16 @@ class _OrderPlanBottomSheetState extends State<OrderPlanBottomSheet> {
                 physics: const BouncingScrollPhysics(),
                 keyboardDismissBehavior:
                     ScrollViewKeyboardDismissBehavior.onDrag,
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 20,
+                  vertical: 14,
+                ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     _buildSummaryCard(isDark),
-                    const SizedBox(height: 14),
+                    const SizedBox(height: 12),
+                    _buildLicenseRefSwitch(isDark),
                     _buildQuickChips(isDark),
                     const SizedBox(height: 14),
                     _buildEditableMessageField(isDark),
@@ -2391,20 +2634,52 @@ class _ScannerOverlayPainter extends CustomPainter {
     final r = scanRect;
 
     // Superior-Izquierda
-    canvas.drawLine(Offset(r.left, r.top + cornerLen), Offset(r.left, r.top), cornerPaint);
-    canvas.drawLine(Offset(r.left, r.top), Offset(r.left + cornerLen, r.top), cornerPaint);
+    canvas.drawLine(
+      Offset(r.left, r.top + cornerLen),
+      Offset(r.left, r.top),
+      cornerPaint,
+    );
+    canvas.drawLine(
+      Offset(r.left, r.top),
+      Offset(r.left + cornerLen, r.top),
+      cornerPaint,
+    );
 
     // Superior-Derecha
-    canvas.drawLine(Offset(r.right - cornerLen, r.top), Offset(r.right, r.top), cornerPaint);
-    canvas.drawLine(Offset(r.right, r.top), Offset(r.right, r.top + cornerLen), cornerPaint);
+    canvas.drawLine(
+      Offset(r.right - cornerLen, r.top),
+      Offset(r.right, r.top),
+      cornerPaint,
+    );
+    canvas.drawLine(
+      Offset(r.right, r.top),
+      Offset(r.right, r.top + cornerLen),
+      cornerPaint,
+    );
 
     // Inferior-Izquierda
-    canvas.drawLine(Offset(r.left, r.bottom - cornerLen), Offset(r.left, r.bottom), cornerPaint);
-    canvas.drawLine(Offset(r.left, r.bottom), Offset(r.left + cornerLen, r.bottom), cornerPaint);
+    canvas.drawLine(
+      Offset(r.left, r.bottom - cornerLen),
+      Offset(r.left, r.bottom),
+      cornerPaint,
+    );
+    canvas.drawLine(
+      Offset(r.left, r.bottom),
+      Offset(r.left + cornerLen, r.bottom),
+      cornerPaint,
+    );
 
     // Inferior-Derecha
-    canvas.drawLine(Offset(r.right - cornerLen, r.bottom), Offset(r.right, r.bottom), cornerPaint);
-    canvas.drawLine(Offset(r.right, r.bottom), Offset(r.right, r.bottom - cornerLen), cornerPaint);
+    canvas.drawLine(
+      Offset(r.right - cornerLen, r.bottom),
+      Offset(r.right, r.bottom),
+      cornerPaint,
+    );
+    canvas.drawLine(
+      Offset(r.right, r.bottom),
+      Offset(r.right, r.bottom - cornerLen),
+      cornerPaint,
+    );
 
     // Haz de escaneo animado suave
     final beamY = r.top + (r.height * animationProgress);
@@ -2418,7 +2693,11 @@ class _ScannerOverlayPainter extends CustomPainter {
       ).createShader(Rect.fromLTWH(r.left, beamY - 1, r.width, 2.5))
       ..strokeWidth = 2.5;
 
-    canvas.drawLine(Offset(r.left + 4, beamY), Offset(r.right - 4, beamY), beamPaint);
+    canvas.drawLine(
+      Offset(r.left + 4, beamY),
+      Offset(r.right - 4, beamY),
+      beamPaint,
+    );
   }
 
   @override
@@ -2463,7 +2742,9 @@ class _QrScannerSheetState extends State<QrScannerSheet>
       formats: const [BarcodeFormat.qrCode],
       detectionSpeed: DetectionSpeed.normal,
     );
-    final isTest = WidgetsBinding.instance.runtimeType.toString().contains('Test');
+    final isTest = WidgetsBinding.instance.runtimeType.toString().contains(
+      'Test',
+    );
     _scanAnimationController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 2400),
@@ -2563,17 +2844,18 @@ class _QrScannerSheetState extends State<QrScannerSheet>
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
-    final primaryColor = isDark ? const Color(0xFF38BDF8) : const Color(0xFF0284C7);
+    final primaryColor = isDark
+        ? const Color(0xFF38BDF8)
+        : const Color(0xFF0284C7);
 
     final viewInsets = MediaQuery.viewInsetsOf(context);
     final viewPadding = MediaQuery.viewPaddingOf(context);
-    final bottomPadding = math.max(viewInsets.bottom, viewPadding.bottom) + 16.0;
+    final bottomPadding =
+        math.max(viewInsets.bottom, viewPadding.bottom) + 16.0;
     final screenHeight = MediaQuery.sizeOf(context).height;
 
     return Container(
-      constraints: BoxConstraints(
-        maxHeight: screenHeight * 0.90,
-      ),
+      constraints: BoxConstraints(maxHeight: screenHeight * 0.90),
       decoration: BoxDecoration(
         color: isDark ? const Color(0xFF1E1E28) : Colors.white,
         borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
@@ -2615,7 +2897,11 @@ class _QrScannerSheetState extends State<QrScannerSheet>
                   Expanded(
                     child: Row(
                       children: [
-                        Icon(Icons.qr_code_scanner_rounded, color: primaryColor, size: 20),
+                        Icon(
+                          Icons.qr_code_scanner_rounded,
+                          color: primaryColor,
+                          size: 20,
+                        ),
                         const SizedBox(width: 8),
                         Flexible(
                           child: Text(
@@ -2625,7 +2911,9 @@ class _QrScannerSheetState extends State<QrScannerSheet>
                             style: TextStyle(
                               fontSize: 16,
                               fontWeight: FontWeight.bold,
-                              color: isDark ? Colors.white : const Color(0xFF0F172A),
+                              color: isDark
+                                  ? Colors.white
+                                  : const Color(0xFF0F172A),
                             ),
                           ),
                         ),
@@ -2639,7 +2927,9 @@ class _QrScannerSheetState extends State<QrScannerSheet>
                         key: const ValueKey('btn_scan_gallery'),
                         icon: Icon(
                           Icons.photo_library_rounded,
-                          color: isDark ? const Color(0xFF34D399) : const Color(0xFF059669),
+                          color: isDark
+                              ? const Color(0xFF34D399)
+                              : const Color(0xFF059669),
                         ),
                         tooltip: "Desde Galería",
                         onPressed: _pickAndDecodeFromGallery,
@@ -2748,10 +3038,16 @@ class _QrScannerSheetState extends State<QrScannerSheet>
                             key: const ValueKey('btn_scan_torch'),
                             iconSize: 20,
                             icon: Icon(
-                              _isTorchOn ? Icons.flash_on_rounded : Icons.flash_off_rounded,
-                              color: _isTorchOn ? const Color(0xFFFBBF24) : Colors.white70,
+                              _isTorchOn
+                                  ? Icons.flash_on_rounded
+                                  : Icons.flash_off_rounded,
+                              color: _isTorchOn
+                                  ? const Color(0xFFFBBF24)
+                                  : Colors.white70,
                             ),
-                            tooltip: _isTorchOn ? "Apagar linterna" : "Encender linterna",
+                            tooltip: _isTorchOn
+                                ? "Apagar linterna"
+                                : "Encender linterna",
                             onPressed: _toggleTorch,
                           ),
                         ),
@@ -2786,9 +3082,14 @@ class _QrScannerSheetState extends State<QrScannerSheet>
 
               // Texto guía amigable (CERO EMOJIS CRUDOS)
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 6,
+                ),
                 decoration: BoxDecoration(
-                  color: isDark ? Colors.white.withValues(alpha: 0.04) : Colors.black.withValues(alpha: 0.03),
+                  color: isDark
+                      ? Colors.white.withValues(alpha: 0.04)
+                      : Colors.black.withValues(alpha: 0.03),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Row(
@@ -2796,7 +3097,9 @@ class _QrScannerSheetState extends State<QrScannerSheet>
                     Icon(
                       Icons.lightbulb_outline_rounded,
                       size: 15,
-                      color: isDark ? const Color(0xFF38BDF8) : const Color(0xFF0284C7),
+                      color: isDark
+                          ? const Color(0xFF38BDF8)
+                          : const Color(0xFF0284C7),
                     ),
                     const SizedBox(width: 6),
                     Expanded(
@@ -2833,7 +3136,9 @@ class _QrScannerSheetState extends State<QrScannerSheet>
                           vertical: 10,
                         ),
                         filled: true,
-                        fillColor: isDark ? const Color(0xFF161A22) : const Color(0xFFF8FAFC),
+                        fillColor: isDark
+                            ? const Color(0xFF161A22)
+                            : const Color(0xFFF8FAFC),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(10),
                           borderSide: BorderSide(
@@ -2892,7 +3197,12 @@ class _QrScannerSheetState extends State<QrScannerSheet>
     );
   }
 
-  Widget _buildZoomChip(String label, double zoomScale, Color primaryColor, bool isDark) {
+  Widget _buildZoomChip(
+    String label,
+    double zoomScale,
+    Color primaryColor,
+    bool isDark,
+  ) {
     final isSelected = (_currentZoom - zoomScale).abs() < 0.05;
     return GestureDetector(
       key: ValueKey('chip_zoom_$label'),
@@ -2902,7 +3212,9 @@ class _QrScannerSheetState extends State<QrScannerSheet>
         decoration: BoxDecoration(
           color: isSelected
               ? primaryColor
-              : (isDark ? Colors.white10 : Colors.black.withValues(alpha: 0.05)),
+              : (isDark
+                    ? Colors.white10
+                    : Colors.black.withValues(alpha: 0.05)),
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
             color: isSelected
