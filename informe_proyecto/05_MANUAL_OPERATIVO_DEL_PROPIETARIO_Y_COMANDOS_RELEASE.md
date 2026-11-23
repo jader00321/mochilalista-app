@@ -91,14 +91,15 @@ Para iniciar la plataforma con un solo clic o desde un acceso directo en tu Escr
    - Crea en tu Escritorio el acceso directo **`MochilaLista Admin.lnk`** enlazado al lanzador `Iniciar_MochilaLista_Admin.bat`, configurado para ejecutarse minimizado (`WindowStyle = 7`) y portando el ícono corporativo oficial multi-resolución de alta definición (`mochilalista_admin\web\app_icon.ico` / `favicon.ico`).
 2. **Doble Clic:** Al ejecutar el acceso directo o el archivo `.bat`, el lanzador inteligente realiza automáticamente:
    - Posicionamiento absoluto seguro en `mochilalista_admin/` (`%~dp0mochilalista_admin`).
-   - Validación de la disponibilidad de Dart SDK en el sistema.
-   - Verificación precisa de socket en puerto 8080 (`netstat -ano | findstr ":8080 " | findstr "LISTENING"`). Si ya estaba corriendo, evita lanzar procesos duplicados.
-   - Si no estaba encendido, levanta `server.dart` en una ventana minimizada dedicada con título `MochilaLista Admin Server` (pudiendo restaurarla y cerrarla con `Ctrl+C` en cualquier momento).
-   - **Modo Ventana Nativa de Escritorio (`--app`):** Mediante un bucle de espera inteligente con sondeo a `http://localhost:8080`, aguarda a que el servidor esté listo para atender peticiones y lanza Microsoft Edge o Google Chrome en modo aplicación limpia:
+   - Validación de la disponibilidad de Dart SDK en el sistema con mensaje claro de ayuda si falta en el PATH.
+   - Verificación precisa de socket en puerto 8080 (`netstat -ano | findstr ":8080 " | findstr "LISTENING"`) y sondeo HTTP real sobre `http://localhost:8080/api/vault/health` devolviendo `200 OK`. Si ya estaba corriendo y saludable, reutiliza el servidor de inmediato sin lanzar procesos redundantes.
+   - Si no estaba encendido, levanta `server.dart` en una ventana minimizada dedicada con título `MochilaLista Admin Server` y envoltorio interactivo anti-cierre silencioso (`cmd /c "cd /d "%ADMIN_DIR%" && dart run server.dart || pause"`), permitiendo diagnosticar cualquier error en pantalla.
+   - **Prioridad 1 — Google Chrome en Modo Ventana Nativa de Escritorio (`--app`):** Mediante bucle de espera con sondeo HTTP (hasta 15 intentos de 1s), aguarda la respuesta `200 OK` del backend y lanza **Google Chrome** en modo aplicación limpia:
      ```cmd
-     start msedge.exe --app=http://localhost:8080
+     start chrome.exe --app=http://localhost:8080
      ```
-     *(o `chrome.exe --app=http://localhost:8080`)*, desplegando la plataforma en una ventana independiente, sin barra de direcciones ni pestañas de navegación genéricas, operando con la apariencia y fluidez de un software de escritorio empresarial.
+     *(con fallback a `msedge.exe --app=...` o navegador predeterminado solo si Chrome no está instalado)*, desplegando la plataforma en una ventana independiente, sin barra de direcciones ni pestañas genéricas, operando con la fluidez de un software de escritorio nativo.
+   - **Botón `Abrir en Chrome` en la Cabecera Web:** En la barra superior de la interfaz dispones de un botón discreto con ícono de Google Chrome que invoca el endpoint `POST /api/system/open-browser`, abriendo la plataforma en una pestaña normal de Chrome si requieres acceder a DevTools, extensiones o navegación multipestaña.
 
 #### Método 2: Inicio Manual por Terminal (PowerShell / CMD)
 ```powershell
@@ -315,36 +316,37 @@ En **Cartera de Clientes**, presiona el botón **`[👁️]`** (Ficha 360°) o *
 
 ---
 
-### 1.10.1. Generador y Personalizador de Boletas de Pago (`BOL-XXXX`) 100% Offline
-Accesible desde el botón **`[🧾 Boleta]`** de cualquier pago registrado en la Ficha 360°:
-- **Correlativo Permanente por Pago:** Cada boleta recibe un número correlativo oficial irreversible (ej. `BOL-0001`, `BOL-0002`) asignado de forma atómica en disco (`DatabaseService.issueOrGetPaymentReceipt`), preservando la trazabilidad contable.
-- **Personalizador en Tiempo Real:** Permite editar razón social del emisor, RUC/DNI, teléfono, ciudad/dirección (por defecto: `Piura, Perú`), notas legales y pie de página comercial.
-- **Vista Previa en Vivo:** Renderizado inmediato de la boleta estilo punto de venta con tipografía monoespaciada, membrete ejecutivo, detalle del plan suscrito, subtotal, total e impuestos (exonerado/incluido).
-- **Guardado de Plantilla como Predeterminada:** Botón para guardar las personalizaciones en `owner_config.json` (`receipt_config`) para que todas las futuras emisiones hereden tu formato corporativo.
-- **Entrega Multiformato en 1 Clic:**
-  1. **`[Descargar PNG (@2x)]`:** Exporta una imagen nítida en alta densidad lista para enviar como archivo adjunto.
-  2. **`[Copiar al Portapapeles]`:** Copia la imagen al búfer del sistema para pegarla directamente en WhatsApp Desktop o Web con `Ctrl + V`.
-  3. **`[Imprimir / PDF]`:** Abre el cuadro nativo de impresión de Windows para imprimir en impresora térmica o guardar como documento PDF.
-  4. **`[Compartir por WhatsApp]`:** Envía un resumen textual estructurado con el número de boleta, monto y confirmación de vigencia al número del cliente.
+### 1.10.1. Generador y Personalizador de Comprobantes de Pago (Boletas `BOL-XXXX` & Facturas `FAC-XXXX`) 100% Offline con Descarga PDF Directa
+Accesible desde los botones de comprobante en la Ficha 360°, la tabla de Finanzas o tras registrar un cobro:
+- **Soporte Dual para Boletas y Facturas Oficiales:** Permite alternar instantáneamente entre **Boleta de Pago** (`BOL-XXXX`) y **Factura de Pago** (`FAC-XXXX`), administrando series correlativas independientes, atómicas e irreversibles en disco (`DatabaseService.issueOrGetPaymentReceipt`) con total idempotencia contable.
+- **Desglose Opcional de IGV (18% Perú):** Al emitir Facturas de Pago, dispones de un interruptor para calcular automáticamente el Subtotal (Base Imponible), el IGV 18% y el Total facturado con precisión a 2 decimales, o emitir como importe total exonerado/incluido.
+- **Renderizado Gráfico Fiel en Alta Definición:** Motor `<canvas>` 2D aislado (`ctx.save()` / `ctx.restore()`) con fondo claro corporativo `#f8fafc`, padding tipográfico de 20px, membrete ejecutivo, detalle del cliente y titular, concepto oficial homologado y sello de seguridad.
+- **Generador de PDF 1.4 Binario Offline Directo:** Incluye un motor PDF nativo en JavaScript que empaqueta la imagen del comprobante en un stream `/DCTDecode` bajo especificación PDF 1.4, permitiendo descargar el archivo `.pdf` en 1 clic de forma 100% offline sin librerías externas pesadas ni conexión a internet.
+- **Acciones Rápidas de Entrega Multiformato:**
+  1. **`[Descargar Boleta/Factura PDF]`:** Genera y descarga el documento `.pdf` con nombre sanitizado para Windows (ej. `Boleta_BOL-0001_Luzam.pdf`).
+  2. **`[Descargar PNG (@2x)]`:** Exporta imagen rasterizada en alta densidad (1200x940 píxeles).
+  3. **`[Copiar Imagen al Portapapeles]`:** Copia el comprobante al búfer del sistema para pegarlo de inmediato con `Ctrl + V` en WhatsApp Desktop o Web.
+  4. **`[Enviar por WhatsApp]`:** Conecta con el Compositor de WhatsApp editable (`#modalWaComposer`), permitiendo revisar y personalizar el mensaje antes de disparar el envío.
+  5. **`[Imprimir]`:** Abre el diálogo de impresión del sistema operativo para ticket o impresora láser.
 
 ---
 
-### 1.11. Centro de Personalización y Exportación a Libros Excel Multi-Hoja (`#tabSettings`)
-En el Sidebar, accede a la pestaña **Ajustes / Personalización (`#tabSettings`)**:
-1. **Edición en Caliente de `owner_config.json`:**
-   - **Identidad Corporativa y Legal:** Nombre del Propietario (`Julio Angello Vasquez Navarro`), RUC/DNI, Sede Oficial y mención legal de INDECOPI / D.L. 822.
-   - **Pasarelas de Cobro Perú:** Números y titulares oficiales para **Yape**, **Plin**, Transferencia Bancaria BCP/BBVA.
-   - **Tarifario y Parámetros Comerciales:** Ajuste dinámico de precios (Suscripciones, Perpetuo, Migración de Celular, Bolsa Extra IA) y días por plan sin tocar una sola línea de código Dart ni reiniciar el servidor.
-   - **Plantillas Reactivas de WhatsApp:** Personalización de los mensajes predeterminados para entrega de licencia, recordatorio de vencimiento y cotización de pase anual.
-   - **Preferencia Visual:** Conmutador instantáneo entre Tema Oscuro (Dark Mode) y Tema Claro (Light Mode).
-2. **Motor de Exportación a Libros Microsoft Excel Oficiales (`.xlsx`):**
-   - Dispones de dos botones ejecutivos: **`[📥 Descargar Libro Excel Maestro (Completo)]`** y **`[📥 Descargar Libro Contable (Finanzas)]`**.
-   - Los libros se generan con el formato profesional corporativo (`.xlsx` nativo):
-     - **Hoja 1 (`Resumen Ejecutivo`):** Tarjetas de métricas, distribución de cartera e ingresos totales calculados con fórmulas reales de Excel (`SUM`).
-     - **Hoja 2 (`Cartera CRM`):** Directorio exhaustivo con filtros automáticos, formato moneda (`S/ #,##0.00`) y fechas ISO legibles.
-     - **Hoja 3 (`Libro de Pagos`):** Historial contable de transacciones, referencias de pago y totales computados en tiempo real.
-     - **Hoja 4 (`Equipos y Licencias`):** Registro de firmas asimétricas Ed25519, nonces, días agregados y dispositivo destino.
-     - **Hoja 5 (`Guia y Glosario`):** Guía de uso contable, glosario técnico de métricas y estados comerciales.
+### 1.11. Centro de Finanzas, Búsqueda de Comprobantes y Exportación Excel Multi-Hoja (`#tabFinancesAndBackups` & `#tabSettings`)
+1. **Búsqueda en Tiempo Real en Finanzas (`#tabFinancesAndBackups`):**
+   - Buscador predictivo omnicanal (`#inputFinSearch` con botón de limpieza SVG) que filtra instantáneamente por número de comprobante (`BOL-XXXX`, `FAC-XXXX`), nombre de negocio, titular, RUC/DNI, referencia, medio de pago, plan oficial o notas contables.
+   - Columna interactiva **`Comprobante`** con distintivos visuales de alto contraste:
+     - **Píldora Verde (`.badge-receipt-bol`):** Boleta oficial emitida (ej. `BOL-0001`). Al hacer clic, abre de inmediato el comprobante para visualizarlo, copiarlo o descargarlo.
+     - **Píldora Índigo (`.badge-receipt-fac`):** Factura oficial emitida (ej. `FAC-0001`).
+     - **Botón `Emitir` (`.btn-fin-emit`):** Para transacciones registradas sin comprobante previo. Al pulsar, genera y abre el documento en 1 clic.
+2. **Exportador Contable a CSV con BOM UTF-8:**
+   - Botón **`[Exportar CSV]`** que descarga el historial completo de cobranzas compatible con Excel, LibreOffice y Google Sheets, incluyendo cabeceras `RUC_DNI`, `TIPO_COMPROBANTE` y `N_COMPROBANTE` con encoding `\uFEFF`.
+3. **Motor de Exportación a Libros Microsoft Excel Oficiales (`.xlsx` multi-hoja):**
+   - Generación de libros de cálculo de 5 hojas oficiales sin `Sheet1`:
+     - **Hoja 1 (`Resumen Ejecutivo`):** Métricas de recaudación, ticket promedio y desgloses computados con fórmulas reales de Excel (`SUM`, `AVERAGE`, `COUNT`, `SUMIF`).
+     - **Hoja 2 (`Cartera CRM`):** 18 columnas exactas (A..R), incorporando la columna 17 (R) **`Próximo Seguimiento`** vinculada al campo `next_followup_date`.
+     - **Hoja 3 (`Libro de Pagos`):** 14 columnas exactas (A..N), manteniendo el importe cobrado en la columna 10 (K) para proteger el 100% de las fórmulas dinámicas e incorporando las columnas 11 (L) **`Tipo Comprobante`**, 12 (M) **`N.° Comprobante`** y 13 (N) **`Última Edición`**.
+     - **Hoja 4 (`Equipos y Licencias`):** Registro técnico de dispositivos, tokens Ed25519 y hardware vinculado.
+     - **Hoja 5 (`Guia y Glosario`):** Guía de uso contable y glosario de términos.
 
 ---
 

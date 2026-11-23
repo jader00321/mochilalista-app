@@ -348,12 +348,17 @@ class DatabaseService {
     }
 
     final phone = normalizePeruPhone(clientData['phone'] as String? ?? '');
+    final rawFollowup = clientData['next_followup_date'] as String?;
+    final String? nextFollowup = (rawFollowup != null && rawFollowup.trim().isNotEmpty)
+        ? rawFollowup.trim()
+        : null;
 
     final newClient = {
       'id': id,
       'business_name': clientData['business_name'] ?? 'Negocio Sin Nombre',
       'owner_name': clientData['owner_name'] ?? 'Propietario',
-      'document_id': clientData['document_id'] ?? '',
+      'document_id': clientData['document_id'] ?? clientData['document_number'] ?? '',
+      'document_number': clientData['document_number'] ?? clientData['document_id'] ?? '',
       'phone': phone,
       'current_device_id': rawDeviceId,
       'device_model': (clientData['device_model'] as String?)?.trim() ?? '',
@@ -365,6 +370,7 @@ class DatabaseService {
           : (plan.contains('PERPETU') ? 'PERPETUA' : 'ACTIVA'),
       'license_expires': expiresAt,
       'expected_subscription_date': clientData['expected_subscription_date'],
+      'next_followup_date': nextFollowup,
       'trial_days_remaining': (!isProspect && plan == 'TRIAL') ? trialDays : null,
       'next_nonce': 1,
       'updates_until': updatesUntil,
@@ -393,6 +399,14 @@ class DatabaseService {
     // Normalizar teléfono si viene en updates
     if (updates.containsKey('phone')) {
       updates['phone'] = normalizePeruPhone(updates['phone'] as String? ?? '');
+    }
+
+    // Normalizar fecha de próximo seguimiento si viene en updates
+    if (updates.containsKey('next_followup_date')) {
+      final rawFollowup = updates['next_followup_date'] as String?;
+      updates['next_followup_date'] = (rawFollowup != null && rawFollowup.trim().isNotEmpty)
+          ? rawFollowup.trim()
+          : null;
     }
 
     // Si viene current_device_id, validar unicidad
@@ -758,6 +772,22 @@ class DatabaseService {
       client['updates_until'] = updatesUntil.toUtc().toIso8601String();
     }
 
+    // Historial de pagos
+    String? newPaymentId;
+    if (paymentAmount > 0) {
+      newPaymentId = 'PAY-${DateTime.now().millisecondsSinceEpoch}';
+      final payments = (client['payment_history'] as List? ?? []).cast<Map<String, dynamic>>();
+      payments.add({
+        'id': newPaymentId,
+        'date': now.toUtc().toIso8601String(),
+        'amount': paymentAmount,
+        'plan': normPlan,
+        'method': paymentMethod,
+        'reference': paymentRef,
+      });
+      client['payment_history'] = payments;
+    }
+
     // Historial de códigos
     final codes = (client['generated_codes_history'] as List? ?? []).cast<Map<String, dynamic>>();
     codes.add({
@@ -774,22 +804,10 @@ class DatabaseService {
       'bonus_ai_credits': aiExtraCredits,
       'total_ai_credited': totalCreditsToAdd,
       'ai_credits': totalCreditsToAdd,
+      'payment_id': newPaymentId,
+      'amount_paid': paymentAmount > 0 ? paymentAmount : 0.0,
     });
     client['generated_codes_history'] = codes;
-
-    // Historial de pagos
-    if (paymentAmount > 0) {
-      final payments = (client['payment_history'] as List? ?? []).cast<Map<String, dynamic>>();
-      payments.add({
-        'id': 'PAY-${DateTime.now().millisecondsSinceEpoch}',
-        'date': now.toUtc().toIso8601String(),
-        'amount': paymentAmount,
-        'plan': normPlan,
-        'method': paymentMethod,
-        'reference': paymentRef,
-      });
-      client['payment_history'] = payments;
-    }
 
     clients[index] = client;
     await saveClients(clients, reason: 'emit_code_$clientId');
@@ -811,13 +829,17 @@ class DatabaseService {
     final payments = (client['payment_history'] as List? ?? []).cast<Map<String, dynamic>>();
     payments.removeWhere((p) => p['id'] == paymentId);
     client['payment_history'] = payments;
+    client['total_paid'] = payments.fold<double>(
+      0.0,
+      (sum, p) => sum + ((p['amount'] as num?)?.toDouble() ?? 0.0),
+    );
 
     clients[index] = client;
     await saveClients(clients, reason: 'delete_payment_${clientId}_$paymentId');
     return client;
   }
 
-  /// Editar un pago existente en el historial del cliente
+  /// Editar un pago existente en el historial del cliente (Plan Maestro 18 - Fase 4)
   Future<Map<String, dynamic>?> updatePayment(
       String clientId, String paymentId, Map<String, dynamic> paymentData) async {
     final clients = await getClients();
@@ -832,19 +854,57 @@ class DatabaseService {
     if (pIndex == -1) return null;
 
     final oldPayment = payments[pIndex];
-    if (paymentData.containsKey('date')) oldPayment['date'] = paymentData['date'];
+
+    // 1. Validación estricta de monto (número válido >= 0)
     if (paymentData.containsKey('amount')) {
-      oldPayment['amount'] = (paymentData['amount'] as num?)?.toDouble() ?? 0.0;
+      final rawAmt = paymentData['amount'];
+      final num? parsedAmt = (rawAmt is num) ? rawAmt : num.tryParse(rawAmt.toString());
+      if (parsedAmt == null || parsedAmt.isNaN || parsedAmt < 0) {
+        throw ArgumentError('El monto del pago debe ser un número válido mayor o igual a cero.');
+      }
+      oldPayment['amount'] = parsedAmt.toDouble();
     }
+
+    // 2. Validación estricta de fecha (formato ISO válido)
+    if (paymentData.containsKey('date')) {
+      final rawDate = (paymentData['date'] as String? ?? '').trim();
+      if (rawDate.isNotEmpty) {
+        try {
+          DateTime.parse(rawDate);
+          oldPayment['date'] = rawDate;
+        } catch (_) {
+          throw ArgumentError('La fecha del pago no tiene un formato ISO válido (YYYY-MM-DD).');
+        }
+      }
+    }
+
+    // 3. Concepto / Plan Oficial
     if (paymentData.containsKey('plan')) oldPayment['plan'] = paymentData['plan'];
     if (paymentData.containsKey('concept')) oldPayment['plan'] = paymentData['concept'];
+
+    // 4. Medio de pago, referencia y notas
     if (paymentData.containsKey('method')) oldPayment['method'] = paymentData['method'];
     if (paymentData.containsKey('payment_method')) oldPayment['method'] = paymentData['payment_method'];
     if (paymentData.containsKey('reference')) oldPayment['reference'] = paymentData['reference'];
     if (paymentData.containsKey('notes')) oldPayment['notes'] = paymentData['notes'];
 
+    // 5. Blindaje de comprobantes: ID y datos de comprobante emitido son estrictamente inmutables
+    oldPayment['id'] = paymentId;
+    // receipt_number, receipt_type y receipt_issued_at se preservan intactos en oldPayment
+
+    // 6. Auditoría contable: timestamp de actualización en UTC
+    oldPayment['updated_at'] = DateTime.now().toUtc().toIso8601String();
+
     payments[pIndex] = oldPayment;
     client['payment_history'] = payments;
+
+    // 7. Recalcular automáticamente total_paid del cliente
+    final totalPaid = payments.fold<double>(
+      0.0,
+      (sum, p) => sum + ((p['amount'] as num?)?.toDouble() ?? 0.0),
+    );
+    client['total_paid'] = totalPaid;
+
     clients[index] = client;
     await saveClients(clients, reason: 'update_payment_${clientId}_$paymentId');
     return client;
@@ -867,6 +927,10 @@ class DatabaseService {
       'reference': paymentData['reference'] ?? 'Registro Manual',
     });
     client['payment_history'] = payments;
+    client['total_paid'] = payments.fold<double>(
+      0.0,
+      (sum, p) => sum + ((p['amount'] as num?)?.toDouble() ?? 0.0),
+    );
 
     clients[index] = client;
     await saveClients(clients, reason: 'add_manual_payment_$clientId');
@@ -877,12 +941,17 @@ class DatabaseService {
   Future<Map<String, dynamic>?> addPayment(String clientId, Map<String, dynamic> paymentData) =>
       addManualPayment(clientId, paymentData);
 
-  /// Emite o recupera la boleta de pago oficial (BOL-XXXX) de forma atómica e idempotente
+  /// Emite o recupera la boleta (BOL-XXXX) o factura (FAC-XXXX) oficial de forma atómica e idempotente
   Future<Map<String, dynamic>?> issueOrGetPaymentReceipt({
     required String clientId,
     required String paymentId,
     required ConfigService configService,
+    String? voucherType,
     String? customNote,
+    String? invoiceRuc,
+    String? invoiceBusinessName,
+    String? invoiceFiscalAddress,
+    bool? showIgvBreakdown,
   }) async {
     final clients = await getClients();
     final index = clients.indexWhere((c) => c['id'] == clientId);
@@ -896,40 +965,102 @@ class DatabaseService {
     if (pIndex == -1) return null;
 
     final payment = payments[pIndex];
-    final existingReceipt = payment['receipt_number'] as String?;
-    final bool alreadyIssued = existingReceipt != null && existingReceipt.trim().isNotEmpty;
 
-    if (!alreadyIssued) {
-      final isSandbox = currentMode == 'sandbox';
-      final correlative = await configService.consumeReceiptCorrelative(isSandbox: isSandbox);
-      final receiptNumber = 'BOL-${correlative.toString().padLeft(4, '0')}';
-      final issuedAt = DateTime.now().toUtc().toIso8601String();
-
-      payment['receipt_number'] = receiptNumber;
-      payment['receipt_issued_at'] = issuedAt;
-      if (customNote != null && customNote.trim().isNotEmpty) {
-        payment['receipt_custom_note'] = customNote.trim();
+    // Retrocompatibilidad con pagos legados que solo tienen receipt_number
+    final legacyReceiptNum = payment['receipt_number'] as String?;
+    if (legacyReceiptNum != null && legacyReceiptNum.trim().isNotEmpty) {
+      if (legacyReceiptNum.startsWith('BOL-') && payment['receipt_bol_number'] == null) {
+        payment['receipt_bol_number'] = legacyReceiptNum;
+      } else if (legacyReceiptNum.startsWith('FAC-') && payment['receipt_fac_number'] == null) {
+        payment['receipt_fac_number'] = legacyReceiptNum;
       }
+    }
 
+    // Determinar tipo de comprobante solicitado ('BOL' o 'FAC')
+    final String requestedType = (voucherType ?? payment['receipt_type'] ?? 'BOL')
+        .toString()
+        .trim()
+        .toUpperCase();
+    final String vType = (requestedType == 'FAC') ? 'FAC' : 'BOL';
+
+    // Verificar si ya existe correlativo para este tipo en este pago
+    final String? existingTypedCorrelative = (vType == 'FAC')
+        ? (payment['receipt_fac_number'] as String?)
+        : (payment['receipt_bol_number'] as String?);
+
+    final bool alreadyIssuedForType =
+        existingTypedCorrelative != null && existingTypedCorrelative.trim().isNotEmpty;
+
+    bool needsSave = false;
+
+    if (!alreadyIssuedForType) {
+      // Asignar nuevo correlativo consumiendo contador del tipo solicitado
+      final isSandbox = currentMode == 'sandbox';
+      final correlative = await configService.consumeReceiptCorrelative(
+        isSandbox: isSandbox,
+        voucherType: vType,
+      );
+      final formattedNum = '$vType-${correlative.toString().padLeft(4, '0')}';
+      if (vType == 'FAC') {
+        payment['receipt_fac_number'] = formattedNum;
+      } else {
+        payment['receipt_bol_number'] = formattedNum;
+      }
+      payment['receipt_number'] = formattedNum;
+      payment['receipt_type'] = vType;
+      payment['receipt_issued_at'] ??= DateTime.now().toUtc().toIso8601String();
+      needsSave = true;
+    } else {
+      // Reutilizar exactamente el correlativo previo de ese tipo (idempotencia pura)
+      if (payment['receipt_number'] != existingTypedCorrelative || payment['receipt_type'] != vType) {
+        payment['receipt_number'] = existingTypedCorrelative;
+        payment['receipt_type'] = vType;
+        needsSave = true;
+      }
+    }
+
+    // Actualizar campos fiscales y notas opcionales si vienen definidos
+    if (customNote != null && customNote.trim() != (payment['receipt_custom_note'] ?? '')) {
+      payment['receipt_custom_note'] = customNote.trim();
+      needsSave = true;
+    }
+    if (invoiceRuc != null && invoiceRuc.trim() != (payment['invoice_ruc'] ?? '')) {
+      payment['invoice_ruc'] = invoiceRuc.trim();
+      needsSave = true;
+    }
+    if (invoiceBusinessName != null && invoiceBusinessName.trim() != (payment['invoice_business_name'] ?? '')) {
+      payment['invoice_business_name'] = invoiceBusinessName.trim();
+      needsSave = true;
+    }
+    if (invoiceFiscalAddress != null && invoiceFiscalAddress.trim() != (payment['invoice_fiscal_address'] ?? '')) {
+      payment['invoice_fiscal_address'] = invoiceFiscalAddress.trim();
+      needsSave = true;
+    }
+    if (showIgvBreakdown != null && showIgvBreakdown != payment['show_igv_breakdown']) {
+      payment['show_igv_breakdown'] = showIgvBreakdown;
+      needsSave = true;
+    }
+
+    if (needsSave) {
       payments[pIndex] = payment;
       client['payment_history'] = payments;
       clients[index] = client;
-      await saveClients(clients, reason: 'issue_receipt_${receiptNumber}_$paymentId');
-    } else {
-      if (customNote != null && customNote.trim() != (payment['receipt_custom_note'] ?? '')) {
-        payment['receipt_custom_note'] = customNote.trim();
-        payments[pIndex] = payment;
-        client['payment_history'] = payments;
-        clients[index] = client;
-        await saveClients(clients, reason: 'update_receipt_note_${payment['receipt_number']}_$paymentId');
-      }
+      await saveClients(clients, reason: 'issue_receipt_${payment['receipt_number']}_$paymentId');
     }
 
     return {
       'ok': true,
       'receipt_number': payment['receipt_number'],
+      'receipt_type': payment['receipt_type'] ?? vType,
+      'voucher_type': payment['receipt_type'] ?? vType,
+      'receipt_bol_number': payment['receipt_bol_number'],
+      'receipt_fac_number': payment['receipt_fac_number'],
       'receipt_issued_at': payment['receipt_issued_at'],
-      'already_issued': alreadyIssued,
+      'invoice_ruc': payment['invoice_ruc'],
+      'invoice_business_name': payment['invoice_business_name'],
+      'invoice_fiscal_address': payment['invoice_fiscal_address'],
+      'show_igv_breakdown': payment['show_igv_breakdown'] ?? false,
+      'already_issued': alreadyIssuedForType,
       'payment': payment,
       'client': {
         'id': client['id'],
@@ -963,12 +1094,18 @@ class DatabaseService {
           'method': p['method'] ?? '-',
           'reference': p['reference'] ?? '-',
           'receipt_number': p['receipt_number'] ?? '',
+          'receipt_type': p['receipt_type'] ?? '',
+          'receipt_bol_number': p['receipt_bol_number'] ?? '',
+          'receipt_fac_number': p['receipt_fac_number'] ?? '',
           'receipt_issued_at': p['receipt_issued_at'] ?? '',
           'client_id': c['id'],
           'business_name': c['business_name'] ?? '',
           'owner_name': c['owner_name'] ?? '',
+          'document_number': c['document_number'] ?? c['document_id'] ?? '',
           'phone': c['phone'] ?? '',
           'device_id': c['current_device_id'] ?? '',
+          'notes': p['notes'] ?? '',
+          'updated_at': p['updated_at'] ?? '',
         });
       }
     }
@@ -981,19 +1118,23 @@ class DatabaseService {
     final finances = await getConsolidatedFinances();
     final buffer = StringBuffer();
     buffer.write('\uFEFF'); // BOM UTF-8 para Excel
-    buffer.writeln('FECHA,ID_CLIENTE,NEGOCIO,TITULAR,TELEFONO,DEVICE_ID,MONTO_PEN,PLAN,MEDIO_PAGO,REFERENCIA');
+    buffer.writeln('FECHA,ID_CLIENTE,NEGOCIO,TITULAR,RUC_DNI,TELEFONO,DEVICE_ID,MONTO_PEN,PLAN,MEDIO_PAGO,REFERENCIA,TIPO_COMPROBANTE,N_COMPROBANTE');
     for (final f in finances) {
       final dateStr = (f['date'] as String).isNotEmpty ? (f['date'] as String).substring(0, 10) : '';
       final clientId = f['client_id'] ?? '';
       final biz = (f['business_name'] ?? '').toString().replaceAll('"', '""');
       final owner = (f['owner_name'] ?? '').toString().replaceAll('"', '""');
+      final docId = (f['document_number'] ?? '').toString().replaceAll('"', '""');
       final phone = f['phone'] ?? '';
       final devId = f['device_id'] ?? '';
       final amount = ((f['amount'] as num?)?.toDouble() ?? 0.0).toStringAsFixed(2);
       final plan = f['plan'] ?? '';
       final method = f['method'] ?? '';
       final ref = (f['reference'] ?? '').toString().replaceAll('"', '""');
-      buffer.writeln('$dateStr,$clientId,"$biz","$owner",$phone,$devId,$amount,$plan,"$method","$ref"');
+      final recNum = (f['receipt_number'] as String? ?? '').trim();
+      final recType = (f['receipt_type'] as String? ?? '').trim().toUpperCase();
+      final tipoComp = recType.isNotEmpty ? recType : (recNum.startsWith('FAC') ? 'FAC' : (recNum.startsWith('BOL') ? 'BOL' : ''));
+      buffer.writeln('$dateStr,$clientId,"$biz","$owner","$docId",$phone,$devId,$amount,$plan,"$method","$ref","$tipoComp","$recNum"');
     }
     return buffer.toString();
   }

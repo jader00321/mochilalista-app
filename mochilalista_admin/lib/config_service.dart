@@ -219,21 +219,38 @@ class ConfigService {
         'signature_text': 'Administración Comercial — MochilaLista',
         'next_correlative': 1,
         'sandbox_next_correlative': 1,
+        'next_invoice_correlative': 1,
+        'sandbox_next_invoice_correlative': 1,
+        'show_igv_breakdown': false,
+        'show_issuer_doc': true,
+        'show_issuer_phone': true,
+        'show_client_doc': true,
+        'show_hardware_id': true,
+        'show_operation_number': true,
+        'show_observation': true,
+        'show_signature': true,
+        'show_footer_notes': true,
       },
     };
   }
 
-  /// Retorna el siguiente número correlativo disponible según el modo activo
-  int getNextReceiptCorrelative({required bool isSandbox}) {
+  /// Retorna el siguiente número correlativo disponible según el tipo de comprobante y modo activo
+  int getNextReceiptCorrelative({required bool isSandbox, String voucherType = 'BOL'}) {
     final rc = receiptConfig;
-    final key = isSandbox ? 'sandbox_next_correlative' : 'next_correlative';
+    final isInvoice = voucherType.toUpperCase() == 'FAC';
+    final key = isInvoice
+        ? (isSandbox ? 'sandbox_next_invoice_correlative' : 'next_invoice_correlative')
+        : (isSandbox ? 'sandbox_next_correlative' : 'next_correlative');
     return (rc[key] as num?)?.toInt() ?? 1;
   }
 
-  /// Consume atómicamente el correlativo actual para emitir una boleta y lo incrementa en +1
-  Future<int> consumeReceiptCorrelative({required bool isSandbox}) async {
+  /// Consume atómicamente el correlativo actual para emitir un comprobante (BOL o FAC) y lo incrementa en +1
+  Future<int> consumeReceiptCorrelative({required bool isSandbox, String voucherType = 'BOL'}) async {
     final rc = Map<String, dynamic>.from(receiptConfig);
-    final key = isSandbox ? 'sandbox_next_correlative' : 'next_correlative';
+    final isInvoice = voucherType.toUpperCase() == 'FAC';
+    final key = isInvoice
+        ? (isSandbox ? 'sandbox_next_invoice_correlative' : 'next_invoice_correlative')
+        : (isSandbox ? 'sandbox_next_correlative' : 'next_correlative');
     final current = (rc[key] as num?)?.toInt() ?? 1;
     rc[key] = current + 1;
     final newConfig = Map<String, dynamic>.from(_config);
@@ -509,6 +526,14 @@ class ConfigService {
       if (rc.containsKey('sandbox_next_correlative')) {
         final snc = (rc['sandbox_next_correlative'] as num?)?.toInt() ?? 1;
         rc['sandbox_next_correlative'] = snc < 1 ? 1 : snc;
+      }
+      if (rc.containsKey('next_invoice_correlative')) {
+        final nic = (rc['next_invoice_correlative'] as num?)?.toInt() ?? 1;
+        rc['next_invoice_correlative'] = nic < 1 ? 1 : nic;
+      }
+      if (rc.containsKey('sandbox_next_invoice_correlative')) {
+        final snic = (rc['sandbox_next_invoice_correlative'] as num?)?.toInt() ?? 1;
+        rc['sandbox_next_invoice_correlative'] = snic < 1 ? 1 : snic;
       }
       merged['receipt_config'] = rc;
     }

@@ -337,7 +337,39 @@ function initNavigation() {
     if (floatingTooltip) floatingTooltip.classList.remove('visible');
   });
 
-  // 5. Botón Discreto "Apagar Servidor" en Sidebar Footer (Plan Maestro 15 - Fase 7)
+  // 5. Botón Discreto "Abrir en Chrome" en Sidebar Footer (Plan Maestro 18 - Fase 1)
+  const btnOpenChrome = document.getElementById('btnOpenInChrome');
+  if (btnOpenChrome) {
+    btnOpenChrome.addEventListener('mouseenter', () => {
+      if (!sidebar?.classList.contains('collapsed') || !floatingTooltip) return;
+      floatingTooltip.textContent = 'Abrir en Google Chrome';
+      const rect = btnOpenChrome.getBoundingClientRect();
+      const top = rect.top + (rect.height / 2) - 14;
+      const left = rect.right + 10;
+      floatingTooltip.style.top = `${Math.max(8, top)}px`;
+      floatingTooltip.style.left = `${left}px`;
+      floatingTooltip.classList.add('visible');
+    });
+
+    btnOpenChrome.addEventListener('mouseleave', () => {
+      if (floatingTooltip) floatingTooltip.classList.remove('visible');
+    });
+
+    btnOpenChrome.addEventListener('click', async () => {
+      try {
+        const res = await fetch('/api/system/open-browser', { method: 'POST' });
+        if (!res.ok) {
+          throw new Error('Servidor no pudo lanzar navegador');
+        }
+        showToast('Abriendo MochilaLista Admin en Google Chrome...', 'success');
+      } catch (err) {
+        window.open('http://localhost:8080', '_blank');
+        showToast('Abriendo pestaña en navegador...', 'info');
+      }
+    });
+  }
+
+  // 6. Botón Discreto "Apagar Servidor" en Sidebar Footer (Plan Maestro 15 - Fase 7)
   const btnShutdown = document.getElementById('btnShutdownServer');
   if (btnShutdown) {
     btnShutdown.addEventListener('mouseenter', () => {
@@ -379,6 +411,27 @@ function initNavigation() {
         },
         true
       );
+    });
+  }
+
+  // 7. Acciones Pendientes en Dashboard hacia Cartera CRM (Plan Maestro 18 - Fase 3)
+  const dashFollowupItem = document.getElementById('dashFollowupAlertItem');
+  if (dashFollowupItem) {
+    dashFollowupItem.addEventListener('click', () => {
+      const clientTab = document.querySelector('.nav-tab[data-tab="tabClients"]');
+      if (clientTab) clientTab.click();
+      const chip = document.getElementById('chipFilterFollowupDue');
+      if (chip) chip.click();
+    });
+  }
+
+  const dashBonusItem = document.getElementById('dashBonusAlertItem');
+  if (dashBonusItem) {
+    dashBonusItem.addEventListener('click', () => {
+      const clientTab = document.querySelector('.nav-tab[data-tab="tabClients"]');
+      if (clientTab) clientTab.click();
+      const chip = document.getElementById('chipFilterPendingBonus');
+      if (chip) chip.click();
     });
   }
 }
@@ -653,6 +706,39 @@ async function loadDashboard() {
         `;
         tbody.appendChild(tr);
       });
+    }
+
+    // Acciones pendientes CRM (Plan Maestro 18 - Fase 3): Seguimientos pendientes y Bonos IA por emitir
+    const todayStr = getLocalIsoDate();
+    let countFollowupDue = 0;
+    let countPendingBonus = 0;
+    if (globalClients && globalClients.length > 0) {
+      globalClients.forEach(c => {
+        if (c.next_followup_date && c.next_followup_date <= todayStr) countFollowupDue++;
+        if ((c.ai_pending_bonus || 0) > 0) countPendingBonus++;
+      });
+    }
+
+    const alertBanner = document.getElementById('dashPendingActionsAlert');
+    const followupItem = document.getElementById('dashFollowupAlertItem');
+    const bonusItem = document.getElementById('dashBonusAlertItem');
+    const followupCountEl = document.getElementById('dashFollowupAlertCount');
+    const bonusCountEl = document.getElementById('dashBonusAlertCount');
+
+    if (alertBanner) {
+      if (countFollowupDue > 0 || countPendingBonus > 0) {
+        alertBanner.style.display = 'block';
+        if (followupItem) {
+          followupItem.style.display = countFollowupDue > 0 ? 'inline-flex' : 'none';
+          if (followupCountEl) followupCountEl.textContent = countFollowupDue;
+        }
+        if (bonusItem) {
+          bonusItem.style.display = countPendingBonus > 0 ? 'inline-flex' : 'none';
+          if (bonusCountEl) bonusCountEl.textContent = countPendingBonus;
+        }
+      } else {
+        alertBanner.style.display = 'none';
+      }
     }
 
     // Cargar finanzas si están vacías para alimentar el gráfico de ingresos
@@ -1000,14 +1086,100 @@ function getLatestPublishedVersion() {
   return latest;
 }
 
+// =================== HELPERS COMERCIALES & FORMATO (FASE 3) ===================
+function getLocalIsoDate(d = new Date()) {
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function formatPeruvianPhoneDisplay(phone) {
+  if (!phone) return '-';
+  const raw = String(phone).trim();
+  const digits = raw.replace(/\D/g, '');
+  if (digits.length === 9) {
+    return `+51${digits}`;
+  }
+  if (digits.length === 11 && digits.startsWith('51')) {
+    return `+${digits}`;
+  }
+  return raw.startsWith('+') ? raw : (digits ? `+${digits}` : raw);
+}
+
+function formatPlanHumanLabel(planCode) {
+  if (!planCode) return '-';
+  const p = String(planCode).toUpperCase().trim();
+  switch (p) {
+    case 'MENSUAL': return 'Plan Mensual';
+    case 'TRIMESTRAL': return 'Plan Trimestral';
+    case 'SEMESTRAL': return 'Plan Semestral';
+    case 'ANUAL': return 'Plan Anual';
+    case 'PERPETUO_LIBERADO':
+    case 'PERPETUO': return 'Licencia Perpetua';
+    case 'TRIAL':
+    case 'TRIAL_GRATUITO': return 'Trial Gratuito';
+    case 'EXTENSION_CORTESIA': return 'Extensión Cortesía';
+    case 'PASE_ACTUALIZACION_ANUAL': return 'Pase Actualización Anual';
+    case 'RECARGA_IA_150': return 'Recarga IA 150';
+    case 'BONO_IA_PERSONALIZADO': return 'Recarga IA Personalizada';
+    case 'SERVICIO_MIGRACION': return 'Servicio de Migración';
+    case 'ABONO_PARCIAL': return 'Abono Parcial';
+    case 'PROSPECTO': return 'Prospecto Comercial';
+    default:
+      return p.replace(/_/g, ' ');
+  }
+}
+
+/**
+ * Normaliza cualquier denominación de plan (canónica o legada) a su slug oficial.
+ * Retorna null si es un concepto personalizado no catalogado.
+ */
+function normalizePlanToSlug(rawPlan) {
+  if (!rawPlan) return null;
+  const p = String(rawPlan).trim().toUpperCase();
+
+  // Coincidencias directas con slugs canónicos
+  if (p === 'MENSUAL') return 'MENSUAL';
+  if (p === 'TRIMESTRAL') return 'TRIMESTRAL';
+  if (p === 'SEMESTRAL') return 'SEMESTRAL';
+  if (p === 'ANUAL') return 'ANUAL';
+  if (p === 'PERPETUO_LIBERADO' || p === 'PERPETUO') return 'PERPETUO_LIBERADO';
+  if (p === 'PASE_ACTUALIZACION_ANUAL') return 'PASE_ACTUALIZACION_ANUAL';
+  if (p === 'RECARGA_IA_150') return 'RECARGA_IA_150';
+  if (p === 'BONO_IA_PERSONALIZADO') return 'BONO_IA_PERSONALIZADO';
+  if (p === 'SERVICIO_MIGRACION') return 'SERVICIO_MIGRACION';
+  if (p === 'EXTENSION_CORTESIA') return 'EXTENSION_CORTESIA';
+  if (p === 'ABONO_PARCIAL') return 'ABONO_PARCIAL';
+
+  // Normalización defensiva para textos descriptivos legados
+  if (p.includes('MENSUAL')) return 'MENSUAL';
+  if (p.includes('TRIMESTRAL')) return 'TRIMESTRAL';
+  if (p.includes('SEMESTRAL')) return 'SEMESTRAL';
+  if (p.includes('ANUAL') && !p.includes('UPDATE') && !p.includes('ACTUALIZAC')) return 'ANUAL';
+  if (p.includes('PERPETU')) return 'PERPETUO_LIBERADO';
+  if (p.includes('PASE') || (p.includes('UPDATE') && p.includes('ANUAL')) || p.includes('ACTUALIZACION')) return 'PASE_ACTUALIZACION_ANUAL';
+  if (p.includes('150') || p.includes('BOLSA EXTRA IA') || p.includes('RECARGA EXTRA IA') || p.includes('RECARGA IA 150')) return 'RECARGA_IA_150';
+  if (p.includes('BONO IA') || p.includes('RECARGA IA PERSONALIZADA')) return 'BONO_IA_PERSONALIZADO';
+  if (p.includes('MIGRAC') || p.includes('SERVICIO TÉCNICO') || p.includes('SERVICIO TECNICO')) return 'SERVICIO_MIGRACION';
+  if (p.includes('CORTES') || p.includes('EXTENSION') || p.includes('EXTENSIÓN')) return 'EXTENSION_CORTESIA';
+  if (p.includes('ABONO') || p.includes('PARCIAL') || p.includes('A CUENTA')) return 'ABONO_PARCIAL';
+
+  return null;
+}
+
 function updateFilterCounts() {
   const now = new Date();
+  const todayStr = getLocalIsoDate(now);
   let countActive = 0;
   let countExpiring = 0;
   let countExpired = 0;
   let countPerpetual = 0;
   let countProspect = 0;
   let countOutdated = 0;
+  let countTrial = 0;
+  let countPendingBonus = 0;
+  let countFollowupDue = 0;
 
   const latestVer = getLatestPublishedVersion();
 
@@ -1016,7 +1188,20 @@ function updateFilterCounts() {
     const status = (c.license_status || '').toUpperCase();
     const isProspect = plan === 'PROSPECTO' || status === 'PROSPECTO';
     const isPerp = plan === 'PERPETUO_LIBERADO' || plan === 'PERPETUO';
+    const isTrial = plan === 'TRIAL' || status === 'TRIAL' || plan === 'TRIAL_GRATUITO';
     const expDate = c.license_expires ? new Date(c.license_expires) : null;
+
+    if (isTrial) {
+      countTrial++;
+    }
+
+    if ((c.ai_pending_bonus || 0) > 0) {
+      countPendingBonus++;
+    }
+
+    if (c.next_followup_date && c.next_followup_date <= todayStr) {
+      countFollowupDue++;
+    }
 
     if (isProspect) {
       countProspect++;
@@ -1051,6 +1236,18 @@ function updateFilterCounts() {
   setTxt('countPerpetual', countPerpetual);
   setTxt('countProspect', countProspect);
   setTxt('countOutdated', countOutdated);
+  setTxt('countTrial', countTrial);
+  setTxt('countPendingBonus', countPendingBonus);
+  setTxt('countFollowupDue', countFollowupDue);
+
+  const chipBonus = document.getElementById('chipFilterPendingBonus');
+  if (chipBonus) {
+    if (countPendingBonus > 0) {
+      chipBonus.classList.add('accent-pending');
+    } else {
+      chipBonus.classList.remove('accent-pending');
+    }
+  }
 }
 
 // =================== HELPER CENTRALIZADO: BADGE DE ESTADO DEL CLIENTE ===================
@@ -1108,6 +1305,7 @@ function renderClientsTable() {
   tbody.innerHTML = '';
 
   const now = new Date();
+  const todayStr = getLocalIsoDate(now);
   const latestVer = getLatestPublishedVersion();
 
   const filtered = globalClients.filter(c => {
@@ -1117,6 +1315,7 @@ function renderClientsTable() {
       const status = (c.license_status || '').toUpperCase();
       const isProspect = plan === 'PROSPECTO' || status === 'PROSPECTO';
       const isPerp = plan === 'PERPETUO_LIBERADO' || plan === 'PERPETUO';
+      const isTrial = plan === 'TRIAL' || status === 'TRIAL' || plan === 'TRIAL_GRATUITO';
       const expDate = c.license_expires ? new Date(c.license_expires) : null;
       const diffDays = expDate ? Math.ceil((expDate - now) / (1000 * 60 * 60 * 24)) : 999;
 
@@ -1125,6 +1324,9 @@ function renderClientsTable() {
       if (currentClientFilter === 'expiring' && (isProspect || !(!isPerp && diffDays >= 0 && diffDays <= 7))) return false;
       if (currentClientFilter === 'expired' && (isProspect || !(!isPerp && diffDays < 0))) return false;
       if (currentClientFilter === 'perpetual' && (isProspect || !isPerp)) return false;
+      if (currentClientFilter === 'trial' && !isTrial) return false;
+      if (currentClientFilter === 'pending_bonus' && (!c.ai_pending_bonus || c.ai_pending_bonus <= 0)) return false;
+      if (currentClientFilter === 'followup_due' && (!c.next_followup_date || c.next_followup_date > todayStr)) return false;
       if (currentClientFilter === 'outdated') {
         const clientVer = (c.installed_version || '').trim();
         if (isProspect || !latestVer || !clientVer || compareSemVer(clientVer, latestVer) >= 0) {
@@ -1145,6 +1347,7 @@ function renderClientsTable() {
         c.installed_version,
         c.license_type,
         c.notes,
+        c.next_followup_date,
       ].filter(Boolean).join(' ').toLowerCase();
 
       if (!matchText.includes(currentSearchQuery)) {
@@ -1154,6 +1357,11 @@ function renderClientsTable() {
 
     return true;
   });
+
+  // Si se filtra por seguimientos pendientes, ordenar por fecha más vencida primero (ascendente)
+  if (currentClientFilter === 'followup_due') {
+    filtered.sort((a, b) => (a.next_followup_date || '').localeCompare(b.next_followup_date || ''));
+  }
 
   if (filtered.length === 0) {
     tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; padding:1.5rem; color:var(--text-muted);">No se encontraron clientes para este filtro o criterio de búsqueda.</td></tr>';
@@ -1199,18 +1407,30 @@ function renderClientsTable() {
           </button>
         </span>`;
 
-    const pendingBonusBadge = (c.ai_pending_bonus && c.ai_pending_bonus > 0)
-      ? `<div class="badge-pending-bonus" title="Bono acordado pendiente de emitir en token Ed25519">+${c.ai_pending_bonus} IA por emitir</div>`
-      : '';
-
-    // Saldo real en celular vs Bono pendiente
-    const realAiBalance = (c.ai_reported_balance !== undefined && c.ai_reported_balance !== null)
+    // Homogeneización 1:1 de Créditos IA (Plan Maestro 18 - Fase 3)
+    const displayAi = (c.ai_reported_balance !== undefined && c.ai_reported_balance !== null)
       ? c.ai_reported_balance
       : (c.ai_accumulated_credits ?? c.ai_extra_credits ?? 0);
-    const hasAiCredits = realAiBalance > 0 || (c.ai_extra_credits || 0) > 0;
-    const aiDisplay = (c.ai_reported_balance !== undefined && c.ai_reported_balance !== null)
-      ? `${c.ai_reported_balance} IA`
-      : ((c.ai_extra_credits || 0) > 0 ? `+${c.ai_extra_credits} IA` : '0 IA');
+    const hasAiCredits = displayAi > 0;
+    const aiMarkup = hasAiCredits
+      ? `<span class="badge badge-purple">${displayAi} IA</span>`
+      : '<span class="badge badge-outline" style="color:var(--text-muted); border:1px solid var(--border-color);">0 IA</span>';
+
+    const pendingBonusBadge = (c.ai_pending_bonus && c.ai_pending_bonus > 0)
+      ? `<div class="badge-pending-bonus" title="Bono acordado pendiente de emitir en token Ed25519">+${c.ai_pending_bonus} pend.</div>`
+      : '';
+
+    // Seguimiento en columna Negocio & Titular
+    let followupBadge = '';
+    if (c.next_followup_date) {
+      if (c.next_followup_date < todayStr) {
+        followupBadge = `<div style="margin-top:3px;"><span class="badge badge-red badge-xs" style="font-size:0.7rem; padding:1px 6px;" title="Seguimiento comercial vencido">Seg. Vencido: ${escapeHtml(c.next_followup_date)}</span></div>`;
+      } else if (c.next_followup_date === todayStr) {
+        followupBadge = `<div style="margin-top:3px;"><span class="badge badge-yellow badge-xs" style="font-size:0.7rem; padding:1px 6px;" title="Seguimiento programado para hoy">Seg. Hoy</span></div>`;
+      } else {
+        followupBadge = `<div style="margin-top:3px;"><span class="badge badge-outline badge-xs" style="font-size:0.7rem; padding:1px 6px; color:var(--text-muted); border-color:var(--border-color);" title="Próximo seguimiento">Seg: ${escapeHtml(c.next_followup_date)}</span></div>`;
+      }
+    }
 
     const planSuffix = (!isProspect && !isTrial)
       ? `<small style="font-weight:700; color:var(--text-secondary);">(${escapeHtml(c.license_type || 'MENSUAL')})</small>`
@@ -1223,6 +1443,7 @@ function renderClientsTable() {
         <div style="font-size:0.8rem; color:var(--text-secondary); margin-top:2px;">
           ${escapeHtml(c.owner_name)}${c.document_id ? ' • ' + escapeHtml(c.document_id) : ''}
         </div>
+        ${followupBadge}
         ${c.notes ? `<div style="font-size:0.75rem; color:var(--text-muted); margin-top:2px;">${escapeHtml(c.notes)}</div>` : ''}
       </td>
       <td>
@@ -1242,9 +1463,7 @@ function renderClientsTable() {
         ${verBadge}
       </td>
       <td>
-        ${hasAiCredits
-        ? `<span class="badge badge-purple">${aiDisplay}</span>`
-        : '<span class="badge badge-outline" style="color:var(--text-muted); border:1px solid var(--border-color);">0 IA</span>'}
+        ${aiMarkup}
         ${pendingBonusBadge}
       </td>
       <td style="text-align:center; white-space: nowrap;">
@@ -1276,6 +1495,79 @@ function copyDeviceIdToClipboard(deviceId) {
   });
 }
 
+let currentSelectedGeneratorCode = null;
+
+const GEN_SVGS = {
+  lightbulb: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;margin-right:4px;"><path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5"/><path d="M9 18h6"/><path d="M10 22h4"/></svg>`,
+  calendar: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;margin-right:4px;"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>`,
+  bolt: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;margin-right:4px;"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>`,
+  lock: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;margin-right:4px;"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>`,
+  coin: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;margin-right:4px;"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>`,
+  gear: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;margin-right:4px;"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>`,
+  star: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;margin-right:4px;"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>`,
+  refresh: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;margin-right:4px;"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>`,
+  clock: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;margin-right:4px;"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`
+};
+
+function decodeMl9TokenPayload(token) {
+  if (!token || typeof token !== 'string') return null;
+  const trimmed = token.trim();
+  let b64Part = '';
+  if (trimmed.startsWith('ML9-')) {
+    const parts = trimmed.substring(4).split('.');
+    b64Part = parts[0] || '';
+  } else if (trimmed.includes('.')) {
+    b64Part = trimmed.split('.')[0] || '';
+  } else {
+    b64Part = trimmed;
+  }
+  if (!b64Part) return null;
+  try {
+    let base64 = b64Part.replace(/-/g, '+').replace(/_/g, '/');
+    while (base64.length % 4 !== 0) {
+      base64 += '=';
+    }
+    const decodedStr = atob(base64);
+    return JSON.parse(decodedStr);
+  } catch (e) {
+    return null;
+  }
+}
+
+function resetCustomSettings() {
+  const customDays = document.getElementById('licCustomDays');
+  const customAi = document.getElementById('licCustomAiBonus');
+  const customDate = document.getElementById('licCustomExactDate');
+  const chkCustom = document.getElementById('chkEnableCustomSettings');
+  const customContent = document.getElementById('licCustomContent');
+  const accordionArrow = document.getElementById('accordionArrow');
+  if (customDays) customDays.value = '';
+  if (customAi) customAi.value = '0';
+  if (customDate) customDate.value = '';
+  if (chkCustom) chkCustom.checked = false;
+  if (customContent) customContent.classList.remove('open');
+  if (accordionArrow) accordionArrow.textContent = '▼';
+}
+
+function buildGeneratorWhatsAppMessage(code, client) {
+  const token = code?.token || '';
+  const plan = code?.plan || client?.license_type || 'MENSUAL';
+  const titular = client?.owner_name || 'Comerciante';
+  const negocio = client?.business_name || 'su negocio';
+  const deviceId = code?.device_id || client?.current_device_id || 'ML-0000';
+  const aiVal = (code?.ai_credits !== undefined && code?.ai_credits !== null) ? code.ai_credits : (code?.ai_extra_credits ?? 0);
+  const expires = (plan === 'PERPETUO_LIBERADO') ? 'Vitalicia' : (code?.expires_at ? code.expires_at.substring(0, 10) : (client?.license_expires ? client.license_expires.substring(0, 10) : 'Activa'));
+  const version = client?.installed_version ? `v${client.installed_version}` : 'v9.35.0';
+
+  if (plan === 'BONO_IA_PERSONALIZADO' || plan === 'RECARGA_IA_150') {
+    return `¡Hola, ${titular}! 👋 Te saludamos de MochilaLista.\nTu recarga de escaneos de Inteligencia Artificial para *${negocio}* ha sido acreditada con éxito.\n\n⚡ Detalle de la Recarga:\n• Créditos IA Otorgados: +${aiVal} escaneos vitalicios\n• Hardware ID Vinculado: \`${deviceId}\`\n\n🔑 Token de Activación IA:\n\`${token}\`\n\nPuedes ingresar este token o escanear el QR en tu app para sumarlos inmediatamente a tu saldo disponible. ¡A seguir potenciando tu negocio! 🚀`;
+  } else if (plan === 'EXTENSION_CORTESIA') {
+    return `Estimado(a) ${titular}, te saludamos de MochilaLista.\nTe confirmamos la habilitación de una extensión de cortesía para tu sistema en *${negocio}*.\n\n📌 Nueva vigencia temporal: *${expires}*\n• Hardware ID: \`${deviceId}\`\n\n🔑 Código de Activación:\n\`${token}\`\n\nIngresa este código o escanea el QR en tu aplicación para continuar operando sin interrupciones. ¡Quedamos a tu servicio! 🎒✅`;
+  } else {
+    return `¡Excelente noticia, ${titular}!\nTu licencia oficial de MochilaLista para el negocio *${negocio}* ha sido generada exitosamente.\n\n📌 Detalles de la Licencia:\n• Plan: ${plan.replace(/_/g, ' ')}\n• Hardware ID: \`${deviceId}\`\n• Vigencia: ${expires}\n• Versión: ${version}\n\n🔑 Código de Activación:\n\`${token}\`\n\nPuedes ingresar este código o escanear el QR desde la pantalla de activación de tu aplicación móvil. ¡Gracias por confiar en MochilaLista! 🎒✅`;
+  }
+}
+
 function selectClientForLicense(clientId, options = {}) {
   drawerReturnState = null;
   const tabs = document.querySelectorAll('.nav-tab');
@@ -1291,18 +1583,15 @@ function selectClientForLicense(clientId, options = {}) {
     licSelect.value = clientId;
     const client = globalClients.find(c => c.id === clientId);
 
+    resetCustomSettings();
+
     // Si el cliente tiene bono IA acordado pendiente de emitir o se solicitó preferBonus
-    if (options.preferBonus && client && (client.ai_pending_bonus || 0) > 0) {
+    if (client && (client.ai_pending_bonus || 0) > 0) {
       const planSel = document.getElementById('licPlanSelect');
       if (planSel) planSel.value = 'BONO_IA_PERSONALIZADO';
       const aiInput = document.getElementById('licCustomAiAmount');
       if (aiInput) aiInput.value = client.ai_pending_bonus;
       updateEcoModeUI('free');
-    } else if (client && (client.ai_pending_bonus || 0) > 0) {
-      const bonusInput = document.getElementById('licCustomAiBonus');
-      if (bonusInput) {
-        bonusInput.value = client.ai_pending_bonus;
-      }
     }
 
     updateClientSummaryCard();
@@ -1317,10 +1606,12 @@ function initLicenseStudioEvents() {
   const clientSelect = document.getElementById('licClientSelect');
 
   planSelect?.addEventListener('change', () => {
+    resetCustomSettings();
     updateLiveLicenseProjection();
   });
 
   clientSelect?.addEventListener('change', () => {
+    resetCustomSettings();
     updateClientSummaryCard();
     updateLiveLicenseProjection();
     const activeClient = globalClients.find(c => c.id === clientSelect.value);
@@ -1387,6 +1678,22 @@ function initLicenseStudioEvents() {
     if (accordionArrow) accordionArrow.textContent = isOpen ? '▲' : '▼';
   });
 
+  // Checkbox de habilitación explícita de ajustes personalizados
+  document.getElementById('chkEnableCustomSettings')?.addEventListener('change', (e) => {
+    if (e.target.checked) {
+      if (customContent) customContent.classList.add('open');
+      if (accordionArrow) accordionArrow.textContent = '▲';
+    }
+    updateLiveLicenseProjection();
+  });
+
+  // Botón para restablecer ajustes personalizados a los valores originales del plan
+  document.getElementById('btnResetCustomSettings')?.addEventListener('click', () => {
+    resetCustomSettings();
+    updateLiveLicenseProjection();
+    showToast('Ajustes comerciales personalizados restablecidos.', 'info');
+  });
+
   // Escuchar inputs para recalcular proyección en vivo
   document.getElementById('licCustomDays')?.addEventListener('input', updateLiveLicenseProjection);
   document.getElementById('licCustomAiBonus')?.addEventListener('input', updateLiveLicenseProjection);
@@ -1416,6 +1723,19 @@ function initLicenseStudioEvents() {
     });
   });
 
+  document.getElementById('btnGenCopyMessageAndCode')?.addEventListener('click', () => {
+    const clientId = document.getElementById('licClientSelect')?.value;
+    const client = globalClients.find(c => c.id === clientId);
+    if (!currentSelectedGeneratorCode || !client) {
+      showToast('No hay una licencia activa seleccionada para copiar.', 'warning');
+      return;
+    }
+    const msg = buildGeneratorWhatsAppMessage(currentSelectedGeneratorCode, client);
+    navigator.clipboard.writeText(msg).then(() => {
+      showToast('¡Mensaje contextual y código copiados para WhatsApp!', 'success');
+    });
+  });
+
   document.getElementById('btnDownloadQr')?.addEventListener('click', downloadQrCode);
   document.getElementById('btnDownloadCredential')?.addEventListener('click', downloadCredential);
   document.getElementById('btnCopyCredentialImage')?.addEventListener('click', copyCredentialToClipboard);
@@ -1423,23 +1743,24 @@ function initLicenseStudioEvents() {
   document.getElementById('btnSendWa')?.addEventListener('click', () => {
     const clientId = document.getElementById('licClientSelect')?.value;
     const client = globalClients.find(c => c.id === clientId);
-    const token = document.getElementById('generatedCodeDisplay')?.textContent?.trim();
-    if (!client || !token) {
+    if (!client || !currentSelectedGeneratorCode) {
       showToast('No hay una licencia activa seleccionada para enviar.', 'warning');
       return;
     }
-    const cleanPhone = (client.phone || '').replace(/[^0-9]/g, '');
-    const msgText = renderConfigTemplate('license_issued', {
-      titular: client.owner_name || 'Comerciante',
-      negocio: client.business_name || 'tu negocio',
-      plan: document.getElementById('metaGenPlan')?.textContent || client.license_type || 'Licencia',
-      dias: '-',
-      vencimiento: document.getElementById('metaGenExpires')?.textContent || client.license_expires || 'Activa',
-      creditos_ia: document.getElementById('metaGenAi')?.textContent || client.ai_reported_balance || 0,
-      codigo: token,
-      device_id: client.current_device_id || 'ML-0000',
-    });
-    window.open(`https://api.whatsapp.com/send?phone=${cleanPhone}&text=${encodeURIComponent(msgText)}`, '_blank');
+    const plan = currentSelectedGeneratorCode.plan || client.license_type;
+    let tpl = 'license';
+    if (plan === 'BONO_IA_PERSONALIZADO' || plan === 'RECARGA_IA_150') {
+      tpl = 'ai_bonus';
+    } else if (plan === 'EXTENSION_CORTESIA') {
+      tpl = 'courtesy_extension';
+    }
+    if (typeof openWhatsAppComposer === 'function') {
+      openWhatsAppComposer(client.id, tpl, {
+        token: currentSelectedGeneratorCode.token,
+        aiCredits: (currentSelectedGeneratorCode.ai_credits ?? currentSelectedGeneratorCode.ai_extra_credits ?? 0),
+        diasExtension: currentSelectedGeneratorCode.days || 7,
+      });
+    }
   });
 
   // Botón Auditar en el Inspector
@@ -1490,14 +1811,14 @@ function updateEcoModeUI(mode) {
 
   if (isFree) {
     if (amountInput) amountInput.value = '0.00';
-    if (grpAmount) grpAmount.style.opacity = '0.5';
-    if (grpMethod) grpMethod.style.opacity = '0.5';
-    if (grpRef) grpRef.style.opacity = '0.5';
+    if (grpAmount) grpAmount.style.display = 'none';
+    if (grpMethod) grpMethod.style.display = 'none';
+    if (grpRef) grpRef.style.display = 'none';
     if (boxSuggested) boxSuggested.style.display = 'none';
   } else {
-    if (grpAmount) grpAmount.style.opacity = '1';
-    if (grpMethod) grpMethod.style.opacity = '1';
-    if (grpRef) grpRef.style.opacity = '1';
+    if (grpAmount) { grpAmount.style.display = ''; grpAmount.style.opacity = '1'; }
+    if (grpMethod) { grpMethod.style.display = ''; grpMethod.style.opacity = '1'; }
+    if (grpRef) { grpRef.style.display = ''; grpRef.style.opacity = '1'; }
     if (boxSuggested) boxSuggested.style.display = 'block';
     updateSuggestedPrice();
   }
@@ -1539,7 +1860,8 @@ function updateClientSummaryCard() {
   document.getElementById('sumBizName').textContent = client.business_name || 'Negocio Sin Nombre';
   document.getElementById('sumOwnerName').textContent = `• Titular: ${client.owner_name || '-'}`;
   document.getElementById('sumDeviceId').textContent = client.current_device_id || 'ML-0000';
-  document.getElementById('sumPlanNonce').textContent = `${(client.license_type || 'MENSUAL').replace(/_/g, ' ')} (Nonce #${client.next_nonce || 1})`;
+  const nextNonce = client.next_nonce || 1;
+  document.getElementById('sumPlanNonce').textContent = `${(client.license_type || 'MENSUAL').replace(/_/g, ' ')} (Próximo Nonce: #${nextNonce})`;
 
   const now = new Date();
   const expDate = client.license_expires ? new Date(client.license_expires) : null;
@@ -1579,8 +1901,6 @@ function updateClientSummaryCard() {
   let aiText = `${realAi} IA en celular`;
   if (pendingAi > 0) {
     aiText += ` (+${pendingAi} IA pendientes de emitir)`;
-  } else if ((client.ai_extra_credits || 0) > 0) {
-    aiText = `+${client.ai_extra_credits} escaneos IA vitalicios`;
   }
   document.getElementById('sumAiCredits').textContent = aiText;
   document.getElementById('sumInstalledVersion').textContent = `v${client.installed_version || '9.35.0'}`;
@@ -1601,6 +1921,16 @@ function updateLiveLicenseProjection() {
   const clientId = clientSelect?.value;
   const client = globalClients.find(c => c.id === clientId);
 
+  // Anti-doble bono: Ocultar y forzar a 0 el bono de regalo si el plan es Bono IA Personalizado
+  const grpLicCustomAiBonus = document.getElementById('grpLicCustomAiBonus');
+  if (plan === 'BONO_IA_PERSONALIZADO') {
+    if (grpLicCustomAiBonus) grpLicCustomAiBonus.style.display = 'none';
+    const customAiInput = document.getElementById('licCustomAiBonus');
+    if (customAiInput) customAiInput.value = '0';
+  } else {
+    if (grpLicCustomAiBonus) grpLicCustomAiBonus.style.display = '';
+  }
+
   // Mostrar / Ocultar panel interactivo de Bono IA Personalizado
   if (plan === 'BONO_IA_PERSONALIZADO') {
     if (panelCustomAi) panelCustomAi.style.display = 'block';
@@ -1611,22 +1941,35 @@ function updateLiveLicenseProjection() {
   const selectedOpt = planSelect.options[planSelect.selectedIndex];
   const cfgPlan = ownerConfig?.catalog?.[plan];
 
-  if (plan !== 'BONO_IA_PERSONALIZADO') {
+  const grpAmount = document.getElementById('grpLicPaymentAmount');
+  const grpMethod = document.getElementById('grpLicPaymentMethod');
+  const grpRef = document.getElementById('grpLicPaymentRef');
+
+  if (plan === 'EXTENSION_CORTESIA') {
+    if (grpAmount) grpAmount.style.display = 'none';
+    if (grpMethod) grpMethod.style.display = 'none';
+    if (grpRef) grpRef.style.display = 'none';
+    if (amountInput) amountInput.value = '0.00';
+  } else if (plan === 'BONO_IA_PERSONALIZADO') {
+    const isFree = document.getElementById('ecoModeFree')?.checked ?? true;
+    if (isFree) {
+      if (amountInput) amountInput.value = '0.00';
+      if (grpAmount) grpAmount.style.display = 'none';
+      if (grpMethod) grpMethod.style.display = 'none';
+      if (grpRef) grpRef.style.display = 'none';
+    } else {
+      if (grpAmount) { grpAmount.style.display = ''; grpAmount.style.opacity = '1'; }
+      if (grpMethod) { grpMethod.style.display = ''; grpMethod.style.opacity = '1'; }
+      if (grpRef) { grpRef.style.display = ''; grpRef.style.opacity = '1'; }
+    }
+  } else {
     const defaultPrice = (cfgPlan?.price !== undefined) ? cfgPlan.price.toFixed(2) : (selectedOpt?.getAttribute('data-price') || '35.00');
     if (amountInput && document.activeElement !== amountInput) {
       amountInput.value = defaultPrice;
     }
-    const grpAmount = document.getElementById('grpLicPaymentAmount');
-    const grpMethod = document.getElementById('grpLicPaymentMethod');
-    const grpRef = document.getElementById('grpLicPaymentRef');
-    if (grpAmount) grpAmount.style.opacity = '1';
-    if (grpMethod) grpMethod.style.opacity = '1';
-    if (grpRef) grpRef.style.opacity = '1';
-  } else {
-    const isFree = document.getElementById('ecoModeFree')?.checked ?? true;
-    if (isFree && amountInput) {
-      amountInput.value = '0.00';
-    }
+    if (grpAmount) { grpAmount.style.display = ''; grpAmount.style.opacity = '1'; }
+    if (grpMethod) { grpMethod.style.display = ''; grpMethod.style.opacity = '1'; }
+    if (grpRef) { grpRef.style.display = ''; grpRef.style.opacity = '1'; }
   }
 
   impactBadge.style.display = 'block';
@@ -1636,9 +1979,11 @@ function updateLiveLicenseProjection() {
   const now = new Date();
   let baseDate = now;
 
+  // Leer ajustes personalizados estrictamente si el switch está activado y el plan no es Bono IA
+  const isCustomEnabled = (document.getElementById('chkEnableCustomSettings')?.checked === true) && (plan !== 'BONO_IA_PERSONALIZADO');
   const customMode = document.getElementById('licCustomComputationMode')?.value || 'cumulative';
-  const customDaysVal = parseInt(document.getElementById('licCustomDays')?.value) || 0;
-  const customAiBonus = parseInt(document.getElementById('licCustomAiBonus')?.value) || 0;
+  const customDaysVal = isCustomEnabled ? (parseInt(document.getElementById('licCustomDays')?.value) || 0) : 0;
+  const customAiBonus = isCustomEnabled ? (parseInt(document.getElementById('licCustomAiBonus')?.value) || 0) : 0;
 
   if (customMode === 'cumulative' && client && client.license_expires) {
     const exp = new Date(client.license_expires);
@@ -1657,7 +2002,9 @@ function updateLiveLicenseProjection() {
   const currentAi = (client?.ai_reported_balance !== undefined && client?.ai_reported_balance !== null)
     ? client.ai_reported_balance
     : (client?.ai_accumulated_credits ?? client?.ai_extra_credits ?? 0);
-  const currentNonce = client?.next_nonce || 1;
+  const nextNonce = client?.next_nonce || 1;
+  const lastNonce = nextNonce > 1 ? nextNonce - 1 : 0;
+  const nonceHtml = `<div>${GEN_SVGS.lock} <strong>Nonce Criptográfico:</strong> Último Nonce Emitido (#${lastNonce > 0 ? lastNonce : 'Ninguno'}) → <strong>Próximo Nonce a Firmar (#${nextNonce})</strong>.</div>`;
 
   // 1. Proyección de Bono IA Personalizado (0 días)
   if (plan === 'BONO_IA_PERSONALIZADO') {
@@ -1667,7 +2014,7 @@ function updateLiveLicenseProjection() {
     const paymentAmt = parseFloat(amountInput?.value) || 0;
     const paymentMth = document.getElementById('licPaymentMethod')?.value || 'Yape';
 
-    impactBadge.innerHTML = `💡 <strong>Bono / Recarga IA Personalizada:</strong> Otorga <strong>+${customScans} créditos de escaneos IA</strong> vitalicios directos al celular sin alterar días ni suscripción.`;
+    impactBadge.innerHTML = `${GEN_SVGS.lightbulb} <strong>Bono / Recarga IA Personalizada:</strong> Otorga <strong>+${customScans} créditos de escaneos IA</strong> vitalicios directos al celular sin alterar días ni suscripción.`;
 
     const clientExpStr = client?.license_expires ? client.license_expires.substring(0, 10) : 'Sin fecha';
     const isTrial = client?.license_type === 'TRIAL' || client?.trial_days_remaining !== null;
@@ -1680,24 +2027,24 @@ function updateLiveLicenseProjection() {
       : `Cobro acordado: S/ ${paymentAmt.toFixed(2)} vía ${escapeHtml(paymentMth)}`;
 
     projectionText.innerHTML = `
-      <div style="margin-bottom:0.35rem;">📅 <strong>Vigencia:</strong> Mantiene fecha actual (${vigenciaTxt}) (Sin cambios de días).</div>
-      <div style="margin-bottom:0.35rem;">⚡ <strong>Créditos IA:</strong> Saldo celular (${currentAi} IA) + Esta emisión (+${customScans} IA) = <strong>Total proyectado (${projectedAi} IA)</strong>.</div>
-      <div style="margin-bottom:0.35rem;">🔐 <strong>Nonce Criptográfico:</strong> Nonce actual (#${currentNonce}) → <strong>Siguiente (#${currentNonce + 1})</strong>.</div>
-      <div style="font-size:0.82rem; color:var(--text-secondary);">💰 <strong>Impacto Financiero:</strong> ${financeTxt}.</div>
+      <div style="margin-bottom:0.35rem;">${GEN_SVGS.calendar} <strong>Vigencia:</strong> Mantiene fecha actual (${vigenciaTxt}) (Sin cambios de días).</div>
+      <div style="margin-bottom:0.35rem;">${GEN_SVGS.bolt} <strong>Créditos IA:</strong> Saldo celular (${currentAi} IA) + Esta emisión (+${customScans} IA) = <strong>Total proyectado (${projectedAi} IA)</strong>.</div>
+      <div style="margin-bottom:0.35rem;">${nonceHtml}</div>
+      <div style="font-size:0.82rem; color:var(--text-secondary);">${GEN_SVGS.coin} <strong>Impacto Financiero:</strong> ${financeTxt}.</div>
     `;
     return;
   }
 
   // 2. Si hay días personalizados configurados en el acordeón
   if (customDaysVal > 0) {
-    impactBadge.innerHTML = `⚙️ <strong>Ajuste Personalizado:</strong> Se otorgarán <strong>+${customDaysVal} días</strong> directos (${customMode === 'from_today' ? 'contando desde hoy' : 'acumulativos'})` +
+    impactBadge.innerHTML = `${GEN_SVGS.gear} <strong>Ajuste Personalizado:</strong> Se otorgarán <strong>+${customDaysVal} días</strong> directos (${customMode === 'from_today' ? 'contando desde hoy' : 'acumulativos'})` +
       (customAiBonus > 0 ? ` + <strong>${customAiBonus} escaneos IA de regalo</strong>.` : '.');
     const projCustom = new Date(baseDate.getTime() + customDaysVal * 24 * 60 * 60 * 1000);
     const projAi = currentAi + customAiBonus;
     projectionText.innerHTML = `
-      <div style="margin-bottom:0.35rem;">📅 <strong>Nueva expiración proyectada:</strong> ${formatDateStr(projCustom)}.</div>
-      ${customAiBonus > 0 ? `<div style="margin-bottom:0.35rem;">⚡ <strong>Créditos IA:</strong> ${currentAi} IA + ${customAiBonus} IA = <strong>${projAi} IA</strong> proyectados.</div>` : ''}
-      <div>🔐 <strong>Nonce Criptográfico:</strong> Nonce #${currentNonce} → <strong>Nonce #${currentNonce + 1}</strong>.</div>
+      <div style="margin-bottom:0.35rem;">${GEN_SVGS.calendar} <strong>Nueva expiración proyectada:</strong> ${formatDateStr(projCustom)}.</div>
+      ${customAiBonus > 0 ? `<div style="margin-bottom:0.35rem;">${GEN_SVGS.bolt} <strong>Créditos IA:</strong> ${currentAi} IA + ${customAiBonus} IA = <strong>${projAi} IA</strong> proyectados.</div>` : ''}
+      ${nonceHtml}
     `;
     return;
   }
@@ -1707,52 +2054,52 @@ function updateLiveLicenseProjection() {
     case 'RECARGA_IA_150': {
       const aiCredits = (cfgPlan?.ai_credits !== undefined) ? cfgPlan.ai_credits : 150;
       impactBadge.classList.add('recharge');
-      impactBadge.innerHTML = `💡 <strong>Impacto:</strong> Conservará su plan actual y su fecha de vigencia. Se sumarán <strong>+${aiCredits} créditos de escaneos IA</strong> acumulativos sin fecha de caducidad.`;
+      impactBadge.innerHTML = `${GEN_SVGS.lightbulb} <strong>Impacto:</strong> Conservará su plan actual y su fecha de vigencia. Se sumarán <strong>+${aiCredits} créditos de escaneos IA</strong> acumulativos sin fecha de caducidad.`;
       const projAi = currentAi + aiCredits;
       projectionText.innerHTML = `
-        <div style="margin-bottom:0.35rem;">📅 <strong>Vigencia:</strong> Mantiene su fecha actual (${client?.license_expires ? client.license_expires.substring(0, 10) : 'Activa'}) (Sin alteración de suscripción).</div>
-        <div style="margin-bottom:0.35rem;">⚡ <strong>Créditos IA:</strong> Saldo celular (${currentAi} IA) + Recarga (+${aiCredits} IA) = <strong>${projAi} IA</strong> proyectados.</div>
-        <div>🔐 <strong>Nonce Criptográfico:</strong> Nonce #${currentNonce} → <strong>Nonce #${currentNonce + 1}</strong>.</div>
+        <div style="margin-bottom:0.35rem;">${GEN_SVGS.calendar} <strong>Vigencia:</strong> Mantiene su fecha actual (${client?.license_expires ? client.license_expires.substring(0, 10) : 'Activa'}) (Sin alteración de suscripción).</div>
+        <div style="margin-bottom:0.35rem;">${GEN_SVGS.bolt} <strong>Créditos IA:</strong> Saldo celular (${currentAi} IA) + Recarga (+${aiCredits} IA) = <strong>${projAi} IA</strong> proyectados.</div>
+        ${nonceHtml}
       `;
       break;
     }
     case 'PERPETUO_LIBERADO': {
       const updateMonths = (cfgPlan?.updates_window_months !== undefined) ? cfgPlan.updates_window_months : 12;
       impactBadge.classList.add('perpetual');
-      impactBadge.innerHTML = `⭐ <strong>Impacto:</strong> Licencia Perpetua Liberada. Acceso ilimitado de por vida (+99,999 días) con ${updateMonths} meses de actualizaciones de funciones incluidas.`;
+      impactBadge.innerHTML = `${GEN_SVGS.star} <strong>Impacto:</strong> Licencia Perpetua Liberada. Acceso ilimitado de por vida (+99,999 días) con ${updateMonths} meses de actualizaciones de funciones incluidas.`;
       const updatesTarget = new Date(now.getTime() + updateMonths * 30 * 24 * 60 * 60 * 1000);
       projectionText.innerHTML = `
-        <div style="margin-bottom:0.35rem;">📅 <strong>Vigencia:</strong> Vitalicia de por vida • <strong>Pase de Updates hasta:</strong> ${formatDateStr(updatesTarget)}.</div>
-        <div>🔐 <strong>Nonce Criptográfico:</strong> Nonce #${currentNonce} → <strong>Nonce #${currentNonce + 1}</strong>.</div>
+        <div style="margin-bottom:0.35rem;">${GEN_SVGS.calendar} <strong>Vigencia:</strong> Vitalicia de por vida • <strong>Pase de Updates hasta:</strong> ${formatDateStr(updatesTarget)}.</div>
+        ${nonceHtml}
       `;
       break;
     }
     case 'PASE_ACTUALIZACION_ANUAL': {
       const passDays = (cfgPlan?.days !== undefined && cfgPlan.days > 0) ? cfgPlan.days : 365;
       impactBadge.classList.add('perpetual');
-      impactBadge.innerHTML = `🔄 <strong>Impacto:</strong> Extiende por <strong>+${passDays} días adicionales</strong> la ventana de nuevas versiones y herramientas para clientes perpetuos.`;
+      impactBadge.innerHTML = `${GEN_SVGS.refresh} <strong>Impacto:</strong> Extiende por <strong>+${passDays} días adicionales</strong> la ventana de nuevas versiones y herramientas para clientes perpetuos.`;
       const currentUpdates = client && client.updates_until ? new Date(client.updates_until) : now;
       const baseUp = currentUpdates > now ? currentUpdates : now;
       const newUpdates = new Date(baseUp.getTime() + passDays * 24 * 60 * 60 * 1000);
       projectionText.innerHTML = `
-        <div style="margin-bottom:0.35rem;">📅 <strong>Nueva Ventana de Updates:</strong> Hasta el ${formatDateStr(newUpdates)} (+${passDays} días).</div>
-        <div>🔐 <strong>Nonce Criptográfico:</strong> Nonce #${currentNonce} → <strong>Nonce #${currentNonce + 1}</strong>.</div>
+        <div style="margin-bottom:0.35rem;">${GEN_SVGS.calendar} <strong>Nueva Ventana de Updates:</strong> Hasta el ${formatDateStr(newUpdates)} (+${passDays} días).</div>
+        ${nonceHtml}
       `;
       break;
     }
     case 'EXTENSION_CORTESIA': {
       const cortesiaDays = (cfgPlan?.days !== undefined && cfgPlan.days > 0) ? cfgPlan.days : 7;
-      impactBadge.innerHTML = `⏳ <strong>Impacto:</strong> Otorga <strong>+${cortesiaDays} días de gracia temporal</strong> (S/ 0.00) para resolver cobranza en trámite o emergencias operativas.`;
+      impactBadge.innerHTML = `${GEN_SVGS.clock} <strong>Impacto:</strong> Otorga <strong>+${cortesiaDays} días de gracia temporal</strong> (S/ 0.00) para resolver cobranza en trámite o emergencias operativas.`;
       const projCortesia = new Date(baseDate.getTime() + cortesiaDays * 24 * 60 * 60 * 1000);
       projectionText.innerHTML = `
-        <div style="margin-bottom:0.35rem;">📅 <strong>Nueva expiración proyectada:</strong> ${formatDateStr(projCortesia)} (+${cortesiaDays} días de gracia).</div>
-        <div>🔐 <strong>Nonce Criptográfico:</strong> Nonce #${currentNonce} → <strong>Nonce #${currentNonce + 1}</strong>.</div>
+        <div style="margin-bottom:0.35rem;">${GEN_SVGS.calendar} <strong>Nueva expiración proyectada:</strong> ${formatDateStr(projCortesia)} (+${cortesiaDays} días de gracia).</div>
+        ${nonceHtml}
       `;
       break;
     }
     default: {
       const days = (cfgPlan?.days !== undefined) ? cfgPlan.days : (parseInt(selectedOpt?.getAttribute('data-days')) || 30);
-      impactBadge.innerHTML = `📅 <strong>Impacto:</strong> Renovación acumulativa sin pérdida de días. Se sumarán <strong>+${days} días</strong> directos al saldo remanente.`;
+      impactBadge.innerHTML = `${GEN_SVGS.calendar} <strong>Impacto:</strong> Renovación acumulativa sin pérdida de días. Se sumarán <strong>+${days} días</strong> directos al saldo remanente.`;
       const projRegular = new Date(baseDate.getTime() + days * 24 * 60 * 60 * 1000);
 
       const basePlanAi = (cfgPlan?.ai_credits !== undefined)
@@ -1765,9 +2112,9 @@ function updateLiveLicenseProjection() {
         : `Saldo celular (${currentAi} IA) + Cuota del plan (+${basePlanAi} IA) = <strong>${projAi} IA</strong> proyectados.`;
 
       projectionText.innerHTML = `
-        <div style="margin-bottom:0.35rem;">📅 <strong>Nueva expiración proyectada:</strong> ${formatDateStr(projRegular)} (Cero pérdida de días).</div>
-        <div style="margin-bottom:0.35rem;">⚡ <strong>Créditos IA:</strong> ${aiBreakdown}</div>
-        <div>🔐 <strong>Nonce Criptográfico:</strong> Nonce #${currentNonce} → <strong>Nonce #${currentNonce + 1}</strong>.</div>
+        <div style="margin-bottom:0.35rem;">${GEN_SVGS.calendar} <strong>Nueva expiración proyectada:</strong> ${formatDateStr(projRegular)} (Cero pérdida de días).</div>
+        <div style="margin-bottom:0.35rem;">${GEN_SVGS.bolt} <strong>Créditos IA:</strong> ${aiBreakdown}</div>
+        ${nonceHtml}
       `;
       break;
     }
@@ -1778,6 +2125,7 @@ const updatePlanImpactAndProjection = updateLiveLicenseProjection;
 
 function renderSelectedGeneratorLicense(code, client, isLatest = true) {
   if (!code) return;
+  currentSelectedGeneratorCode = code;
 
   const placeholder = document.getElementById('resultPlaceholder');
   const content = document.getElementById('resultContent');
@@ -1801,6 +2149,9 @@ function renderSelectedGeneratorLicense(code, client, isLatest = true) {
   const token = code.token || '';
   if (displayCode) displayCode.textContent = token;
 
+  // Decodificación defensiva desacoplada del token Ed25519 como fallback
+  const claims = decodeMl9TokenPayload(token) || {};
+
   // Actualizar metadatos en grid
   const metaPlan = document.getElementById('metaGenPlan');
   const metaNonce = document.getElementById('metaGenNonce');
@@ -1809,9 +2160,13 @@ function renderSelectedGeneratorLicense(code, client, isLatest = true) {
   const metaAi = document.getElementById('metaGenAi');
   const metaDevice = document.getElementById('metaGenDeviceId');
 
-  const pPlan = code.plan || client?.license_type || 'MENSUAL';
+  const pPlan = code.plan || (claims.y ? claims.y : client?.license_type) || 'MENSUAL';
   if (metaPlan) metaPlan.textContent = pPlan.replace(/_/g, ' ');
-  if (metaNonce) metaNonce.textContent = code.nonce !== undefined ? `#${code.nonce}` : '-';
+
+  const nonceVal = (code.nonce !== undefined && code.nonce !== null)
+    ? code.nonce
+    : (claims.n !== undefined ? claims.n : null);
+  if (metaNonce) metaNonce.textContent = nonceVal !== null ? `#${nonceVal}` : '-';
 
   const emittedDate = code.emitted_at || code.created_at;
   if (metaEmitted) {
@@ -1827,6 +2182,8 @@ function renderSelectedGeneratorLicense(code, client, isLatest = true) {
       metaExpires.textContent = code.expires_at.substring(0, 10);
     } else if (code.expires_result) {
       metaExpires.textContent = code.expires_result.substring(0, 10);
+    } else if (claims.x) {
+      metaExpires.textContent = new Date(claims.x * 1000).toISOString().substring(0, 10);
     } else if (client?.license_expires) {
       metaExpires.textContent = client.license_expires.substring(0, 10);
     } else {
@@ -1834,9 +2191,50 @@ function renderSelectedGeneratorLicense(code, client, isLatest = true) {
     }
   }
 
-  const aiCreds = code.ai_credits ?? code.ai_extra_credits ?? 0;
+  const aiCreds = (code.ai_credits !== undefined && code.ai_credits !== null)
+    ? code.ai_credits
+    : ((code.ai_extra_credits !== undefined && code.ai_extra_credits !== null)
+      ? code.ai_extra_credits
+      : (claims.c !== undefined ? claims.c : 0));
   if (metaAi) metaAi.textContent = `+${aiCreds} IA`;
-  if (metaDevice) metaDevice.textContent = code.device_id || client?.current_device_id || 'ML-0000';
+  if (metaDevice) metaDevice.textContent = code.device_id || claims.d || client?.current_device_id || 'ML-0000';
+
+  // Configuración dinámica del botón directo 'Generar / Ver Boleta'
+  const btnOpenReceipt = document.getElementById('btnGenOpenReceipt');
+  if (btnOpenReceipt) {
+    let matchedPayment = null;
+    const historyPayments = client?.payment_history || [];
+    if (code.payment_id) {
+      matchedPayment = historyPayments.find(p => p.id === code.payment_id);
+    }
+    if (!matchedPayment && code.amount_paid > 0) {
+      const codeDate = (code.emitted_at || code.created_at || '').substring(0, 10);
+      matchedPayment = historyPayments.find(p => {
+        const pDate = (p.date || '').substring(0, 10);
+        return pDate === codeDate && Math.abs((p.amount || 0) - (code.amount_paid || 0)) < 0.01;
+      });
+    }
+
+    if (matchedPayment || (code.amount_paid && code.amount_paid > 0) || code.payment_id) {
+      btnOpenReceipt.style.display = 'inline-flex';
+      const receiptNum = matchedPayment?.receipt_number;
+      const btnSpan = document.getElementById('btnGenOpenReceiptText');
+      if (btnSpan) {
+        btnSpan.textContent = receiptNum ? `Ver Boleta (${receiptNum})` : 'Generar / Ver Boleta';
+      }
+      btnOpenReceipt.onclick = () => {
+        const targetPaymentId = matchedPayment?.id || code.payment_id;
+        if (targetPaymentId && typeof openPaymentReceiptModal === 'function') {
+          openPaymentReceiptModal(client.id, targetPaymentId);
+        } else {
+          showToast('No se encontró el registro contable del pago.', 'warning');
+        }
+      };
+    } else {
+      btnOpenReceipt.style.display = 'none';
+      btnOpenReceipt.onclick = null;
+    }
+  }
 
   // Renderizar QR Code
   const qrContainer = document.getElementById('qrContainer');
@@ -2012,7 +2410,19 @@ async function generateLicense() {
   let paymentMethod = document.getElementById('licPaymentMethod').value;
   let paymentRef = document.getElementById('licPaymentRef').value.trim() || 'Op. Generada';
 
-  let customAiBonus = parseInt(document.getElementById('licCustomAiBonus')?.value) || 0;
+  // Leer ajustes personalizados estrictamente si el switch está activado y el plan no es Bono IA
+  const isCustomEnabled = (document.getElementById('chkEnableCustomSettings')?.checked === true) && !isBonoIa;
+  let customDaysVal = null;
+  let customAiBonus = 0;
+  let computationMode = 'cumulative';
+  let customExactDate = null;
+
+  if (isCustomEnabled) {
+    customDaysVal = parseInt(document.getElementById('licCustomDays')?.value) || null;
+    customAiBonus = parseInt(document.getElementById('licCustomAiBonus')?.value) || 0;
+    computationMode = document.getElementById('licCustomComputationMode')?.value || 'cumulative';
+    customExactDate = document.getElementById('licCustomExactDate')?.value || null;
+  }
 
   if (isBonoIa) {
     const customAiAmount = parseInt(document.getElementById('licCustomAiAmount')?.value) || 20;
@@ -2027,12 +2437,11 @@ async function generateLicense() {
       paymentMethod = 'Cortesia / Promocion';
       paymentRef = 'Bono Gratuito';
     }
+  } else if (plan === 'EXTENSION_CORTESIA') {
+    paymentAmount = 0.0;
+    paymentMethod = 'Cortesia / Promocion';
+    paymentRef = 'Extension Cortesia';
   }
-
-  // Parámetros de personalización libre
-  const customDaysVal = parseInt(document.getElementById('licCustomDays')?.value) || null;
-  const computationMode = document.getElementById('licCustomComputationMode')?.value || 'cumulative';
-  const customExactDate = document.getElementById('licCustomExactDate')?.value || null;
 
   try {
     const res = await fetch('/api/licenses/generate', {
@@ -2058,6 +2467,7 @@ async function generateLicense() {
     }
 
     const data = await res.json();
+    currentSelectedGeneratorCode = data;
 
     // Actualizar clientes y dashboard
     await loadClients();
@@ -2439,20 +2849,16 @@ let currentDrawerTab = 'drawerTabOverview';
  */
 function updateDrawerEditPlanFields(plan) {
   const p = (plan || '').toUpperCase();
+  const grpUpdates = document.getElementById('grpDrawerEditUpdates');
   const updatesInput = document.getElementById('drawerEditUpdates');
-  if (!updatesInput) return;
-  const isNoUpdates = (p === 'PROSPECTO' || p === 'TRIAL');
-  if (isNoUpdates) {
-    updatesInput.disabled = true;
-    updatesInput.style.opacity = '0.5';
-    updatesInput.style.cursor = 'not-allowed';
-    updatesInput.title = 'No aplica para Trial o Prospecto';
-    updatesInput.value = '';
-  } else {
-    updatesInput.disabled = false;
-    updatesInput.style.opacity = '1';
-    updatesInput.style.cursor = 'auto';
-    updatesInput.title = '';
+  const isPerpetualOrPass = (p === 'PERPETUO_LIBERADO' || p === 'PERPETUO' || p === 'PASE_ACTUALIZACION_ANUAL');
+  if (grpUpdates) {
+    grpUpdates.style.display = isPerpetualOrPass ? 'block' : 'none';
+  }
+  if (updatesInput) {
+    if (!isPerpetualOrPass) {
+      updatesInput.value = '';
+    }
   }
 }
 
@@ -2470,23 +2876,53 @@ function closeReceiptModal() {
 /**
  * Resuelve y abre la Boleta de Pago con correlativo persistente (idempotente)
  */
-async function openPaymentReceiptModal(clientId, paymentId) {
+async function openPaymentReceiptModal(clientId, paymentId, voucherType = null) {
   try {
+    const payload = {};
+    if (voucherType) payload.voucher_type = voucherType;
     const res = await fetch(`/api/clients/${clientId}/payments/${paymentId}/receipt`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({}),
+      body: JSON.stringify(payload),
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
-      throw new Error(err.error || 'No se pudo resolver la boleta de pago.');
+      throw new Error(err.error || 'No se pudo resolver el comprobante de pago.');
     }
     const data = await res.json();
     currentReceiptData = data;
     populateReceiptUI(data);
     openModal('modalPaymentReceipt');
   } catch (e) {
-    showToast('Error al abrir boleta: ' + e.message, 'error');
+    showToast('Error al abrir comprobante: ' + e.message, 'error');
+  }
+}
+
+async function switchReceiptVoucherType(newType) {
+  if (!currentReceiptData || !currentReceiptData.client || !currentReceiptData.payment) return;
+  const clientId = currentReceiptData.client.id;
+  const paymentId = currentReceiptData.payment.id;
+  try {
+    const res = await fetch(`/api/clients/${clientId}/payments/${paymentId}/receipt`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        voucher_type: newType,
+        invoice_ruc: document.getElementById('rcInputInvoiceRuc')?.value.trim() || undefined,
+        invoice_business_name: document.getElementById('rcInputInvoiceBizName')?.value.trim() || undefined,
+        invoice_fiscal_address: document.getElementById('rcInputInvoiceAddress')?.value.trim() || undefined,
+        show_igv_breakdown: document.getElementById('rcCheckShowIgv')?.checked ?? false,
+      }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Error al cambiar serie del comprobante.');
+    }
+    const data = await res.json();
+    currentReceiptData = data;
+    populateReceiptUI(data);
+  } catch (e) {
+    showToast('Error al alternar serie: ' + e.message, 'error');
   }
 }
 
@@ -2494,9 +2930,45 @@ function populateReceiptUI(data) {
   if (!data) return;
   const rc = data.receipt_config || {};
   const payment = data.payment || {};
+  const client = data.client || {};
+  const voucherType = data.voucher_type || (data.receipt_number?.startsWith('FAC') ? 'FAC' : 'BOL');
+  const isInvoice = voucherType === 'FAC';
 
+  // Modal header badge & main title
+  const mainTitle = document.getElementById('receiptModalMainTitle');
+  if (mainTitle) {
+    mainTitle.textContent = isInvoice ? 'Factura de Pago Oficial & Comprobante Digital' : 'Generador de Boleta de Pago';
+  }
+  const badge = document.getElementById('receiptModalBadge');
+  if (badge) badge.textContent = data.receipt_number || (isInvoice ? 'FAC-0001' : 'BOL-0001');
+
+  // Selector de Tipo de Comprobante
+  const selectVoucher = document.getElementById('rcSelectVoucherType');
+  if (selectVoucher) selectVoucher.value = voucherType;
+
+  // Bloque de datos fiscales de factura
+  const invoiceBlock = document.getElementById('rcInvoiceFieldsBlock');
+  if (invoiceBlock) invoiceBlock.style.display = isInvoice ? 'block' : 'none';
+
+  const invRuc = document.getElementById('rcInputInvoiceRuc');
+  if (invRuc) invRuc.value = payment.invoice_ruc || client.document_number || '';
+  const invBiz = document.getElementById('rcInputInvoiceBizName');
+  if (invBiz) invBiz.value = payment.invoice_business_name || client.business_name || '';
+  const invAddr = document.getElementById('rcInputInvoiceAddress');
+  if (invAddr) invAddr.value = payment.invoice_fiscal_address || '';
+  const invIgv = document.getElementById('rcCheckShowIgv');
+  if (invIgv) invIgv.checked = payment.show_igv_breakdown === true || (isInvoice && rc.show_igv_breakdown === true);
+
+  // Título de comprobante
   const titleInp = document.getElementById('rcInputTitle');
-  if (titleInp) titleInp.value = rc.title || 'BOLETA DE PAGO ADMINISTRATIVA';
+  if (titleInp) {
+    if (isInvoice) {
+      titleInp.value = rc.invoice_title || 'FACTURA DE VENTA / PAGO';
+    } else {
+      titleInp.value = rc.title || 'BOLETA DE PAGO ADMINISTRATIVA';
+    }
+  }
+
   const commInp = document.getElementById('rcInputCommercialName');
   if (commInp) commInp.value = rc.commercial_name || 'MochilaLista';
   const issuerInp = document.getElementById('rcInputIssuerName');
@@ -2508,8 +2980,20 @@ function populateReceiptUI(data) {
   const cityInp = document.getElementById('rcInputIssuerCity');
   if (cityInp) cityInp.value = rc.issuer_city || 'Piura, Perú';
 
-  const logoChk = document.getElementById('rcCheckShowLogo');
-  if (logoChk) logoChk.checked = rc.show_logo !== false;
+  // 9 Interruptores de Visibilidad
+  const setChk = (id, val) => {
+    const el = document.getElementById(id);
+    if (el) el.checked = val !== false;
+  };
+  setChk('rcCheckShowLogo', rc.show_logo);
+  setChk('rcCheckShowIssuerDoc', rc.show_issuer_doc);
+  setChk('rcCheckShowIssuerPhone', rc.show_issuer_phone);
+  setChk('rcCheckShowClientDoc', rc.show_client_doc);
+  setChk('rcCheckShowHardwareId', rc.show_hardware_id);
+  setChk('rcCheckShowOperationNumber', rc.show_operation_number);
+  setChk('rcCheckShowObservation', rc.show_observation);
+  setChk('rcCheckShowSignature', rc.show_signature);
+  setChk('rcCheckShowFooterNotes', rc.show_footer_notes);
 
   const colorInp = document.getElementById('rcInputAccentColor');
   if (colorInp) colorInp.value = rc.accent_color || '#2563eb';
@@ -2523,9 +3007,6 @@ function populateReceiptUI(data) {
   const signInp = document.getElementById('rcInputSignature');
   if (signInp) signInp.value = rc.signature_text || 'Administración Comercial — MochilaLista';
 
-  const badge = document.getElementById('receiptModalBadge');
-  if (badge) badge.textContent = data.receipt_number || 'BOL-0001';
-
   renderReceiptPreviewAndCanvas();
 }
 
@@ -2533,20 +3014,39 @@ function renderReceiptPreviewAndCanvas() {
   if (!currentReceiptData) return;
   const payment = currentReceiptData.payment || {};
   const client = currentReceiptData.client || {};
+  const voucherType = currentReceiptData.voucher_type || (currentReceiptData.receipt_number?.startsWith('FAC') ? 'FAC' : 'BOL');
+  const isInvoice = voucherType === 'FAC';
 
-  const title = document.getElementById('rcInputTitle')?.value.trim() || 'BOLETA DE PAGO ADMINISTRATIVA';
+  const title = document.getElementById('rcInputTitle')?.value.trim() || (isInvoice ? 'FACTURA DE VENTA / PAGO' : 'BOLETA DE PAGO ADMINISTRATIVA');
   const commercial = document.getElementById('rcInputCommercialName')?.value.trim() || 'MochilaLista';
   const issuer = document.getElementById('rcInputIssuerName')?.value.trim() || 'Julio Angello Vasquez Navarro';
   const issuerDoc = document.getElementById('rcInputIssuerDoc')?.value.trim() || 'D.N.I. / R.U.C. Registrado';
   const issuerPhone = document.getElementById('rcInputIssuerPhone')?.value.trim() || '+51 922 836 879';
   const issuerCity = document.getElementById('rcInputIssuerCity')?.value.trim() || 'Piura, Perú';
+
+  // Toggles de visibilidad
   const showLogo = document.getElementById('rcCheckShowLogo')?.checked !== false;
+  const showIssuerDoc = document.getElementById('rcCheckShowIssuerDoc')?.checked !== false;
+  const showIssuerPhone = document.getElementById('rcCheckShowIssuerPhone')?.checked !== false;
+  const showClientDoc = document.getElementById('rcCheckShowClientDoc')?.checked !== false;
+  const showHardwareId = document.getElementById('rcCheckShowHardwareId')?.checked !== false;
+  const showOperationNumber = document.getElementById('rcCheckShowOperationNumber')?.checked !== false;
+  const showObservation = document.getElementById('rcCheckShowObservation')?.checked !== false;
+  const showSignature = document.getElementById('rcCheckShowSignature')?.checked !== false;
+  const showFooterNotes = document.getElementById('rcCheckShowFooterNotes')?.checked !== false;
+
   const accentColor = document.getElementById('rcInputAccentColor')?.value || '#2563eb';
   const customNote = document.getElementById('rcInputCustomNote')?.value.trim() || '';
   const footerNotes = document.getElementById('rcInputFooterNotes')?.value.trim() || '';
   const signatureText = document.getElementById('rcInputSignature')?.value.trim() || '';
 
-  const correlative = currentReceiptData.receipt_number || 'BOL-0001';
+  // Datos fiscales de factura
+  const invoiceRuc = document.getElementById('rcInputInvoiceRuc')?.value.trim() || '';
+  const invoiceBiz = document.getElementById('rcInputInvoiceBizName')?.value.trim() || '';
+  const invoiceAddress = document.getElementById('rcInputInvoiceAddress')?.value.trim() || '';
+  const showIgv = document.getElementById('rcCheckShowIgv')?.checked === true;
+
+  const correlative = currentReceiptData.receipt_number || (isInvoice ? 'FAC-0001' : 'BOL-0001');
   const rawDate = currentReceiptData.receipt_issued_at || payment.date || new Date().toISOString();
   let dateFormatted = rawDate.substring(0, 10);
   try {
@@ -2561,6 +3061,10 @@ function renderReceiptPreviewAndCanvas() {
   if (rdocComm) {
     rdocComm.textContent = commercial;
     rdocComm.style.color = accentColor;
+  }
+  const rdocCorrLbl = document.getElementById('rdocCorrelativeLbl');
+  if (rdocCorrLbl) {
+    rdocCorrLbl.textContent = isInvoice ? 'FACTURA N.°' : 'COMPROBANTE N.°';
   }
   const rdocCorr = document.getElementById('rdocCorrelativeNum');
   if (rdocCorr) {
@@ -2578,19 +3082,53 @@ function renderReceiptPreviewAndCanvas() {
 
   const rdocIssuer = document.getElementById('rdocIssuerName');
   if (rdocIssuer) rdocIssuer.textContent = issuer;
+  const rdocDocRow = document.getElementById('rdocIssuerDocRow');
+  if (rdocDocRow) rdocDocRow.style.display = showIssuerDoc ? 'block' : 'none';
   const rdocDoc = document.getElementById('rdocIssuerDoc');
   if (rdocDoc) rdocDoc.textContent = issuerDoc;
+  const rdocPhoneRow = document.getElementById('rdocIssuerPhoneRow');
+  if (rdocPhoneRow) rdocPhoneRow.style.display = showIssuerPhone ? 'block' : 'none';
   const rdocPhone = document.getElementById('rdocIssuerPhone');
   if (rdocPhone) rdocPhone.textContent = issuerPhone;
   const rdocCity = document.getElementById('rdocIssuerCity');
   if (rdocCity) rdocCity.textContent = issuerCity;
 
+  // Cliente o Empresa
+  const rdocClientTag = document.getElementById('rdocClientTag');
+  if (rdocClientTag) {
+    rdocClientTag.textContent = isInvoice ? 'DATOS DE LA EMPRESA / CLIENTE' : 'DATOS DEL CLIENTE';
+  }
   const rdocClientBiz = document.getElementById('rdocClientBiz');
-  if (rdocClientBiz) rdocClientBiz.textContent = client.business_name || 'Cliente Registrado';
+  if (rdocClientBiz) {
+    rdocClientBiz.textContent = (isInvoice && invoiceBiz) ? invoiceBiz : (client.business_name || 'Cliente Registrado');
+  }
+  const rdocClientOwnerRow = document.getElementById('rdocClientOwnerRow');
+  if (rdocClientOwnerRow) {
+    rdocClientOwnerRow.style.display = (!isInvoice && client.owner_name) ? 'block' : 'none';
+  }
   const rdocClientOwner = document.getElementById('rdocClientOwner');
   if (rdocClientOwner) rdocClientOwner.textContent = client.owner_name || '-';
+
+  const rdocClientDocRow = document.getElementById('rdocClientDocRow');
+  if (rdocClientDocRow) rdocClientDocRow.style.display = showClientDoc ? 'block' : 'none';
+  const rdocClientDocLbl = document.getElementById('rdocClientDocLbl');
+  if (rdocClientDocLbl) rdocClientDocLbl.textContent = isInvoice ? 'RUC:' : 'RUC / DNI:';
   const rdocClientDoc = document.getElementById('rdocClientDoc');
-  if (rdocClientDoc) rdocClientDoc.textContent = client.document_number || '-';
+  if (rdocClientDoc) {
+    rdocClientDoc.textContent = (isInvoice && invoiceRuc) ? invoiceRuc : (client.document_number || '-');
+  }
+
+  const rdocClientAddressRow = document.getElementById('rdocClientAddressRow');
+  if (rdocClientAddressRow) {
+    rdocClientAddressRow.style.display = (isInvoice && invoiceAddress) ? 'block' : 'none';
+  }
+  const rdocClientAddress = document.getElementById('rdocClientAddress');
+  if (rdocClientAddress) rdocClientAddress.textContent = invoiceAddress;
+
+  const rdocClientDevIdRow = document.getElementById('rdocClientDevIdRow');
+  if (rdocClientDevIdRow) {
+    rdocClientDevIdRow.style.display = (showHardwareId && !isInvoice) ? 'block' : 'none';
+  }
   const rdocClientDevId = document.getElementById('rdocClientDevId');
   if (rdocClientDevId) rdocClientDevId.textContent = client.current_device_id || '-';
 
@@ -2599,29 +3137,62 @@ function renderReceiptPreviewAndCanvas() {
   const rdocNote = document.getElementById('rdocPaymentCustomNote');
   if (rdocNote) {
     rdocNote.textContent = customNote;
-    rdocNote.style.display = customNote ? 'block' : 'none';
+    rdocNote.style.display = (showObservation && customNote) ? 'block' : 'none';
   }
   const rdocMethod = document.getElementById('rdocPaymentMethod');
   if (rdocMethod) rdocMethod.textContent = payment.method || 'Yape';
   const rdocRef = document.getElementById('rdocPaymentRef');
-  if (rdocRef) rdocRef.textContent = payment.reference || '-';
+  if (rdocRef) rdocRef.textContent = showOperationNumber ? (payment.reference || '-') : '-';
   const rdocPayDate = document.getElementById('rdocPaymentDate');
   if (rdocPayDate) rdocPayDate.textContent = payment.date ? payment.date.substring(0, 10) : '-';
 
-  const amountVal = (parseFloat(payment.amount) || 0).toFixed(2);
+  const totalVal = parseFloat(payment.amount) || 0;
   const rdocRowAmt = document.getElementById('rdocPaymentRowAmount');
-  if (rdocRowAmt) rdocRowAmt.textContent = `S/ ${amountVal}`;
+  if (rdocRowAmt) rdocRowAmt.textContent = `S/ ${totalVal.toFixed(2)}`;
+
+  // Cálculo de IGV 18% opcional
+  let subtotalVal = totalVal;
+  let igvVal = 0;
+  if (showIgv) {
+    subtotalVal = +(totalVal / 1.18).toFixed(2);
+    igvVal = +(totalVal - subtotalVal).toFixed(2);
+  }
 
   const rdocTotalBox = document.querySelector('.rdoc-total-box');
-  if (rdocTotalBox) rdocTotalBox.style.borderColor = accentColor;
-  const rdocTotal = document.getElementById('rdocPaymentTotal');
-  if (rdocTotal) {
-    rdocTotal.textContent = `S/ ${amountVal}`;
-    rdocTotal.style.color = accentColor;
+  if (rdocTotalBox) {
+    rdocTotalBox.style.borderColor = accentColor;
+    if (showIgv) {
+      rdocTotalBox.classList.add('with-igv');
+      rdocTotalBox.innerHTML = `
+        <div class="rdoc-igv-row">
+          <span>Subtotal (Op. Gravada):</span>
+          <strong>S/ ${subtotalVal.toFixed(2)}</strong>
+        </div>
+        <div class="rdoc-igv-row">
+          <span>I.G.V. (18%):</span>
+          <strong>S/ ${igvVal.toFixed(2)}</strong>
+        </div>
+        <div class="rdoc-igv-total-row">
+          <span style="font-weight:700; color:var(--text-primary, #0f172a);">TOTAL A PAGAR:</span>
+          <span id="rdocPaymentTotal" style="color:${accentColor}; font-weight:900; font-size:1.35rem;">S/ ${totalVal.toFixed(2)}</span>
+        </div>
+      `;
+    } else {
+      rdocTotalBox.classList.remove('with-igv');
+      rdocTotalBox.innerHTML = `
+        <span style="font-size:0.8rem; font-weight:700; color:var(--text-secondary, #475569);">${isInvoice ? 'TOTAL FACTURADO:' : 'TOTAL RECIBIDO:'}</span>
+        <span id="rdocPaymentTotal" style="color:${accentColor}; font-weight:900; font-size:1.5rem;">S/ ${totalVal.toFixed(2)}</span>
+      `;
+    }
   }
 
   const rdocFoot = document.getElementById('rdocFooterNotes');
-  if (rdocFoot) rdocFoot.textContent = footerNotes;
+  if (rdocFoot) {
+    rdocFoot.textContent = footerNotes;
+    rdocFoot.style.display = showFooterNotes ? 'block' : 'none';
+  }
+  const rdocSignBlock = document.getElementById('rdocSignatureBlock');
+  if (rdocSignBlock) rdocSignBlock.style.display = showSignature ? 'flex' : 'none';
   const rdocSign = document.getElementById('rdocSignatureText');
   if (rdocSign) rdocSign.textContent = signatureText;
 
@@ -2634,26 +3205,53 @@ function drawReceiptOnCanvas() {
 
   const payment = currentReceiptData.payment || {};
   const client = currentReceiptData.client || {};
+  const voucherType = currentReceiptData.voucher_type || (currentReceiptData.receipt_number?.startsWith('FAC') ? 'FAC' : 'BOL');
+  const isInvoice = voucherType === 'FAC';
 
-  const title = document.getElementById('rcInputTitle')?.value.trim() || 'BOLETA DE PAGO ADMINISTRATIVA';
+  const title = document.getElementById('rcInputTitle')?.value.trim() || (isInvoice ? 'FACTURA DE VENTA / PAGO' : 'BOLETA DE PAGO ADMINISTRATIVA');
   const commercial = document.getElementById('rcInputCommercialName')?.value.trim() || 'MochilaLista';
   const issuer = document.getElementById('rcInputIssuerName')?.value.trim() || 'Julio Angello Vasquez Navarro';
   const issuerDoc = document.getElementById('rcInputIssuerDoc')?.value.trim() || 'D.N.I. / R.U.C. Registrado';
   const issuerPhone = document.getElementById('rcInputIssuerPhone')?.value.trim() || '+51 922 836 879';
   const issuerCity = document.getElementById('rcInputIssuerCity')?.value.trim() || 'Piura, Perú';
+
+  // Toggles de visibilidad
   const showLogo = document.getElementById('rcCheckShowLogo')?.checked !== false;
+  const showIssuerDoc = document.getElementById('rcCheckShowIssuerDoc')?.checked !== false;
+  const showIssuerPhone = document.getElementById('rcCheckShowIssuerPhone')?.checked !== false;
+  const showClientDoc = document.getElementById('rcCheckShowClientDoc')?.checked !== false;
+  const showHardwareId = document.getElementById('rcCheckShowHardwareId')?.checked !== false;
+  const showOperationNumber = document.getElementById('rcCheckShowOperationNumber')?.checked !== false;
+  const showObservation = document.getElementById('rcCheckShowObservation')?.checked !== false;
+  const showSignature = document.getElementById('rcCheckShowSignature')?.checked !== false;
+  const showFooterNotes = document.getElementById('rcCheckShowFooterNotes')?.checked !== false;
+
   const accentColor = document.getElementById('rcInputAccentColor')?.value || '#2563eb';
   const customNote = document.getElementById('rcInputCustomNote')?.value.trim() || '';
   const footerNotes = document.getElementById('rcInputFooterNotes')?.value.trim() || 'Software de Punto de Venta Offline. Comprobante de control administrativo y soporte técnico.';
   const signatureText = document.getElementById('rcInputSignature')?.value.trim() || 'Administración Comercial — MochilaLista';
 
-  const correlative = currentReceiptData.receipt_number || 'BOL-0001';
+  // Datos fiscales de factura
+  const invoiceRuc = document.getElementById('rcInputInvoiceRuc')?.value.trim() || '';
+  const invoiceBiz = document.getElementById('rcInputInvoiceBizName')?.value.trim() || '';
+  const invoiceAddress = document.getElementById('rcInputInvoiceAddress')?.value.trim() || '';
+  const showIgv = document.getElementById('rcCheckShowIgv')?.checked === true;
+
+  const correlative = currentReceiptData.receipt_number || (isInvoice ? 'FAC-0001' : 'BOL-0001');
   const rawDate = currentReceiptData.receipt_issued_at || payment.date || new Date().toISOString();
   let dateFormatted = rawDate.substring(0, 10);
   try {
     const d = new Date(rawDate);
     dateFormatted = d.toLocaleDateString('es-PE', { day: '2-digit', month: '2-digit', year: 'numeric' }) + ' ' + d.toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' });
   } catch (_) {}
+
+  const totalVal = parseFloat(payment.amount) || 0;
+  let subtotalVal = totalVal;
+  let igvVal = 0;
+  if (showIgv) {
+    subtotalVal = +(totalVal / 1.18).toFixed(2);
+    igvVal = +(totalVal - subtotalVal).toFixed(2);
+  }
 
   const width = 1200;
   const height = 940;
@@ -2662,14 +3260,16 @@ function drawReceiptOnCanvas() {
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
 
-  // Fondo blanco y marco sutil
+  // Fondo blanco y marco exterior sutil
+  ctx.save();
   ctx.fillStyle = '#ffffff';
   ctx.fillRect(0, 0, width, height);
   ctx.strokeStyle = '#cbd5e1';
   ctx.lineWidth = 2;
   ctx.strokeRect(10, 10, width - 20, height - 20);
+  ctx.restore();
 
-  // Cabecera
+  // Cabecera superior
   let startX = 60;
   if (showLogo) {
     const img = document.getElementById('rdocLogoImg');
@@ -2685,6 +3285,7 @@ function drawReceiptOnCanvas() {
     startX = 150;
   }
 
+  ctx.save();
   ctx.fillStyle = '#0f172a';
   ctx.font = 'bold 30px sans-serif';
   ctx.textAlign = 'left';
@@ -2693,35 +3294,43 @@ function drawReceiptOnCanvas() {
   ctx.fillStyle = accentColor;
   ctx.font = 'bold 22px sans-serif';
   ctx.fillText(commercial, startX, 112);
+  ctx.restore();
 
-  // Caja de correlativo
+  // Caja de correlativo (esquina superior derecha)
+  ctx.save();
   ctx.fillStyle = '#f8fafc';
   ctx.strokeStyle = '#e2e8f0';
   ctx.lineWidth = 2;
   roundRect(ctx, width - 360, 42, 300, 88, 10, true, true);
 
   ctx.fillStyle = '#64748b';
-  ctx.font = 'bold 14px sans-serif';
+  ctx.font = 'bold 13px sans-serif';
   ctx.textAlign = 'center';
-  ctx.fillText('COMPROBANTE N.°', width - 210, 68);
+  ctx.fillText(isInvoice ? 'FACTURA DE VENTA N.°' : 'COMPROBANTE N.°', width - 210, 68);
 
   ctx.fillStyle = accentColor;
   ctx.font = 'bold 28px monospace';
   ctx.fillText(correlative, width - 210, 98);
 
   ctx.fillStyle = '#64748b';
-  ctx.font = '500 14px sans-serif';
+  ctx.font = '500 13px sans-serif';
   ctx.fillText(dateFormatted, width - 210, 120);
+  ctx.restore();
 
-  // Línea divisoria
+  // Línea divisoria de acento
+  ctx.save();
   ctx.fillStyle = accentColor;
   ctx.fillRect(60, 145, width - 120, 4);
+  ctx.restore();
 
   // Cajas de Emisor y Cliente
   const colW = (width - 150) / 2;
+
+  // 1. Tarjeta Emisor
+  ctx.save();
   ctx.fillStyle = '#f8fafc';
   ctx.strokeStyle = '#e2e8f0';
-  ctx.lineWidth = 2;
+  ctx.lineWidth = 1.5;
   roundRect(ctx, 60, 165, colW, 160, 8, true, true);
 
   ctx.fillStyle = '#64748b';
@@ -2735,30 +3344,67 @@ function drawReceiptOnCanvas() {
 
   ctx.fillStyle = '#475569';
   ctx.font = '16px sans-serif';
-  ctx.fillText(`Documento: ${issuerDoc}`, 80, 252);
-  ctx.fillText(`WhatsApp: ${issuerPhone}`, 80, 280);
-  ctx.fillText(`Ciudad: ${issuerCity}`, 80, 308);
+  let emitY = 252;
+  if (showIssuerDoc) {
+    ctx.fillText(`Documento: ${issuerDoc}`, 80, emitY);
+    emitY += 28;
+  }
+  if (showIssuerPhone) {
+    ctx.fillText(`WhatsApp: ${issuerPhone}`, 80, emitY);
+    emitY += 28;
+  }
+  ctx.fillText(`Ciudad: ${issuerCity}`, 80, emitY);
+  ctx.restore();
 
-  // Cliente
-  roundRect(ctx, 60 + colW + 30, 165, colW, 160, 8, true, true);
+  // 2. Tarjeta Cliente / Empresa (con aislamiento estricto y padding interno exacto)
+  const clientCardX = 60 + colW + 30;
+  const clientTextX = clientCardX + 20; // 110 + colW (exact 20px padding)
+
+  ctx.save();
+  ctx.fillStyle = '#f8fafc';
+  ctx.strokeStyle = '#e2e8f0';
+  ctx.lineWidth = 1.5;
+  roundRect(ctx, clientCardX, 165, colW, 160, 8, true, true);
 
   ctx.fillStyle = '#64748b';
   ctx.font = 'bold 14px sans-serif';
-  ctx.fillText('DATOS DEL CLIENTE', 90 + colW, 192);
+  ctx.textAlign = 'left';
+  ctx.fillText(isInvoice ? 'DATOS DE LA EMPRESA / CLIENTE' : 'DATOS DEL CLIENTE', clientTextX, 192);
 
   ctx.fillStyle = '#0f172a';
   ctx.font = 'bold 20px sans-serif';
-  ctx.fillText(client.business_name || 'Cliente Registrado', 90 + colW, 222);
+  const clientBizDisplay = (isInvoice && invoiceBiz) ? invoiceBiz : (client.business_name || 'Cliente Registrado');
+  ctx.fillText(clientBizDisplay, clientTextX, 222);
 
   ctx.fillStyle = '#475569';
   ctx.font = '16px sans-serif';
-  ctx.fillText(`Titular: ${client.owner_name || '-'}`, 90 + colW, 252);
-  ctx.fillText(`RUC / DNI: ${client.document_number || '-'}`, 90 + colW, 280);
-  ctx.fillText(`Hardware ID: ${client.current_device_id || '-'}`, 90 + colW, 308);
+  let cliY = 252;
+  if (isInvoice) {
+    if (showClientDoc) {
+      ctx.fillText(`RUC: ${invoiceRuc || client.document_number || '-'}`, clientTextX, cliY);
+      cliY += 28;
+    }
+    if (invoiceAddress) {
+      ctx.fillText(`Dirección: ${invoiceAddress}`, clientTextX, cliY);
+      cliY += 28;
+    }
+  } else {
+    ctx.fillText(`Titular: ${client.owner_name || '-'}`, clientTextX, cliY);
+    cliY += 28;
+    if (showClientDoc) {
+      ctx.fillText(`RUC / DNI: ${client.document_number || '-'}`, clientTextX, cliY);
+      cliY += 28;
+    }
+    if (showHardwareId) {
+      ctx.fillText(`Hardware ID: ${client.current_device_id || '-'}`, clientTextX, cliY);
+    }
+  }
+  ctx.restore();
 
   // Tabla de Cobro
   const tableY = 350;
   const tableW = width - 120;
+  ctx.save();
   ctx.fillStyle = '#f1f5f9';
   ctx.fillRect(60, tableY, tableW, 44);
   ctx.strokeStyle = '#cbd5e1';
@@ -2767,16 +3413,19 @@ function drawReceiptOnCanvas() {
 
   ctx.fillStyle = '#334155';
   ctx.font = 'bold 16px sans-serif';
+  ctx.textAlign = 'left';
   ctx.fillText('Descripción / Concepto', 80, tableY + 28);
   ctx.fillText('Medio', 550, tableY + 28);
   ctx.fillText('N.° Operación', 700, tableY + 28);
   ctx.fillText('Fecha', 880, tableY + 28);
   ctx.textAlign = 'right';
   ctx.fillText('Total (S/)', 60 + tableW - 20, tableY + 28);
+  ctx.restore();
 
   // Fila tabla
   const rowY = tableY + 44;
   const rowH = 75;
+  ctx.save();
   ctx.fillStyle = '#ffffff';
   ctx.fillRect(60, rowY, tableW, rowH);
   ctx.strokeStyle = '#e2e8f0';
@@ -2787,7 +3436,7 @@ function drawReceiptOnCanvas() {
   ctx.font = 'bold 18px sans-serif';
   ctx.fillText(payment.plan || 'Pago Registrado', 80, rowY + 30);
 
-  if (customNote) {
+  if (showObservation && customNote) {
     ctx.fillStyle = '#64748b';
     ctx.font = '14px sans-serif';
     ctx.fillText(customNote, 80, rowY + 54);
@@ -2796,33 +3445,77 @@ function drawReceiptOnCanvas() {
   ctx.fillStyle = '#334155';
   ctx.font = '16px sans-serif';
   ctx.fillText(payment.method || 'Yape', 550, rowY + 35);
-  ctx.fillText(payment.reference || '-', 700, rowY + 35);
+  ctx.fillText(showOperationNumber ? (payment.reference || '-') : '-', 700, rowY + 35);
   ctx.fillText(payment.date ? payment.date.substring(0, 10) : '-', 880, rowY + 35);
 
-  const amountVal = (parseFloat(payment.amount) || 0).toFixed(2);
   ctx.textAlign = 'right';
   ctx.fillStyle = '#0f172a';
   ctx.font = 'bold 20px sans-serif';
-  ctx.fillText(`S/ ${amountVal}`, 60 + tableW - 20, rowY + 38);
+  ctx.fillText(`S/ ${totalVal.toFixed(2)}`, 60 + tableW - 20, rowY + 38);
+  ctx.restore();
 
-  // Caja Total
-  const totalBoxY = 490;
-  ctx.fillStyle = '#f8fafc';
-  ctx.strokeStyle = accentColor;
-  ctx.lineWidth = 3;
-  roundRect(ctx, width - 420, totalBoxY, 360, 75, 10, true, true);
+  // Caja de Totales (con o sin desglose de IGV)
+  if (showIgv) {
+    ctx.save();
+    const boxW = 380;
+    const boxH = 110;
+    const boxX = width - 60 - boxW;
+    const boxY = 475;
+    ctx.fillStyle = '#f8fafc';
+    ctx.strokeStyle = accentColor;
+    ctx.lineWidth = 2.5;
+    roundRect(ctx, boxX, boxY, boxW, boxH, 10, true, true);
 
-  ctx.fillStyle = '#1e293b';
-  ctx.font = 'bold 18px sans-serif';
-  ctx.textAlign = 'left';
-  ctx.fillText('TOTAL RECIBIDO:', width - 395, totalBoxY + 45);
+    ctx.font = '500 15px sans-serif';
+    ctx.fillStyle = '#64748b';
+    ctx.textAlign = 'left';
+    ctx.fillText('SUBTOTAL (OP. GRAVADA):', boxX + 20, boxY + 30);
+    ctx.textAlign = 'right';
+    ctx.fillText(`S/ ${subtotalVal.toFixed(2)}`, boxX + boxW - 20, boxY + 30);
 
-  ctx.fillStyle = accentColor;
-  ctx.font = '900 32px sans-serif';
-  ctx.textAlign = 'right';
-  ctx.fillText(`S/ ${amountVal}`, width - 85, totalBoxY + 47);
+    ctx.textAlign = 'left';
+    ctx.fillText('I.G.V. (18%):', boxX + 20, boxY + 58);
+    ctx.textAlign = 'right';
+    ctx.fillText(`S/ ${igvVal.toFixed(2)}`, boxX + boxW - 20, boxY + 58);
+
+    ctx.strokeStyle = '#e2e8f0';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(boxX + 15, boxY + 70);
+    ctx.lineTo(boxX + boxW - 15, boxY + 70);
+    ctx.stroke();
+
+    ctx.font = 'bold 17px sans-serif';
+    ctx.fillStyle = '#0f172a';
+    ctx.textAlign = 'left';
+    ctx.fillText('TOTAL A PAGAR:', boxX + 20, boxY + 95);
+    ctx.font = '900 24px sans-serif';
+    ctx.fillStyle = accentColor;
+    ctx.textAlign = 'right';
+    ctx.fillText(`S/ ${totalVal.toFixed(2)}`, boxX + boxW - 20, boxY + 96);
+    ctx.restore();
+  } else {
+    ctx.save();
+    const totalBoxY = 490;
+    ctx.fillStyle = '#f8fafc';
+    ctx.strokeStyle = accentColor;
+    ctx.lineWidth = 3;
+    roundRect(ctx, width - 420, totalBoxY, 360, 75, 10, true, true);
+
+    ctx.fillStyle = '#1e293b';
+    ctx.font = 'bold 18px sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText(isInvoice ? 'TOTAL FACTURADO:' : 'TOTAL RECIBIDO:', width - 395, totalBoxY + 45);
+
+    ctx.fillStyle = accentColor;
+    ctx.font = '900 32px sans-serif';
+    ctx.textAlign = 'right';
+    ctx.fillText(`S/ ${totalVal.toFixed(2)}`, width - 85, totalBoxY + 47);
+    ctx.restore();
+  }
 
   // Línea divisoria pie
+  ctx.save();
   ctx.strokeStyle = '#cbd5e1';
   ctx.lineWidth = 2;
   ctx.setLineDash([6, 6]);
@@ -2830,27 +3523,35 @@ function drawReceiptOnCanvas() {
   ctx.moveTo(60, 680);
   ctx.lineTo(width - 60, 680);
   ctx.stroke();
-  ctx.setLineDash([]);
+  ctx.restore();
 
   // Notas al pie
-  ctx.textAlign = 'left';
-  ctx.fillStyle = '#64748b';
-  ctx.font = '15px sans-serif';
-  wrapText(ctx, footerNotes, 60, 725, width - 460, 22);
+  if (showFooterNotes) {
+    ctx.save();
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#64748b';
+    ctx.font = '15px sans-serif';
+    wrapText(ctx, footerNotes, 60, 725, width - 460, 22);
+    ctx.restore();
+  }
 
   // Firma
-  const signX = width - 250;
-  ctx.strokeStyle = '#64748b';
-  ctx.lineWidth = 1;
-  ctx.beginPath();
-  ctx.moveTo(signX - 120, 770);
-  ctx.lineTo(signX + 120, 770);
-  ctx.stroke();
+  if (showSignature) {
+    ctx.save();
+    const signX = width - 250;
+    ctx.strokeStyle = '#64748b';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(signX - 120, 770);
+    ctx.lineTo(signX + 120, 770);
+    ctx.stroke();
 
-  ctx.textAlign = 'center';
-  ctx.fillStyle = '#334155';
-  ctx.font = 'bold 15px sans-serif';
-  ctx.fillText(signatureText, signX, 795);
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#334155';
+    ctx.font = 'bold 15px sans-serif';
+    ctx.fillText(signatureText, signX, 795);
+    ctx.restore();
+  }
 }
 
 function drawFallbackLogo(ctx, x, y, w, h, color) {
@@ -2892,22 +3593,147 @@ function wrapText(ctx, text, x, y, maxWidth, lineHeight) {
   ctx.fillText(line, x, y);
 }
 
+function generateOfflinePdfFromCanvas(canvas, fileName) {
+  const dataUrl = canvas.toDataURL('image/jpeg', 0.95);
+  const base64Data = dataUrl.split(',')[1];
+  const binaryImg = atob(base64Data);
+  const imgLen = binaryImg.length;
+  const imgBytes = new Uint8Array(imgLen);
+  for (let i = 0; i < imgLen; i++) {
+    imgBytes[i] = binaryImg.charCodeAt(i);
+  }
+
+  const pageWidth = 842; // A4 horizontal en puntos tipográficos (~841.89 pt)
+  const pageHeight = 595; // A4 horizontal (~595.28 pt)
+  const imgW = 760;
+  const imgH = +(imgW * (canvas.height / canvas.width)).toFixed(2);
+  const imgX = +((pageWidth - imgW) / 2).toFixed(2);
+  const imgY = +((pageHeight - imgH) / 2).toFixed(2);
+
+  const enc = new TextEncoder();
+  const parts = [];
+  const offsets = [];
+
+  function addString(str) {
+    const b = enc.encode(str);
+    parts.push(b);
+    return b.length;
+  }
+
+  function addBytes(bytes) {
+    parts.push(bytes);
+    return bytes.length;
+  }
+
+  let currentOffset = 0;
+  function markObj(num) {
+    offsets[num] = currentOffset;
+  }
+
+  // Encabezado PDF 1.4 binario estándar
+  currentOffset += addString('%PDF-1.4\n%\xFF\xFF\xFF\xFF\n');
+
+  // Objeto 1: Catalog
+  markObj(1);
+  currentOffset += addString('1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n');
+
+  // Objeto 2: Pages
+  markObj(2);
+  currentOffset += addString('2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n');
+
+  // Objeto 3: Page
+  markObj(3);
+  currentOffset += addString(
+    `3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${pageWidth} ${pageHeight}] ` +
+    `/Resources << /XObject << /Im1 4 0 R >> >> /Contents 5 0 R >>\nendobj\n`
+  );
+
+  // Objeto 4: Image XObject (JPEG /DCTDecode)
+  markObj(4);
+  currentOffset += addString(
+    `4 0 obj\n<< /Type /XObject /Subtype /Image /Width ${canvas.width} /Height ${canvas.height} ` +
+    `/ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${imgLen} >>\nstream\n`
+  );
+  currentOffset += addBytes(imgBytes);
+  currentOffset += addString('\nendstream\nendobj\n');
+
+  // Objeto 5: Page Content stream
+  const contentStream = `q\n${imgW} 0 0 ${imgH} ${imgX} ${imgY} cm\n/Im1 Do\nQ\n`;
+  const contentLen = enc.encode(contentStream).length;
+  markObj(5);
+  currentOffset += addString(`5 0 obj\n<< /Length ${contentLen} >>\nstream\n${contentStream}endstream\nendobj\n`);
+
+  // Tabla Xref
+  const xrefStart = currentOffset;
+  let xrefStr = 'xref\n0 6\n0000000000 65535 f \n';
+  for (let i = 1; i <= 5; i++) {
+    const offStr = String(offsets[i]).padStart(10, '0');
+    xrefStr += `${offStr} 00000 n \n`;
+  }
+  xrefStr += `trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n${xrefStart}\n%%EOF\n`;
+  addString(xrefStr);
+
+  // Consolidar buffer binario completo
+  const totalLength = parts.reduce((acc, p) => acc + p.length, 0);
+  const pdfBytes = new Uint8Array(totalLength);
+  let pos = 0;
+  for (const p of parts) {
+    pdfBytes.set(p, pos);
+    pos += p.length;
+  }
+
+  const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(blob);
+  link.download = fileName;
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(link.href), 10000);
+}
+
+function sanitizeDownloadFileName(str) {
+  return String(str || '').replace(/[\/\\:*?"<>|]/g, '_').replace(/\s+/g, '_');
+}
+
+function downloadReceiptPdf() {
+  const canvas = document.getElementById('receiptExportCanvas');
+  if (!canvas) return;
+  const isInvoice = currentReceiptData?.voucher_type === 'FAC';
+  const correlative = currentReceiptData?.receipt_number || (isInvoice ? 'FAC-0001' : 'BOL-0001');
+  const biz = sanitizeDownloadFileName(currentReceiptData?.client?.business_name || 'Cliente');
+  const prefix = isInvoice ? 'Factura' : 'Boleta';
+  const cleanCorrelative = sanitizeDownloadFileName(correlative);
+  const fileName = `${prefix}_${cleanCorrelative}_${biz}.pdf`;
+
+  try {
+    generateOfflinePdfFromCanvas(canvas, fileName);
+    showToast(`${prefix} ${correlative} descargada en PDF con éxito.`, 'success');
+  } catch (e) {
+    console.error('Error generando PDF offline:', e);
+    showToast('Error al generar PDF: ' + e.message, 'error');
+  }
+}
+
 function downloadReceiptPng() {
   const canvas = document.getElementById('receiptExportCanvas');
   if (!canvas) return;
-  const correlative = currentReceiptData?.receipt_number || 'BOL-0001';
-  const biz = (currentReceiptData?.client?.business_name || 'Cliente').replace(/[^a-zA-Z0-9_-]/g, '_');
+  const isInvoice = currentReceiptData?.voucher_type === 'FAC';
+  const correlative = currentReceiptData?.receipt_number || (isInvoice ? 'FAC-0001' : 'BOL-0001');
+  const biz = sanitizeDownloadFileName(currentReceiptData?.client?.business_name || 'Cliente');
+  const prefix = isInvoice ? 'Factura' : 'Boleta';
+  const cleanCorrelative = sanitizeDownloadFileName(correlative);
   const link = document.createElement('a');
-  link.download = `Boleta_${correlative}_${biz}.png`;
+  link.download = `${prefix}_${cleanCorrelative}_${biz}.png`;
   link.href = canvas.toDataURL('image/png');
   link.click();
-  showToast(`Boleta ${correlative} descargada con éxito.`, 'success');
+  showToast(`${prefix} ${correlative} descargada en PNG con éxito.`, 'success');
 }
 
 async function copyReceiptToClipboard() {
   const canvas = document.getElementById('receiptExportCanvas');
   if (!canvas) return;
-  const correlative = currentReceiptData?.receipt_number || 'BOL-0001';
+  const isInvoice = currentReceiptData?.voucher_type === 'FAC';
+  const correlative = currentReceiptData?.receipt_number || (isInvoice ? 'FAC-0001' : 'BOL-0001');
+  const docName = isInvoice ? 'Factura' : 'Boleta';
   try {
     canvas.toBlob(async (blob) => {
       if (!blob) {
@@ -2918,7 +3744,7 @@ async function copyReceiptToClipboard() {
         await navigator.clipboard.write([
           new ClipboardItem({ 'image/png': blob })
         ]);
-        showToast(`Boleta ${correlative} copiada al portapapeles. ¡Lista para pegar con Ctrl+V en WhatsApp!`, 'success');
+        showToast(`${docName} ${correlative} copiada al portapapeles. ¡Lista para pegar con Ctrl+V en WhatsApp!`, 'success');
       } catch (err) {
         console.warn('Clipboard write error:', err);
         downloadReceiptPng();
@@ -2938,18 +3764,27 @@ function sendReceiptViaWhatsapp() {
   if (!currentReceiptData) return;
   const client = currentReceiptData.client;
   const payment = currentReceiptData.payment;
-  const correlative = currentReceiptData.receipt_number || 'BOL-0001';
+  const isInvoice = currentReceiptData.voucher_type === 'FAC';
+  const correlative = currentReceiptData.receipt_number || (isInvoice ? 'FAC-0001' : 'BOL-0001');
   const amount = (parseFloat(payment.amount) || 0).toFixed(2);
   const titular = client.owner_name || client.business_name || 'Estimado cliente';
   const concept = payment.plan || 'Servicio MochilaLista';
 
+  const docTypeName = isInvoice ? 'Factura de Pago Oficial' : 'Boleta de Pago Oficial';
+  const docExtra = isInvoice ? 'fiscal para tu control tributario y administrativo' : 'para tu control contable';
+
   const msg = `¡Hola, ${titular}! Te saluda el equipo de MochilaLista.\n\n` +
-    `Te hacemos entrega de tu *Boleta de Pago Oficial N.° ${correlative}* por el monto de *S/ ${amount}* correspondiente a *${concept}*.\n\n` +
-    `📌 Hemos adjuntado el comprobante digital para tu control contable.\n\n` +
+    `Te hacemos entrega de tu *${docTypeName} N.° ${correlative}* por el monto de *S/ ${amount}* correspondiente a *${concept}*.\n\n` +
+    `📌 Hemos adjuntado el comprobante digital ${docExtra}.\n\n` +
     `¡Muchas gracias por tu confianza y preferencia!`;
 
   closeReceiptModal();
-  if (typeof openWaComposerForClient === 'function' && client.id) {
+  if (typeof openWhatsAppComposer === 'function' && client.id) {
+    openWhatsAppComposer(client.id, null, {
+      customMessage: msg,
+      templateKey: 'custom'
+    });
+  } else if (typeof openWaComposerForClient === 'function' && client.id) {
     openWaComposerForClient(client.id, {
       customMessage: msg,
       templateKey: 'custom'
@@ -2961,7 +3796,12 @@ function sendReceiptViaWhatsapp() {
   }
 }
 
+window.openWaComposerForClient = function(clientId, options = {}) {
+  return openWhatsAppComposer(clientId, options.templateKey || null, options);
+};
+
 async function saveReceiptDefaultDesign() {
+  const isInvoice = currentReceiptData?.voucher_type === 'FAC';
   const title = document.getElementById('rcInputTitle')?.value.trim() || 'BOLETA DE PAGO ADMINISTRATIVA';
   const commercial = document.getElementById('rcInputCommercialName')?.value.trim() || 'MochilaLista';
   const issuer = document.getElementById('rcInputIssuerName')?.value.trim() || 'Julio Angello Vasquez Navarro';
@@ -2969,18 +3809,37 @@ async function saveReceiptDefaultDesign() {
   const issuerPhone = document.getElementById('rcInputIssuerPhone')?.value.trim() || '+51 922 836 879';
   const issuerCity = document.getElementById('rcInputIssuerCity')?.value.trim() || 'Piura, Perú';
   const showLogo = document.getElementById('rcCheckShowLogo')?.checked !== false;
+  const showIssuerDoc = document.getElementById('rcCheckShowIssuerDoc')?.checked !== false;
+  const showIssuerPhone = document.getElementById('rcCheckShowIssuerPhone')?.checked !== false;
+  const showClientDoc = document.getElementById('rcCheckShowClientDoc')?.checked !== false;
+  const showHardwareId = document.getElementById('rcCheckShowHardwareId')?.checked !== false;
+  const showOperationNumber = document.getElementById('rcCheckShowOperationNumber')?.checked !== false;
+  const showObservation = document.getElementById('rcCheckShowObservation')?.checked !== false;
+  const showSignature = document.getElementById('rcCheckShowSignature')?.checked !== false;
+  const showFooterNotes = document.getElementById('rcCheckShowFooterNotes')?.checked !== false;
+  const showIgv = document.getElementById('rcCheckShowIgv')?.checked === true;
   const accentColor = document.getElementById('rcInputAccentColor')?.value || '#2563eb';
   const footerNotes = document.getElementById('rcInputFooterNotes')?.value.trim() || '';
   const signatureText = document.getElementById('rcInputSignature')?.value.trim() || '';
 
   const newRc = {
-    title,
+    title: isInvoice ? (ownerConfig?.receipt_config?.title || 'BOLETA DE PAGO ADMINISTRATIVA') : title,
+    invoice_title: isInvoice ? title : (ownerConfig?.receipt_config?.invoice_title || 'FACTURA DE VENTA / PAGO'),
     commercial_name: commercial,
     issuer_name: issuer,
     issuer_doc: issuerDoc,
     issuer_phone: issuerPhone,
     issuer_city: issuerCity,
     show_logo: showLogo,
+    show_issuer_doc: showIssuerDoc,
+    show_issuer_phone: showIssuerPhone,
+    show_client_doc: showClientDoc,
+    show_hardware_id: showHardwareId,
+    show_operation_number: showOperationNumber,
+    show_observation: showObservation,
+    show_signature: showSignature,
+    show_footer_notes: showFooterNotes,
+    show_igv_breakdown: showIgv,
     accent_color: accentColor,
     footer_notes: footerNotes,
     signature_text: signatureText,
@@ -3003,7 +3862,7 @@ async function saveReceiptDefaultDesign() {
     if (currentReceiptData) {
       currentReceiptData.receipt_config = saved.receipt_config;
     }
-    showToast('Diseño de boleta guardado como predeterminado con éxito.', 'success');
+    showToast('Diseño y preferencias de comprobante guardados con éxito.', 'success');
   } catch (e) {
     showToast('Error al guardar diseño: ' + e.message, 'error');
   }
@@ -3012,12 +3871,22 @@ async function saveReceiptDefaultDesign() {
 function resetReceiptDefaultDesign() {
   const defaultRc = {
     title: 'BOLETA DE PAGO ADMINISTRATIVA',
+    invoice_title: 'FACTURA DE VENTA / PAGO',
     commercial_name: 'MochilaLista',
     issuer_name: 'Julio Angello Vasquez Navarro',
     issuer_doc: 'D.N.I. / R.U.C. Registrado',
     issuer_phone: '+51 922 836 879',
     issuer_city: 'Piura, Perú',
     show_logo: true,
+    show_issuer_doc: true,
+    show_issuer_phone: true,
+    show_client_doc: true,
+    show_hardware_id: true,
+    show_operation_number: true,
+    show_observation: true,
+    show_signature: true,
+    show_footer_notes: true,
+    show_igv_breakdown: false,
     accent_color: '#2563eb',
     footer_notes: 'Software de Punto de Venta Offline. Comprobante de control administrativo y soporte técnico.',
     signature_text: 'Administración Comercial — MochilaLista',
@@ -3030,20 +3899,39 @@ function resetReceiptDefaultDesign() {
 }
 
 function initReceiptModalEvents() {
-  const inputs = [
+  const textInputs = [
     'rcInputTitle', 'rcInputCommercialName', 'rcInputIssuerName',
     'rcInputIssuerDoc', 'rcInputIssuerPhone', 'rcInputIssuerCity',
     'rcInputAccentColor', 'rcInputCustomNote', 'rcInputFooterNotes',
-    'rcInputSignature'
+    'rcInputSignature', 'rcInputInvoiceRuc', 'rcInputInvoiceBizName',
+    'rcInputInvoiceAddress'
   ];
-  inputs.forEach(id => {
+  textInputs.forEach(id => {
     document.getElementById(id)?.addEventListener('input', () => {
       renderReceiptPreviewAndCanvas();
     });
   });
 
-  document.getElementById('rcCheckShowLogo')?.addEventListener('change', () => {
+  // Selector de Tipo de Comprobante (BOL vs FAC)
+  document.getElementById('rcSelectVoucherType')?.addEventListener('change', (e) => {
+    switchReceiptVoucherType(e.target.value);
+  });
+
+  // Checkbox de IGV 18%
+  document.getElementById('rcCheckShowIgv')?.addEventListener('change', () => {
     renderReceiptPreviewAndCanvas();
+  });
+
+  // 9 Interruptores de visibilidad
+  const toggleCheckIds = [
+    'rcCheckShowLogo', 'rcCheckShowIssuerDoc', 'rcCheckShowIssuerPhone',
+    'rcCheckShowClientDoc', 'rcCheckShowHardwareId', 'rcCheckShowOperationNumber',
+    'rcCheckShowObservation', 'rcCheckShowSignature', 'rcCheckShowFooterNotes'
+  ];
+  toggleCheckIds.forEach(id => {
+    document.getElementById(id)?.addEventListener('change', () => {
+      renderReceiptPreviewAndCanvas();
+    });
   });
 
   document.querySelectorAll('.rc-swatch').forEach(swatch => {
@@ -3060,6 +3948,7 @@ function initReceiptModalEvents() {
   document.getElementById('btnRcSaveDefault')?.addEventListener('click', saveReceiptDefaultDesign);
   document.getElementById('btnRcResetDefault')?.addEventListener('click', resetReceiptDefaultDesign);
   document.getElementById('btnRcDownloadPng')?.addEventListener('click', downloadReceiptPng);
+  document.getElementById('btnRcDownloadPdf')?.addEventListener('click', downloadReceiptPdf);
   document.getElementById('btnRcCopyClipboard')?.addEventListener('click', copyReceiptToClipboard);
   document.getElementById('btnRcPrintPdf')?.addEventListener('click', printReceiptPdf);
   document.getElementById('btnRcSendWhatsapp')?.addEventListener('click', sendReceiptViaWhatsapp);
@@ -3151,6 +4040,7 @@ function initDrawerEvents() {
     const upd = document.getElementById('drawerEditUpdates')?.value || null;
     const aiRep = parseInt(document.getElementById('drawerEditAiReported')?.value) || 0;
     const aiBonus = parseInt(document.getElementById('drawerEditAiPendingBonus')?.value) || 0;
+    const followup = document.getElementById('drawerEditFollowupDate')?.value || null;
     const notes = document.getElementById('drawerEditNotes').value.trim();
 
     try {
@@ -3170,6 +4060,7 @@ function initDrawerEvents() {
           updates_until: upd,
           ai_reported_balance: aiRep,
           ai_pending_bonus: aiBonus,
+          next_followup_date: followup,
           notes: notes,
         }),
       });
@@ -3340,7 +4231,7 @@ async function openClient360Drawer(clientId) {
     }
   }
 
-  document.getElementById('drawerPhone').textContent = client.phone || '-';
+  document.getElementById('drawerPhone').textContent = formatPeruvianPhoneDisplay(client.phone);
   document.getElementById('drawerDocId').textContent = client.document_id || '-';
   const drawerDeviceModel = document.getElementById('drawerDeviceModel');
   if (drawerDeviceModel) {
@@ -3349,6 +4240,21 @@ async function openClient360Drawer(clientId) {
   const drawerAiBreakdown = document.getElementById('drawerAiBreakdown');
   if (drawerAiBreakdown) {
     drawerAiBreakdown.textContent = `En celular: ${realAi} IA | Bono pendiente: +${pendingAi} IA`;
+  }
+  const drawerFollowup = document.getElementById('drawerFollowup');
+  if (drawerFollowup) {
+    if (client.next_followup_date) {
+      const todayStr = getLocalIsoDate();
+      if (client.next_followup_date < todayStr) {
+        drawerFollowup.innerHTML = `<span style="color:var(--danger); font-weight:700;">Vencido (${escapeHtml(client.next_followup_date)})</span>`;
+      } else if (client.next_followup_date === todayStr) {
+        drawerFollowup.innerHTML = `<span style="color:var(--warning); font-weight:700;">¡Hoy! (${escapeHtml(client.next_followup_date)})</span>`;
+      } else {
+        drawerFollowup.innerHTML = `<span style="color:var(--primary); font-weight:600;">Programado (${escapeHtml(client.next_followup_date)})</span>`;
+      }
+    } else {
+      drawerFollowup.textContent = 'Sin programar';
+    }
   }
   document.getElementById('drawerNotes').textContent = client.notes || 'Sin observaciones registradas.';
 
@@ -3404,6 +4310,8 @@ async function openClient360Drawer(clientId) {
   if (editAiRep) editAiRep.value = client.ai_reported_balance || 0;
   const editAiBonus = document.getElementById('drawerEditAiPendingBonus');
   if (editAiBonus) editAiBonus.value = client.ai_pending_bonus || 0;
+  const editFollowup = document.getElementById('drawerEditFollowupDate');
+  if (editFollowup) editFollowup.value = client.next_followup_date ? client.next_followup_date.substring(0, 10) : '';
   document.getElementById('drawerEditNotes').value = client.notes || '';
 
   try {
@@ -3434,9 +4342,21 @@ async function openClient360Drawer(clientId) {
           card.className = 'drawer-payment-card';
           card.innerHTML = `
             <div class="dpc-row-top">
-              <div class="dpc-concept-wrap">
+              <div class="dpc-concept-wrap" style="display:flex; align-items:center; gap:0.4rem; flex-wrap:wrap;">
                 <span class="dpc-date">${escapeHtml(pDate)}</span>
-                <span class="badge badge-mono">${escapeHtml(p.plan || '-')}</span>
+                <span class="badge badge-mono">${escapeHtml(formatPlanHumanLabel(p.plan || '-'))}</span>
+                ${p.updated_at ? `
+                  <span class="badge-edited-payment" title="Pago editado el ${escapeHtml(p.updated_at.substring(0, 10))} ${escapeHtml(p.updated_at.substring(11, 16))} UTC">
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                    <span>Editado</span>
+                  </span>
+                ` : ''}
+                ${p.receipt_number ? `
+                  <button type="button" class="btn-micro-receipt" onclick="openPaymentReceiptModal('${clientId}', '${p.id}')" title="Ver / Reimprimir Comprobante Oficial">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle; margin-right:2px;"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                    <span>${escapeHtml(p.receipt_number)}</span>
+                  </button>
+                ` : ''}
               </div>
               <div class="dpc-amount">S/ ${amt.toFixed(2)}</div>
             </div>
@@ -3655,7 +4575,7 @@ async function openClient360Drawer(clientId) {
           migrations.forEach((h, hIdx) => {
             const tr = document.createElement('tr');
             tr.innerHTML = `
-              <td>${h.migrated_at ? h.migrated_at.substring(0, 10) : '-'}</td>
+              <td style="white-space: nowrap; min-width: 96px;">${h.migrated_at ? h.migrated_at.substring(0, 10) : '-'}</td>
               <td><code style="font-family:var(--font-mono); font-size:0.78rem;">${escapeHtml(h.old_device_id)}</code></td>
               <td><strong style="font-family:var(--font-mono); color:var(--primary); font-size:0.78rem;">${escapeHtml(h.new_device_id)}</strong></td>
               <td>S/ ${(h.fee_amount || h.fee_charged || 0).toFixed(2)}</td>
@@ -3807,11 +4727,11 @@ function openAddPaymentModal(clientId) {
   const payDate = document.getElementById('manualPayDate');
   if (payDate) payDate.value = new Date().toISOString().substring(0, 10);
 
-  // Preset inteligente
+  // Preset inteligente homologado
   const presetSel = document.getElementById('manualPayPlanPreset');
   const customConcept = document.getElementById('manualPayCustomConcept');
   if (presetSel) {
-    presetSel.value = 'Renovación Mensual';
+    presetSel.value = 'MENSUAL';
     if (customConcept) {
       customConcept.value = '';
       customConcept.style.display = 'none';
@@ -3819,12 +4739,17 @@ function openAddPaymentModal(clientId) {
   }
 
   const defaultPrice = ownerConfig?.catalog?.['MENSUAL']?.price ?? 35.0;
-  document.getElementById('manualPayAmount').value = defaultPrice.toFixed(2);
-  document.getElementById('manualPayPlan').value = 'Renovación Mensual';
+  document.getElementById('manualPayAmount').value = parseFloat(defaultPrice).toFixed(2);
+  document.getElementById('manualPayPlan').value = 'MENSUAL';
   document.getElementById('manualPayMethod').value = 'Yape';
   document.getElementById('manualPayRef').value = '';
   document.getElementById('manualPayNotes').value = '';
 
+  // Banner y Checkbox de Comprobante
+  const receiptNotice = document.getElementById('manualPayReceiptNotice');
+  if (receiptNotice) receiptNotice.style.display = 'none';
+  const receiptLabel = document.getElementById('manualPayGenerateReceiptLabel');
+  if (receiptLabel) receiptLabel.textContent = 'Generar Boleta de Pago al guardar (Abre comprobante BOL-XXXX de inmediato)';
   const genReceiptChk = document.getElementById('manualPayGenerateReceipt');
   if (genReceiptChk) genReceiptChk.checked = true;
 
@@ -3869,42 +4794,50 @@ function openEditPaymentModal(clientId, payment) {
 
   const payDate = document.getElementById('manualPayDate');
   if (payDate) payDate.value = payment.date ? payment.date.substring(0, 10) : new Date().toISOString().substring(0, 10);
-  document.getElementById('manualPayAmount').value = payment.amount || 0;
+  document.getElementById('manualPayAmount').value = parseFloat(payment.amount ?? 0).toFixed(2);
 
-  // Matching preset o fallback a CUSTOM preservando concepto original
+  // Matching de slug canónico con retrocompatibilidad o fallback a CUSTOM
   const presetSel = document.getElementById('manualPayPlanPreset');
   const customConcept = document.getElementById('manualPayCustomConcept');
   const planVal = payment.plan || '';
-  let matched = false;
-  if (presetSel) {
-    for (const opt of presetSel.options) {
-      if (opt.value !== 'CUSTOM' && (opt.value === planVal || planVal.toLowerCase() === opt.value.toLowerCase())) {
-        presetSel.value = opt.value;
-        matched = true;
-        break;
-      }
+  const slug = normalizePlanToSlug(planVal);
+
+  if (slug && presetSel) {
+    presetSel.value = slug;
+    if (customConcept) {
+      customConcept.value = '';
+      customConcept.style.display = 'none';
     }
-    if (!matched) {
-      presetSel.value = 'CUSTOM';
-      if (customConcept) {
-        customConcept.value = planVal;
-        customConcept.style.display = 'block';
-      }
-    } else {
-      if (customConcept) {
-        customConcept.value = '';
-        customConcept.style.display = 'none';
-      }
+    document.getElementById('manualPayPlan').value = slug;
+  } else {
+    if (presetSel) presetSel.value = 'CUSTOM';
+    if (customConcept) {
+      customConcept.value = planVal;
+      customConcept.style.display = 'block';
     }
+    document.getElementById('manualPayPlan').value = planVal;
   }
 
-  document.getElementById('manualPayPlan').value = planVal;
   document.getElementById('manualPayMethod').value = payment.method || 'Yape';
   document.getElementById('manualPayRef').value = payment.reference || '';
   document.getElementById('manualPayNotes').value = payment.notes || '';
 
+  // Blindaje contable de comprobante previo
+  const receiptNotice = document.getElementById('manualPayReceiptNotice');
+  const receiptBadge = document.getElementById('manualPayReceiptNumberBadge');
+  const receiptLabel = document.getElementById('manualPayGenerateReceiptLabel');
   const genReceiptChk = document.getElementById('manualPayGenerateReceipt');
-  if (genReceiptChk) genReceiptChk.checked = false;
+
+  if (payment.receipt_number) {
+    if (receiptNotice) receiptNotice.style.display = 'flex';
+    if (receiptBadge) receiptBadge.textContent = payment.receipt_number;
+    if (receiptLabel) receiptLabel.textContent = `Abrir comprobante ${payment.receipt_number} actualizado al guardar`;
+    if (genReceiptChk) genReceiptChk.checked = true;
+  } else {
+    if (receiptNotice) receiptNotice.style.display = 'none';
+    if (receiptLabel) receiptLabel.textContent = 'Generar Boleta de Pago al guardar (Abre comprobante BOL-XXXX de inmediato)';
+    if (genReceiptChk) genReceiptChk.checked = false;
+  }
 
   openModal('modalManualPayment');
 }
@@ -4027,6 +4960,14 @@ const WA_TEMPLATES = {
     name: 'Entrega Oficial de Licencia / Credencial',
     text: '¡Excelente noticia, {titular}!\nTu licencia oficial de MochilaLista para el negocio *{negocio}* ha sido generada exitosamente.\n\n📌 Detalles de la Licencia:\n• Plan: {plan}\n• Hardware ID: `{device_id}`\n• Vigencia: {vencimiento}\n• Versión: {version}\n\n🔑 Código de Activación:\n`{codigo_licencia}`\n\nPuedes ingresar este código o escanear el QR desde la pantalla de activación de tu aplicación móvil. ¡Gracias por confiar en MochilaLista! 🎒✅'
   },
+  ai_bonus: {
+    name: 'Bono / Recarga IA',
+    text: '¡Hola, {titular}! 👋 Te saludamos de MochilaLista.\nTu recarga de escaneos de Inteligencia Artificial para *{negocio}* ha sido acreditada con éxito.\n\n⚡ Detalle de la Recarga:\n• Créditos IA Otorgados: +{creditos_ia} escaneos vitalicios\n• Hardware ID Vinculado: `{device_id}`\n\n🔑 Token de Activación IA:\n`{codigo_licencia}`\n\nPuedes ingresar este token o escanear el QR en tu app para sumarlos inmediatamente a tu saldo disponible. ¡A seguir potenciando tu negocio! 🚀'
+  },
+  courtesy_extension: {
+    name: 'Extensión de Cortesía',
+    text: 'Estimado(a) {titular}, te saludamos de MochilaLista.\nTe confirmamos la habilitación de una extensión de cortesía por *{dias} día(s)* adicionales para tu sistema en *{negocio}*.\n\n📌 Nueva vigencia temporal: *{vencimiento}*\n• Hardware ID: `{device_id}`\n\n🔑 Código de Activación:\n`{codigo_licencia}`\n\nIngresa este código o escanea el QR en tu aplicación para continuar operando sin interrupciones. ¡Quedamos a tu servicio! 🎒✅'
+  },
   update: {
     name: 'Aviso de Nueva Versión APK',
     text: '¡Hola, {titular}! Te saludamos de MochilaLista.\nTe informamos que ya se encuentra disponible una nueva actualización de la aplicación: versión *v{version}* con mejoras clave de rendimiento, estabilidad y nuevas funciones comerciales para tu negocio *{negocio}*.\nTu equipo actual (`{device_id}`) es totalmente compatible.\nContáctanos por este medio para facilitarte el enlace de descarga directa del APK oficial. 🚀📲'
@@ -4052,7 +4993,7 @@ function formatPlanLabel(plan) {
   return plan.replace(/_/g, ' ');
 }
 
-async function openWhatsAppComposer(clientId, defaultTemplateKey = null) {
+async function openWhatsAppComposer(clientId, defaultTemplateKey = null, options = {}) {
   const client = globalClients.find(c => c.id === clientId);
   if (!client) {
     showToast('Cliente no encontrado.', 'error');
@@ -4122,25 +5063,39 @@ async function openWhatsAppComposer(clientId, defaultTemplateKey = null) {
     initialTpl = 'welcome';
   }
 
-  // Cargar token histórico más reciente si existe
-  let lastToken = `ML9-PENDIENTE-${client.current_device_id || 'DISPOSITIVO'}`;
-  try {
-    const res = await fetch(`/api/clients/${clientId}/history`);
-    if (res.ok) {
-      const history = await res.json();
-      if (history.codes && history.codes.length > 0) {
-        lastToken = history.codes[history.codes.length - 1].token;
+  // Cargar token histórico más reciente si existe o usar el provisto en options
+  let lastToken = options.token || `ML9-PENDIENTE-${client.current_device_id || 'DISPOSITIVO'}`;
+  if (!options.token) {
+    try {
+      const res = await fetch(`/api/clients/${clientId}/history`);
+      if (res.ok) {
+        const history = await res.json();
+        if (history.codes && history.codes.length > 0) {
+          lastToken = history.codes[history.codes.length - 1].token;
+        }
       }
-    }
-  } catch (_) { }
+    } catch (_) { }
+  }
 
   const modalEl = document.getElementById('modalWaComposer');
   if (modalEl) {
     modalEl.dataset.lastToken = lastToken;
     modalEl.dataset.cleanPhone = cleanDigits;
+    modalEl.dataset.aiCredits = options.aiCredits !== undefined ? String(options.aiCredits) : '';
+    modalEl.dataset.diasExtension = options.diasExtension !== undefined ? String(options.diasExtension) : '';
   }
 
-  selectWaTemplate(initialTpl);
+  if (options.customMessage) {
+    document.querySelectorAll('.wa-template-btn').forEach(b => b.classList.remove('active'));
+    currentWaComposerTemplateKey = 'custom';
+    const textarea = document.getElementById('waCompMessage');
+    if (textarea) {
+      textarea.value = options.customMessage;
+      updateWaComposerStats();
+    }
+  } else {
+    selectWaTemplate(initialTpl);
+  }
   openModal('modalWaComposer');
 }
 
@@ -4182,12 +5137,16 @@ function selectWaTemplate(tplKey) {
   const yapePhone = pm.yape_plin_phone || '922836879';
   const yapeTitular = pm.yape_plin_holder || li.author_full_name || 'Julio Angello Vasquez Navarro';
   const autor = li.author_full_name || 'Julio Angello Vasquez Navarro';
+  const aiCredsVal = modalEl?.dataset?.aiCredits || client.ai_reported_balance || '0';
+  const diasVal = modalEl?.dataset?.diasExtension || '7';
 
   let rendered = rawTpl
     .replace(/\{negocio\}/g, client.business_name || 'su negocio')
     .replace(/\{titular\}/g, client.owner_name || 'Estimado cliente')
     .replace(/\{plan\}/g, formatPlanLabel(client.license_type))
     .replace(/\{dias_restantes\}/g, String(diffDays))
+    .replace(/\{dias\}/g, String(diasVal))
+    .replace(/\{creditos_ia\}/g, String(aiCredsVal))
     .replace(/\{vencimiento\}/g, client.license_expires ? client.license_expires.substring(0, 10) : 'Activa')
     .replace(/\{device_id\}/g, client.current_device_id || 'PENDIENTE')
     .replace(/\{version\}/g, latestVer)
@@ -4948,11 +5907,19 @@ async function inspectToken() {
 // =================== 6. FINANZAS & RESPALDOS (NUEVA PESTAÑA OFICIAL) ===================
 function initFinancesAndBackupsEvents() {
   // Filtros de Finanzas
+  document.getElementById('inputFinSearch')?.addEventListener('input', renderFinancesTable);
+  document.getElementById('btnFinSearchClear')?.addEventListener('click', () => {
+    const inputSearch = document.getElementById('inputFinSearch');
+    if (inputSearch) inputSearch.value = '';
+    renderFinancesTable();
+  });
   document.getElementById('finFilterFrom')?.addEventListener('change', renderFinancesTable);
   document.getElementById('finFilterTo')?.addEventListener('change', renderFinancesTable);
   document.getElementById('finFilterPlan')?.addEventListener('change', renderFinancesTable);
   document.getElementById('finFilterMethod')?.addEventListener('change', renderFinancesTable);
   document.getElementById('btnFinFilterClear')?.addEventListener('click', () => {
+    const inputSearch = document.getElementById('inputFinSearch');
+    if (inputSearch) inputSearch.value = '';
     document.getElementById('finFilterFrom').value = '';
     document.getElementById('finFilterTo').value = '';
     document.getElementById('finFilterPlan').value = 'all';
@@ -5006,6 +5973,12 @@ function renderFinancesTable() {
   if (!tbody) return;
   tbody.innerHTML = '';
 
+  const searchVal = (document.getElementById('inputFinSearch')?.value || '').trim().toLowerCase();
+  const btnClear = document.getElementById('btnFinSearchClear');
+  if (btnClear) {
+    btnClear.style.display = searchVal ? 'block' : 'none';
+  }
+
   const fromVal = document.getElementById('finFilterFrom')?.value;
   const toVal = document.getElementById('finFilterTo')?.value;
   const planVal = document.getElementById('finFilterPlan')?.value || 'all';
@@ -5016,6 +5989,34 @@ function renderFinancesTable() {
     if (toVal && f.date && f.date.substring(0, 10) > toVal) return false;
     if (planVal !== 'all' && !(f.plan || '').toUpperCase().includes(planVal.toUpperCase())) return false;
     if (methodVal !== 'all' && !(f.method || '').toUpperCase().includes(methodVal.toUpperCase())) return false;
+
+    if (searchVal) {
+      const receiptNo = (f.receipt_number || '').toLowerCase();
+      const bolNo = (f.receipt_bol_number || '').toLowerCase();
+      const facNo = (f.receipt_fac_number || '').toLowerCase();
+      const clientName = (f.business_name || '').toLowerCase();
+      const ownerName = (f.owner_name || '').toLowerCase();
+      const clientId = (f.client_id || '').toLowerCase();
+      const docId = (f.document_number || '').toLowerCase();
+      const ref = (f.reference || '').toLowerCase();
+      const plan = (f.plan || '').toLowerCase();
+      const planHuman = (typeof formatPlanHumanLabel === 'function' ? formatPlanHumanLabel(f.plan) : '').toLowerCase();
+      const notes = (f.notes || '').toLowerCase();
+
+      const matches = receiptNo.includes(searchVal) ||
+        bolNo.includes(searchVal) ||
+        facNo.includes(searchVal) ||
+        clientName.includes(searchVal) ||
+        ownerName.includes(searchVal) ||
+        clientId.includes(searchVal) ||
+        docId.includes(searchVal) ||
+        ref.includes(searchVal) ||
+        plan.includes(searchVal) ||
+        planHuman.includes(searchVal) ||
+        notes.includes(searchVal);
+      if (!matches) return false;
+    }
+
     return true;
   });
 
@@ -5048,30 +6049,54 @@ function renderFinancesTable() {
   document.getElementById('finKpiTopMethod').textContent = topMethod;
 
   if (filtered.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="9" style="text-align:center; padding:1.5rem; color:var(--text-muted);">Sin transacciones registradas para este filtro.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="9" style="text-align:center; padding:1.5rem; color:var(--text-muted);">Sin transacciones registradas para este filtro o criterio de búsqueda.</td></tr>';
     return;
   }
 
   filtered.forEach(f => {
     const tr = document.createElement('tr');
-    const receiptBadge = f.receipt_number 
-      ? `<span class="badge badge-success" style="font-size:0.75rem; letter-spacing:0.5px; padding:3px 6px;">${escapeHtml(f.receipt_number)}</span>`
-      : `<span style="font-size:0.75rem; color:var(--text-muted);">Sin emitir</span>`;
-    tr.innerHTML = `
-      <td>${f.date ? f.date.substring(0, 10) : '-'}</td>
-      <td><strong>${escapeHtml(f.client_id)}</strong></td>
-      <td><strong>${escapeHtml(f.business_name)}</strong></td>
-      <td>${escapeHtml(f.owner_name)}</td>
-      <td><span class="badge badge-mono">${escapeHtml(f.plan)}</span></td>
-      <td>${escapeHtml(f.method)}</td>
-      <td>${escapeHtml(f.reference)}</td>
-      <td><strong style="color:var(--success);">S/ ${(f.amount || 0).toFixed(2)}</strong></td>
-      <td style="text-align:center;">
-        <button type="button" class="btn btn-secondary btn-xs btn-fin-receipt" title="Generar o Ver Boleta Oficial" onclick="openPaymentReceiptModal('${escapeHtml(f.client_id)}', '${escapeHtml(f.id)}')">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:4px;"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
-          ${f.receipt_number ? escapeHtml(f.receipt_number) : 'Boleta'}
+
+    let receiptCellHtml = '';
+    const receiptNum = f.receipt_number || f.receipt_fac_number || f.receipt_bol_number;
+    const rType = f.receipt_type || (receiptNum && receiptNum.startsWith('FAC') ? 'FAC' : (receiptNum && receiptNum.startsWith('BOL') ? 'BOL' : null));
+
+    if (rType === 'FAC' || (receiptNum && receiptNum.startsWith('FAC'))) {
+      const displayNum = receiptNum || 'FAC-XXXX';
+      receiptCellHtml = `
+        <button type="button" class="badge-receipt-fac" title="Ver / Reimprimir Factura Oficial" onclick="openPaymentReceiptModal('${escapeHtml(f.client_id)}', '${escapeHtml(f.id)}')">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+          <span>${escapeHtml(displayNum)}</span>
         </button>
-      </td>
+      `;
+    } else if (rType === 'BOL' || (receiptNum && receiptNum.startsWith('BOL'))) {
+      const displayNum = receiptNum || 'BOL-XXXX';
+      receiptCellHtml = `
+        <button type="button" class="badge-receipt-bol" title="Ver / Reimprimir Boleta Oficial" onclick="openPaymentReceiptModal('${escapeHtml(f.client_id)}', '${escapeHtml(f.id)}')">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+          <span>${escapeHtml(displayNum)}</span>
+        </button>
+      `;
+    } else {
+      receiptCellHtml = `
+        <button type="button" class="btn-fin-emit" title="Emitir Boleta o Factura Oficial para este pago" onclick="openPaymentReceiptModal('${escapeHtml(f.client_id)}', '${escapeHtml(f.id)}')">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          <span>Emitir</span>
+        </button>
+      `;
+    }
+
+    const planLabel = typeof formatPlanHumanLabel === 'function' ? formatPlanHumanLabel(f.plan) : (f.plan || '-');
+
+    tr.innerHTML = `
+      <td style="white-space:nowrap;">${f.date ? f.date.substring(0, 10) : '-'}</td>
+      <td><strong style="font-family:var(--font-mono);">${escapeHtml(f.client_id)}</strong></td>
+      <td><strong>${escapeHtml(f.business_name || '-')}</strong></td>
+      <td>${escapeHtml(f.owner_name || '-')}</td>
+      <td><span class="badge badge-mono">${escapeHtml(planLabel)}</span></td>
+      <td>${escapeHtml(f.method || '-')}</td>
+      <td><span style="font-family:var(--font-mono); font-size:0.8rem;">${escapeHtml(f.reference || '-')}</span></td>
+      <td><strong style="color:var(--success); font-family:var(--font-mono);">S/ ${(f.amount || 0).toFixed(2)}</strong></td>
+      <td style="text-align:center;">${receiptCellHtml}</td>
     `;
     tbody.appendChild(tr);
   });
@@ -5519,6 +6544,7 @@ function initModalEvents() {
         customConcept.style.display = 'block';
         customConcept.focus();
       }
+      if (planInput) planInput.value = customConcept?.value?.trim() || '';
     } else {
       if (customConcept) {
         customConcept.style.display = 'none';
@@ -5527,7 +6553,7 @@ function initModalEvents() {
       if (planInput) planInput.value = val;
       const selectedOpt = e.target.selectedOptions?.[0];
       const price = selectedOpt?.dataset?.price;
-      if (price && !paymentId && amountInput) {
+      if (price !== undefined && !paymentId && amountInput) {
         amountInput.value = parseFloat(price).toFixed(2);
       }
     }
@@ -5536,7 +6562,12 @@ function initModalEvents() {
   document.getElementById('btnSubmitManualPayment')?.addEventListener('click', async () => {
     const clientId = document.getElementById('manualPayClientId').value;
     const paymentId = document.getElementById('manualPayId')?.value?.trim();
-    const amount = parseFloat(document.getElementById('manualPayAmount').value) || 0;
+    const rawAmt = parseFloat(document.getElementById('manualPayAmount').value);
+    if (isNaN(rawAmt) || rawAmt < 0) {
+      showToast('El monto debe ser mayor o igual a cero.', 'warning');
+      return;
+    }
+    const amount = parseFloat(rawAmt.toFixed(2));
     
     // Resolver concepto según preset o personalizado
     let plan = '';
@@ -5550,16 +6581,16 @@ function initModalEvents() {
       plan = document.getElementById('manualPayPlan')?.value?.trim() || '';
     }
 
+    if (!plan) {
+      showToast('Por favor completa el concepto o plan del pago.', 'warning');
+      return;
+    }
+
     const method = document.getElementById('manualPayMethod').value;
     const ref = document.getElementById('manualPayRef').value.trim();
     const notes = document.getElementById('manualPayNotes').value.trim();
     const date = document.getElementById('manualPayDate')?.value || new Date().toISOString().substring(0, 10);
     const shouldGenerateReceipt = document.getElementById('manualPayGenerateReceipt')?.checked ?? false;
-
-    if (!amount || !plan) {
-      showToast('Por favor completa el monto y concepto.', 'warning');
-      return;
-    }
 
     try {
       let res;
@@ -5602,11 +6633,15 @@ function initModalEvents() {
       closeModal('modalManualPayment');
       showToast(paymentId ? 'Pago actualizado con éxito.' : 'Pago manual registrado con éxito.', 'success');
 
-      // Si se marcó emitir boleta de inmediato al registrar un nuevo pago
-      if (shouldGenerateReceipt && !paymentId && updatedClient && Array.isArray(updatedClient.payment_history)) {
-        const newPayment = updatedClient.payment_history[updatedClient.payment_history.length - 1];
-        if (newPayment && newPayment.id) {
-          openPaymentReceiptModal(clientId, newPayment.id);
+      // Si se marcó emitir o abrir comprobante de pago al guardar
+      if (shouldGenerateReceipt) {
+        if (paymentId) {
+          openPaymentReceiptModal(clientId, paymentId);
+        } else if (updatedClient && Array.isArray(updatedClient.payment_history)) {
+          const newPayment = updatedClient.payment_history[updatedClient.payment_history.length - 1];
+          if (newPayment && newPayment.id) {
+            openPaymentReceiptModal(clientId, newPayment.id);
+          }
         }
       }
 
@@ -5706,7 +6741,7 @@ async function openClientHistoryModal(clientId) {
         tr.innerHTML = `
           <td>${p.date ? p.date.substring(0, 10) : '-'}</td>
           <td><strong>S/ ${(p.amount || 0).toFixed(2)}</strong></td>
-          <td>${escapeHtml(p.plan || '-')}</td>
+          <td>${escapeHtml(formatPlanHumanLabel(p.plan || '-'))}${p.updated_at ? ` <span class="badge-edited-payment" title="Pago editado el ${escapeHtml(p.updated_at.substring(0, 10))} ${escapeHtml(p.updated_at.substring(11, 16))} UTC"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg> <span>Editado</span></span>` : ''}</td>
           <td>${escapeHtml(p.method || '-')}</td>
           <td>${escapeHtml(p.reference || '-')}</td>
           <td>
@@ -5769,7 +6804,7 @@ async function openClientHistoryModal(clientId) {
       data.hardware_history.forEach(h => {
         const tr = document.createElement('tr');
         tr.innerHTML = `
-          <td>${h.migrated_at ? h.migrated_at.substring(0, 10) : '-'}</td>
+          <td style="white-space: nowrap; min-width: 96px;">${h.migrated_at ? h.migrated_at.substring(0, 10) : '-'}</td>
           <td><span class="device-id-badge" style="opacity:0.7;">${escapeHtml(h.old_device_id)}</span></td>
           <td><span class="device-id-badge" style="color:var(--success);">${escapeHtml(h.new_device_id)}</span></td>
           <td>S/ ${(h.fee_charged || h.fee_amount || 0).toFixed(2)}</td>
@@ -5864,6 +6899,7 @@ async function handleCreateClient(andEmit = false) {
   const aiBonus = parseInt(document.getElementById('newAiPendingBonus').value) || 0;
   const trialDays = parseInt(document.getElementById('newTrialDaysRemaining')?.value) || 30;
   const expectedSubDate = document.getElementById('newExpectedSubscriptionDate')?.value || null;
+  const followupDate = document.getElementById('newFollowupDate')?.value || null;
   const notes = document.getElementById('newNotes').value.trim();
 
   let plan = 'TRIAL';
@@ -5906,6 +6942,7 @@ async function handleCreateClient(andEmit = false) {
         ai_extra_credits: 0,
         trial_days_remaining: situation === 'TRIAL' ? trialDays : null,
         expected_subscription_date: situation === 'PROSPECTO' ? expectedSubDate : null,
+        next_followup_date: followupDate,
         notes: notes,
       }),
     });

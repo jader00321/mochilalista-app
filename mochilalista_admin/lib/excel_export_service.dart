@@ -352,7 +352,7 @@ class ExcelExportService {
     sheet.setColumnWidth(2, 20.0);
   }
 
-  /// Hoja 2: Cartera CRM (17 Columnas exactas A..Q)
+  /// Hoja 2: Cartera CRM (18 Columnas exactas A..R)
   int _buildCrmSheet(Sheet sheet, List<Map<String, dynamic>> clients) {
     final headers = [
       'ID', // A
@@ -372,6 +372,7 @@ class ExcelExportService {
       'N.° de Pagos', // O
       'Último Token Emitido', // P
       'Notas y Acuerdos', // Q
+      'Próximo Seguimiento', // R
     ];
 
     final headerStyle = _headerStyle();
@@ -463,6 +464,8 @@ class ExcelExportService {
             : '[Bono IA pendiente: +$pendingBonus]';
       }
 
+      final followup = (client['next_followup_date'] as String?)?.trim();
+
       sheet.cell(CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: row))
         ..value = TextCellValue(client['id'] as String? ?? '');
       sheet.cell(CellIndex.indexByColumnRow(columnIndex: 1, rowIndex: row))
@@ -498,12 +501,14 @@ class ExcelExportService {
         ..value = TextCellValue(lastToken);
       sheet.cell(CellIndex.indexByColumnRow(columnIndex: 16, rowIndex: row))
         ..value = TextCellValue(notes);
+      sheet.cell(CellIndex.indexByColumnRow(columnIndex: 17, rowIndex: row))
+        ..value = TextCellValue((followup != null && followup.isNotEmpty) ? followup : '-');
 
       row++;
     }
 
     // Anchos de columna precalculados
-    final colWidths = [12.0, 32.0, 26.0, 16.0, 18.0, 20.0, 18.0, 16.0, 18.0, 14.0, 16.0, 16.0, 18.0, 18.0, 12.0, 40.0, 30.0];
+    final colWidths = [12.0, 32.0, 26.0, 16.0, 18.0, 20.0, 18.0, 16.0, 18.0, 14.0, 16.0, 16.0, 18.0, 18.0, 12.0, 40.0, 30.0, 20.0];
     for (int i = 0; i < colWidths.length; i++) {
       sheet.setColumnWidth(i, colWidths[i]);
     }
@@ -511,7 +516,7 @@ class ExcelExportService {
     return row; // Última fila ocupada (1-indexed para Excel)
   }
 
-  /// Hoja 3: Libro de Pagos (11 Columnas exactas A..K)
+  /// Hoja 3: Libro de Pagos (14 Columnas exactas A..N)
   int _buildPaymentsSheet(
     Sheet sheet,
     List<Map<String, dynamic>> payments,
@@ -529,6 +534,9 @@ class ExcelExportService {
       'Medio de Pago', // I
       'N.° Operación / Referencia', // J
       'Monto Cobrado (PEN)', // K
+      'Tipo Comprobante', // L
+      'N.° Comprobante', // M
+      'Última Edición', // N
     ];
 
     final headerStyle = _headerStyle();
@@ -579,6 +587,22 @@ class ExcelExportService {
       sheet.cell(CellIndex.indexByColumnRow(columnIndex: 10, rowIndex: row))
         ..value = DoubleCellValue(amount);
 
+      final recNum = (p['receipt_number'] as String? ?? '').trim();
+      final recType = (p['receipt_type'] as String? ?? '').trim().toUpperCase();
+      final tipoComprobante = recType == 'FAC' || recNum.startsWith('FAC')
+          ? 'Factura'
+          : (recType == 'BOL' || recNum.startsWith('BOL') ? 'Boleta' : 'Sin emitir');
+      final numComprobante = recNum.isNotEmpty ? recNum : '-';
+      final updatedAt = (p['updated_at'] as String? ?? '').trim();
+      final updatedDisplay = updatedAt.isNotEmpty ? updatedAt.replaceFirst('T', ' ').split('.').first : '-';
+
+      sheet.cell(CellIndex.indexByColumnRow(columnIndex: 11, rowIndex: row))
+        ..value = TextCellValue(tipoComprobante);
+      sheet.cell(CellIndex.indexByColumnRow(columnIndex: 12, rowIndex: row))
+        ..value = TextCellValue(numComprobante);
+      sheet.cell(CellIndex.indexByColumnRow(columnIndex: 13, rowIndex: row))
+        ..value = TextCellValue(updatedDisplay);
+
       row++;
     }
 
@@ -595,7 +619,7 @@ class ExcelExportService {
         ..cellStyle = _boldLabelStyle();
     }
 
-    final colWidths = [18.0, 22.0, 14.0, 32.0, 26.0, 18.0, 14.0, 18.0, 16.0, 24.0, 20.0];
+    final colWidths = [18.0, 22.0, 14.0, 32.0, 26.0, 18.0, 14.0, 18.0, 16.0, 24.0, 20.0, 18.0, 18.0, 22.0];
     for (int i = 0; i < colWidths.length; i++) {
       sheet.setColumnWidth(i, colWidths[i]);
     }

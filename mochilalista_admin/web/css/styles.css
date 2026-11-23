@@ -1646,6 +1646,77 @@ footer {
   font-size: 0.84rem;
 }
 
+/* Badges interactivos de comprobantes en Finanzas */
+.badge-receipt-bol {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-family: var(--font-mono);
+  font-size: 0.76rem;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  padding: 0.25rem 0.55rem;
+  border-radius: 6px;
+  background-color: rgba(16, 185, 129, 0.15);
+  color: #10b981;
+  border: 1px solid rgba(16, 185, 129, 0.35);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-decoration: none;
+}
+.badge-receipt-bol:hover {
+  background-color: rgba(16, 185, 129, 0.28);
+  border-color: #10b981;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(16, 185, 129, 0.2);
+}
+
+.badge-receipt-fac {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-family: var(--font-mono);
+  font-size: 0.76rem;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  padding: 0.25rem 0.55rem;
+  border-radius: 6px;
+  background-color: rgba(99, 102, 241, 0.15);
+  color: #818cf8;
+  border: 1px solid rgba(99, 102, 241, 0.35);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-decoration: none;
+}
+.badge-receipt-fac:hover {
+  background-color: rgba(99, 102, 241, 0.28);
+  border-color: #818cf8;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.2);
+}
+
+.btn-fin-emit {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0.25rem 0.55rem;
+  border-radius: 6px;
+  background: var(--bg-secondary);
+  color: var(--text-muted);
+  border: 1px dashed var(--border-color);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.btn-fin-emit:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+  border-color: var(--primary);
+  border-style: solid;
+  transform: translateY(-1px);
+}
+
 /* Toolbar de Backups */
 .backups-toolbar {
   display: flex;
@@ -2099,7 +2170,7 @@ footer {
 .drawer-body {
   flex: 1;
   overflow-y: auto;
-  padding: 1.4rem;
+  padding: 1.4rem 1.4rem 3rem 1.4rem;
   display: flex;
   flex-direction: column;
   gap: 1.25rem;
@@ -2988,19 +3059,36 @@ footer {
 }
 
 .modal-receipt-dialog {
+  max-width: 1080px;
+  width: 95%;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
   transition: all 0.25s ease;
+}
+
+#modalPaymentReceipt .modal-body {
+  overflow: hidden;
+  padding: 0.75rem 1.25rem 1rem 1.25rem;
+  display: flex;
+  flex: 1;
+  min-height: 0;
 }
 
 .receipt-split-container {
   display: grid;
-  grid-template-columns: 1fr 340px;
+  grid-template-columns: 1.15fr 0.85fr;
   gap: 1.25rem;
-  align-items: start;
+  align-items: stretch;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
 }
 
 @media (max-width: 900px) {
   .receipt-split-container {
     grid-template-columns: 1fr;
+    overflow-y: auto;
   }
 }
 
@@ -3012,7 +3100,9 @@ footer {
   border: 1px solid var(--border-color);
   border-radius: 12px;
   padding: 1rem;
-  overflow-x: auto;
+  overflow-y: auto;
+  overflow-x: hidden;
+  height: 100%;
 }
 
 .receipt-preview-header {
@@ -3274,9 +3364,12 @@ footer {
   background: var(--bg-card);
   border: 1px solid var(--border-color);
   border-radius: 12px;
-  padding: 1rem;
-  max-height: calc(85vh - 70px);
+  padding: 1rem 1rem 0 1rem;
+  height: 100%;
+  max-height: calc(90vh - 110px);
   overflow-y: auto;
+  overflow-x: hidden;
+  position: relative;
 }
 
 .rc-section-title {
@@ -3345,6 +3438,105 @@ footer {
   border-top: 1px solid var(--border-color);
   padding-top: 0.75rem;
   margin-top: 0.25rem;
+}
+
+.receipt-actions-sticky {
+  position: sticky;
+  bottom: 0;
+  margin: 0.75rem -1rem 0 -1rem;
+  padding: 0.75rem 1rem 0.85rem 1rem;
+  background: var(--bg-card);
+  border-top: 1px solid var(--border-color);
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.25);
+}
+
+.rc-toggles-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.45rem 0.65rem;
+  margin-top: 0.35rem;
+  margin-bottom: 0.35rem;
+}
+
+.rc-toggle-item {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: var(--text-primary);
+  cursor: pointer;
+  user-select: none;
+}
+
+.rc-toggle-item input[type="checkbox"] {
+  width: 15px;
+  height: 15px;
+  cursor: pointer;
+  accent-color: var(--primary);
+}
+
+.rc-invoice-block {
+  background: rgba(37, 99, 235, 0.05);
+  border: 1px solid rgba(37, 99, 235, 0.25);
+  border-radius: 8px;
+  padding: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  animation: fadeIn 0.25s ease;
+}
+
+.rc-invoice-title {
+  font-size: 0.76rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--primary);
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.rdoc-total-box.with-igv {
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.2rem;
+  padding: 0.6rem 1rem;
+}
+
+.rdoc-igv-row {
+  display: flex;
+  justify-content: space-between;
+  width: 100%;
+  gap: 1.5rem;
+  font-size: 0.78rem;
+  color: #475569;
+}
+
+.rdoc-igv-total-row {
+  display: flex;
+  justify-content: space-between;
+  width: 100%;
+  gap: 1.5rem;
+  border-top: 1px solid rgba(37, 99, 235, 0.25);
+  padding-top: 0.35rem;
+  margin-top: 0.2rem;
+}
+
+[data-theme="light"] .receipt-actions-sticky {
+  background: #ffffff;
+  border-color: #e2e8f0;
+  box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.06);
+}
+
+[data-theme="light"] .rc-invoice-block {
+  background: rgba(37, 99, 235, 0.04);
+  border-color: rgba(37, 99, 235, 0.3);
 }
 
 /* =================== FASE 6: MIGRACIÓN SEGURA DE HARDWARE =================== */
@@ -3462,6 +3654,299 @@ footer {
   border-color: rgba(220, 38, 38, 0.45);
   color: #b91c1c;
 }
+
+/* ==========================================================================
+   BOTÓN DISCRETO "ABRIR EN CHROME" EN SIDEBAR FOOTER (PLAN MAESTRO 18 - FASE 1)
+   ========================================================================== */
+.btn-open-in-chrome {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 12px;
+  margin-bottom: 8px;
+  background: rgba(59, 130, 246, 0.08);
+  color: #60a5fa;
+  border: 1px solid rgba(59, 130, 246, 0.2);
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-open-in-chrome:hover {
+  background: rgba(59, 130, 246, 0.18);
+  border-color: rgba(59, 130, 246, 0.4);
+  color: #3b82f6;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.15);
+}
+
+.btn-open-in-chrome:active {
+  transform: translateY(0);
+}
+
+.btn-open-in-chrome .chrome-icon {
+  flex-shrink: 0;
+  transition: transform 0.25s ease;
+}
+
+.btn-open-in-chrome:hover .chrome-icon {
+  transform: rotate(30deg);
+}
+
+/* Modo Colapsado del Sidebar */
+.app-sidebar.collapsed .btn-open-in-chrome {
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  margin: 0 auto 8px auto;
+  border-radius: 8px;
+}
+
+.app-sidebar.collapsed .btn-open-in-chrome .open-chrome-text {
+  display: none;
+}
+
+/* Soporte Tema Claro */
+[data-theme="light"] .btn-open-in-chrome {
+  background: rgba(37, 99, 235, 0.06);
+  color: #2563eb;
+  border-color: rgba(37, 99, 235, 0.25);
+}
+
+[data-theme="light"] .btn-open-in-chrome:hover {
+  background: rgba(37, 99, 235, 0.12);
+  border-color: rgba(37, 99, 235, 0.45);
+  color: #1d4ed8;
+}
+
+/* ==========================================================================
+   ALERTA DISCRETA CRM EN DASHBOARD & NUEVOS CHIPS Y BOTONES (PLAN MAESTRO 18 - FASE 3)
+   ========================================================================== */
+.dash-pending-alert {
+  background: rgba(245, 158, 11, 0.08);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  border-radius: 10px;
+  padding: 0.75rem 1.2rem;
+  animation: fadeIn 0.3s ease;
+}
+
+.dash-alert-content {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+}
+
+.dash-alert-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: rgba(245, 158, 11, 0.15);
+  color: #f59e0b;
+  flex-shrink: 0;
+}
+
+.dash-alert-icon svg {
+  width: 18px;
+  height: 18px;
+}
+
+.dash-alert-text {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  font-size: 0.88rem;
+  color: var(--text-primary);
+}
+
+.dash-alert-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.25rem 0.65rem;
+  border-radius: 9999px;
+  background: rgba(239, 68, 68, 0.12);
+  color: #ef4444;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.dash-alert-pill:hover {
+  background: rgba(239, 68, 68, 0.22);
+  transform: translateY(-1px);
+}
+
+.dash-alert-pill.bonus {
+  background: rgba(168, 85, 247, 0.12);
+  color: #a855f7;
+  border-color: rgba(168, 85, 247, 0.3);
+}
+
+.dash-alert-pill.bonus:hover {
+  background: rgba(168, 85, 247, 0.22);
+}
+
+/* Chip con acento para Bono IA Pendiente cuando > 0 */
+.filter-chip.accent-pending {
+  border-color: rgba(168, 85, 247, 0.5);
+  color: #c084fc;
+  background: rgba(168, 85, 247, 0.12);
+  font-weight: 700;
+}
+
+.filter-chip.accent-pending.active {
+  background: #a855f7;
+  color: #ffffff;
+  border-color: #a855f7;
+}
+
+/* Botón micro para comprobantes en Ficha 360 */
+.btn-micro-receipt {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(37, 99, 235, 0.1);
+  color: #3b82f6;
+  border: 1px solid rgba(37, 99, 235, 0.25);
+  padding: 2px 7px;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  font-family: var(--font-mono);
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-micro-receipt:hover {
+  background: rgba(37, 99, 235, 0.2);
+  border-color: rgba(37, 99, 235, 0.5);
+  color: #2563eb;
+  transform: translateY(-1px);
+}
+
+/* Soporte Tema Claro para elementos de Fase 3 */
+[data-theme="light"] .dash-pending-alert {
+  background: rgba(245, 158, 11, 0.1);
+  border-color: rgba(217, 119, 6, 0.35);
+}
+
+[data-theme="light"] .dash-alert-icon {
+  background: rgba(245, 158, 11, 0.2);
+  color: #d97706;
+}
+
+[data-theme="light"] .dash-alert-pill {
+  background: rgba(220, 38, 38, 0.1);
+  color: #dc2626;
+  border-color: rgba(220, 38, 38, 0.3);
+}
+
+[data-theme="light"] .dash-alert-pill:hover {
+  background: rgba(220, 38, 38, 0.18);
+}
+
+[data-theme="light"] .dash-alert-pill.bonus {
+  background: rgba(147, 51, 234, 0.1);
+  color: #9333ea;
+  border-color: rgba(147, 51, 234, 0.3);
+}
+
+[data-theme="light"] .dash-alert-pill.bonus:hover {
+  background: rgba(147, 51, 234, 0.18);
+}
+
+[data-theme="light"] .filter-chip.accent-pending {
+  border-color: rgba(147, 51, 234, 0.45);
+  color: #7e22ce;
+  background: rgba(147, 51, 234, 0.08);
+}
+
+[data-theme="light"] .filter-chip.accent-pending.active {
+  background: #9333ea;
+  color: #ffffff;
+}
+
+[data-theme="light"] .btn-micro-receipt {
+  background: rgba(37, 99, 235, 0.08);
+  color: #1d4ed8;
+  border-color: rgba(37, 99, 235, 0.3);
+}
+
+[data-theme="light"] .btn-micro-receipt:hover {
+  background: rgba(37, 99, 235, 0.16);
+  border-color: rgba(37, 99, 235, 0.5);
+  color: #1e40af;
+}
+
+/* ==========================================================================
+   MODAL EDITAR PAGO REGISTRADO & COMPROBANTES (PLAN MAESTRO 18 - FASE 4)
+   ========================================================================== */
+.checkbox-row-styled {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0.75rem 1rem;
+  border-radius: 8px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  margin-top: 0.35rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.checkbox-row-styled:hover {
+  background: var(--bg-hover);
+  border-color: rgba(37, 99, 235, 0.4);
+}
+
+.receipt-notice-banner {
+  background: rgba(37, 99, 235, 0.08);
+  border: 1px solid rgba(37, 99, 235, 0.25);
+  border-radius: 10px;
+  padding: 0.75rem 1rem;
+  animation: fadeIn 0.3s ease;
+}
+
+.badge-edited-payment {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 0.68rem;
+  font-weight: 600;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: rgba(148, 163, 184, 0.12);
+  color: var(--text-muted);
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  cursor: default;
+}
+
+[data-theme="light"] .checkbox-row-styled {
+  background: #f8fafc;
+  border-color: #cbd5e1;
+}
+
+[data-theme="light"] .receipt-notice-banner {
+  background: rgba(37, 99, 235, 0.06);
+  border-color: rgba(37, 99, 235, 0.3);
+}
+
+[data-theme="light"] .badge-edited-payment {
+  background: #f1f5f9;
+  color: #64748b;
+  border-color: #cbd5e1;
+}
+
 
 
 

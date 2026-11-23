@@ -78,9 +78,9 @@ void main() {
       final excel = Excel.decodeBytes(bytes);
       final sheet = excel['Cartera CRM'];
 
-      // Fila 0 (encabezados) debe tener 17 columnas
+      // Fila 0 (encabezados) debe tener 18 columnas (incluyendo Próximo Seguimiento)
       final headerRow = sheet.rows.first;
-      expect(headerRow.length, equals(17));
+      expect(headerRow.length, equals(18));
 
       expect(headerRow[0]?.value.toString(), equals('ID'));
       expect(headerRow[1]?.value.toString(), equals('Nombre Comercial'));
@@ -88,23 +88,27 @@ void main() {
       expect(headerRow[7]?.value.toString(), equals('Estado de Licencia'));
       expect(headerRow[12]?.value.toString(), equals('Créditos IA Acumulados'));
       expect(headerRow[16]?.value.toString(), equals('Notas y Acuerdos'));
+      expect(headerRow[17]?.value.toString(), equals('Próximo Seguimiento'));
 
       // Al menos 1 fila de datos correspondiente a los clientes semilla
       expect(sheet.rows.length, greaterThan(1));
     });
 
-    test('Libro de Pagos cuenta con 11 columnas exactas (A..K) y fila de total', () async {
+    test('Libro de Pagos cuenta con 14 columnas exactas (A..N) y fila de total', () async {
       final bytes = await excelService.generateMasterWorkbook();
       final excel = Excel.decodeBytes(bytes);
       final sheet = excel['Libro de Pagos'];
 
       final headerRow = sheet.rows.first;
-      expect(headerRow.length, equals(11));
+      expect(headerRow.length, equals(14));
 
       expect(headerRow[0]?.value.toString(), equals('ID Transacción'));
       expect(headerRow[5]?.value.toString(), equals('Concepto / Plan'));
       expect(headerRow[8]?.value.toString(), equals('Medio de Pago'));
       expect(headerRow[10]?.value.toString(), equals('Monto Cobrado (PEN)'));
+      expect(headerRow[11]?.value.toString(), equals('Tipo Comprobante'));
+      expect(headerRow[12]?.value.toString(), equals('N.° Comprobante'));
+      expect(headerRow[13]?.value.toString(), equals('Última Edición'));
     });
 
     test('Resumen Ejecutivo contiene fórmulas reales SUM, COUNTIF, SUMIF e IFERROR', () async {

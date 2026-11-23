@@ -97,6 +97,60 @@ int compareSemVer(String v1, String v2) {
   return 0;
 }
 
+Future<void> _launchBrowserDetached(String url) async {
+  if (Platform.isWindows) {
+    final programFiles =
+        Platform.environment['ProgramFiles'] ?? r'C:\Program Files';
+    final programFilesX86 =
+        Platform.environment['ProgramFiles(x86)'] ?? r'C:\Program Files (x86)';
+    final localAppData = Platform.environment['LocalAppData'] ?? '';
+
+    final chromeCandidates = [
+      '$programFiles\\Google\\Chrome\\Application\\chrome.exe',
+      '$programFilesX86\\Google\\Chrome\\Application\\chrome.exe',
+      if (localAppData.isNotEmpty)
+        '$localAppData\\Google\\Chrome\\Application\\chrome.exe',
+    ];
+
+    String? chromeBin;
+    for (final cand in chromeCandidates) {
+      if (File(cand).existsSync()) {
+        chromeBin = cand;
+        break;
+      }
+    }
+
+    if (chromeBin != null) {
+      await Process.start(chromeBin, [url], mode: ProcessStartMode.detached);
+      return;
+    }
+
+    final edgeCandidates = [
+      '$programFilesX86\\Microsoft\\Edge\\Application\\msedge.exe',
+      '$programFiles\\Microsoft\\Edge\\Application\\msedge.exe',
+    ];
+    String? edgeBin;
+    for (final cand in edgeCandidates) {
+      if (File(cand).existsSync()) {
+        edgeBin = cand;
+        break;
+      }
+    }
+
+    if (edgeBin != null) {
+      await Process.start(edgeBin, [url], mode: ProcessStartMode.detached);
+      return;
+    }
+
+    await Process.start('cmd.exe', ['/c', 'start', '""', url],
+        mode: ProcessStartMode.detached);
+  } else if (Platform.isMacOS) {
+    await Process.start('open', [url], mode: ProcessStartMode.detached);
+  } else {
+    await Process.start('xdg-open', [url], mode: ProcessStartMode.detached);
+  }
+}
+
 Future<void> handleRequest(
   HttpRequest request,
   DatabaseService dbService,
@@ -105,6 +159,7 @@ Future<void> handleRequest(
   ExcelExportService excelService,
   VaultStorageService vaultStorage, {
   void Function(int code)? onExitOverride,
+  Future<void> Function(String url)? onOpenBrowserOverride,
 }) async {
   final path = request.uri.path;
   final method = request.method;
@@ -135,7 +190,8 @@ Future<void> handleRequest(
     if (path.startsWith('/api/')) {
       await _handleApiRoute(request, path, method, dbService, signer,
           configService, excelService, vaultStorage,
-          onExitOverride: onExitOverride);
+          onExitOverride: onExitOverride,
+          onOpenBrowserOverride: onOpenBrowserOverride);
       return;
     }
 
@@ -168,6 +224,7 @@ Future<void> _handleApiRoute(
   ExcelExportService excelService,
   VaultStorageService vaultStorage, {
   void Function(int code)? onExitOverride,
+  Future<void> Function(String url)? onOpenBrowserOverride,
 }) async {
   request.response.headers.contentType = ContentType.json;
 
@@ -177,7 +234,8 @@ Future<void> _handleApiRoute(
         path == '/api/vault/pin/status' ||
         path == '/api/vault/pin/verify' ||
         path == '/api/vault/pin/recover' ||
-        path == '/api/vault/pin/lock';
+        path == '/api/vault/pin/lock' ||
+        path == '/api/system/open-browser';
 
     if (!isExempt) {
       final token = request.headers.value('X-Vault-Session-Token') ??
@@ -531,6 +589,25 @@ Future<void> _handleApiRoute(
     return;
   }
 
+  // Apertura de navegador Google Chrome / sistema: /api/system/open-browser
+  if (path == '/api/system/open-browser' && method == 'POST') {
+    const targetUrl = 'http://localhost:8080';
+    if (onOpenBrowserOverride != null) {
+      await onOpenBrowserOverride(targetUrl);
+    } else {
+      await _launchBrowserDetached(targetUrl);
+    }
+    request.response.statusCode = HttpStatus.ok;
+    request.response.headers.contentType = ContentType.json;
+    request.response.write(jsonEncode({
+      'ok': true,
+      'url': targetUrl,
+      'message': 'Navegador iniciado exitosamente.',
+    }));
+    await request.response.close();
+    return;
+  }
+
   // Apagado limpio y seguro del servidor: /api/system/shutdown
   // Protegido por el middleware de bloqueo PIN real (HTTP 423 si la sesión está bloqueada)
   if (path == '/api/system/shutdown' && method == 'POST') {
@@ -686,7 +763,7 @@ Future<void> _handleApiRoute(
       await request.response.close();
       return;
     } else if (method == 'POST') {
-      final bodyStr = await utf8.decodeStream(request);
+      final bodyStr = await _readRequestBody(request);
       final data = jsonDecode(bodyStr) as Map<String, dynamic>;
       try {
         final newClient = await dbService.createClient(data);
@@ -826,16 +903,22 @@ Future<void> _handleApiRoute(
       await request.response.close();
       return;
     } else if (paymentId != null && method == 'PUT') {
-      // Editar pago existente
-      final bodyStr = await _readRequestBody(request);
-      final body = jsonDecode(bodyStr) as Map<String, dynamic>;
-      final updated = await dbService.updatePayment(clientId, paymentId, body);
-      if (updated == null) {
-        request.response.statusCode = HttpStatus.notFound;
-        request.response
-            .write(jsonEncode({'error': 'Pago o cliente no encontrado'}));
-      } else {
-        request.response.write(jsonEncode(updated));
+      // Editar pago existente (Plan Maestro 18 - Fase 4)
+      try {
+        final bodyStr = await _readRequestBody(request);
+        final body = jsonDecode(bodyStr) as Map<String, dynamic>;
+        final updated = await dbService.updatePayment(clientId, paymentId, body);
+        if (updated == null) {
+          request.response.statusCode = HttpStatus.notFound;
+          request.response
+              .write(jsonEncode({'error': 'Pago o cliente no encontrado'}));
+        } else {
+          request.response.write(jsonEncode(updated));
+        }
+      } catch (e) {
+        request.response.statusCode = HttpStatus.badRequest;
+        final msg = (e is ArgumentError) ? e.message.toString() : e.toString();
+        request.response.write(jsonEncode({'error': msg}));
       }
       await request.response.close();
       return;
@@ -869,12 +952,22 @@ Future<void> _handleApiRoute(
       } catch (_) {}
     }
     final customNote = body['custom_note'] as String?;
+    final voucherType = body['voucher_type'] as String?;
+    final invoiceRuc = body['invoice_ruc'] as String?;
+    final invoiceBusinessName = body['invoice_business_name'] as String?;
+    final invoiceFiscalAddress = body['invoice_fiscal_address'] as String?;
+    final showIgvBreakdown = body['show_igv_breakdown'] as bool?;
 
     try {
       final receiptData = await dbService.issueOrGetPaymentReceipt(
         clientId: clientId,
         paymentId: paymentId,
         customNote: customNote,
+        voucherType: voucherType,
+        invoiceRuc: invoiceRuc,
+        invoiceBusinessName: invoiceBusinessName,
+        invoiceFiscalAddress: invoiceFiscalAddress,
+        showIgvBreakdown: showIgvBreakdown,
         configService: configService,
       );
 
@@ -1121,6 +1214,9 @@ Future<void> _handleApiRoute(
         : configService.getPlanAiCredits(normPlan,
             fallback: LicenseSigner.getCumulativeScansForPlan(normPlan));
     final totalCredited = baseAi + aiExtra;
+    final lastCode = (updatedClient?['generated_codes_history'] as List?)?.isNotEmpty == true
+        ? (updatedClient!['generated_codes_history'] as List).last as Map<String, dynamic>?
+        : null;
 
     request.response.write(jsonEncode({
       'token': token,
@@ -1133,6 +1229,8 @@ Future<void> _handleApiRoute(
       'total_ai_scans_credited': totalCredited,
       'token_claim_c': tokenClaimC,
       'ai_extra_credits': aiExtra,
+      'payment_id': lastCode?['payment_id'],
+      'amount_paid': lastCode?['amount_paid'] ?? 0.0,
       'client': updatedClient,
     }));
     await request.response.close();
