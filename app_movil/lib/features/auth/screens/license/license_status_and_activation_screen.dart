@@ -46,6 +46,7 @@ class _LicenseStatusAndActivationScreenState
   final _tourKeys = LicenseStatusTourKeys();
   String? _detectedClipboardCode;
   bool _isCheckingClipboard = false;
+  bool? _isPlansExpanded;
 
   @override
   void initState() {
@@ -435,7 +436,7 @@ class _LicenseStatusAndActivationScreenState
               const SizedBox(height: 16),
 
               // Catálogo de Planes y Medios de Pago Peruanos
-              _buildPricingAndPaymentCatalog(fingerprint, isDark),
+              _buildPricingAndPaymentCatalog(license, fingerprint, isDark),
               const SizedBox(height: 24),
             ],
           ),
@@ -1152,60 +1153,15 @@ class _LicenseStatusAndActivationScreenState
     );
   }
 
-  Widget _buildPricingAndPaymentCatalog(String fingerprint, bool isDark) {
-    // Tarifario Comercial Oficial Completo (7 Ítems)
-    final plans = [
-      {
-        "name": "Mensual",
-        "price": "S/ 35.00",
-        "desc": "Ideal para probar el sistema mes a mes",
-        "badge": "Flexible",
-        "aiBadge": "+50 IA",
-      },
-      {
-        "name": "Trimestral",
-        "price": "S/ 90.00",
-        "desc": "Ahorro de S/ 15 vs mensual (S/ 30/mes)",
-        "badge": "Popular",
-        "aiBadge": "+180 IA",
-      },
-      {
-        "name": "Semestral",
-        "price": "S/ 160.00",
-        "desc": "Ahorro de S/ 50 (S/ 26.60/mes)",
-        "badge": "Recomendado",
-        "aiBadge": "+450 IA",
-      },
-      {
-        "name": "Anual",
-        "price": "S/ 280.00",
-        "desc": "Mayor ahorro comercial (S/ 23.30/mes)",
-        "badge": "Mejor Precio",
-        "aiBadge": "+1,200 IA",
-      },
-      {
-        "name": "Perpetua",
-        "price": "S/ 850.00",
-        "desc": "Pago único de por vida + 12 meses de updates",
-        "badge": "Liberada",
-        "aiBadge": "+200 IA",
-      },
-      {
-        "name": "Bolsa Extra IA",
-        "price": "S/ 20.00",
-        "desc":
-            "+150 escaneos acumulativos sin vencimiento para cualquier plan",
-        "badge": "Bolsa IA",
-        "aiBadge": "+150 IA",
-      },
-      {
-        "name": "Pase Anual de Updates",
-        "price": "S/ 150.00",
-        "desc": "12 meses extra de nuevas funciones para Licencias Perpetuas",
-        "badge": "Updates",
-        "aiBadge": "+100 IA",
-      },
-    ];
+  Widget _buildPricingAndPaymentCatalog(
+    LicenseModel? license,
+    String fingerprint,
+    bool isDark,
+  ) {
+    final hasPaidCommercialLicense =
+        license != null && license.isActive && !license.isTrial;
+    _isPlansExpanded ??= !hasPaidCommercialLicense;
+    final isExpanded = _isPlansExpanded!;
 
     return Card(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -1218,238 +1174,339 @@ class _LicenseStatusAndActivationScreenState
           children: [
             KeyedSubtree(
               key: _tourKeys.pricingCatalogKey,
-              child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 10,
-                ),
-                decoration: BoxDecoration(
-                  color: Colors.blue.withValues(alpha: 0.08),
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  key: const ValueKey("accordion_pricing_catalog_header"),
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.blue.withValues(alpha: 0.2)),
-                ),
-                child: Row(
-                  children: [
-                    const Icon(
-                      Icons.local_offer_rounded,
-                      size: 20,
-                      color: Colors.blue,
+                  onTap: () {
+                    setState(() {
+                      _isPlansExpanded = !_isPlansExpanded!;
+                    });
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 10,
                     ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        "Planes Comerciales Oficiales",
-                        style: TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.bold,
-                          color: isDark ? Colors.white : Colors.black87,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 10),
-
-            // Aviso de Renovación Acumulativa
-            Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: Colors.blue.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: Colors.blue.withValues(alpha: 0.25)),
-              ),
-              child: Row(
-                children: [
-                  const Icon(
-                    Icons.info_outline_rounded,
-                    size: 18,
-                    color: Colors.blue,
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      "Si renuevas antes de que venza tu periodo, tus días no se pierden, se suman automáticamente.",
-                      style: TextStyle(
-                        fontSize: 11.5,
-                        fontWeight: FontWeight.w600,
-                        color: isDark
-                            ? Colors.lightBlue[200]
-                            : Colors.blue[900],
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 8),
-
-            // Aviso de Cobertura Multinegocio y Cuota IA Compartida
-            Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: Colors.indigo.withValues(alpha: 0.08),
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(
-                  color: Colors.indigo.withValues(alpha: 0.25),
-                ),
-              ),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Icon(
-                    Icons.storefront_rounded,
-                    size: 18,
-                    color: Colors.indigo,
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      "Una sola licencia activa ampara todos los perfiles de tu negocio en este celular. La cuota de escaneos IA es compartida y acumulativa entre todos tus perfiles.",
-                      style: TextStyle(
-                        fontSize: 11.5,
-                        height: 1.35,
-                        fontWeight: FontWeight.w500,
-                        color: isDark ? Colors.indigo[200] : Colors.indigo[900],
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 12),
-
-            // Lista de los 7 Productos del Catálogo
-            ...plans.map((p) => _buildPlanTile(p, fingerprint, isDark)),
-            const SizedBox(height: 14),
-
-            const Divider(height: 1),
-            const SizedBox(height: 14),
-
-            // Medios de Pago Directos (Perú) con Copiado en 1 Toque y Toast Flotante
-            Text(
-              "Medios de Pago Directos (Perú):",
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.bold,
-                color: isDark ? Colors.white : Colors.black87,
-              ),
-            ),
-            const SizedBox(height: 8),
-
-            // Tarjeta Yape / Plin con Copiado en 1 Toque
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-              decoration: BoxDecoration(
-                color: isDark
-                    ? const Color(0xFF14141C)
-                    : const Color(0xFFF8FAFC),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                  color: isDark ? Colors.white12 : Colors.black12,
-                ),
-              ),
-              child: Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF6B1D90).withValues(alpha: 0.15),
-                      shape: BoxShape.circle,
+                      color: Colors.blue.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: Colors.blue.withValues(alpha: 0.2),
+                      ),
                     ),
-                    child: const Icon(
-                      Icons.qr_code_2_rounded,
-                      color: Color(0xFF6B1D90),
-                      size: 20,
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                    child: Row(
                       children: [
-                        const Text(
-                          "Yape y Plin (Perú)",
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 12.5,
+                        const Icon(
+                          Icons.local_offer_rounded,
+                          size: 20,
+                          color: Colors.blue,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                "Planes Comerciales Oficiales",
+                                style: TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.bold,
+                                  color: isDark ? Colors.white : Colors.black87,
+                                ),
+                              ),
+                              if (!isExpanded) ...[
+                                const SizedBox(height: 3),
+                                Text(
+                                  "Explora 7 planes y recargas: mayor ahorro semestral/anual, Licencia Perpetua y Bolsas Extra IA sin vencimiento.",
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    color: isDark
+                                        ? Colors.grey[400]
+                                        : Colors.grey[600],
+                                  ),
+                                ),
+                              ],
+                            ],
                           ),
                         ),
-                        Text(
-                          "${OwnerLegalIdentity.supportPhone} • ${OwnerLegalIdentity.yapePlinHolder}",
-                          style: TextStyle(
-                            fontSize: 11.5,
-                            color: isDark ? Colors.grey[300] : Colors.grey[700],
+                        const SizedBox(width: 8),
+                        AnimatedRotation(
+                          turns: isExpanded ? 0.5 : 0.0,
+                          duration: const Duration(milliseconds: 280),
+                          curve: Curves.easeInOutCubic,
+                          child: const Icon(
+                            Icons.expand_more_rounded,
+                            size: 22,
+                            color: Colors.blue,
                           ),
                         ),
                       ],
                     ),
                   ),
-                  const SizedBox(width: 8),
-                  ElevatedButton(
-                    onPressed: () {
-                      Clipboard.setData(
-                        ClipboardData(text: OwnerLegalIdentity.supportPhone),
-                      );
-                      CustomSnackBar.show(
-                        context,
-                        message:
-                            "Número Yape/Plin copiado: ${OwnerLegalIdentity.supportPhone}",
-                        isError: false,
-                      );
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF6B1D90),
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 8,
-                      ),
-                      elevation: 0,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                    ),
-                    child: const Text(
-                      "Copiar",
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                ],
+                ),
               ),
             ),
-            const SizedBox(height: 8),
-
-            // Tarjetas Bancarias Opcionales BCP / BBVA
-            _buildBankAccountsSection(isDark),
-            const SizedBox(height: 14),
-
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton.icon(
-                onPressed: () {
-                  final msg =
-                      "Hola Julio Angello, deseo renovar/activar mi plan en MochilaLista. Mi ID de equipo es: $fingerprint";
-                  _launchWhatsAppMessage(msg);
-                },
-                icon: const Icon(Icons.chat_rounded, size: 18),
-                label: const Text(
-                  "Contactar por WhatsApp para activar",
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-                ),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.green[700],
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
+            if (!isExpanded) ...[
+              const SizedBox(height: 10),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  key: const ValueKey("btn_toggle_expand_plans"),
+                  onPressed: () {
+                    setState(() {
+                      _isPlansExpanded = true;
+                    });
+                  },
+                  icon: const Icon(Icons.visibility_outlined, size: 16),
+                  label: const Text(
+                    "Ver planes y recargas",
+                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.blue[700],
+                    side: BorderSide(
+                      color: Colors.blue.withValues(alpha: 0.3),
+                    ),
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
                   ),
                 ),
               ),
+            ],
+            AnimatedSize(
+              duration: const Duration(milliseconds: 280),
+              curve: Curves.easeInOutCubic,
+              alignment: Alignment.topCenter,
+              child: isExpanded
+                  ? Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const SizedBox(height: 10),
+
+                        // Aviso de Renovación Acumulativa
+                        Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: Colors.blue.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(
+                              color: Colors.blue.withValues(alpha: 0.25),
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(
+                                Icons.info_outline_rounded,
+                                size: 18,
+                                color: Colors.blue,
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  "Si renuevas antes de que venza tu periodo, tus días no se pierden, se suman automáticamente.",
+                                  style: TextStyle(
+                                    fontSize: 11.5,
+                                    fontWeight: FontWeight.w600,
+                                    color: isDark
+                                        ? Colors.lightBlue[200]
+                                        : Colors.blue[900],
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+
+                        // Aviso de Cobertura Multinegocio y Cuota IA Compartida
+                        Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: Colors.indigo.withValues(alpha: 0.08),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(
+                              color: Colors.indigo.withValues(alpha: 0.25),
+                            ),
+                          ),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Icon(
+                                Icons.storefront_rounded,
+                                size: 18,
+                                color: Colors.indigo,
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  "Una sola licencia activa ampara todos los perfiles de tu negocio en este celular. La cuota de escaneos IA es compartida y acumulativa entre todos tus perfiles.",
+                                  style: TextStyle(
+                                    fontSize: 11.5,
+                                    height: 1.35,
+                                    fontWeight: FontWeight.w500,
+                                    color: isDark
+                                        ? Colors.indigo[200]
+                                        : Colors.indigo[900],
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+
+                        // Lista de los 7 Productos del Catálogo Oficial
+                        ...officialPlans.map(
+                          (p) => _buildPlanTile(p, fingerprint, isDark),
+                        ),
+                        const SizedBox(height: 14),
+
+                        const Divider(height: 1),
+                        const SizedBox(height: 14),
+
+                        // Medios de Pago Directos (Perú) con Copiado en 1 Toque y Toast Flotante
+                        Text(
+                          "Medios de Pago Directos (Perú):",
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.bold,
+                            color: isDark ? Colors.white : Colors.black87,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+
+                        // Tarjeta Yape / Plin con Copiado en 1 Toque
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 10,
+                          ),
+                          decoration: BoxDecoration(
+                            color: isDark
+                                ? const Color(0xFF14141C)
+                                : const Color(0xFFF8FAFC),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: isDark ? Colors.white12 : Colors.black12,
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF6B1D90)
+                                      .withValues(alpha: 0.15),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: const Icon(
+                                  Icons.qr_code_2_rounded,
+                                  color: Color(0xFF6B1D90),
+                                  size: 20,
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Text(
+                                      "Yape y Plin (Perú)",
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 12.5,
+                                      ),
+                                    ),
+                                    Text(
+                                      "${OwnerLegalIdentity.supportPhone} • ${OwnerLegalIdentity.yapePlinHolder}",
+                                      style: TextStyle(
+                                        fontSize: 11.5,
+                                        color: isDark
+                                            ? Colors.grey[300]
+                                            : Colors.grey[700],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              ElevatedButton(
+                                onPressed: () {
+                                  Clipboard.setData(
+                                    ClipboardData(
+                                      text: OwnerLegalIdentity.supportPhone,
+                                    ),
+                                  );
+                                  CustomSnackBar.show(
+                                    context,
+                                    message:
+                                        "Número Yape/Plin copiado: ${OwnerLegalIdentity.supportPhone}",
+                                    isError: false,
+                                  );
+                                },
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: const Color(0xFF6B1D90),
+                                  foregroundColor: Colors.white,
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 10,
+                                    vertical: 8,
+                                  ),
+                                  elevation: 0,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                ),
+                                child: const Text(
+                                  "Copiar",
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+
+                        // Tarjetas Bancarias Opcionales BCP / BBVA
+                        _buildBankAccountsSection(isDark),
+                        const SizedBox(height: 14),
+
+                        SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton.icon(
+                            onPressed: () {
+                              final msg =
+                                  "Hola Julio Angello, deseo renovar/activar mi plan en MochilaLista. Mi ID de equipo es: $fingerprint";
+                              _launchWhatsAppMessage(msg);
+                            },
+                            icon: const Icon(Icons.chat_rounded, size: 18),
+                            label: const Text(
+                              "Contactar por WhatsApp para activar",
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 13,
+                              ),
+                            ),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.green[700],
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    )
+                  : const SizedBox.shrink(),
             ),
           ],
         ),
@@ -1588,12 +1645,12 @@ class _LicenseStatusAndActivationScreenState
   }
 
   Widget _buildPlanTile(
-    Map<String, String> plan,
+    CommercialPlanDetail plan,
     String fingerprint,
     bool isDark,
   ) {
-    final isPerpetual = plan['name'] == 'Perpetua';
-    final isExtraAi = plan['name'] == 'Bolsa Extra IA';
+    final isPerpetual = plan.isPerpetual;
+    final isExtraAi = plan.isExtraAi;
 
     Color cardBorderColor;
     Color cardBgColor;
@@ -1615,149 +1672,226 @@ class _LicenseStatusAndActivationScreenState
 
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
         color: cardBgColor,
         borderRadius: BorderRadius.circular(10),
         border: Border.all(color: cardBorderColor),
       ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Wrap(
-                  spacing: 6,
-                  runSpacing: 4,
-                  crossAxisAlignment: WrapCrossAlignment.center,
-                  children: [
-                    Text(
-                      plan['name']!,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 13.5,
-                      ),
-                    ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 6,
-                        vertical: 2,
-                      ),
-                      decoration: BoxDecoration(
-                        color: badgeColor.withValues(alpha: 0.15),
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: Text(
-                        plan['badge']!,
-                        style: TextStyle(
-                          fontSize: 9.5,
-                          fontWeight: FontWeight.bold,
-                          color: badgeColor,
-                        ),
-                      ),
-                    ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 6,
-                        vertical: 2,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.blue.withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(6),
-                        border: Border.all(
-                          color: Colors.blue.withValues(alpha: 0.3),
-                        ),
-                      ),
-                      child: Text(
-                        plan['aiBadge']!,
-                        style: const TextStyle(
-                          fontSize: 9.5,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.blue,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 3),
-                Text(
-                  plan['desc']!,
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: isDark ? Colors.grey[400] : Colors.grey[600],
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 8),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                plan['price']!,
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 14,
-                  color: isPerpetual
-                      ? Colors.purple
-                      : (isDark ? Colors.lightBlue[200] : Colors.blue[900]),
-                ),
-              ),
-              const SizedBox(height: 4),
-              InkWell(
-                onTap: () {
-                  _showOrderPlanModal(
-                    planName: plan['name']!,
-                    price: plan['price']!,
-                    desc: plan['desc']!,
-                    aiScansBadge: plan['aiBadge']!,
-                    fingerprint: fingerprint,
-                    isDark: isDark,
-                  );
-                },
-                borderRadius: BorderRadius.circular(8),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 5,
-                  ),
-                  decoration: BoxDecoration(
-                    color: Colors.green.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(
-                      color: Colors.green.withValues(alpha: 0.4),
-                    ),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Expanded(
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  key: ValueKey("plan_tile_${plan.id}"),
+                  borderRadius: BorderRadius.circular(8),
+                  onTap: () {
+                    _showPlanDetailModal(
+                      plan: plan,
+                      fingerprint: fingerprint,
+                      isDark: isDark,
+                    );
+                  },
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Icon(
-                        Icons.shopping_bag_outlined,
-                        size: 13,
-                        color: Colors.green[700],
+                      Wrap(
+                        spacing: 6,
+                        runSpacing: 4,
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        children: [
+                          Text(
+                            plan.name,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 13.5,
+                            ),
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 6,
+                              vertical: 2,
+                            ),
+                            decoration: BoxDecoration(
+                              color: badgeColor.withValues(alpha: 0.15),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Text(
+                              plan.badge,
+                              style: TextStyle(
+                                fontSize: 9.5,
+                                fontWeight: FontWeight.bold,
+                                color: badgeColor,
+                              ),
+                            ),
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 6,
+                              vertical: 2,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.blue.withValues(alpha: 0.12),
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(
+                                color: Colors.blue.withValues(alpha: 0.3),
+                              ),
+                            ),
+                            child: Text(
+                              plan.aiBadge,
+                              style: const TextStyle(
+                                fontSize: 9.5,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.blue,
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
-                      const SizedBox(width: 4),
+                      const SizedBox(height: 3),
                       Text(
-                        "Pedir",
+                        plan.desc,
                         style: TextStyle(
-                          fontSize: 11.5,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.green[700],
+                          fontSize: 11,
+                          color: isDark ? Colors.grey[400] : Colors.grey[600],
                         ),
+                      ),
+                      const SizedBox(height: 4),
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Flexible(
+                            child: Text(
+                              "Ver beneficios",
+                              style: TextStyle(
+                                fontSize: 10.5,
+                                fontWeight: FontWeight.w600,
+                                color:
+                                    isDark ? Colors.blue[300] : Colors.blue[700],
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          const SizedBox(width: 2),
+                          Icon(
+                            Icons.chevron_right_rounded,
+                            size: 13,
+                            color:
+                                isDark ? Colors.blue[300] : Colors.blue[700],
+                          ),
+                        ],
                       ),
                     ],
                   ),
                 ),
               ),
-            ],
-          ),
-        ],
+            ),
+            const SizedBox(width: 8),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  plan.price,
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14,
+                    color: isPerpetual
+                        ? Colors.purple
+                        : (isDark ? Colors.lightBlue[200] : Colors.blue[900]),
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    key: ValueKey("btn_pedir_${plan.id}"),
+                    onTap: () {
+                      _showOrderPlanModal(
+                        planName: plan.name,
+                        price: plan.price,
+                        desc: plan.desc,
+                        aiScansBadge: plan.aiBadge,
+                        fingerprint: fingerprint,
+                        isDark: isDark,
+                      );
+                    },
+                    borderRadius: BorderRadius.circular(8),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 5,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.green.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: Colors.green.withValues(alpha: 0.4),
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.shopping_bag_outlined,
+                            size: 13,
+                            color: Colors.green[700],
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            "Pedir",
+                            style: TextStyle(
+                              fontSize: 11.5,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.green[700],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
+  }
+
+  Future<void> _showPlanDetailModal({
+    required CommercialPlanDetail plan,
+    required String fingerprint,
+    required bool isDark,
+  }) async {
+    final result = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => PlanDetailBottomSheet(
+        plan: plan,
+        fingerprint: fingerprint,
+        isDark: isDark,
+      ),
+    );
+
+    if (result == true && mounted) {
+      await Future.delayed(const Duration(milliseconds: 120));
+      if (!mounted) return;
+      _showOrderPlanModal(
+        planName: plan.name,
+        price: plan.price,
+        desc: plan.desc,
+        aiScansBadge: plan.aiBadge,
+        fingerprint: fingerprint,
+        isDark: isDark,
+      );
+    }
   }
 
   Future<void> _showOrderPlanModal({
@@ -1821,6 +1955,616 @@ class _LicenseStatusAndActivationScreenState
       ),
     );
   }
+
+  static const List<CommercialPlanDetail> officialPlans = [
+    CommercialPlanDetail(
+      id: "mensual",
+      name: "Mensual",
+      price: "S/ 35.00",
+      desc: "Ideal para probar el sistema mes a mes",
+      badge: "Flexible",
+      aiBadge: "+50 IA",
+      duration: "30 días continuos",
+      aiQuota: "50 escaneos inteligentes IA incluidos",
+      savings: "Tarifa flexible sin compromisos a largo plazo",
+      idealFor: "Negocios que inician o desean probar la plataforma mes a mes",
+      benefits: [
+        "Acceso total a todos los módulos comerciales y financieros",
+        "50 escaneos IA para digitalizar listas escolares y facturas",
+        "Soporte técnico directo vía WhatsApp con el desarrollador",
+        "Operación 100% offline garantizada para inventario y ventas",
+        "Días restantes acumulables si renuevas antes del vencimiento",
+      ],
+    ),
+    CommercialPlanDetail(
+      id: "trimestral",
+      name: "Trimestral",
+      price: "S/ 90.00",
+      desc: "Ahorro de S/ 15 vs mensual (S/ 30/mes)",
+      badge: "Popular",
+      aiBadge: "+180 IA",
+      duration: "90 días continuos (3 meses)",
+      aiQuota: "180 escaneos inteligentes IA incluidos",
+      savings: "Ahorras S/ 15.00 frente a tres pagos mensuales (S/ 30.00/mes)",
+      idealFor:
+          "Comercios con campañas regulares de temporada escolar o festiva",
+      benefits: [
+        "Ahorro comercial directo frente al plan mensual",
+        "180 escaneos IA acumulables con vigencia continua",
+        "Copia de seguridad en Google Drive y exportación de reportes",
+        "Soporte prioritario del desarrollador oficial",
+        "Sin interrupciones durante un trimestre completo de ventas",
+      ],
+    ),
+    CommercialPlanDetail(
+      id: "semestral",
+      name: "Semestral",
+      price: "S/ 160.00",
+      desc: "Ahorro de S/ 50 (S/ 26.60/mes)",
+      badge: "Recomendado",
+      aiBadge: "+450 IA",
+      duration: "180 días continuos (6 meses)",
+      aiQuota: "450 escaneos inteligentes IA incluidos",
+      savings: "Ahorras S/ 50.00 frente al plan mensual (S/ 26.60/mes)",
+      idealFor:
+          "Librerías, bazares y papelerías que cubren toda la campaña escolar",
+      benefits: [
+        "Costo mensual optimizado a solo S/ 26.60 al mes",
+        "450 escaneos IA para alta demanda de inicio de clases",
+        "Radar Comercial y sugerencias inteligentes de precios",
+        "Sincronización multi-dispositivo y respaldo en la nube",
+        "Asesoría directa en configuración y carga de catálogos",
+      ],
+    ),
+    CommercialPlanDetail(
+      id: "anual",
+      name: "Anual",
+      price: "S/ 280.00",
+      desc: "Mayor ahorro comercial (S/ 23.30/mes)",
+      badge: "Mejor Precio",
+      aiBadge: "+1,200 IA",
+      duration: "365 días continuos (1 año completo)",
+      aiQuota: "1,200 escaneos inteligentes IA incluidos",
+      savings: "Máximo ahorro anual: S/ 140.00 de ahorro (S/ 23.30/mes)",
+      idealFor:
+          "Empresas y librerías consolidadas que buscan máxima rentabilidad",
+      benefits: [
+        "Tarifa mensual más económica del mercado (S/ 23.30/mes)",
+        "1,200 escaneos IA para cubrir todo el año sin preocupaciones",
+        "Todas las actualizaciones de versión mayores y menores incluidas",
+        "Soporte VIP directo y asistencia en restauraciones",
+        "Garantía de continuidad operativa sin cortes durante todo el año",
+      ],
+    ),
+    CommercialPlanDetail(
+      id: "perpetua",
+      name: "Perpetua",
+      price: "S/ 850.00",
+      desc: "Pago único de por vida + 12 meses de updates",
+      badge: "Liberada",
+      aiBadge: "+200 IA",
+      duration: "Vitalicia (De por vida, sin caducidad)",
+      aiQuota: "200 escaneos IA iniciales incluidos",
+      savings:
+          "Pago único definitivo sin costos de suscripción mensual ni anual",
+      idealFor:
+          "Dueños de negocio que desean adquirir el software en propiedad definitiva",
+      isPerpetual: true,
+      benefits: [
+        "Licencia de por vida para el dispositivo vinculado",
+        "Cero pagos recurrentes obligatorios",
+        "12 meses completos de actualizaciones de nuevas funciones incluidos",
+        "Uso 100% offline indefinido de todas las funciones base",
+        "Opción de transferir licencia en caso de cambio de celular certificado",
+      ],
+    ),
+    CommercialPlanDetail(
+      id: "bolsa_extra_ia",
+      name: "Bolsa Extra IA",
+      price: "S/ 20.00",
+      desc: "+150 escaneos acumulativos sin vencimiento para cualquier plan",
+      badge: "Bolsa IA",
+      aiBadge: "+150 IA",
+      duration: "Permanente (No expira nunca)",
+      aiQuota: "+150 escaneos IA acumulativos",
+      savings: "Tarifa reducida por escaneo: S/ 0.13 por escaneo inteligente",
+      idealFor:
+          "Negocios con picos intensivos de escaneo OCR de facturas y listas",
+      isExtraAi: true,
+      benefits: [
+        "Recarga inmediata de 150 escaneos de alta precisión con Gemini IA",
+        "Tus escaneos nunca vencen y se suman a tu saldo actual",
+        "Compatible con cualquier plan activo (Mensual, Anual o Perpetua)",
+        "Puede adquirirse tantas veces como sea necesario",
+        "Escaneo instantáneo de listas escolares manuscritas y facturas físicas",
+      ],
+    ),
+    CommercialPlanDetail(
+      id: "pase_anual_updates",
+      name: "Pase Anual de Updates",
+      price: "S/ 150.00",
+      desc: "12 meses extra de nuevas funciones para Licencias Perpetuas",
+      badge: "Updates",
+      aiBadge: "+100 IA",
+      duration: "365 días de actualizaciones de versión",
+      aiQuota: "+100 escaneos IA incluidos con la renovación",
+      savings:
+          "Extensión económica para mantener el software al día con nuevas normas",
+      idealFor:
+          "Usuarios de Licencia Perpetua que desean seguir recibiendo mejoras continuas",
+      isUpdatePass: true,
+      benefits: [
+        "12 meses adicionales de acceso a nuevas funciones y mejoras",
+        "100 escaneos IA de regalo con la renovación",
+        "Compatibilidad con las últimas versiones de Android y cambios tributarios",
+        "Tu licencia base sigue funcionando de por vida aunque no renueves el pase",
+        "Soporte prioritario continuo del desarrollador oficial",
+      ],
+    ),
+  ];
+}
+
+/// Detalle estructurado de un plan comercial oficial para el modal flotante
+class CommercialPlanDetail {
+  final String id;
+  final String name;
+  final String price;
+  final String desc;
+  final String badge;
+  final String aiBadge;
+  final String duration;
+  final String aiQuota;
+  final String savings;
+  final String idealFor;
+  final List<String> benefits;
+  final bool isPerpetual;
+  final bool isExtraAi;
+  final bool isUpdatePass;
+
+  const CommercialPlanDetail({
+    required this.id,
+    required this.name,
+    required this.price,
+    required this.desc,
+    required this.badge,
+    required this.aiBadge,
+    required this.duration,
+    required this.aiQuota,
+    required this.savings,
+    required this.idealFor,
+    required this.benefits,
+    this.isPerpetual = false,
+    this.isExtraAi = false,
+    this.isUpdatePass = false,
+  });
+}
+
+/// Modal flotante de beneficios y detalles técnicos del plan comercial
+class PlanDetailBottomSheet extends StatelessWidget {
+  final CommercialPlanDetail plan;
+  final String fingerprint;
+  final bool isDark;
+
+  const PlanDetailBottomSheet({
+    super.key,
+    required this.plan,
+    required this.fingerprint,
+    required this.isDark,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    Color themeColor;
+    if (plan.isPerpetual) {
+      themeColor = Colors.purple;
+    } else if (plan.isExtraAi) {
+      themeColor = Colors.teal;
+    } else {
+      themeColor = Colors.blue[700]!;
+    }
+
+    return Container(
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.sizeOf(context).height * 0.88,
+      ),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF1E1E28) : Colors.white,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Drag handle
+          Center(
+            child: Container(
+              width: 40,
+              height: 4,
+              margin: const EdgeInsets.only(top: 10, bottom: 8),
+              decoration: BoxDecoration(
+                color: isDark ? Colors.white24 : Colors.grey[300],
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
+
+          // Header
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(9),
+                  decoration: BoxDecoration(
+                    color: themeColor.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(
+                    Icons.verified_outlined,
+                    color: themeColor,
+                    size: 22,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        "Plan ${plan.name}",
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: isDark ? Colors.white : Colors.black87,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        "Beneficios oficiales y especificaciones técnicas",
+                        style: TextStyle(
+                          fontSize: 11.5,
+                          color: isDark ? Colors.grey[400] : Colors.grey[600],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.close_rounded, size: 20),
+                  onPressed: () => Navigator.of(context).pop(false),
+                  tooltip: "Cerrar",
+                ),
+              ],
+            ),
+          ),
+          Divider(
+            height: 1,
+            thickness: 1,
+            color: isDark ? Colors.white10 : Colors.black12,
+          ),
+
+          // Body scrollable
+          Flexible(
+            child: SingleChildScrollView(
+              physics: const BouncingScrollPhysics(),
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  // Hero Card con Precio y Badges
+                  Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: isDark
+                          ? const Color(0xFF14141C)
+                          : const Color(0xFFF1F5F9),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(
+                        color: themeColor.withValues(alpha: 0.3),
+                      ),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Expanded(
+                              child: Wrap(
+                                spacing: 6,
+                                runSpacing: 4,
+                                crossAxisAlignment: WrapCrossAlignment.center,
+                                children: [
+                                  Text(
+                                    plan.name,
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 16,
+                                    ),
+                                  ),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 7,
+                                      vertical: 2,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: themeColor.withValues(alpha: 0.15),
+                                      borderRadius: BorderRadius.circular(6),
+                                    ),
+                                    child: Text(
+                                      plan.badge,
+                                      style: TextStyle(
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.bold,
+                                        color: themeColor,
+                                      ),
+                                    ),
+                                  ),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 7,
+                                      vertical: 2,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: Colors.blue.withValues(alpha: 0.15),
+                                      borderRadius: BorderRadius.circular(6),
+                                    ),
+                                    child: Text(
+                                      plan.aiBadge,
+                                      style: const TextStyle(
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.blue,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              plan.price,
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                                color: themeColor,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          plan.desc,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: isDark ? Colors.grey[300] : Colors.grey[700],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+
+                  // Ficha técnica
+                  _buildSpecRow(
+                    icon: Icons.calendar_month_rounded,
+                    label: "Duración / Cobertura:",
+                    value: plan.duration,
+                    iconColor: Colors.blue,
+                    isDark: isDark,
+                  ),
+                  const SizedBox(height: 6),
+                  _buildSpecRow(
+                    icon: Icons.auto_awesome_rounded,
+                    label: "Cuota de Inteligencia Artificial:",
+                    value: plan.aiQuota,
+                    iconColor: Colors.purple,
+                    isDark: isDark,
+                  ),
+                  const SizedBox(height: 6),
+                  _buildSpecRow(
+                    icon: Icons.savings_outlined,
+                    label: "Ahorro comercial:",
+                    value: plan.savings,
+                    iconColor: Colors.green,
+                    isDark: isDark,
+                  ),
+                  const SizedBox(height: 6),
+                  _buildSpecRow(
+                    icon: Icons.storefront_outlined,
+                    label: "Recomendado para:",
+                    value: plan.idealFor,
+                    iconColor: Colors.amber[700]!,
+                    isDark: isDark,
+                  ),
+                  const SizedBox(height: 14),
+
+                  // Lista de beneficios
+                  Text(
+                    "Beneficios Destacados:",
+                    style: TextStyle(
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.bold,
+                      color: isDark ? Colors.grey[200] : Colors.grey[800],
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  ...plan.benefits.map(
+                    (b) => Padding(
+                      padding: const EdgeInsets.only(bottom: 6),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Icon(
+                            Icons.check_circle_rounded,
+                            size: 16,
+                            color: Colors.green,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              b,
+                              style: TextStyle(
+                                fontSize: 11.5,
+                                height: 1.35,
+                                color: isDark
+                                    ? Colors.grey[300]
+                                    : Colors.grey[700],
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+
+                  // Nota de Garantía Oficial y Operación Offline
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: Colors.green.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(
+                        color: Colors.green.withValues(alpha: 0.25),
+                      ),
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Icon(
+                          Icons.verified_user_rounded,
+                          size: 16,
+                          color: Colors.green[700],
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            "Garantía oficial MochilaLista: Funcionamiento 100% offline garantizado. No requiere conexión permanente para ventas ni control de stock.",
+                            style: TextStyle(
+                              fontSize: 11,
+                              height: 1.35,
+                              color: isDark
+                                  ? Colors.green[200]
+                                  : Colors.green[900],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          // Bottom actions (SafeArea)
+          SafeArea(
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+              decoration: BoxDecoration(
+                color: isDark ? const Color(0xFF1E1E28) : Colors.white,
+                border: Border(
+                  top: BorderSide(
+                    color: isDark ? Colors.white10 : Colors.black12,
+                    width: 1,
+                  ),
+                ),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () => Navigator.of(context).pop(false),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        foregroundColor:
+                            isDark ? Colors.white70 : Colors.black87,
+                        side: BorderSide(
+                          color: isDark ? Colors.white24 : Colors.black26,
+                        ),
+                      ),
+                      child: const Text(
+                        "Cerrar",
+                        style: TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    flex: 2,
+                    child: ElevatedButton.icon(
+                      key: const ValueKey("btn_modal_pedir_este_plan"),
+                      onPressed: () => Navigator.of(context).pop(true),
+                      icon: const Icon(Icons.shopping_bag_rounded, size: 18),
+                      label: Text(
+                        "Pedir (${plan.price})",
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 13,
+                        ),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.green[700],
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSpecRow({
+    required IconData icon,
+    required String label,
+    required String value,
+    required Color iconColor,
+    required bool isDark,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF14141C) : const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: isDark ? Colors.white10 : Colors.black12),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, size: 15, color: iconColor),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text.rich(
+              TextSpan(
+                style: TextStyle(
+                  fontSize: 11,
+                  color: isDark ? Colors.grey[300] : Colors.grey[800],
+                ),
+                children: [
+                  TextSpan(
+                    text: "$label ",
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  TextSpan(text: value),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 /// Modal Bottom Sheet interactivo y editable al pulsar "Pedir"
@@ -1835,6 +2579,13 @@ class OrderPlanBottomSheet extends StatefulWidget {
   final bool isDark;
   final ValueChanged<String> onSendWhatsApp;
 
+  static const String yapePlinLine =
+      "• Estado: Pago realizado vía Yape/Plin. Adjunto comprobante.";
+  static const String bankAccountLine =
+      "• Consulta: Solicito números de cuenta para transferencia bancaria.";
+  static const String invoiceLine =
+      "• Requerimiento: Solicito emisión de Factura con RUC.";
+
   const OrderPlanBottomSheet({
     super.key,
     required this.planName,
@@ -1848,6 +2599,78 @@ class OrderPlanBottomSheet extends StatefulWidget {
     required this.onSendWhatsApp,
   });
 
+  /// Extrae el cuerpo libre del mensaje escrito por el usuario, despojándolo de
+  /// tokens técnicos `MLS1-...` y de líneas correspondientes a complementos rápidos conocidos.
+  static String extractUserBody(String fullText) {
+    // 1. Quitar referencia de soporte MLS1 y regex general de sync tokens
+    var body = ClientSyncService().removeSyncTokenFromMessage(fullText);
+
+    // 2. Quitar complementos rápidos conocidos
+    body = body.replaceAll(yapePlinLine, '');
+    body = body.replaceAll(bankAccountLine, '');
+    body = body.replaceAll(invoiceLine, '');
+
+    // Variaciones defensivas por si el usuario editó espacios o viñetas
+    body = body.replaceAll(
+      RegExp(
+        r'•\s*Estado:\s*Pago realizado vía Yape/Plin\.\s*Adjunto comprobante\.?',
+      ),
+      '',
+    );
+    body = body.replaceAll(
+      RegExp(
+        r'•\s*Consulta:\s*Solicito números de cuenta para transferencia bancaria\.?',
+      ),
+      '',
+    );
+    body = body.replaceAll(
+      RegExp(
+        r'•\s*Requerimiento:\s*Solicito emisión de Factura con RUC\.?',
+      ),
+      '',
+    );
+
+    // 3. Normalizar saltos de línea repetidos
+    body = body.replaceAll(RegExp(r'\n{3,}'), '\n\n');
+    return body.trimRight();
+  }
+
+  /// Compone el mensaje final en 3 bloques estructurados:
+  /// Bloque 1: Cuerpo del usuario / texto libre base
+  /// Bloque 2: Complementos rápidos activos ordenados
+  /// Bloque 3: Pie técnico de soporte (`Ref. soporte: MLS1-...`) estrictamente al final
+  static String composeMessage({
+    required String userBody,
+    bool yapePlin = false,
+    bool bankAccounts = false,
+    bool invoice = false,
+    bool includeLicenseRef = true,
+    String? syncToken,
+  }) {
+    final cleanBody = userBody.trimRight();
+    final complements = <String>[];
+    if (yapePlin) complements.add(yapePlinLine);
+    if (bankAccounts) complements.add(bankAccountLine);
+    if (invoice) complements.add(invoiceLine);
+
+    String result;
+    if (complements.isNotEmpty) {
+      if (cleanBody.isNotEmpty) {
+        result = '$cleanBody\n\n${complements.join('\n')}';
+      } else {
+        result = complements.join('\n');
+      }
+    } else {
+      result = cleanBody;
+    }
+
+    if (includeLicenseRef && syncToken != null && syncToken.isNotEmpty) {
+      result = ClientSyncService().appendSyncTokenToMessage(result, syncToken);
+    }
+
+    return result;
+  }
+
   @override
   State<OrderPlanBottomSheet> createState() => _OrderPlanBottomSheetState();
 }
@@ -1859,26 +2682,22 @@ class _OrderPlanBottomSheetState extends State<OrderPlanBottomSheet> {
   bool _bankAccountsActive = false;
   bool _commercialInvoiceActive = false;
   bool _includeLicenseRef = true;
-
-  static const String _yapePlinLine =
-      "\n• Estado: Pago realizado vía Yape/Plin. Adjunto comprobante.";
-  static const String _bankAccountLine =
-      "\n• Consulta: Solicito números de cuenta para transferencia bancaria.";
-  static const String _invoiceLine =
-      "\n• Requerimiento: Solicito emisión de Factura con RUC.";
+  bool _isInternalUpdating = false;
 
   @override
   void initState() {
     super.initState();
-    String initialMessage = widget.defaultMessage;
-    if (_includeLicenseRef &&
-        widget.syncToken != null &&
-        widget.syncToken!.isNotEmpty) {
-      initialMessage = ClientSyncService().appendSyncTokenToMessage(
-        initialMessage,
-        widget.syncToken!,
-      );
-    }
+    final initialBody = OrderPlanBottomSheet.extractUserBody(
+      widget.defaultMessage,
+    );
+    final initialMessage = OrderPlanBottomSheet.composeMessage(
+      userBody: initialBody,
+      yapePlin: false,
+      bankAccounts: false,
+      invoice: false,
+      includeLicenseRef: _includeLicenseRef,
+      syncToken: widget.syncToken,
+    );
     _msgController = TextEditingController(text: initialMessage);
     _msgController.addListener(_onTextChanged);
   }
@@ -1891,6 +2710,7 @@ class _OrderPlanBottomSheetState extends State<OrderPlanBottomSheet> {
   }
 
   void _onTextChanged() {
+    if (_isInternalUpdating) return;
     final text = _msgController.text;
     final hasYape = text.contains("Pago realizado vía Yape/Plin");
     final hasBank = text.contains(
@@ -1898,6 +2718,7 @@ class _OrderPlanBottomSheetState extends State<OrderPlanBottomSheet> {
     );
     final hasInv = text.contains("Solicito emisión de Factura con RUC");
     final hasSync = ClientSyncService().messageContainsSyncToken(text);
+
     if (hasYape != _yapePlinActive ||
         hasBank != _bankAccountsActive ||
         hasInv != _commercialInvoiceActive ||
@@ -1913,46 +2734,82 @@ class _OrderPlanBottomSheetState extends State<OrderPlanBottomSheet> {
     }
   }
 
-  void _toggleLine(bool isSelected, String line) {
-    String current = _msgController.text;
-    final trimmedLine = line.trim();
-    if (isSelected) {
-      if (!current.contains(trimmedLine)) {
-        if (current.isNotEmpty && !current.endsWith('\n')) {
-          current = '$current$line';
-        } else {
-          current = '$current$trimmedLine';
-        }
-      }
-    } else {
-      current = current.replaceAll(line, '').replaceAll(trimmedLine, '');
-      current = current.replaceAll(RegExp(r'\n{3,}'), '\n\n').trimRight();
-    }
-    _msgController.text = current;
+  void _toggleChip(String chipType, bool isSelected) {
+    final currentText = _msgController.text;
+    final userBody = OrderPlanBottomSheet.extractUserBody(currentText);
+
+    if (chipType == 'yape') _yapePlinActive = isSelected;
+    if (chipType == 'bank') _bankAccountsActive = isSelected;
+    if (chipType == 'invoice') _commercialInvoiceActive = isSelected;
+
+    final composed = OrderPlanBottomSheet.composeMessage(
+      userBody: userBody,
+      yapePlin: _yapePlinActive,
+      bankAccounts: _bankAccountsActive,
+      invoice: _commercialInvoiceActive,
+      includeLicenseRef: _includeLicenseRef,
+      syncToken: widget.syncToken,
+    );
+
+    _isInternalUpdating = true;
+    _msgController.text = composed;
     _msgController.selection = TextSelection.fromPosition(
       TextPosition(offset: _msgController.text.length),
     );
+    _isInternalUpdating = false;
+    setState(() {});
+  }
+
+  void _onLicenseRefSwitchChanged(bool val) {
+    final currentText = _msgController.text;
+    final userBody = OrderPlanBottomSheet.extractUserBody(currentText);
+    _includeLicenseRef = val;
+
+    final composed = OrderPlanBottomSheet.composeMessage(
+      userBody: userBody,
+      yapePlin: _yapePlinActive,
+      bankAccounts: _bankAccountsActive,
+      invoice: _commercialInvoiceActive,
+      includeLicenseRef: _includeLicenseRef,
+      syncToken: widget.syncToken,
+    );
+
+    _isInternalUpdating = true;
+    _msgController.text = composed;
+    _msgController.selection = TextSelection.fromPosition(
+      TextPosition(offset: _msgController.text.length),
+    );
+    _isInternalUpdating = false;
+    setState(() {});
   }
 
   void _resetText() {
     FocusManager.instance.primaryFocus?.unfocus();
-    setState(() {
-      String base = widget.defaultMessage;
-      if (_includeLicenseRef &&
-          widget.syncToken != null &&
-          widget.syncToken!.isNotEmpty) {
-        base = ClientSyncService().appendSyncTokenToMessage(
-          base,
-          widget.syncToken!,
-        );
-      } else {
-        base = ClientSyncService().removeSyncTokenFromMessage(base);
-      }
-      _msgController.text = base;
-      _yapePlinActive = false;
-      _bankAccountsActive = false;
-      _commercialInvoiceActive = false;
-    });
+    final defaultBody = OrderPlanBottomSheet.extractUserBody(
+      widget.defaultMessage,
+    );
+    _yapePlinActive = false;
+    _bankAccountsActive = false;
+    _commercialInvoiceActive = false;
+    _includeLicenseRef = true;
+
+    final composed = OrderPlanBottomSheet.composeMessage(
+      userBody: defaultBody,
+      yapePlin: false,
+      bankAccounts: false,
+      invoice: false,
+      includeLicenseRef: true,
+      syncToken: widget.syncToken,
+    );
+
+    _isInternalUpdating = true;
+    _msgController.text = composed;
+    _msgController.selection = TextSelection.fromPosition(
+      TextPosition(offset: _msgController.text.length),
+    );
+    _isInternalUpdating = false;
+    setState(() {});
+
     CustomSnackBar.show(
       context,
       message: "Texto restablecido al formato oficial",
@@ -2017,21 +2874,7 @@ class _OrderPlanBottomSheetState extends State<OrderPlanBottomSheet> {
             value: _includeLicenseRef,
             activeThumbColor: Colors.green,
             activeTrackColor: Colors.green.withValues(alpha: 0.3),
-            onChanged: (val) {
-              setState(() {
-                _includeLicenseRef = val;
-                final current = _msgController.text;
-                if (val &&
-                    widget.syncToken != null &&
-                    widget.syncToken!.isNotEmpty) {
-                  _msgController.text = ClientSyncService()
-                      .appendSyncTokenToMessage(current, widget.syncToken!);
-                } else {
-                  _msgController.text = ClientSyncService()
-                      .removeSyncTokenFromMessage(current);
-                }
-              });
-            },
+            onChanged: _onLicenseRefSwitchChanged,
           ),
         ],
       ),
@@ -2336,7 +3179,7 @@ class _OrderPlanBottomSheetState extends State<OrderPlanBottomSheet> {
               isSelected: _yapePlinActive,
               onSelected: (val) {
                 FocusManager.instance.primaryFocus?.unfocus();
-                _toggleLine(val, _yapePlinLine);
+                _toggleChip('yape', val);
               },
               isDark: isDark,
             ),
@@ -2346,7 +3189,7 @@ class _OrderPlanBottomSheetState extends State<OrderPlanBottomSheet> {
               isSelected: _bankAccountsActive,
               onSelected: (val) {
                 FocusManager.instance.primaryFocus?.unfocus();
-                _toggleLine(val, _bankAccountLine);
+                _toggleChip('bank', val);
               },
               isDark: isDark,
             ),
@@ -2356,7 +3199,7 @@ class _OrderPlanBottomSheetState extends State<OrderPlanBottomSheet> {
               isSelected: _commercialInvoiceActive,
               onSelected: (val) {
                 FocusManager.instance.primaryFocus?.unfocus();
-                _toggleLine(val, _invoiceLine);
+                _toggleChip('invoice', val);
               },
               isDark: isDark,
             ),
@@ -2448,8 +3291,8 @@ class _OrderPlanBottomSheetState extends State<OrderPlanBottomSheet> {
         const SizedBox(height: 6),
         TextField(
           controller: _msgController,
-          minLines: 4,
-          maxLines: 6,
+          minLines: 5,
+          maxLines: 9,
           onTapOutside: (_) => FocusManager.instance.primaryFocus?.unfocus(),
           style: TextStyle(
             fontSize: 12.5,

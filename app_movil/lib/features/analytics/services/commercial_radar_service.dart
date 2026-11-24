@@ -8,19 +8,39 @@ import 'package:sqflite/sqflite.dart';
 import 'package:app_movil/core/config/api_constants.dart';
 import 'package:app_movil/core/database/local_db.dart';
 import 'package:app_movil/features/analytics/models/commercial_radar_model.dart';
+import 'package:app_movil/features/analytics/data/peru_ubigeo_catalog.dart';
+import 'package:app_movil/features/analytics/services/link_health_verifier.dart';
+
+class _CurateResult {
+  final List<CommercialNewsItem> items;
+  final RadarFeedSourceMode mode;
+
+  const _CurateResult({required this.items, required this.mode});
+}
 
 class CommercialRadarService {
-  static const String _cacheKeyPrefix = 'commercial_radar_cache_v4_';
-  static const String _cacheTimestampPrefix = 'commercial_radar_time_v4_';
-  static const String _cacheDatePrefix = 'commercial_radar_date_v4_';
+  static const String _cacheKeyPrefix = 'commercial_radar_cache_v5_';
+  static const String _cacheTimestampPrefix = 'commercial_radar_time_v5_';
+  static const String _cacheDatePrefix = 'commercial_radar_date_v5_';
   static const Duration _cacheDuration = Duration(hours: 4);
+
+  /// Cliente HTTP inyectable para pruebas unitarias sin tráfico real de red
+  static http.Client? customHttpClient;
+
+  /// Mock inyectable para emular el enriquecimiento Gemini en pruebas automatizadas
+  static Future<List<CommercialNewsItem>> Function(List<Map<String, dynamic>>, String)? geminiCuratorMock;
+
+  /// Modo del origen del último feed emitido
+  static RadarFeedSourceMode lastSourceMode = RadarFeedSourceMode.liveRssWithAi;
 
   /// Cantidad de nuevas señales incorporadas en el último refresco intradía
   static int lastNewSignalsCount = 0;
 
   /// Caché estática en memoria para 0ms de latencia y 0 saltos de renderizado
   static final Map<String, List<CommercialNewsItem>> _memoryCache = {};
-  static int _refreshCycleCounter = 0;
+
+  /// Instancia de LinkHealthVerifier vinculada al cliente HTTP configurado
+  static LinkHealthVerifier get _linkVerifier => LinkHealthVerifier(client: customHttpClient);
 
   /// Fecha del día para control de caducidad matutina (yyyy-MM-dd)
   static String getTodayDateStr() {
@@ -131,47 +151,54 @@ class CommercialRadarService {
   }
 
   /// Saneamiento y actualización de noticias cacheadas o guardadas para garantizar
-  /// URLs 100% verídicas, activas y sin dominios cruzados ni errores 404
+  /// URLs 100% verídicas, activas y sin dominios caídos como emergenciasviales.proviasnac.gob.pe
   static CommercialNewsItem sanitizeAndUpgradeNewsItem(
     CommercialNewsItem item, {
     String region = 'Talara / Piura',
   }) {
     // 1. Si coincide con un ID del catálogo de respaldo oficial actualizado
-    final fallbackList = _getOfflineFallback(region);
+    final fallbackList = _getOfflineFallback(RadarLocation.fromLegacyString(region));
     for (final fb in fallbackList) {
       if (fb.id == item.id) {
         return item.copyWith(
           sourceName: fb.sourceName,
           sourceUrl: fb.sourceUrl,
           isLive: false,
+          isOfflineGuide: true,
         );
       }
     }
 
-    // 2. Si tiene URLs rotas o desactualizadas conocidas
+    // 2. Erradicación de URLs rotas o desactualizadas conocidas a rutas canónicas gob.pe
     String updatedUrl = item.sourceUrl.trim();
     String updatedSource = item.sourceName.trim();
 
-    if (updatedUrl.contains('orientacion.sunat.gob.pe/guias-de-remision-electronica')) {
-      updatedUrl = 'https://cpe.sunat.gob.pe/sistema-emision/guia-remision-electronica';
-      updatedSource = 'SUNAT Portal Oficial GRE';
-    } else if (updatedUrl.contains('976451.aspx')) {
-      updatedUrl = 'https://emergenciasviales.proviasnac.gob.pe/';
+    if (updatedUrl.contains('emergenciasviales.proviasnac.gob.pe') ||
+        updatedUrl.contains('976451.aspx') ||
+        updatedUrl.contains('alerta_sutran')) {
+      updatedUrl = 'https://www.gob.pe/sutran';
       updatedSource = 'Provías Nacional / SUTRAN';
+    } else if (updatedUrl.contains('sunat') || updatedUrl.contains('guias-de-remision-electronica')) {
+      updatedUrl = 'https://www.gob.pe/sunat';
+      updatedSource = 'SUNAT Portal Oficial';
+    } else if (updatedUrl.contains('senamhi')) {
+      updatedUrl = 'https://www.gob.pe/senamhi';
+      updatedSource = 'SENAMHI Alertas';
+    } else if (updatedUrl.contains('midagri') || updatedUrl.contains('sisap')) {
+      updatedUrl = 'https://www.gob.pe/midagri';
+      updatedSource = 'MIDAGRI Oficial';
+    } else if (updatedUrl.contains('produce') || updatedUrl.contains('tuempresa')) {
+      updatedUrl = 'https://www.gob.pe/tuempresa';
+      updatedSource = 'PRODUCE / Tu Empresa MYPE';
+    } else if (updatedUrl.contains('indecopi')) {
+      updatedUrl = 'https://www.gob.pe/indecopi';
+      updatedSource = 'INDECOPI Oficial';
+    } else if (updatedUrl.contains('provias')) {
+      updatedUrl = 'https://www.gob.pe/proviasnacional';
+      updatedSource = 'Provías Nacional';
     } else if (updatedSource.contains('Cámara de Comercio') && updatedUrl.contains('gestion.pe')) {
       updatedUrl = CommercialNewsItem.buildVerifiedSearchUrl(item.cleanTitle, mediaDomain: 'lacamara.pe');
       updatedSource = 'Cámara de Comercio de Lima';
-    } else if (updatedUrl == 'https://www.gob.pe/produce' || updatedUrl == 'https://gob.pe/produce') {
-      updatedUrl = 'https://www.gob.pe/tuempresa';
-      updatedSource = 'PRODUCE / Tu Empresa MYPE';
-    } else if (updatedUrl == 'https://orientacion.sunat.gob.pe/' || updatedUrl == 'https://orientacion.sunat.gob.pe') {
-      updatedUrl = 'https://cpe.sunat.gob.pe/';
-    } else if (updatedUrl == 'https://www.senamhi.gob.pe/' || updatedUrl == 'https://www.senamhi.gob.pe') {
-      updatedUrl = 'https://www.senamhi.gob.pe/?p=avisos';
-    } else if (updatedUrl == 'https://www.gob.pe/sutran' || updatedUrl == 'https://gob.pe/sutran') {
-      updatedUrl = 'https://gis.sutran.gob.pe/alerta_sutran/';
-    } else if (updatedUrl == 'https://siea.midagri.gob.pe/' || updatedUrl == 'https://siea.midagri.gob.pe') {
-      updatedUrl = 'https://sistemas.midagri.gob.pe/sisap/portal/';
     }
 
     return item.copyWith(
@@ -211,7 +238,6 @@ class CommercialRadarService {
     } catch (_) {}
 
     if (items.isEmpty) {
-      // Respaldo en SharedPreferences si la base de datos no está disponible
       try {
         final prefs = await SharedPreferences.getInstance();
         final str = prefs.getString('commercial_radar_bookmarked_items_json');
@@ -224,7 +250,6 @@ class CommercialRadarService {
 
     if (items.isEmpty) return [];
 
-    // Saneamiento automático para instalaciones previas
     bool hasChanges = false;
     final List<CommercialNewsItem> upgraded = [];
     for (final it in items) {
@@ -288,7 +313,6 @@ class CommercialRadarService {
       );
     } catch (_) {}
 
-    // Respaldo SharedPreferences
     try {
       final prefs = await SharedPreferences.getInstance();
       final current = await getSavedNews();
@@ -337,33 +361,36 @@ class CommercialRadarService {
   }
 
   // ==========================================
-  // OBTENCIÓN Y STREAMING CON FUSIÓN INTRADÍA
+  // OBTENCIÓN Y STREAMING CON FUSIÓN INTRADÍA Y CASCADA REAL
   // ==========================================
 
   /// Obtiene las noticias curadas progresivamente una a una con Fusión Intradía y Caducidad Matutina
   static Stream<CommercialNewsItem> streamCuratedNews({
     String region = 'Talara / Piura',
+    RadarLocation? location,
     bool forceRefresh = false,
   }) async* {
+    final loc = location ?? RadarLocation.fromLegacyString(region);
+    final cacheKey = loc.isNational ? 'Todo el Perú' : '${loc.department}_${loc.province}';
     final todayStr = getTodayDateStr();
 
-    // 1. Si NO es recarga forzada, verificar si la memoria tiene noticias de HOY
-    if (!forceRefresh && _memoryCache.containsKey(region) && _memoryCache[region]!.isNotEmpty) {
-      final balanced = interleaveCategories(_memoryCache[region]!);
+    // 1. Memoria rápida si no es recarga forzada
+    if (!forceRefresh && _memoryCache.containsKey(cacheKey) && _memoryCache[cacheKey]!.isNotEmpty) {
+      final balanced = interleaveCategories(_memoryCache[cacheKey]!);
       for (var item in balanced) {
         yield item;
       }
       return;
     }
 
-    // 2. Si NO es recarga forzada, cargar caché persistente si es del MISMO día
+    // 2. Caché persistente del mismo día
     if (!forceRefresh) {
-      final cached = await _loadFromCache(region, todayStr);
+      final cached = await _loadFromCache(cacheKey, todayStr);
       if (cached != null && cached.isNotEmpty) {
+        lastSourceMode = RadarFeedSourceMode.cachedRecent;
         final balanced = interleaveCategories(cached);
-        _memoryCache[region] = balanced;
+        _memoryCache[cacheKey] = balanced;
         for (var item in balanced) {
-          await Future.delayed(const Duration(milliseconds: 40));
           yield item;
         }
         return;
@@ -373,114 +400,194 @@ class CommercialRadarService {
     // 3. Preparar lista base existente para fusión intradía
     List<CommercialNewsItem> existingOfDay = [];
     if (forceRefresh) {
-      final currentInMem = _memoryCache[region];
+      final currentInMem = _memoryCache[cacheKey];
       if (currentInMem != null && currentInMem.isNotEmpty) {
         existingOfDay = List.from(currentInMem);
       } else {
-        final fromDisk = await _loadFromCache(region, todayStr);
+        final fromDisk = await _loadFromCache(cacheKey, todayStr);
         if (fromDisk != null) existingOfDay = fromDisk;
       }
     }
 
-    // 4. Intentar obtener noticias en vivo vía RSS + Curaduría Gemini
+    // 4. Intentar obtener noticias en vivo vía RSS Google News Perú + Curaduría Gemini o Análisis Local
     List<CommercialNewsItem> newlyFetched = [];
+    RadarFeedSourceMode determinedMode = RadarFeedSourceMode.liveRssWithAi;
+
     try {
-      final rawItems = await _fetchGoogleNewsRss(region);
-      if (rawItems.isNotEmpty) {
-        final curatedItems = await _curateWithGemini(rawItems, region);
-        if (curatedItems.isNotEmpty) {
-          newlyFetched = curatedItems;
-        }
+      final rawRssItems = await _fetchGoogleNewsRssCascade(loc);
+      if (rawRssItems.isNotEmpty) {
+        final verifiedRssItems = await _verifyRssLinks(rawRssItems);
+        final curateResult = await _curateRssItems(verifiedRssItems, loc);
+        newlyFetched = curateResult.items;
+        determinedMode = curateResult.mode;
       }
     } catch (_) {
-      // Si falla la red o Gemini, se usa fallback variado
+      // Fallback ante fallo de red
     }
 
-    // Si no se obtuvieron noticias de red, usamos el catálogo offline enriquecido de 28+ señales
+    // 5. Contingencia si no se obtuvieron noticias de red
     if (newlyFetched.isEmpty) {
-      final allFallback = _getOfflineFallback(region);
-      if (existingOfDay.isEmpty) {
-        // Carga inicial del día: primer lote representativo y equilibrado (12 señales)
-        final balanced = interleaveCategories(allFallback);
-        newlyFetched = balanced.take(12).toList();
+      final fromDisk = await _loadFromCache(cacheKey, todayStr);
+      if (fromDisk != null && fromDisk.isNotEmpty) {
+        newlyFetched = fromDisk;
+        determinedMode = RadarFeedSourceMode.cachedRecent;
       } else {
-        // Pull-to-Refresh: buscar señales de la reserva ampliada que aún no estén en el feed del día
-        final existingIds = existingOfDay.map((e) => e.id).toSet();
-        final remaining = allFallback.where((item) => !existingIds.contains(item.id)).toList();
-        if (remaining.isNotEmpty) {
-          // Agregar un nuevo lote de 3-4 señales de la reserva
-          newlyFetched = remaining.take(4).toList();
-        } else {
-          // Si el usuario ya exploró todas las señales de la reserva, generar pulso de refresco dinámico
-          _refreshCycleCounter++;
-          final now = DateTime.now();
-          final cycleItem = allFallback[_refreshCycleCounter % allFallback.length];
-          newlyFetched = [
-            CommercialNewsItem(
-              id: 'fallback_live_${_refreshCycleCounter}_${cycleItem.id}',
-              title: cycleItem.cleanTitle,
-              summary: cycleItem.cleanSummary,
-              impactAnalysis: cycleItem.cleanImpact,
-              actionableAdvice: cycleItem.cleanAdvice,
-              category: cycleItem.category,
-              sourceName: cycleItem.sourceName,
-              sourceUrl: cycleItem.sourceUrl,
-              imageUrl: cycleItem.imageUrl,
-              publishedAt: now,
-              region: region,
-            ),
-          ];
-        }
+        final allFallback = _getOfflineFallback(loc);
+        newlyFetched = allFallback;
+        determinedMode = RadarFeedSourceMode.offlineGuide;
       }
     }
 
-    // 5. Aplicar Fusión Intradía: combinar existentes del día con las nuevas
+    lastSourceMode = determinedMode;
+
+    // 6. Aplicar Fusión Intradía
     List<CommercialNewsItem> finalFeed;
-    if (existingOfDay.isNotEmpty) {
+    if (existingOfDay.isNotEmpty && determinedMode != RadarFeedSourceMode.offlineGuide) {
       finalFeed = mergeNewsItems(existingOfDay, newlyFetched);
     } else {
       lastNewSignalsCount = newlyFetched.length;
       finalFeed = interleaveCategories(newlyFetched);
     }
 
-    // 6. Guardar en memoria y disco con la fecha del día
-    _memoryCache[region] = finalFeed;
-    await _saveToCache(region, finalFeed, todayStr);
+    _memoryCache[cacheKey] = finalFeed;
+    await _saveToCache(cacheKey, finalFeed, todayStr);
 
-    // 7. Emitir en stream con pequeña cadencia progresiva
     for (var item in finalFeed) {
-      await Future.delayed(Duration.zero);
       yield item;
     }
   }
 
-  /// Consulta RSS de Google News Perú con parámetros optimizados y filtros anti-ruido
-  static Future<List<Map<String, dynamic>>> _fetchGoogleNewsRss(String region) async {
-    String baseQuery;
-    final rLower = region.toLowerCase();
-    if (rLower.contains('talara') || rLower.contains('piura')) {
-      baseQuery = '((Piura OR Talara) AND (comercio OR transporte OR carreteras OR fletes OR lluvias OR SENAMHI)) OR (Perú AND (SUNAT OR "mercado mayorista" OR "precios" OR "campaña comercial"))';
-    } else if (region == 'Todo el Perú') {
-      baseQuery = 'Perú AND (comercio OR transporte OR carreteras OR fletes OR SUNAT OR abastecimiento OR mayoristas OR "campaña comercial")';
-    } else {
-      baseQuery = '($region AND (comercio OR transporte OR carreteras OR abastecimiento OR fletes)) OR (Perú AND (SUNAT OR "mercado mayorista" OR "campaña comercial"))';
-    }
+  // ==========================================
+  // INGESTA RSS EN CASCADA (LOCAL -> REGIONAL -> NACIONAL)
+  // ==========================================
+
+  /// Consulta RSS de Google News Perú con cascada territorial y filtro anti-ruido
+  static Future<List<Map<String, dynamic>>> _fetchGoogleNewsRssCascade(RadarLocation loc) async {
+    final client = customHttpClient ?? http.Client();
+    final bool isOwnedClient = customHttpClient == null;
+    final List<Map<String, dynamic>> collectedItems = [];
 
     const antiNoise = ' NOT (fútbol OR soccer OR partido OR liga OR torneo OR gol OR club OR farándula OR espectáculo OR cantante OR concierto)';
-    final query = '($baseQuery)$antiNoise';
 
-    final url = Uri.parse(
-      'https://news.google.com/rss/search?q=${Uri.encodeComponent(query)}&hl=es-419&gl=PE&ceid=PE:es-419',
-    );
+    try {
+      if (loc.isNational) {
+        // Nivel Nacional directo
+        final qNacional = '(Perú AND (comercio OR "mercado mayorista" OR fletes OR transporte OR abastecimiento OR SUNAT OR INDECOPI OR carreteras OR SENAMHI))$antiNoise';
+        final itemsNacional = await _fetchRssQuery(
+          client,
+          qNacional,
+          scope: RadarNewsScope.nacional,
+          scopeLabel: 'Nacional • Perú',
+          regionName: 'Perú',
+          limit: 12,
+        );
+        collectedItems.addAll(itemsNacional);
+      } else {
+        // Cascada Nivel 1: Local (Distrito / Localidad prioritaria + Complemento Provincial)
+        List<Map<String, dynamic>> itemsLocal = [];
 
-    final response = await http.get(url).timeout(const Duration(seconds: 12));
-    if (response.statusCode != 200) return [];
+        if (loc.district != null && loc.district!.isNotEmpty) {
+          final qDistrict = '("${loc.district}" "${loc.province}" AND (comercio OR transporte OR carreteras OR fletes OR abastecimiento OR lluvias OR SENAMHI))$antiNoise';
+          final districtItems = await _fetchRssQuery(
+            client,
+            qDistrict,
+            scope: RadarNewsScope.local,
+            scopeLabel: 'Local • ${loc.district}',
+            regionName: loc.district!,
+            limit: 4,
+          );
+          itemsLocal.addAll(districtItems);
+        }
 
-    return _parseRssXml(response.body, region);
+        // Si el distrito es pequeño o devuelve pocas noticias locales (< 2), complementar con la provincia
+        if (itemsLocal.length < 2) {
+          final qProv = '("${loc.province}" AND (comercio OR transporte OR carreteras OR fletes OR abastecimiento OR lluvias OR SENAMHI))$antiNoise';
+          final provItems = await _fetchRssQuery(
+            client,
+            qProv,
+            scope: RadarNewsScope.local,
+            scopeLabel: loc.district != null && loc.district!.isNotEmpty
+                ? 'Local • ${loc.district}'
+                : 'Local • ${loc.province}',
+            regionName: loc.province,
+            limit: 4 - itemsLocal.length,
+          );
+          itemsLocal.addAll(provItems);
+        }
+        collectedItems.addAll(itemsLocal);
+
+        // Cascada Nivel 2: Regional (Departamento + Corredor Logístico Estratégico)
+        final qRegional = '("${loc.department}" AND (rutas OR carreteras OR comercio OR transporte OR abastecimiento OR fletes OR "${loc.corridor}" OR SENAMHI))$antiNoise';
+        final itemsRegional = await _fetchRssQuery(
+          client,
+          qRegional,
+          scope: RadarNewsScope.regional,
+          scopeLabel: 'Regional • ${loc.department}',
+          regionName: loc.department,
+          limit: 4,
+        );
+        collectedItems.addAll(itemsRegional);
+
+        // Cascada Nivel 3: Nacional complementaria
+        final qNacional = '(Perú AND (SUNAT OR abastecimiento OR fletes OR "mercado mayorista" OR INDECOPI OR "campaña comercial"))$antiNoise';
+        final itemsNacional = await _fetchRssQuery(
+          client,
+          qNacional,
+          scope: RadarNewsScope.nacional,
+          scopeLabel: 'Nacional • Perú',
+          regionName: 'Perú',
+          limit: 4,
+        );
+        collectedItems.addAll(itemsNacional);
+      }
+    } finally {
+      if (isOwnedClient) {
+        client.close();
+      }
+    }
+
+    return collectedItems;
   }
 
-  /// Parser manual ultra liviano y tolerante de RSS XML
-  static List<Map<String, dynamic>> _parseRssXml(String xml, String region) {
+  static Future<List<Map<String, dynamic>>> _fetchRssQuery(
+    http.Client client,
+    String query, {
+    required RadarNewsScope scope,
+    required String scopeLabel,
+    required String regionName,
+    int limit = 6,
+  }) async {
+    try {
+      final url = Uri.parse(
+        'https://news.google.com/rss/search?q=${Uri.encodeComponent(query)}&hl=es-419&gl=PE&ceid=PE:es-419',
+      );
+      final response = await client.get(
+        url,
+        headers: {'User-Agent': LinkHealthVerifier.userAgent},
+      ).timeout(const Duration(seconds: 10));
+
+      if (response.statusCode != 200) return [];
+
+      return parseRssXml(
+        response.body,
+        scope: scope,
+        scopeLabel: scopeLabel,
+        regionName: regionName,
+        limit: limit,
+      );
+    } catch (_) {
+      return [];
+    }
+  }
+
+  /// Parser público de RSS XML en Dart puro (sin librerías externas)
+  static List<Map<String, dynamic>> parseRssXml(
+    String xml, {
+    RadarNewsScope scope = RadarNewsScope.nacional,
+    String scopeLabel = 'Nacional • Perú',
+    String regionName = 'Perú',
+    int limit = 10,
+  }) {
     List<Map<String, dynamic>> items = [];
     final itemRegex = RegExp(r'<item>([\s\S]*?)<\/item>', caseSensitive: false);
     final titleRegex = RegExp(r'<title>([\s\S]*?)<\/title>', caseSensitive: false);
@@ -490,9 +597,9 @@ class CommercialRadarService {
     final imgRegex = RegExp(r'<img[^>]+src="([^">]+)"', caseSensitive: false);
 
     for (var match in itemRegex.allMatches(xml)) {
-      if (items.length >= 10) break;
+      if (items.length >= limit) break;
       final content = match.group(1) ?? '';
-      
+
       String rawTitle = titleRegex.firstMatch(content)?.group(1) ?? '';
       rawTitle = _cleanCdataAndEntities(rawTitle);
 
@@ -513,7 +620,7 @@ class CommercialRadarService {
           final parts = title.split(' - ');
           if (parts.length > 1) {
             final extractedSource = parts.last.trim();
-            if (extractedSource.isNotEmpty && extractedSource.length < 30) {
+            if (extractedSource.isNotEmpty && extractedSource.length < 35) {
               rawSource = extractedSource;
             }
             title = parts.sublist(0, parts.length - 1).join(' - ').trim();
@@ -521,15 +628,18 @@ class CommercialRadarService {
         }
 
         final verifiedSource = _cleanEditorialSource(rawSource, title);
-        final parsedDate = _parseRssPubDate(rawPubDate);
+        final parsedDate = parseRssPubDate(rawPubDate);
 
         items.add({
-          'id': 'news_${items.length}_${DateTime.now().millisecondsSinceEpoch}',
+          'id': 'rss_${scope.code}_${items.length}_${DateTime.now().millisecondsSinceEpoch}',
           'title': title,
           'link': rawLink,
           'source': verifiedSource,
           'pubDate': parsedDate,
           'imageUrl': imgUrl,
+          'scope': scope,
+          'scopeLabel': scopeLabel,
+          'region': regionName,
         });
       }
     }
@@ -557,8 +667,8 @@ class CommercialRadarService {
     return s;
   }
 
-  /// Parser seguro de fechas RFC-822 / RFC-1123 de feeds RSS
-  static DateTime _parseRssPubDate(String rawDate) {
+  /// Parser público seguro de fechas RFC-822 / RFC-1123 de feeds RSS
+  static DateTime parseRssPubDate(String rawDate) {
     if (rawDate.isEmpty) return DateTime.now();
     try {
       final parsed = DateTime.tryParse(rawDate);
@@ -594,29 +704,65 @@ class CommercialRadarService {
         .replaceAll('&amp;', '&')
         .replaceAll('&quot;', '"')
         .replaceAll('&apos;', "'")
+        .replaceAll('&#39;', "'")
         .replaceAll('&lt;', '<')
         .replaceAll('&gt;', '>')
         .trim();
   }
 
-  /// Curaduría estructurada con Gemini AI
-  static Future<List<CommercialNewsItem>> _curateWithGemini(
-    List<Map<String, dynamic>> rawItems,
-    String region,
+  /// Verifica la salud de los links extraídos del RSS usando LinkHealthVerifier
+  static Future<List<Map<String, dynamic>>> _verifyRssLinks(
+    List<Map<String, dynamic>> items,
   ) async {
+    final List<Map<String, dynamic>> verified = [];
+    final verifier = _linkVerifier;
+
+    for (var item in items) {
+      final originalLink = item['link'] as String? ?? '';
+      final title = item['title'] as String? ?? '';
+      final workingUrl = await verifier.resolveWorkingUrl(
+        originalLink,
+        fallbackUrl: CommercialNewsItem.buildVerifiedSearchUrl(title),
+      );
+
+      final copy = Map<String, dynamic>.from(item);
+      copy['link'] = workingUrl;
+      verified.add(copy);
+    }
+
+    return verified;
+  }
+
+  // ==========================================
+  // CURADURÍA GEMINI (ANALIZADOR DE TITULARES REALES) Y FALLBACK DETERMINISTA
+  // ==========================================
+
+  static Future<_CurateResult> _curateRssItems(
+    List<Map<String, dynamic>> rawItems,
+    RadarLocation loc,
+  ) async {
+    if (geminiCuratorMock != null) {
+      try {
+        final mocked = await geminiCuratorMock!(rawItems, loc.displayName);
+        if (mocked.isNotEmpty) {
+          return _CurateResult(items: mocked, mode: RadarFeedSourceMode.liveRssWithAi);
+        }
+      } catch (_) {}
+    }
+
     final promptBuffer = StringBuffer();
     promptBuffer.writeln(
-      "Eres el analista jefe de Inteligencia Comercial y Logística para dueños de negocios, bodegas, distribuidoras y mypes en Perú ($region).",
+      "Eres el analista jefe de Inteligencia Comercial y Logística para dueños de negocios, bodegas, distribuidoras y mypes en Perú (Ubicación del usuario: ${loc.displayName}, Corredor logístico: ${loc.corridor}).",
     );
     promptBuffer.writeln(
-      "Analiza las siguientes noticias y para cada una genera un objeto JSON estricto con:",
+      "Analiza los siguientes titulares de NOTICIAS REALES recién ocurridas y para cada una genera un análisis comercial estrictamente en JSON:",
     );
-    promptBuffer.writeln("- id (el mismo id provisto)");
+    promptBuffer.writeln("- id (mantén exactamente el mismo id provisto)");
     promptBuffer.writeln("- category ('Clima y Rutas', 'Mi Región', 'Leyes y SUNAT', 'Proveedores y Abastecimiento' o 'Fechas y Campañas')");
-    promptBuffer.writeln("- summary (1 o 2 líneas concisas explicando qué ocurre)");
+    promptBuffer.writeln("- summary (1 o 2 líneas concisas explicando qué ocurre comercial o logísticamente)");
     promptBuffer.writeln("- impactAnalysis (Explicación concreta de cómo afecta las carreteras, transporte de mercadería, fletes, clientes o cobros del negocio)");
     promptBuffer.writeln("- actionableAdvice (Medidas preventivas concretas sugeridas: compras anticipadas, stock de seguridad, coordinaciones con proveedores)");
-    promptBuffer.writeln("\nNoticias:");
+    promptBuffer.writeln("\nNOTICIAS REALES PROVISTAS:");
 
     for (var item in rawItems) {
       promptBuffer.writeln("ID: ${item['id']}");
@@ -624,12 +770,12 @@ class CommercialRadarService {
       promptBuffer.writeln("Fuente: ${item['source']}\n");
     }
 
-    promptBuffer.writeln("Devuelve exclusivamente un array JSON válido con los campos id, category, summary, impactAnalysis, actionableAdvice.");
+    promptBuffer.writeln("IMPORTANTE: NO inventes noticias adicionales ni modifiques los IDs. Devuelve exclusivamente un array JSON válido con los campos id, category, summary, impactAnalysis, actionableAdvice.");
 
     for (String model in ApiConstants.cascadeModels) {
       GoogleAIClient? client;
       try {
-        client = ApiConstants.createAIClient(timeout: const Duration(seconds: 25));
+        client = ApiConstants.createAIClient(timeout: const Duration(seconds: 20));
         final response = await client.models.generateContent(
           model: model,
           request: GenerateContentRequest(
@@ -656,19 +802,22 @@ class CommercialRadarService {
               curated.add(CommercialNewsItem(
                 id: raw['id'],
                 title: raw['title'],
-                summary: ai['summary'] ?? "Noticia relevante para el comercio y abastecimiento en $region.",
-                impactAnalysis: ai['impactAnalysis'] ?? "Puede generar demoras en los despachos mayoristas o alterar el flujo habitual de clientes en tu zona.",
+                summary: ai['summary'] ?? "Noticia verificada con impacto potencial en abastecimiento o comercio en ${loc.displayName}.",
+                impactAnalysis: ai['impactAnalysis'] ?? "Puede generar demoras en los despachos mayoristas o alterar el flujo habitual de clientes.",
                 actionableAdvice: ai['actionableAdvice'] ?? "Adelanta tus pedidos clave de alta rotación y confirma con tus proveedores el estado de sus rutas.",
-                category: ai['category'] ?? 'Mi Región',
+                category: ai['category'] ?? (raw['scope'] == RadarNewsScope.local ? 'Mi Región' : 'Proveedores y Abastecimiento'),
                 sourceName: raw['source'],
                 sourceUrl: raw['link'],
                 imageUrl: raw['imageUrl'],
                 publishedAt: raw['pubDate'] is DateTime ? raw['pubDate'] : DateTime.now(),
-                region: region,
+                region: raw['region'] ?? loc.displayName,
                 isLive: true,
+                scope: raw['scope'] ?? RadarNewsScope.nacional,
+                scopeLabel: raw['scopeLabel'],
+                isOfflineGuide: false,
               ));
             }
-            return curated;
+            return _CurateResult(items: curated, mode: RadarFeedSourceMode.liveRssWithAi);
           }
         }
       } catch (_) {
@@ -678,32 +827,67 @@ class CommercialRadarService {
       }
     }
 
+    // Fallback determinista local en español si Gemini no estuvo disponible
+    final localAnalyzed = _analyzeLocally(rawItems, loc);
+    return _CurateResult(items: localAnalyzed, mode: RadarFeedSourceMode.liveRssLocalAnalysis);
+  }
+
+  /// Analizador determinista local para noticias reales en caso de fallo o timeout de Gemini
+  static List<CommercialNewsItem> _analyzeLocally(
+    List<Map<String, dynamic>> rawItems,
+    RadarLocation loc,
+  ) {
     return rawItems.map((raw) {
       String cat = 'Mi Región';
       final lower = raw['title'].toString().toLowerCase();
-      if (lower.contains('clima') || lower.contains('lluvia') || lower.contains('carretera') || lower.contains('ruta') || lower.contains('senamhi')) {
+
+      String summary;
+      String impact;
+      String advice;
+
+      if (lower.contains('clima') || lower.contains('lluvia') || lower.contains('carretera') || lower.contains('ruta') || lower.contains('senamhi') || lower.contains('tránsito')) {
         cat = 'Clima y Rutas';
-      } else if (lower.contains('sunat') || lower.contains('ley') || lower.contains('tribut') || lower.contains('factura')) {
+        summary = "Reporte vial y meteorológico en curso con impacto en el tránsito y transporte de carga.";
+        impact = "Riesgo de retrasos en fletes interprovinciales por controles o condiciones de ruta en ${loc.corridor}.";
+        advice = "Coordina despachos con 24h de holgura y valida itinerarios con tus transportistas.";
+      } else if (lower.contains('sunat') || lower.contains('ley') || lower.contains('tribut') || lower.contains('factura') || lower.contains('boleta') || lower.contains('indecopi')) {
         cat = 'Leyes y SUNAT';
-      } else if (lower.contains('proveedor') || lower.contains('abastecimiento') || lower.contains('precio') || lower.contains('almacén')) {
+        summary = "Actualización normativa o tributaria aplicable al comercio y facturación formal en Perú.";
+        impact = "Exigencias de cumplimiento en comprobantes electrónicos y guías de remisión para transporte de mercadería.";
+        advice = "Revisa que tus comprobantes de venta y compras cumplan con los requisitos vigentes.";
+      } else if (lower.contains('proveedor') || lower.contains('abastecimiento') || lower.contains('precio') || lower.contains('almacén') || lower.contains('mercado mayorista')) {
         cat = 'Proveedores y Abastecimiento';
-      } else if (lower.contains('oferta') || lower.contains('campaña') || lower.contains('navidad') || lower.contains('madre') || lower.contains('escolar')) {
+        summary = "Movimiento en mercados mayoristas o cadenas de suministro de insumos y mercadería.";
+        impact = "Posibles variaciones en costos de adquisición o disponibilidad de productos de alta rotación.";
+        advice = "Revisa tus existencias mínimas en Mesa de Trabajo y adelanta pedidos ante alzas.";
+      } else if (lower.contains('oferta') || lower.contains('campaña') || lower.contains('navidad') || lower.contains('madre') || lower.contains('escolar') || lower.contains('feriado')) {
         cat = 'Fechas y Campañas';
+        summary = "Señal comercial clave para temporadas de alta demanda y promociones al consumidor.";
+        impact = "Incremento esperado en la afluencia de clientes y oportunidad para elevar el ticket promedio.";
+        advice = "Configura promociones por volumen y combos sugeridos en tu inventario.";
+      } else {
+        cat = raw['scope'] == RadarNewsScope.local ? 'Mi Región' : 'Proveedores y Abastecimiento';
+        summary = "Hecho noticioso con implicancia comercial para negocios y distribuidores en ${loc.displayName}.";
+        impact = "Variación potencial en la dinámica de compra local o en tiempos de reabastecimiento.";
+        advice = "Supervisa tus saldos de caja y mantén comunicación fluida con proveedores clave.";
       }
 
       return CommercialNewsItem(
         id: raw['id'],
         title: raw['title'],
-        summary: "Noticia relevante para el comercio y abastecimiento en $region.",
-        impactAnalysis: "Posibles variaciones en tiempos de entrega de mercancías o demanda de productos de consumo diario.",
-        actionableAdvice: "Revisa tu stock de seguridad en el inventario y adelanta pedidos antes de incrementos de precios o cierres de ruta.",
+        summary: summary,
+        impactAnalysis: impact,
+        actionableAdvice: advice,
         category: cat,
         sourceName: raw['source'],
         sourceUrl: raw['link'],
         imageUrl: raw['imageUrl'],
         publishedAt: raw['pubDate'] is DateTime ? raw['pubDate'] : DateTime.now(),
-        region: region,
+        region: raw['region'] ?? loc.displayName,
         isLive: true,
+        scope: raw['scope'] ?? RadarNewsScope.nacional,
+        scopeLabel: raw['scopeLabel'],
+        isOfflineGuide: false,
       );
     }).toList();
   }
@@ -722,15 +906,14 @@ class CommercialRadarService {
   }
 
   /// Caché local por región con verificación estricta de fecha del día (Caducidad Matutina)
-  static Future<List<CommercialNewsItem>?> _loadFromCache(String region, String currentTodayStr) async {
+  static Future<List<CommercialNewsItem>?> _loadFromCache(String cacheKey, String currentTodayStr) async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final key = '$_cacheKeyPrefix$region';
-      final timeKey = '$_cacheTimestampPrefix$region';
-      final dateKey = '$_cacheDatePrefix$region';
+      final key = '$_cacheKeyPrefix$cacheKey';
+      final timeKey = '$_cacheTimestampPrefix$cacheKey';
+      final dateKey = '$_cacheDatePrefix$cacheKey';
 
       final savedDate = prefs.getString(dateKey);
-      // Si la fecha guardada es de un día anterior, expira automáticamente
       if (savedDate == null || savedDate != currentTodayStr) {
         return null;
       }
@@ -746,19 +929,19 @@ class CommercialRadarService {
       final List<dynamic> list = jsonDecode(jsonStr);
       return list.map((e) {
         final it = CommercialNewsItem.fromJson(e as Map<String, dynamic>);
-        return sanitizeAndUpgradeNewsItem(it, region: region);
+        return sanitizeAndUpgradeNewsItem(it, region: cacheKey);
       }).toList();
     } catch (_) {
       return null;
     }
   }
 
-  static Future<void> _saveToCache(String region, List<CommercialNewsItem> items, String todayStr) async {
+  static Future<void> _saveToCache(String cacheKey, List<CommercialNewsItem> items, String todayStr) async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final key = '$_cacheKeyPrefix$region';
-      final timeKey = '$_cacheTimestampPrefix$region';
-      final dateKey = '$_cacheDatePrefix$region';
+      final key = '$_cacheKeyPrefix$cacheKey';
+      final timeKey = '$_cacheTimestampPrefix$cacheKey';
+      final dateKey = '$_cacheDatePrefix$cacheKey';
 
       final jsonStr = jsonEncode(items.map((e) => e.toJson()).toList());
       await prefs.setString(key, jsonStr);
@@ -768,21 +951,24 @@ class CommercialRadarService {
   }
 
   // ==========================================
-  // CATÁLOGO DE FALLBACK OFFLINE ENRIQUECIDO (28+ ITEMS LIMPIOS)
+  // CATÁLOGO DE REFERENCIA OFICIAL PERMANENTE OFFLINE (HONESTIDAD TOTAL)
+  // Erradicación completa de emergenciasviales.proviasnac.gob.pe
+  // Fechas permanentes fijas e isOfflineGuide: true
   // ==========================================
 
   /// Expuesto para pruebas unitarias de verificación de fuentes y catálogo de señales
   static List<CommercialNewsItem> getOfflineFallbackSignals({String region = 'Talara / Piura'}) {
-    return _getOfflineFallback(region);
+    return _getOfflineFallback(RadarLocation.fromLegacyString(region));
   }
 
-  /// Noticias de respaldo offline resiliente con información verídica, multitemática y cero emojis
-  static List<CommercialNewsItem> _getOfflineFallback(String region) {
-    final bool isNorth = region.toLowerCase().contains('talara') || region.toLowerCase().contains('piura');
-    final now = DateTime.now();
+  static List<CommercialNewsItem> _getOfflineFallback(RadarLocation loc) {
+    final bool isNorth = loc.department.toLowerCase().contains('piura') ||
+        loc.department.toLowerCase().contains('tumbes') ||
+        loc.department.toLowerCase().contains('lambayeque');
+    final staticRefDate = DateTime(2026, 1, 1);
 
     return [
-      // CATEGORÍA 1: Clima y Rutas (6 noticias)
+      // CATEGORÍA 1: Clima y Rutas (Portales Oficiales Canónicos gob.pe)
       CommercialNewsItem(
         id: 'fallback_cr_1',
         title: isNorth
@@ -792,29 +978,35 @@ class CommercialRadarService {
             ? "Trabajos preventivos de encauzamiento y limpieza de badenes en la ruta costera norte."
             : "Controles continuos de pesaje y alertas de paso en los principales corredores logísticos.",
         impactAnalysis: isNorth
-            ? "Camiones pesados desde Lima hacia Talara podrían registrar demoras de 4 a 8 horas por tránsito restringido."
+            ? "Camiones pesados desde Lima hacia el norte podrían registrar demoras de 4 a 8 horas por tránsito restringido."
             : "Posibles demoras preventivas en garitas de control interregional para carga pesada.",
         actionableAdvice:
             "Coordina tus despachos con 24 a 48 horas de holgura y asegura stock de seguridad en productos de primera necesidad.",
         category: 'Clima y Rutas',
         sourceName: 'Provías Nacional / SUTRAN',
-        sourceUrl: 'https://emergenciasviales.proviasnac.gob.pe/',
-        publishedAt: now.subtract(const Duration(hours: 2)),
-        region: region,
+        sourceUrl: 'https://www.gob.pe/sutran',
+        publishedAt: staticRefDate,
+        region: loc.displayName,
         isLive: false,
+        isOfflineGuide: true,
+        scope: RadarNewsScope.regional,
+        scopeLabel: 'Regional • ${loc.department}',
       ),
       CommercialNewsItem(
         id: 'fallback_cr_2',
         title: "SENAMHI emite aviso meteorológico sobre variaciones térmicas y vientos en la costa",
-        summary: "Incremento de vientos paracas y bancos de niebla matutina afecta visibilidad en carreteras interprovinciales.",
+        summary: "Incremento de vientos y bancos de niebla matutina afecta visibilidad en carreteras interprovinciales.",
         impactAnalysis: "Reducción de velocidad en fletes nocturnos y mayor consumo de combustible en transporte de mercancías.",
         actionableAdvice: "Solicita a transportistas confirmación de itinerarios de llegada antes de pactar entregas con clientes finales.",
         category: 'Clima y Rutas',
         sourceName: 'SENAMHI Alertas',
-        sourceUrl: 'https://www.senamhi.gob.pe/?p=avisos',
-        publishedAt: now.subtract(const Duration(hours: 5)),
+        sourceUrl: 'https://www.gob.pe/senamhi',
+        publishedAt: staticRefDate,
         region: 'Perú',
         isLive: false,
+        isOfflineGuide: true,
+        scope: RadarNewsScope.nacional,
+        scopeLabel: 'Nacional • Perú',
       ),
       CommercialNewsItem(
         id: 'fallback_cr_3',
@@ -824,445 +1016,167 @@ class CommercialRadarService {
         actionableAdvice: "Verifica el mapa de alertas viales antes de despachar pedidos de alto valor o productos perecibles.",
         category: 'Clima y Rutas',
         sourceName: 'SUTRAN Alerta Vial',
-        sourceUrl: 'https://gis.sutran.gob.pe/alerta_sutran/',
-        publishedAt: now.subtract(const Duration(hours: 9)),
+        sourceUrl: 'https://www.gob.pe/sutran',
+        publishedAt: staticRefDate,
         region: 'Perú',
         isLive: false,
+        isOfflineGuide: true,
+        scope: RadarNewsScope.nacional,
+        scopeLabel: 'Nacional • Perú',
       ),
       CommercialNewsItem(
         id: 'fallback_cr_4',
-        title: isNorth
-            ? "Mantenimiento preventivo en variante de Paita y accesos a zonas comerciales de Talara Alta"
-            : "Rehabilitación de vías de acceso a centros de abasto y mercados mayoristas urbanos",
-        summary: "Intervenciones viales locales para optimizar el flujo vehicular de carga mediana y liviana.",
-        impactAnalysis: "Restricción parcial de carga y descarga en horarios matutinos de alta afluencia.",
-        actionableAdvice: "Programa tus maniobras de recepción de mercadería durante las primeras horas del día o al anochecer.",
+        title: "Provías Nacional: Mantenimiento vial rutinario en puentes y badenes interregionales",
+        summary: "Cuadrillas técnicas ejecutan conservación de carpeta asfáltica en los principales corredores del país.",
+        impactAnalysis: "Paso alternado por un solo carril en zonas de obras durante horas diurnas.",
+        actionableAdvice: "Programa traslados de mercadería en horarios de menor congestión para evitar demoras innecesarias.",
         category: 'Clima y Rutas',
-        sourceName: isNorth ? 'El Tiempo Piura' : 'MTC Prensa',
-        sourceUrl: CommercialNewsItem.buildVerifiedSearchUrl(
-          isNorth 
-              ? "mantenimiento preventiva variante Paita accesos comerciales Talara Alta" 
-              : "rehabilitacion vias acceso centros de abasto mercados mayoristas",
-          mediaDomain: isNorth ? "eltiempo.pe" : "gob.pe",
-        ),
-        publishedAt: now.subtract(const Duration(hours: 14)),
-        region: region,
+        sourceName: 'Provías Nacional',
+        sourceUrl: 'https://www.gob.pe/proviasnacional',
+        publishedAt: staticRefDate,
+        region: loc.department,
         isLive: false,
-      ),
-      CommercialNewsItem(
-        id: 'fallback_cr_5',
-        title: "Puertos peruanos operan con normalidad en cabotaje y recepción de contenedores comerciales",
-        summary: "Capitanías de puerto confirman condiciones marítimas favorables para el tránsito de carga costera.",
-        impactAnalysis: "Fluidez continua en el arribo de insumos importados y productos enlatados a centros de acopio.",
-        actionableAdvice: "Mantén cotizaciones al día aprovechando la regularidad del transporte marítimo y portuario.",
-        category: 'Clima y Rutas',
-        sourceName: 'Autoridad Portuaria Nacional (APN)',
-        sourceUrl: 'https://www.apn.gob.pe/',
-        publishedAt: now.subtract(const Duration(hours: 20)),
-        region: 'Perú',
-        isLive: false,
-      ),
-      CommercialNewsItem(
-        id: 'fallback_cr_6',
-        title: "Provías Descentralizado acelera rehabilitación de puentes modulares en rutas secundarias",
-        summary: "Instalación de estructuras metálicas para asegurar transitabilidad entre centros poblados agrícolas.",
-        impactAnalysis: "Mayor conexión con productores locales y reducción en costos de intermediación.",
-        actionableAdvice: "Evalúa alianzas de compra directa con asociaciones agrarias y cooperativas de la zona.",
-        category: 'Clima y Rutas',
-        sourceName: 'MTC / Provías Descentralizado',
-        sourceUrl: CommercialNewsItem.buildVerifiedSearchUrl(
-          "Provias Descentralizado rehabilitacion puentes modulares rutas secundarias",
-          mediaDomain: "gob.pe",
-        ),
-        publishedAt: now.subtract(const Duration(hours: 26)),
-        region: 'Perú',
-        isLive: false,
+        isOfflineGuide: true,
+        scope: RadarNewsScope.regional,
+        scopeLabel: 'Regional • ${loc.department}',
       ),
 
-      // CATEGORÍA 2: Mi Región (6 noticias)
-      CommercialNewsItem(
-        id: 'fallback_mr_1',
-        title: isNorth
-            ? "Comercio en Talara y Piura: Demanda de bebidas, lácteos y productos de aseo repunta un 18%"
-            : "Consumo masivo en comercios minoristas: Familias priorizan formatos medianos y pagos digitales",
-        summary: isNorth
-            ? "El flujo comercial entre Talara Alta, Centro y distritos aledaños mantiene alta rotación en abarrotes clave."
-            : "El 72% de pagos en pequeños negocios peruanos ya se efectúan vía billeteras digitales.",
-        impactAnalysis: "Aumento en la rotación de efectivo digital y necesidad de stock constante en líneas de ticket frecuente.",
-        actionableAdvice: "Coloca tus códigos QR de cobro visibles en el mostrador y crea combos familiares para elevar el ticket promedio.",
-        category: 'Mi Región',
-        sourceName: 'Gestión / Economía',
-        sourceUrl: CommercialNewsItem.buildVerifiedSearchUrl(
-          isNorth 
-              ? "comercio Talara Piura demanda consumo abarrotes ticket" 
-              : "consumo masivo comercios minoristas formatos medianos pagos digitales",
-          mediaDomain: "gestion.pe",
-        ),
-        publishedAt: now.subtract(const Duration(hours: 3)),
-        region: region,
-        isLive: false,
-      ),
-      CommercialNewsItem(
-        id: 'fallback_mr_2',
-        title: isNorth
-            ? "Dinamismo en distritos de Talara: Pariñas, El Alto y Los Órganos reactivan ferias de fin de semana"
-            : "Ferias gastronómicas y comerciales distritales dinamizan ventas de pequeños negocios",
-        summary: "Mayor afluencia de consumidores locales y visitantes durante los fines de semana comerciales.",
-        impactAnalysis: "Pico de ventas en snacks, agua embotellada, descartables y artículos de consumo rápido.",
-        actionableAdvice: "Refuerza tu inventario de bebidas frías y snacks con 3 días de antelación al inicio del fin de semana.",
-        category: 'Mi Región',
-        sourceName: 'Diario Correo / Piura',
-        sourceUrl: CommercialNewsItem.buildVerifiedSearchUrl(
-          isNorth 
-              ? "Talara Pariñas El Alto Los Organos ferias comerciales fin de semana" 
-              : "ferias gastronomicas comerciales distritales dinamizan ventas",
-          mediaDomain: "diariocorreo.pe",
-        ),
-        publishedAt: now.subtract(const Duration(hours: 7)),
-        region: region,
-        isLive: false,
-      ),
-      CommercialNewsItem(
-        id: 'fallback_mr_3',
-        title: "Cámaras de Comercio regionales y Produce impulsan formalización y digitalización MYPE",
-        summary: "Capacitaciones gratuitas en control de kárdex, facturación electrónica y gestión de cobranzas.",
-        impactAnalysis: "Comercios organizados reducen mermas hasta en un 25% y mejoran su calificación crediticia bancaria.",
-        actionableAdvice: "Utiliza la auditoría de stock y trazabilidad de la app para conciliar tu saldo físico al cierre de cada turno.",
-        category: 'Mi Región',
-        sourceName: 'PRODUCE / Tu Empresa MYPE',
-        sourceUrl: 'https://www.gob.pe/tuempresa',
-        publishedAt: now.subtract(const Duration(hours: 12)),
-        region: region,
-        isLive: false,
-      ),
-      CommercialNewsItem(
-        id: 'fallback_mr_4',
-        title: isNorth
-            ? "Sector pesquero artesanal en Talara genera dinamismo económico indirecto en comercios de abarrotes"
-            : "Cadenas productivas locales reactivan consumo diario en zonas comerciales y periféricas",
-        summary: "Ingreso de jornales diarios fortalece las compras al menudeo en bodegas y mercados de barrio.",
-        impactAnalysis: "Mayor rotación de arroz, azúcar, aceite y productos enlatados durante horas de la tarde.",
-        actionableAdvice: "Prepara bolsas fraccionadas de 1 kg y 2 kg listas para despacho rápido en mostrador.",
-        category: 'Mi Región',
-        sourceName: 'Andina Noticias',
-        sourceUrl: CommercialNewsItem.buildVerifiedSearchUrl(
-          isNorth 
-              ? "Talara pesca artesanal comercio abarrotes dinamismo" 
-              : "cadenas productivas locales consumo diario zonas comerciales",
-          mediaDomain: "andina.pe",
-        ),
-        publishedAt: now.subtract(const Duration(hours: 17)),
-        region: region,
-        isLive: false,
-      ),
-      CommercialNewsItem(
-        id: 'fallback_mr_5',
-        title: "Adopción de billeteras móviles supera el 80% en transacciones comerciales minoristas en el norte",
-        summary: "Comerciantes destacan rapidez en la cobranza y disminución del riesgo de billetes falsos.",
-        impactAnalysis: "Mayor agilidad en caja pero necesidad de conciliar los ingresos en cuenta al cierre diario.",
-        actionableAdvice: "Registra cada venta digital en el POS indicando el medio de pago para cuadrar la caja sin faltantes.",
-        category: 'Mi Región',
-        sourceName: 'Gestión / Economía',
-        sourceUrl: CommercialNewsItem.buildVerifiedSearchUrl(
-          "adopcion billeteras moviles transacciones comerciales minoristas Peru",
-          mediaDomain: "gestion.pe",
-        ),
-        publishedAt: now.subtract(const Duration(hours: 23)),
-        region: region,
-        isLive: false,
-      ),
-      CommercialNewsItem(
-        id: 'fallback_mr_6',
-        title: isNorth
-            ? "Sullana y Talara amplían operativos de ordenamiento en zonas de carga y descarga comercial"
-            : "Municipios metropolitanos regulan horarios de abastecimiento para evitar congestión céntrica",
-        summary: "Fiscalización municipal de estacionamientos en perímetros de mercados de abasto.",
-        impactAnalysis: "Proveedores deben respetar estrictamente franjas horarias autorizadas para descargar.",
-        actionableAdvice: "Coordina con tus transportistas para que descarguen antes de las 8:30 a.m. evitando sanciones municipales.",
-        category: 'Mi Región',
-        sourceName: isNorth ? 'El Tiempo Piura' : 'El Comercio / Lima',
-        sourceUrl: CommercialNewsItem.buildVerifiedSearchUrl(
-          isNorth 
-              ? "Sullana Talara operativos ordenamiento zonas carga descarga comercial" 
-              : "municipios regulan horarios abastecimiento mercados carga descarga",
-          mediaDomain: isNorth ? "eltiempo.pe" : "elcomercio.pe",
-        ),
-        publishedAt: now.subtract(const Duration(hours: 29)),
-        region: region,
-        isLive: false,
-      ),
-
-      // CATEGORÍA 3: Leyes y SUNAT (6 noticias)
+      // CATEGORÍA 2: Leyes y SUNAT (Portales Canónicos gob.pe)
       CommercialNewsItem(
         id: 'fallback_ls_1',
-        title: "SUNAT: Obligatoriedad de Guía de Remisión Electrónica (GRE) para traslados comerciales",
-        summary: "Todos los traslados de mercadería deben contar con GRE remitente o transportista validada en línea.",
-        impactAnalysis: "Carga sin GRE autorizada puede ser intervenida en retenes de fiscalización generando demoras de entrega.",
-        actionableAdvice: "Exige siempre el código QR de la GRE digital a tus transportistas antes de recibir la mercadería en almacén.",
+        title: "SUNAT: Obligatoriedad de Guías de Remisión Electrónicas (GRE) para traslado de bienes",
+        summary: "Transportistas y remitentes deben emitir GRE Remitente y Transportista de forma digital con código QR.",
+        impactAnalysis: "Multas e incautación preventiva de mercadería en garitas si no se cuenta con la GRE validada.",
+        actionableAdvice: "Verifica que tus facturas de compra cuenten con su GRE respectiva antes de autorizar la carga al camión.",
         category: 'Leyes y SUNAT',
         sourceName: 'SUNAT Portal Oficial GRE',
-        sourceUrl: 'https://cpe.sunat.gob.pe/sistema-emision/guia-remision-electronica',
-        publishedAt: now.subtract(const Duration(hours: 4)),
+        sourceUrl: 'https://www.gob.pe/sunat',
+        publishedAt: staticRefDate,
         region: 'Perú',
         isLive: false,
+        isOfflineGuide: true,
+        scope: RadarNewsScope.nacional,
+        scopeLabel: 'Nacional • Perú',
       ),
       CommercialNewsItem(
         id: 'fallback_ls_2',
-        title: "Cronograma de vencimientos mensuales del Régimen MYPE Tributario y Régimen Especial (RER)",
-        summary: "Fechas límites de declaración y pago según el último dígito del RUC publicadas por la administración tributaria.",
-        impactAnalysis: "Cumplir dentro del plazo evita intereses moratorios, multas por omisión y bloqueos de cuenta de detracciones.",
-        actionableAdvice: "Cierra tu registro de ventas y compras al menos 3 días hábiles antes de tu fecha límite mensual.",
+        title: "SUNAT: Cronograma de vencimientos mensuales para declaraciones de IGV y Renta",
+        summary: "Fechas límite escalonadas según el último dígito del RUC para evitar multas por declaración tardía.",
+        impactAnalysis: "El retraso en la declaración genera intereses moratorios y pérdida de beneficios de buen contribuyente.",
+        actionableAdvice: "Organiza tus comprobantes de venta y compras con tu contador 5 días antes de tu fecha límite.",
         category: 'Leyes y SUNAT',
-        sourceName: 'SUNAT Cronogramas',
-        sourceUrl: 'https://www.sunat.gob.pe/orientacion/cronogramas/',
-        publishedAt: now.subtract(const Duration(hours: 8)),
+        sourceName: 'SUNAT Cronograma Oficial',
+        sourceUrl: 'https://www.gob.pe/sunat',
+        publishedAt: staticRefDate,
         region: 'Perú',
         isLive: false,
+        isOfflineGuide: true,
+        scope: RadarNewsScope.nacional,
+        scopeLabel: 'Nacional • Perú',
       ),
       CommercialNewsItem(
         id: 'fallback_ls_3',
-        title: "SUNAT actualiza disposiciones sobre emisión electrónica de boletas de venta y facturas",
-        summary: "Regulaciones para el envío inmediato de comprobantes electrónicos a través de la OSE o portal SOL.",
-        impactAnalysis: "Comprobantes no enviados dentro del plazo reglamentario pueden quedar sin validez fiscal.",
-        actionableAdvice: "Verifica que tu sistema de facturación mantenga conexión y envíe los comprobantes de forma automática.",
+        title: "INDECOPI: Derechos del consumidor y fiscalización de precios visibles en mostradores",
+        summary: "Comercios minoristas deben exhibir precios finales en moneda nacional incluyendo todos los tributos.",
+        impactAnalysis: "Sanciones administrativas y clausuras temporales ante denuncias de cobros no informados o redondeos indebidos.",
+        actionableAdvice: "Revisa que todos tus productos en estantería tengan etiquetas de precio claras y coincidan con tu sistema.",
         category: 'Leyes y SUNAT',
-        sourceName: 'SUNAT Comprobantes de Pago',
-        sourceUrl: 'https://cpe.sunat.gob.pe/',
-        publishedAt: now.subtract(const Duration(hours: 15)),
+        sourceName: 'INDECOPI Oficial',
+        sourceUrl: 'https://www.gob.pe/indecopi',
+        publishedAt: staticRefDate,
         region: 'Perú',
         isLive: false,
-      ),
-      CommercialNewsItem(
-        id: 'fallback_ls_4',
-        title: "Bancarización comercial: Pagos mayores a 2,000 soles o 500 dólares requieren medio bancario",
-        summary: "La ley exige utilizar transferencias, cheques o tarjetas para sustentar costo o gasto deducible.",
-        impactAnalysis: "Compras a distribuidores pagadas en efectivo por montos mayores pierden crédito fiscal del IGV.",
-        actionableAdvice: "Efectúa pagos mayores mediante transferencia interbancaria y archiva el voucher junto con la factura.",
-        category: 'Leyes y SUNAT',
-        sourceName: 'SUNAT / Plataforma Digital Única',
-        sourceUrl: 'https://www.gob.pe/7027-medios-de-pago-bancarizacion-sunat',
-        publishedAt: now.subtract(const Duration(hours: 21)),
-        region: 'Perú',
-        isLive: false,
-      ),
-      CommercialNewsItem(
-        id: 'fallback_ls_5',
-        title: "Ministerio de Trabajo publica pautas sobre descansos remunerados y contratos en el comercio MYPE",
-        summary: "Normativa sobre jornada laboral, descanso dominical y compensaciones en pequeños establecimientos comerciales.",
-        impactAnalysis: "Previene contingencias laborales y asegura un ambiente ordenado para el personal del negocio.",
-        actionableAdvice: "Organiza el rol semanal de turnos y descansos compensatorios con firma de conformidad de los colaboradores.",
-        category: 'Leyes y SUNAT',
-        sourceName: 'MTPE Comunicados',
-        sourceUrl: CommercialNewsItem.buildVerifiedSearchUrl(
-          "MTPE descansos remunerados contratos comercio MYPE normativa",
-          mediaDomain: "gob.pe/mtpe",
-        ),
-        publishedAt: now.subtract(const Duration(hours: 27)),
-        region: 'Perú',
-        isLive: false,
-      ),
-      CommercialNewsItem(
-        id: 'fallback_ls_6',
-        title: "SUNAT implementa sistema de alertas preventivas para evitar inconsistencias en el IGV de compras",
-        summary: "Notificaciones tempranas a buzón electrónico sobre proveedores no habidos o deudas en cobranza coactiva.",
-        impactAnalysis: "Permite subsanar observaciones antes de que se conviertan en resoluciones de determinación de deuda.",
-        actionableAdvice: "Revisa periódicamente el buzón SOL de tu RUC y corrobora el estado activo y habido de tus distribuidores.",
-        category: 'Leyes y SUNAT',
-        sourceName: 'SUNAT Prensa Oficial',
-        sourceUrl: CommercialNewsItem.buildVerifiedSearchUrl(
-          "SUNAT alertas preventivas inconsistencias IGV compras proveedores",
-          mediaDomain: "sunat.gob.pe",
-        ),
-        publishedAt: now.subtract(const Duration(hours: 33)),
-        region: 'Perú',
-        isLive: false,
+        isOfflineGuide: true,
+        scope: RadarNewsScope.nacional,
+        scopeLabel: 'Nacional • Perú',
       ),
 
-      // CATEGORÍA 4: Proveedores y Abastecimiento (6 noticias)
+      // CATEGORÍA 3: Proveedores y Abastecimiento (Portales Canónicos gob.pe)
       CommercialNewsItem(
         id: 'fallback_pa_1',
-        title: "Distribuidoras mayoristas anuncian actualización periódica de listas de precios de consumo masivo",
-        summary: "Fabricantes de alimentos y aseo ajustan listas comerciales en función de costos logísticos y tipo de cambio.",
-        impactAnalysis: "El margen de ganancia puede comprimirse si no se actualizan oportunamente los precios en el punto de venta.",
-        actionableAdvice: "Usa el comparador de cotizaciones para evaluar alternativas y emite ofertas con fecha límite de validez.",
+        title: "MIDAGRI: Reporte de abastecimiento y precios mayoristas en mercados de abasto",
+        summary: "Ingreso regular de hortalizas, legumbres, tubérculos y frutas a los centros de distribución mayorista.",
+        impactAnalysis: "Estabilidad en precios base de alimentos permite proyectar márgenes sin sobresaltos para la semana.",
+        actionableAdvice: "Consulta el boletín de precios mayoristas antes de negociar pedidos semanales con tus distribuidores.",
         category: 'Proveedores y Abastecimiento',
-        sourceName: 'Cámara de Comercio de Lima',
-        sourceUrl: CommercialNewsItem.buildVerifiedSearchUrl(
-          "distribuidoras mayoristas actualizacion listas precios consumo masivo",
-          mediaDomain: "lacamara.pe",
-        ),
-        publishedAt: now.subtract(const Duration(hours: 3)),
-        region: region,
+        sourceName: 'MIDAGRI Oficial',
+        sourceUrl: 'https://www.gob.pe/midagri',
+        publishedAt: staticRefDate,
+        region: 'Perú',
         isLive: false,
+        isOfflineGuide: true,
+        scope: RadarNewsScope.nacional,
+        scopeLabel: 'Nacional • Perú',
       ),
       CommercialNewsItem(
         id: 'fallback_pa_2',
-        title: "Mercado Mayorista de Lima y centros de acopio reportan abastecimiento sostenido de abarrotes",
-        summary: "Ingreso diario de carga pesada garantiza stock estable de arroz, azúcar, legumbres y fideos.",
-        impactAnalysis: "Estabilidad de precios al por mayor facilita la planificación de compras semanales con margen seguro.",
-        actionableAdvice: "Aprovecha precios estables para abastecerte de volumen en no perecibles de alta rotación.",
+        title: "PRODUCE Tu Empresa: Programas de articulación comercial y digitalización para mypes",
+        summary: "Iniciativas para conectar pequeños negocios con cadenas productivas y capacitación en gestión comercial.",
+        impactAnalysis: "Acceso a ferias de proveedores formales y líneas de financiamiento respaldadas por el Estado.",
+        actionableAdvice: "Aprovecha los talleres virtuales gratuitos de PRODUCE para capacitar a tu personal en ventas y cobros.",
         category: 'Proveedores y Abastecimiento',
-        sourceName: 'MIDAGRI / SISAP Oficial',
-        sourceUrl: 'https://sistemas.midagri.gob.pe/sisap/portal/',
-        publishedAt: now.subtract(const Duration(hours: 6)),
+        sourceName: 'PRODUCE Tu Empresa',
+        sourceUrl: 'https://www.gob.pe/tuempresa',
+        publishedAt: staticRefDate,
         region: 'Perú',
         isLive: false,
-      ),
-      CommercialNewsItem(
-        id: 'fallback_pa_3',
-        title: "Costos de fletes terrestres interprovinciales se mantienen estables en el corredor norte",
-        summary: "Tarifas de flete por tonelada se estabilizan tras normalización en el precio internacional de combustibles.",
-        impactAnalysis: "Permite calcular costos unitarios de reposición con mayor exactitud sin sobrecostos sorpresivos.",
-        actionableAdvice: "Agrupa pedidos con otros comerciantes o negocia descuentos por camión completo con tu distribuidor.",
-        category: 'Proveedores y Abastecimiento',
-        sourceName: 'RPP Noticias / Economía',
-        sourceUrl: CommercialNewsItem.buildVerifiedSearchUrl(
-          "costos fletes terrestres interprovinciales corredor norte transporte",
-          mediaDomain: "rpp.pe",
-        ),
-        publishedAt: now.subtract(const Duration(hours: 11)),
-        region: region,
-        isLive: false,
-      ),
-      CommercialNewsItem(
-        id: 'fallback_pa_4',
-        title: "Fabricantes de empaques y descartables optimizan despachos hacia almacenes de provincia",
-        summary: "Ampliación de centros de distribución en Trujillo y Piura acelera la reposición a Talara y Tumbes.",
-        impactAnalysis: "Reducción de tiempos de entrega de 5 días a solo 48 horas en líneas de envases y bolsas comerciales.",
-        actionableAdvice: "Reduce el volumen inmovilizado en almacén solicitando entregas más frecuentes de lotes pequeños.",
-        category: 'Proveedores y Abastecimiento',
-        sourceName: 'Gestión / Empresas',
-        sourceUrl: CommercialNewsItem.buildVerifiedSearchUrl(
-          "fabricantes empaques descartables distribucion almacenes provincia",
-          mediaDomain: "gestion.pe",
-        ),
-        publishedAt: now.subtract(const Duration(hours: 16)),
-        region: region,
-        isLive: false,
-      ),
-      CommercialNewsItem(
-        id: 'fallback_pa_5',
-        title: "Empresas de lácteos y embutidos renuevan condiciones de crédito comercial para pequeños negocios",
-        summary: "Distribuidoras otorgan plazos de pago de 7 a 15 días a comerciantes con historial intachable de cancelaciones.",
-        impactAnalysis: "Brinda apalancamiento operativo permitiendo financiar el inventario antes de pagar a los proveedores.",
-        actionableAdvice: "Cumple con puntualidad tus fechas de pago para conservar líneas de crédito abiertas y bonificaciones por volumen.",
-        category: 'Proveedores y Abastecimiento',
-        sourceName: 'Andina Noticias / Economía',
-        sourceUrl: CommercialNewsItem.buildVerifiedSearchUrl(
-          "empresas lacteos embutidos credito comercial pequenos negocios distribucion",
-          mediaDomain: "andina.pe",
-        ),
-        publishedAt: now.subtract(const Duration(hours: 22)),
-        region: 'Perú',
-        isLive: false,
-      ),
-      CommercialNewsItem(
-        id: 'fallback_pa_6',
-        title: "Monitoreo de precios de azúcar y aceites vegetales: Estabilidad en cotizaciones de importación",
-        summary: "La cosecha nacional y el ingreso de insumos industriales estabilizan el valor del saco mayorista.",
-        impactAnalysis: "Previene alzas abruptas en los productos de mayor volumen de venta de la canasta familiar.",
-        actionableAdvice: "Mantén un nivel de stock regulador equivalente a 15 días de venta sin sobreinvertir en inventario especulativo.",
-        category: 'Proveedores y Abastecimiento',
-        sourceName: 'MIDAGRI / SISAP Precios',
-        sourceUrl: 'https://sistemas.midagri.gob.pe/sisap/portal/',
-        publishedAt: now.subtract(const Duration(hours: 28)),
-        region: 'Perú',
-        isLive: false,
+        isOfflineGuide: true,
+        scope: RadarNewsScope.nacional,
+        scopeLabel: 'Nacional • Perú',
       ),
 
-      // CATEGORÍA 5: Fechas y Campañas (6 noticias)
+      // CATEGORÍA 4: Mi Región (Contextualizada con loc.displayName)
+      CommercialNewsItem(
+        id: 'fallback_mr_1',
+        title: loc.district != null
+            ? "Actividad Comercial y Flujo de Clientes en ${loc.district} (${loc.province}, ${loc.department})"
+            : "Actividad Comercial y Flujo de Clientes en ${loc.province} (${loc.department})",
+        summary: "Comercios locales reportan dinamismo continuo y preferencia creciente por pagos digitales con QR.",
+        impactAnalysis: "Más del 65% de los clientes en zonas urbanas prefieren cancelar mediante billeteras electrónicas.",
+        actionableAdvice: "Mantén visible tu código QR de Yape y Plin en el mostrador para evitar pérdidas de venta rápida.",
+        category: 'Mi Región',
+        sourceName: 'PRODUCE Tu Empresa',
+        sourceUrl: 'https://www.gob.pe/tuempresa',
+        publishedAt: staticRefDate,
+        region: loc.displayName,
+        isLive: false,
+        isOfflineGuide: true,
+        scope: RadarNewsScope.local,
+        scopeLabel: loc.district != null ? 'Local • ${loc.district}' : 'Local • ${loc.province}',
+      ),
+      CommercialNewsItem(
+        id: 'fallback_mr_2',
+        title: "Corredor Logístico ${loc.corridor}: Transitabilidad y transporte de abarrotes",
+        summary: "Flujo sostenido de unidades de distribución de mercancías y paquetería hacia los distritos comerciales.",
+        impactAnalysis: "Tiempos regulares de arribo de camiones mayoristas aseguran stock continuo en almacenes.",
+        actionableAdvice: "Programa recepción de mercadería en horas matutinas para verificar cantidades antes de la apertura.",
+        category: 'Mi Región',
+        sourceName: 'Observatorio Logístico Regional',
+        sourceUrl: 'https://www.gob.pe/sutran',
+        publishedAt: staticRefDate,
+        region: loc.department,
+        isLive: false,
+        isOfflineGuide: true,
+        scope: RadarNewsScope.regional,
+        scopeLabel: 'Regional • ${loc.department}',
+      ),
+
+      // CATEGORÍA 5: Fechas y Campañas
       CommercialNewsItem(
         id: 'fallback_fc_1',
-        title: "Planificación comercial: Estrategias de packs y combos para maximizar ventas en fechas clave",
-        summary: "Comercios que arman combos de ahorro con productos de rotación media incrementan su rentabilidad hasta un 30%.",
-        impactAnalysis: "Acelera la salida de artículos complementarios y rescata liquidez de mercadería inmovilizada.",
-        actionableAdvice: "Diseña promociones emparejando un producto líder con uno de rotación secundaria a un precio accesible.",
+        title: "Campañas Comerciales del Año: Planificación de surtido para temporadas de alta rotación",
+        summary: "Fechas clave del calendario peruano dinamizan el consumo familiar y la venta de artículos escolares y festivos.",
+        impactAnalysis: "Los comercios que adelantan su abastecimiento capturan las primeras compras con márgenes superiores.",
+        actionableAdvice: "Organiza tus pedidos con 30 días de anticipación y arma combos temáticos atractivos.",
         category: 'Fechas y Campañas',
-        sourceName: 'Cámara de Comercio de Lima',
-        sourceUrl: CommercialNewsItem.buildVerifiedSearchUrl(
-          "estrategias packs combos ventas fechas clave comercio minorista",
-          mediaDomain: "lacamara.pe",
-        ),
-        publishedAt: now.subtract(const Duration(hours: 5)),
-        region: 'Perú',
-        isLive: false,
-      ),
-      CommercialNewsItem(
-        id: 'fallback_fc_2',
-        title: "Calendario de campañas comerciales en Perú: Recomendaciones para compras anticipadas de stock",
-        summary: "Las compras con mayor margen ocurren cuando los comerciantes adquieren stock de campaña con 3 a 4 semanas de antelación.",
-        impactAnalysis: "Comprar a última hora eleva los costos mayoristas entre 10% y 20% reduciendo el margen del negocio.",
-        actionableAdvice: "Consulta el calendario de fechas festivas en el módulo de Promociones y adelanta tus pedidos por volumen.",
-        category: 'Fechas y Campañas',
-        sourceName: 'PRODUCE / Tu Empresa MYPE',
+        sourceName: 'PRODUCE Calendario MYPE',
         sourceUrl: 'https://www.gob.pe/tuempresa',
-        publishedAt: now.subtract(const Duration(hours: 10)),
+        publishedAt: staticRefDate,
         region: 'Perú',
         isLive: false,
-      ),
-      CommercialNewsItem(
-        id: 'fallback_fc_3',
-        title: "Campaña Escolar y de Oficina: Demanda sostenida de útiles, papelería y artículos de escritorio",
-        summary: "Padres de familia y oficinas locales renuevan material de trabajo a lo largo de cada trimestre.",
-        impactAnalysis: "Demanda recurrente en cuadernos, bolígrafos, fólderes y papeles bond con excelente margen unitario.",
-        actionableAdvice: "Mantén exhibidores ordenados a la vista y prepara listas escolares listas para entrega inmediata.",
-        category: 'Fechas y Campañas',
-        sourceName: 'Diario Correo / Economía',
-        sourceUrl: CommercialNewsItem.buildVerifiedSearchUrl(
-          "campana escolar utiles papeleria oficina demanda ventas",
-          mediaDomain: "diariocorreo.pe",
-        ),
-        publishedAt: now.subtract(const Duration(hours: 18)),
-        region: region,
-        isLive: false,
-      ),
-      CommercialNewsItem(
-        id: 'fallback_fc_4',
-        title: "Festividades patrias y feriados largos: Almacenes recomiendan asegurar bebidas y descartables",
-        summary: "Consumo masivo en feriados largos incrementa en más de 35% en restaurantes, bodegas y locales de comida.",
-        impactAnalysis: "Quiebre de stock en hielo, gaseosas o descartables durante fines de semana largos causa pérdida irrecuperable de venta.",
-        actionableAdvice: "Calcula un 40% adicional de stock en bebidas y descartables para los fines de semana largos oficiales.",
-        category: 'Fechas y Campañas',
-        sourceName: 'Gestión / Tendencias',
-        sourceUrl: CommercialNewsItem.buildVerifiedSearchUrl(
-          "feriados largos aumento consumo bebidas descartables alimentos",
-          mediaDomain: "gestion.pe",
-        ),
-        publishedAt: now.subtract(const Duration(hours: 24)),
-        region: 'Perú',
-        isLive: false,
-      ),
-      CommercialNewsItem(
-        id: 'fallback_fc_5',
-        title: "Campañas de fidelización: Clientes premian la rapidez de atención y los descuentos acumulativos",
-        summary: "Pequeños comercios que implementan descuentos por frecuencia logran un 40% más de recurrencia mensual.",
-        impactAnalysis: "Construye una base sólida de clientes frecuentes frente a la competencia de grandes cadenas.",
-        actionableAdvice: "Premia a tus clientes más leales con descuentos especiales en sus compras semanales de canasta familiar.",
-        category: 'Fechas y Campañas',
-        sourceName: 'El Comercio / Economía',
-        sourceUrl: CommercialNewsItem.buildVerifiedSearchUrl(
-          "campanas fidelizacion clientes descuentos acumulativos comercio",
-          mediaDomain: "elcomercio.pe",
-        ),
-        publishedAt: now.subtract(const Duration(hours: 30)),
-        region: 'Perú',
-        isLive: false,
-      ),
-      CommercialNewsItem(
-        id: 'fallback_fc_6',
-        title: "Campaña Navideña y de Fin de Año: Canastas de víveres y panetones marcan el mayor movimiento anual",
-        summary: "Empresas y familias inician cotizaciones de canastas corporativas desde los meses de octubre y noviembre.",
-        impactAnalysis: "El volumen de venta de canastas genera ingresos anticipados y rotación récord de conservas y abarrotes.",
-        actionableAdvice: "Presenta opciones de canastas económicas y ejecutivas con tiempo para cerrar ventas por volumen anticipadas.",
-        category: 'Fechas y Campañas',
-        sourceName: 'Cámara de Comercio de Lima',
-        sourceUrl: CommercialNewsItem.buildVerifiedSearchUrl(
-          "campana navidena canastas viveres panetones movimiento comercial minorista",
-          mediaDomain: "lacamara.pe",
-        ),
-        publishedAt: now.subtract(const Duration(hours: 36)),
-        region: 'Perú',
-        isLive: false,
+        isOfflineGuide: true,
+        scope: RadarNewsScope.nacional,
+        scopeLabel: 'Nacional • Perú',
       ),
     ];
   }

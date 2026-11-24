@@ -22,27 +22,26 @@ class AppChangelogRegistry {
   static const String currentVersion = OwnerLegalIdentity.currentAppVersionWithBuild;
 
   // =========================================================================
-  // 🚀 NOVEDADES ACTIVAS DE LA VERSIÓN ACTUAL (v9.38.0+82)
-  // Plan Maestro 19: Sincronización Offline, Diagnóstico Seguro y Rescate de Migración
+  // NOVEDADES ACTIVAS DE LA VERSIÓN ACTUAL (v9.39.0+83)
   // =========================================================================
   static const List<AppChangelogItem> activeChangelog = [
     AppChangelogItem(
-      icon: Icons.sync_rounded,
-      title: "Compartir estado de licencia y créditos en 1 toque",
+      icon: Icons.workspace_premium_rounded,
+      title: "Planes comerciales con detalle y orden claro",
       description:
-          "Envía a Soporte Técnico tu ficha de diagnóstico segura (.mlsync) con tu balance de IA y vigencia para resolver cualquier consulta al instante y sin complicaciones.",
+          "Nueva vista plegable de Planes Comerciales con ficha detallada de beneficios y mensajes de solicitud mejor ordenados.",
     ),
     AppChangelogItem(
-      icon: Icons.verified_user_rounded,
-      title: "Atención más ágil en pedidos por WhatsApp",
+      icon: Icons.account_balance_wallet_rounded,
+      title: "Operaciones Financieras con mayor comodidad",
       description:
-          "Tus solicitudes de plan o bolsas extra pueden incluir automáticamente una referencia técnica protegida para agilizar la activación de tu negocio.",
+          "Modal de Operaciones Financieras optimizado con mayor área de trabajo y tarjetas contextuales retraíbles.",
     ),
     AppChangelogItem(
-      icon: Icons.phone_android_rounded,
-      title: "Rescate directo al migrar a un celular nuevo",
+      icon: Icons.radar_rounded,
+      title: "Radar Comercial IA con noticias reales del Perú",
       description:
-          "Si cambiaste de dispositivo o restauraste una copia, ahora puedes enviar tu solicitud de desbloqueo oficial directamente por WhatsApp con un solo toque.",
+          "Radar Comercial IA renovado con noticias reales de Perú, enlaces oficiales verificados y selección por departamento, provincia y distrito/localidad.",
     ),
   ];
 
@@ -60,10 +59,30 @@ class AppChangelogRegistry {
   }
 
   // =========================================================================
-  // 📦 HISTORIAL DE NOVEDADES ARCHIVADAS DE VERSIONES ANTERIORES
+  // HISTORIAL DE NOVEDADES ARCHIVADAS DE VERSIONES ANTERIORES
   // En cada nueva compilación de release, mover aquí el bloque anterior.
   // =========================================================================
   static final Map<String, List<AppChangelogItem>> _historicalChangelogs = {
+    '9.38.0+82': const [
+      AppChangelogItem(
+        icon: Icons.sync_rounded,
+        title: "Compartir estado de licencia y créditos en 1 toque",
+        description:
+            "Envía a Soporte Técnico tu ficha de diagnóstico segura (.mlsync) con tu balance de IA y vigencia para resolver cualquier consulta al instante y sin complicaciones.",
+      ),
+      AppChangelogItem(
+        icon: Icons.verified_user_rounded,
+        title: "Atención más ágil en pedidos por WhatsApp",
+        description:
+            "Tus solicitudes de plan o bolsas extra pueden incluir automáticamente una referencia técnica protegida para agilizar la activación de tu negocio.",
+      ),
+      AppChangelogItem(
+        icon: Icons.phone_android_rounded,
+        title: "Rescate directo al migrar a un celular nuevo",
+        description:
+            "Si cambiaste de dispositivo o restauraste una copia, ahora puedes enviar tu solicitud de desbloqueo oficial directamente por WhatsApp con un solo toque.",
+      ),
+    ],
     '9.36.0+80': const [
       AppChangelogItem(
         icon: Icons.explore_rounded,

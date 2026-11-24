@@ -184,6 +184,8 @@ class _ClientFinanceActionsModalState extends State<ClientFinanceActionsModal>
   final Map<int, String> _installmentShiftReasons = {};
 
   bool _isLoading = false;
+  bool _isLoanInfoExpanded = false;
+  bool _isWithdrawInfoExpanded = false;
 
   final List<String> _motivosSug = [
     "Préstamo personal",
@@ -2039,6 +2041,105 @@ class _ClientFinanceActionsModalState extends State<ClientFinanceActionsModal>
     }
   }
 
+  Widget _buildCollapsibleCard({
+    required Key toggleKey,
+    required bool isExpanded,
+    required VoidCallback onToggle,
+    required IconData icon,
+    required Color iconColor,
+    required String title,
+    required Color titleColor,
+    required String subtitle,
+    required Color subtitleColor,
+    required Color bgColor,
+    required Color borderColor,
+  }) {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
+      decoration: BoxDecoration(
+        color: bgColor,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: borderColor),
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          key: toggleKey,
+          onTap: onToggle,
+          borderRadius: BorderRadius.circular(12),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            child: AnimatedSize(
+              duration: const Duration(milliseconds: 220),
+              curve: Curves.easeInOutCubic,
+              alignment: Alignment.topCenter,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Row(
+                    children: [
+                      Icon(icon, size: 18, color: iconColor),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          title,
+                          style: TextStyle(
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.bold,
+                            color: titleColor,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            isExpanded ? "Ocultar" : "Detalles",
+                            style: TextStyle(
+                              fontSize: 10.5,
+                              fontWeight: FontWeight.w600,
+                              color: titleColor.withValues(alpha: 0.8),
+                            ),
+                          ),
+                          const SizedBox(width: 2),
+                          Icon(
+                            isExpanded
+                                ? Icons.expand_less_rounded
+                                : Icons.expand_more_rounded,
+                            size: 16,
+                            color: titleColor.withValues(alpha: 0.8),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                  if (isExpanded) ...[
+                    const SizedBox(height: 6),
+                    Padding(
+                      padding: const EdgeInsets.only(left: 26),
+                      child: Text(
+                        subtitle,
+                        style: TextStyle(
+                          fontSize: 11,
+                          height: 1.25,
+                          color: subtitleColor,
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildDynamicContextualCard(
     bool isDark,
     double enteredAmount,
@@ -2068,382 +2169,140 @@ class _ClientFinanceActionsModalState extends State<ClientFinanceActionsModal>
 
       final double suggestedLimit = widget.client.tier.limiteCreditoSugerido;
 
+      final String title;
+      final String subtitle;
+      final IconData icon;
+      final Color iconColor;
+      final Color titleColor;
+      final Color subtitleColor;
+      final Color bgColor;
+      final Color borderColor;
+
       if (overdueCount > 0) {
-        // Mora activa detectada: límite congelado y advertencia
-        final subtitle = enteredAmount > 0
+        title = "Límite Congelado: S/ 0.00 (Mora Activa)";
+        subtitle = enteredAmount > 0
             ? "Atención: ${widget.client.fullName} tiene $overdueCount ${overdueCount == 1 ? 'cuota vencida' : 'cuotas vencidas'}. Estás por otorgar un préstamo adicional a un cliente con mora activa."
             : "El cliente tiene $overdueCount ${overdueCount == 1 ? 'cuota vencida' : 'cuotas vencidas'}. Su límite de crédito sugerido está suspendido en S/ 0.00 hasta regularizar su deuda.";
-
-        return Container(
-          margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-          decoration: BoxDecoration(
-            color: isDark ? const Color(0xFF3B1E22) : const Color(0xFFFEF2F2),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: isDark ? Colors.red.withValues(alpha: 0.5) : const Color(0xFFFECACA),
-            ),
-          ),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Icon(Icons.warning_amber_rounded, size: 20, color: Colors.redAccent),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      "Límite Congelado: S/ 0.00 (Mora Activa)",
-                      style: TextStyle(
-                        fontSize: 11.5,
-                        fontWeight: FontWeight.bold,
-                        color: isDark ? const Color(0xFFFF8A80) : const Color(0xFF991B1B),
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      subtitle,
-                      style: TextStyle(
-                        fontSize: 11,
-                        height: 1.25,
-                        color: isDark ? Colors.grey[300] : const Color(0xFF7F1D1D),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        );
-      }
-
-      if (enteredAmount <= 0) {
-        // Al día, sin monto ingresado: resumen de nivel y racha
-        final subtitle = widget.client.rachaPagosPuntuales > 0
+        icon = Icons.warning_amber_rounded;
+        iconColor = Colors.redAccent;
+        titleColor = isDark ? const Color(0xFFFF8A80) : const Color(0xFF991B1B);
+        subtitleColor = isDark ? Colors.grey[300]! : const Color(0xFF7F1D1D);
+        bgColor = isDark ? const Color(0xFF3B1E22) : const Color(0xFFFEF2F2);
+        borderColor = isDark ? Colors.red.withValues(alpha: 0.5) : const Color(0xFFFECACA);
+      } else if (enteredAmount <= 0) {
+        title = "Límite de Crédito Sugerido: ${AppCurrency.format(suggestedLimit)}";
+        subtitle = widget.client.rachaPagosPuntuales > 0
             ? "Cliente puntual con racha de ${widget.client.rachaPagosPuntuales} pagos a tiempo. Recomendado para operaciones de confianza."
             : "Cliente sin historial de atrasos. Se sugiere iniciar con operaciones prudentes dentro de su tope base.";
-
-        return Container(
-          margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-          decoration: BoxDecoration(
-            color: isDark ? const Color(0xFF282837) : const Color(0xFFF8FAFC),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: isDark ? Colors.white10 : const Color(0xFFE2E8F0),
-            ),
-          ),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Icon(Icons.shield_outlined, size: 20, color: Color(widget.client.tier.colorHex)),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      "Límite de Crédito Sugerido (${widget.client.tier.badgeText}): ${AppCurrency.format(suggestedLimit)}",
-                      style: TextStyle(
-                        fontSize: 11.5,
-                        fontWeight: FontWeight.bold,
-                        color: isDark ? Colors.grey[200] : const Color(0xFF1E293B),
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      subtitle,
-                      style: TextStyle(
-                        fontSize: 11,
-                        height: 1.25,
-                        color: isDark ? Colors.grey[400] : const Color(0xFF64748B),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        );
-      }
-
-      if (enteredAmount <= suggestedLimit) {
-        // Al día, monto dentro del rango seguro
+        icon = Icons.shield_outlined;
+        iconColor = Color(widget.client.tier.colorHex);
+        titleColor = isDark ? Colors.grey[200]! : const Color(0xFF1E293B);
+        subtitleColor = isDark ? Colors.grey[400]! : const Color(0xFF64748B);
+        bgColor = isDark ? const Color(0xFF282837) : const Color(0xFFF8FAFC);
+        borderColor = isDark ? Colors.white10 : const Color(0xFFE2E8F0);
+      } else if (enteredAmount <= suggestedLimit) {
         final restan = suggestedLimit - enteredAmount;
-        return Container(
-          margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-          decoration: BoxDecoration(
-            color: isDark ? const Color(0xFF132D21) : const Color(0xFFF0FDF4),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: isDark ? Colors.green.withValues(alpha: 0.5) : const Color(0xFFBBF7D0),
-            ),
-          ),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Icon(Icons.check_circle_outline_rounded,
-                  size: 20, color: isDark ? Colors.greenAccent : const Color(0xFF16A34A)),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      "Monto Dentro del Rango Seguro (${widget.client.tier.badgeText})",
-                      style: TextStyle(
-                        fontSize: 11.5,
-                        fontWeight: FontWeight.bold,
-                        color: isDark ? Colors.greenAccent : const Color(0xFF166534),
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      "Monto dentro del rango seguro recomendado para ${widget.client.fullName}. Restan ${AppCurrency.format(restan)} de su tope sugerido.",
-                      style: TextStyle(
-                        fontSize: 11,
-                        height: 1.25,
-                        color: isDark ? Colors.grey[300] : const Color(0xFF15803D),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        );
+        title = "Monto Dentro del Rango Seguro";
+        subtitle = "Monto dentro del rango seguro recomendado para ${widget.client.fullName}. Restan ${AppCurrency.format(restan)} de su tope sugerido.";
+        icon = Icons.check_circle_outline_rounded;
+        iconColor = isDark ? Colors.greenAccent : const Color(0xFF16A34A);
+        titleColor = isDark ? Colors.greenAccent : const Color(0xFF166534);
+        subtitleColor = isDark ? Colors.grey[300]! : const Color(0xFF15803D);
+        bgColor = isDark ? const Color(0xFF132D21) : const Color(0xFFF0FDF4);
+        borderColor = isDark ? Colors.green.withValues(alpha: 0.5) : const Color(0xFFBBF7D0);
+      } else {
+        final exceso = enteredAmount - suggestedLimit;
+        title = "Atención: Excede Límite Recomendado";
+        subtitle = "El monto ingresado excede por ${AppCurrency.format(exceso)} el límite sugerido de ${AppCurrency.format(suggestedLimit)}. Evalúa la capacidad de pago del cliente.";
+        icon = Icons.warning_amber_rounded;
+        iconColor = isDark ? Colors.amberAccent : const Color(0xFFD97706);
+        titleColor = isDark ? Colors.amberAccent : const Color(0xFFB45309);
+        subtitleColor = isDark ? Colors.grey[300]! : const Color(0xFF92400E);
+        bgColor = isDark ? const Color(0xFF382914) : const Color(0xFFFFFBEB);
+        borderColor = isDark ? Colors.amber.withValues(alpha: 0.5) : const Color(0xFFFDE68A);
       }
 
-      // Al día, monto excede límite
-      final exceso = enteredAmount - suggestedLimit;
-      return Container(
-        margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-        decoration: BoxDecoration(
-          color: isDark ? const Color(0xFF382914) : const Color(0xFFFFFBEB),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: isDark ? Colors.amber.withValues(alpha: 0.5) : const Color(0xFFFDE68A),
-          ),
-        ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Icon(Icons.warning_amber_rounded,
-                size: 20, color: isDark ? Colors.amberAccent : const Color(0xFFD97706)),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    "Atención: Excede Límite Recomendado (${widget.client.tier.badgeText})",
-                    style: TextStyle(
-                      fontSize: 11.5,
-                      fontWeight: FontWeight.bold,
-                      color: isDark ? Colors.amberAccent : const Color(0xFFB45309),
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    "El monto ingresado excede por ${AppCurrency.format(exceso)} el límite sugerido de ${AppCurrency.format(suggestedLimit)}. Evalúa la capacidad de pago del cliente.",
-                    style: TextStyle(
-                      fontSize: 11,
-                      height: 1.25,
-                      color: isDark ? Colors.grey[300] : const Color(0xFF92400E),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
+      return _buildCollapsibleCard(
+        toggleKey: const ValueKey('loan_credit_limit_card_toggle'),
+        isExpanded: _isLoanInfoExpanded,
+        onToggle: () {
+          setState(() {
+            _isLoanInfoExpanded = !_isLoanInfoExpanded;
+          });
+        },
+        icon: icon,
+        iconColor: iconColor,
+        title: title,
+        titleColor: titleColor,
+        subtitle: subtitle,
+        subtitleColor: subtitleColor,
+        bgColor: bgColor,
+        borderColor: borderColor,
       );
     }
 
     // Pestaña Retirar Saldo (Tab 1)
     if (widget.client.saldoAFavor <= 0.01) {
-      return Container(
-        margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-        decoration: BoxDecoration(
-          color: isDark ? const Color(0xFF282837) : const Color(0xFFF8FAFC),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: isDark ? Colors.white10 : const Color(0xFFE2E8F0),
-          ),
-        ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Icon(Icons.account_balance_wallet_outlined, size: 20, color: Colors.grey),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    "Sin Saldo a Favor Disponible",
-                    style: TextStyle(
-                      fontSize: 11.5,
-                      fontWeight: FontWeight.bold,
-                      color: isDark ? Colors.grey[300] : const Color(0xFF334155),
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    "${widget.client.fullName} no cuenta con saldo a favor para retiros en este momento.",
-                    style: TextStyle(
-                      fontSize: 11,
-                      height: 1.25,
-                      color: isDark ? Colors.grey[400] : const Color(0xFF64748B),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      );
+      // Erradicar por completo la duplicación: el estado educativo único se renderiza en _buildWithdrawTab
+      return const SizedBox.shrink();
     }
+
+    final String title;
+    final String subtitle;
+    final IconData icon;
+    final Color iconColor;
+    final Color titleColor;
+    final Color subtitleColor;
+    final Color bgColor;
+    final Color borderColor;
 
     if (enteredAmount <= 0) {
-      return Container(
-        margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-        decoration: BoxDecoration(
-          color: isDark ? const Color(0xFF132D2D) : const Color(0xFFF0FDFA),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: isDark ? Colors.teal.withValues(alpha: 0.5) : const Color(0xFF99F6E4),
-          ),
-        ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Icon(Icons.account_balance_wallet_rounded, size: 20, color: Colors.teal),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    "Saldo a Favor Disponible: ${AppCurrency.format(widget.client.saldoAFavor)}",
-                    style: TextStyle(
-                      fontSize: 11.5,
-                      fontWeight: FontWeight.bold,
-                      color: isDark ? Colors.tealAccent : const Color(0xFF0F766E),
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    "Puedes registrar el desembolso total o parcial del saldo a favor de ${widget.client.fullName}.",
-                    style: TextStyle(
-                      fontSize: 11,
-                      height: 1.25,
-                      color: isDark ? Colors.grey[300] : const Color(0xFF115E59),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      );
-    }
-
-    if (enteredAmount <= widget.client.saldoAFavor) {
+      title = "Saldo a Favor Disponible: ${AppCurrency.format(widget.client.saldoAFavor)}";
+      subtitle = "Puedes registrar el desembolso total o parcial del saldo a favor de ${widget.client.fullName}.";
+      icon = Icons.account_balance_wallet_rounded;
+      iconColor = Colors.teal;
+      titleColor = isDark ? Colors.tealAccent : const Color(0xFF0F766E);
+      subtitleColor = isDark ? Colors.grey[300]! : const Color(0xFF115E59);
+      bgColor = isDark ? const Color(0xFF132D2D) : const Color(0xFFF0FDFA);
+      borderColor = isDark ? Colors.teal.withValues(alpha: 0.5) : const Color(0xFF99F6E4);
+    } else if (enteredAmount <= widget.client.saldoAFavor) {
       final rem = widget.client.saldoAFavor - enteredAmount;
-      return Container(
-        margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-        decoration: BoxDecoration(
-          color: isDark ? const Color(0xFF132D21) : const Color(0xFFF0FDF4),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: isDark ? Colors.green.withValues(alpha: 0.5) : const Color(0xFFBBF7D0),
-          ),
-        ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Icon(Icons.check_circle_outline_rounded,
-                size: 20, color: isDark ? Colors.greenAccent : const Color(0xFF16A34A)),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    "Retiro Válido: ${AppCurrency.format(enteredAmount)}",
-                    style: TextStyle(
-                      fontSize: 11.5,
-                      fontWeight: FontWeight.bold,
-                      color: isDark ? Colors.greenAccent : const Color(0xFF166534),
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    "Tras este retiro, el nuevo saldo a favor de ${widget.client.fullName} será de ${AppCurrency.format(rem)}.",
-                    style: TextStyle(
-                      fontSize: 11,
-                      height: 1.25,
-                      color: isDark ? Colors.grey[300] : const Color(0xFF15803D),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      );
+      title = "Retiro Válido: ${AppCurrency.format(enteredAmount)}";
+      subtitle = "Tras este retiro, el nuevo saldo a favor de ${widget.client.fullName} será de ${AppCurrency.format(rem)}.";
+      icon = Icons.check_circle_outline_rounded;
+      iconColor = isDark ? Colors.greenAccent : const Color(0xFF16A34A);
+      titleColor = isDark ? Colors.greenAccent : const Color(0xFF166534);
+      subtitleColor = isDark ? Colors.grey[300]! : const Color(0xFF15803D);
+      bgColor = isDark ? const Color(0xFF132D21) : const Color(0xFFF0FDF4);
+      borderColor = isDark ? Colors.green.withValues(alpha: 0.5) : const Color(0xFFBBF7D0);
+    } else {
+      final exceso = enteredAmount - widget.client.saldoAFavor;
+      title = "Monto Excede el Saldo Disponible";
+      subtitle = "No es posible retirar ${AppCurrency.format(enteredAmount)}. El monto supera el saldo disponible por ${AppCurrency.format(exceso)}.";
+      icon = Icons.error_outline_rounded;
+      iconColor = Colors.redAccent;
+      titleColor = isDark ? const Color(0xFFFF8A80) : const Color(0xFF991B1B);
+      subtitleColor = isDark ? Colors.grey[300]! : const Color(0xFF7F1D1D);
+      bgColor = isDark ? const Color(0xFF3B1E22) : const Color(0xFFFEF2F2);
+      borderColor = isDark ? Colors.red.withValues(alpha: 0.5) : const Color(0xFFFECACA);
     }
 
-    // Excede saldo disponible
-    final exceso = enteredAmount - widget.client.saldoAFavor;
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-      decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF3B1E22) : const Color(0xFFFEF2F2),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: isDark ? Colors.red.withValues(alpha: 0.5) : const Color(0xFFFECACA),
-        ),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Icon(Icons.error_outline_rounded, size: 20, color: Colors.redAccent),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  "Monto Excede el Saldo Disponible",
-                  style: TextStyle(
-                    fontSize: 11.5,
-                    fontWeight: FontWeight.bold,
-                    color: isDark ? const Color(0xFFFF8A80) : const Color(0xFF991B1B),
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  "No es posible retirar ${AppCurrency.format(enteredAmount)}. El monto supera el saldo disponible por ${AppCurrency.format(exceso)}.",
-                  style: TextStyle(
-                    fontSize: 11,
-                    height: 1.25,
-                    color: isDark ? Colors.grey[300] : const Color(0xFF7F1D1D),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
+    return _buildCollapsibleCard(
+      toggleKey: const ValueKey('withdraw_balance_card_toggle'),
+      isExpanded: _isWithdrawInfoExpanded,
+      onToggle: () {
+        setState(() {
+          _isWithdrawInfoExpanded = !_isWithdrawInfoExpanded;
+        });
+      },
+      icon: icon,
+      iconColor: iconColor,
+      title: title,
+      titleColor: titleColor,
+      subtitle: subtitle,
+      subtitleColor: subtitleColor,
+      bgColor: bgColor,
+      borderColor: borderColor,
     );
   }
 
@@ -2509,14 +2368,15 @@ class _ClientFinanceActionsModalState extends State<ClientFinanceActionsModal>
         onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
         child: Column(
           children: [
-            const SizedBox(height: 8),
+            const SizedBox(height: 4),
 
             // Selector de 2 tarjetas interactivas con subtítulos guía
             _buildTopModeSelector(widget.isDark),
+            const SizedBox(height: 4),
 
             // Tarjeta Contextual Dinámica y Reactiva
             _buildDynamicContextualCard(widget.isDark, enteredAmount, provider),
-            const SizedBox(height: 4),
+            const SizedBox(height: 2),
 
             // TabBarView sin cortes
             Expanded(
@@ -2530,17 +2390,9 @@ class _ClientFinanceActionsModalState extends State<ClientFinanceActionsModal>
               ),
             ),
 
-            // Bottom Action Bar
+            // Bottom Action Bar sin doble compensación (respiro ergonómico limpio de 12dp sobre la barra del sistema)
             Container(
-              padding: EdgeInsets.fromLTRB(
-                20,
-                12,
-                20,
-                InteractiveSheetWrapper.getEffectiveBottomPadding(
-                  context,
-                  minPadding: 28.0,
-                ),
-              ),
+              padding: const EdgeInsets.fromLTRB(20, 10, 20, 12),
               decoration: BoxDecoration(
                 color: surfaceColor,
                 border: Border(
@@ -2551,7 +2403,7 @@ class _ClientFinanceActionsModalState extends State<ClientFinanceActionsModal>
               ),
               child: SizedBox(
                 width: double.infinity,
-                height: 52,
+                height: 50,
                 child: ElevatedButton(
                   onPressed: canSubmit && !_isLoading
                       ? () => _submitAction(provider)
@@ -2647,7 +2499,7 @@ class _ClientFinanceActionsModalState extends State<ClientFinanceActionsModal>
       borderRadius: BorderRadius.circular(14),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
         decoration: BoxDecoration(
           color: isSelected
               ? activeColor.withValues(alpha: isDark ? 0.22 : 0.12)
@@ -2689,12 +2541,12 @@ class _ClientFinanceActionsModalState extends State<ClientFinanceActionsModal>
                 ),
               ],
             ),
-            const SizedBox(height: 3),
+            const SizedBox(height: 2),
             Text(
               subtitle,
               style: TextStyle(
                 fontSize: 10,
-                height: 1.2,
+                height: 1.15,
                 color: isDark ? Colors.grey[400] : Colors.grey[600],
               ),
               maxLines: 2,
@@ -2781,53 +2633,8 @@ class _ClientFinanceActionsModalState extends State<ClientFinanceActionsModal>
     return ListView(
       physics: const BouncingScrollPhysics(),
       keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-      padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
+      padding: const EdgeInsets.fromLTRB(20, 10, 20, 32),
       children: [
-        // Balance Card
-        Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: Colors.teal.withValues(alpha: 0.12),
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: Colors.teal.withValues(alpha: 0.3)),
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      "Saldo a Favor Disponible",
-                      style: TextStyle(
-                        color:
-                            widget.isDark ? Colors.teal[200] : Colors.teal[900],
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      AppCurrency.format(widget.client.saldoAFavor),
-                      style: TextStyle(
-                        color:
-                            widget.isDark ? Colors.teal[300] : Colors.teal[800],
-                        fontSize: 22,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const Icon(Icons.account_balance_wallet,
-                  color: Colors.teal, size: 36),
-            ],
-          ),
-        ),
-
-        const SizedBox(height: 16),
-
         // Quick action chips
         Wrap(
           spacing: 8,
@@ -2930,38 +2737,8 @@ class _ClientFinanceActionsModalState extends State<ClientFinanceActionsModal>
     return ListView(
       physics: const BouncingScrollPhysics(),
       keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-      padding: const EdgeInsets.fromLTRB(20, 16, 20, 48),
+      padding: const EdgeInsets.fromLTRB(20, 10, 20, 48),
       children: [
-        // Banner informativo
-        Container(
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            color: Colors.orange.withValues(alpha: 0.12),
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: Colors.orange.withValues(alpha: 0.3)),
-          ),
-          child: Row(
-            children: [
-              const Icon(Icons.info_outline, color: Colors.orange, size: 22),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  "Registrar Préstamo o Venta al Fiado",
-                  style: TextStyle(
-                    color: widget.isDark
-                        ? Colors.orange[200]
-                        : Colors.orange[900],
-                    fontSize: 14,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-
-        const SizedBox(height: 18),
-
         Text("Monto del Préstamo",
             style: TextStyle(
                 fontSize: 14,

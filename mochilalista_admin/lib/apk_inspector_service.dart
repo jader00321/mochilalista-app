@@ -472,11 +472,11 @@ class ApkInspectorService {
     return '';
   }
 
-  /// Infiere la versión de esquema SQLite buscando en database_helper.dart / local_db.dart en app_movil
+  /// Infiere la versión de esquema SQLite buscando en local_db.dart / database_helper.dart en app_movil
   Future<int> _inferDbSchemaVersion() async {
     final candidateFiles = [
-      File('../app_movil/lib/core/database/database_helper.dart'),
       File('../app_movil/lib/core/database/local_db.dart'),
+      File('../app_movil/lib/core/database/database_helper.dart'),
       File('../app_movil/lib/core/utils/backup_manager.dart'),
     ];
 

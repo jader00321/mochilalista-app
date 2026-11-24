@@ -132,14 +132,17 @@ void main() {
     });
 
     // =========================================================================
-    // 2. Paso 0 Backend: apk_inspector_service busca database_helper.dart
+    // 2. Paso 0 Backend: apk_inspector_service prioriza local_db.dart
     // =========================================================================
-    test('2. Backend: apk_inspector_service.dart verifica database_helper.dart como candidato', () async {
+    test('2. Backend: apk_inspector_service.dart prioriza local_db.dart como candidato', () async {
       final inspectorFile = File('lib/apk_inspector_service.dart');
       expect(await inspectorFile.exists(), isTrue);
       final content = await inspectorFile.readAsString();
-      expect(content, contains('database_helper.dart'));
       expect(content, contains('local_db.dart'));
+      expect(content, contains('database_helper.dart'));
+      final localDbIdx = content.indexOf('local_db.dart');
+      final dbHelperIdx = content.indexOf('database_helper.dart');
+      expect(localDbIdx, lessThan(dbHelperIdx));
     });
 
     // =========================================================================

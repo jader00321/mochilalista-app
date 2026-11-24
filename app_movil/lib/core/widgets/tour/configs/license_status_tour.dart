@@ -81,8 +81,8 @@ class LicenseStatusTour {
           targetKey: k.pricingCatalogKey,
           title: 'Planes Oficiales y Soporte',
           description:
-              'Revisa nuestros planes comerciales transparentes, beneficios y contacta en un toque al desarrollador oficial por WhatsApp para adquirir tu licencia.',
-          tip: 'Atención personalizada y soporte técnico directo con el creador de la app.',
+              'Explora nuestros planes comerciales oficiales y recargas en el acordeón inteligente, conoce sus beneficios al detalle y contacta en un toque al desarrollador oficial por WhatsApp.',
+          tip: 'Toca cualquier plan para ver sus beneficios o pulsa "Pedir" para solicitarlo de inmediato.',
           icon: Icons.support_agent_rounded,
           borderRadius: 16.0,
         ),

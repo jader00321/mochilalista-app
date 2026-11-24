@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -6,6 +7,7 @@ import 'package:share_plus/share_plus.dart';
 
 import 'package:app_movil/features/analytics/models/commercial_radar_model.dart';
 import 'package:app_movil/features/analytics/services/commercial_radar_service.dart';
+import 'package:app_movil/features/analytics/data/peru_ubigeo_catalog.dart';
 import 'package:app_movil/features/analytics/screens/smart_restock_screen.dart';
 import 'package:app_movil/features/smart_quotation/screens/workbench_screen.dart';
 import 'package:app_movil/features/catalog/screens/inventory_screen.dart';
@@ -28,7 +30,9 @@ class CommercialRadarScreen extends StatefulWidget {
 }
 
 class _CommercialRadarScreenState extends State<CommercialRadarScreen> with SingleTickerProviderStateMixin {
-  late String _selectedRegion;
+  late RadarLocation _selectedLocation;
+  String get _selectedRegion => _selectedLocation.displayName;
+
   RadarTab _activeTab = RadarTab.noticiasDelDia;
   String _selectedCategory = 'Todas';
   String _searchQuery = '';
@@ -41,16 +45,7 @@ class _CommercialRadarScreenState extends State<CommercialRadarScreen> with Sing
   late AnimationController _pulseController;
 
   static const String _prefRegionKey = 'commercial_radar_selected_region';
-  static const List<String> _predefinedRegions = [
-    'Talara / Piura',
-    'Piura / Región Norte',
-    'Todo el Perú',
-    'Lima',
-    'Arequipa',
-    'Trujillo',
-    'Chiclayo',
-    'Cusco',
-  ];
+  static const String _prefLocationJsonKey = 'commercial_radar_selected_location_json';
 
   final List<String> _categories = [
     'Todas',
@@ -64,7 +59,7 @@ class _CommercialRadarScreenState extends State<CommercialRadarScreen> with Sing
   @override
   void initState() {
     super.initState();
-    _selectedRegion = widget.initialRegion;
+    _selectedLocation = RadarLocation.fromLegacyString(widget.initialRegion);
     _pulseController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1400),
@@ -75,11 +70,21 @@ class _CommercialRadarScreenState extends State<CommercialRadarScreen> with Sing
   Future<void> _loadSavedData() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final savedReg = prefs.getString(_prefRegionKey);
-      if (savedReg != null && savedReg.isNotEmpty && mounted) {
-        setState(() {
-          _selectedRegion = savedReg;
-        });
+      final savedLocJson = prefs.getString(_prefLocationJsonKey);
+      if (savedLocJson != null && savedLocJson.isNotEmpty && mounted) {
+        try {
+          final decoded = jsonDecode(savedLocJson) as Map<String, dynamic>;
+          setState(() {
+            _selectedLocation = RadarLocation.fromJson(decoded);
+          });
+        } catch (_) {}
+      } else {
+        final savedReg = prefs.getString(_prefRegionKey);
+        if (savedReg != null && savedReg.isNotEmpty && mounted) {
+          setState(() {
+            _selectedLocation = RadarLocation.fromLegacyString(savedReg);
+          });
+        }
       }
 
       final savedList = await CommercialRadarService.getSavedNews();
@@ -136,13 +141,13 @@ class _CommercialRadarScreenState extends State<CommercialRadarScreen> with Sing
     });
 
     // Cargar caché si existe para evitar pantalla vacía
-    final cached = CommercialRadarService.getCachedNews(_selectedRegion);
+    final cached = CommercialRadarService.getCachedNews(_selectedLocation.displayName);
     if (cached != null && cached.isNotEmpty && _allNewsItems.isEmpty) {
       _allNewsItems.addAll(cached);
     }
 
     _streamSubscription = CommercialRadarService.streamCuratedNews(
-      region: _selectedRegion,
+      location: _selectedLocation,
       forceRefresh: forceRefresh,
     ).listen(
       (item) {
@@ -200,7 +205,7 @@ class _CommercialRadarScreenState extends State<CommercialRadarScreen> with Sing
   void _shareAlert(CommercialNewsItem item) {
     final text = '''
 ALERTA RADAR COMERCIAL - MOCHILALISTA
-Zona: $_selectedRegion
+Zona: ${_selectedLocation.displayName} (${item.scopeLabel})
 ${item.cleanTitle}
 
 Impacto en tu Negocio / Ruta:
@@ -215,15 +220,18 @@ Fuente: ${item.sourceName} (${item.sourceUrl})
     Share.share(text.trim());
   }
 
-  Future<void> _changeRegion(String newRegion) async {
+  void _changeLocation(RadarLocation newLocation) {
+    if (newLocation == _selectedLocation) return;
     setState(() {
-      _selectedRegion = newRegion;
+      _selectedLocation = newLocation;
       _visibleCount = 6;
       _allNewsItems.clear();
     });
     try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(_prefRegionKey, newRegion);
+      SharedPreferences.getInstance().then((prefs) {
+        prefs.setString(_prefLocationJsonKey, jsonEncode(newLocation.toJson()));
+        prefs.setString(_prefRegionKey, newLocation.displayName);
+      });
     } catch (_) {}
     _fetchNews(forceRefresh: true);
   }
@@ -236,152 +244,14 @@ Fuente: ${item.sourceName} (${item.sourceUrl})
       useSafeArea: true,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (ctx) => InteractiveSheetWrapper(
-        backgroundColor: sheetBg,
-        maxHeightFactor: 0.85,
-        applyEffectiveBottomPadding: true,
-        showHandle: true,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: Colors.blueAccent.withValues(alpha: 0.15),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(Icons.location_on, color: Colors.blueAccent, size: 22),
-                  ),
-                  const SizedBox(width: 12),
-                  const Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        "Enfoque Geográfico", 
-                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                      ),
-                      Text(
-                        "Sintoniza noticias, rutas y clima de tu localidad",
-                        style: TextStyle(fontSize: 12, color: Colors.grey),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              const Divider(height: 1),
-              Flexible(
-                child: ListView(
-                  shrinkWrap: true,
-                  physics: const BouncingScrollPhysics(),
-                  padding: const EdgeInsets.only(bottom: InteractiveSheetWrapper.kModalScrollBottomClearance),
-                  children: [
-                    ..._predefinedRegions.map((reg) {
-                      final isSelected = reg == _selectedRegion;
-                      return ListTile(
-                        dense: true,
-                        leading: Icon(
-                          reg == 'Todo el Perú' ? Icons.public : Icons.location_city,
-                          color: isSelected ? Colors.blueAccent : Colors.grey,
-                        ),
-                        title: Text(
-                          reg,
-                          style: TextStyle(
-                            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                            color: isSelected ? Colors.blueAccent : (isDark ? Colors.white : Colors.black87),
-                          ),
-                        ),
-                        trailing: isSelected 
-                            ? const Icon(Icons.check_circle, color: Colors.blueAccent, size: 20) 
-                            : null,
-                        onTap: () {
-                          Navigator.pop(ctx);
-                          _changeRegion(reg);
-                        },
-                      );
-                    }),
-                    const Divider(),
-                    ListTile(
-                      dense: true,
-                      leading: const Icon(Icons.edit_location_alt, color: Colors.amber),
-                      title: const Text(
-                        "Otra Ciudad o Región...", 
-                        style: TextStyle(fontWeight: FontWeight.bold, color: Colors.amber),
-                      ),
-                      onTap: () {
-                        Navigator.pop(ctx);
-                        _promptCustomRegion(isDark);
-                      },
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  void _promptCustomRegion(bool isDark) {
-    final textController = TextEditingController();
-    showDialog(
-      context: context,
-      builder: (dlgCtx) => AlertDialog(
-        backgroundColor: isDark ? const Color(0xFF1E293B) : Colors.white,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Row(
-          children: [
-            Icon(Icons.location_city, color: Colors.blueAccent),
-            SizedBox(width: 8),
-            Text("Ciudad o Región", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              "Escribe tu ciudad o provincia para sintonizar noticias locales:",
-              style: TextStyle(fontSize: 13),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: textController,
-              autofocus: true,
-              decoration: InputDecoration(
-                hintText: "Ej: Huancayo, Chiclayo, Iquitos...",
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dlgCtx),
-            child: const Text("Cancelar"),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              final val = textController.text.trim();
-              if (val.isNotEmpty) {
-                Navigator.pop(dlgCtx);
-                _changeRegion(val);
-              }
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.blueAccent,
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            ),
-            child: const Text("Aplicar"),
-          ),
-        ],
+      builder: (ctx) => LocationPickerSheet(
+        isDark: isDark,
+        sheetBg: sheetBg,
+        currentLocation: _selectedLocation,
+        onLocationSelected: (loc) {
+          Navigator.pop(ctx);
+          _changeLocation(loc);
+        },
       ),
     );
   }
@@ -398,7 +268,12 @@ Fuente: ${item.sourceName} (${item.sourceUrl})
       baseList = _allNewsItems.where((item) {
         final itemCat = item.category.toLowerCase();
         if (targetCat.contains('región') || targetCat.contains('region')) {
-          return itemCat.contains('región') || itemCat.contains('region') || item.region == _selectedRegion;
+          return itemCat.contains('región') ||
+              itemCat.contains('region') ||
+              item.scope == RadarNewsScope.local ||
+              item.scope == RadarNewsScope.regional ||
+              item.region.toLowerCase().contains(_selectedLocation.province.toLowerCase()) ||
+              item.region.toLowerCase().contains(_selectedLocation.department.toLowerCase());
         }
         if (targetCat.contains('clima') || targetCat.contains('ruta')) {
           return itemCat.contains('clima') || itemCat.contains('ruta');
@@ -613,15 +488,28 @@ Fuente: ${item.sourceName} (${item.sourceUrl})
                                   alignment: Alignment.centerLeft,
                                   child: Row(
                                     children: [
-                                      const Text(
-                                        "IA EN VIVO",
-                                        style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.redAccent),
+                                      Icon(
+                                        CommercialRadarService.lastSourceMode.icon,
+                                        size: 11,
+                                        color: CommercialRadarService.lastSourceMode.color,
+                                      ),
+                                      const SizedBox(width: 4),
+                                      Text(
+                                        CommercialRadarService.lastSourceMode.label,
+                                        style: TextStyle(
+                                          fontSize: 10.5,
+                                          fontWeight: FontWeight.bold,
+                                          color: CommercialRadarService.lastSourceMode.color,
+                                        ),
                                       ),
                                       const SizedBox(width: 6),
                                       Container(
                                         width: 6,
                                         height: 6,
-                                        decoration: const BoxDecoration(shape: BoxShape.circle, color: Colors.greenAccent),
+                                        decoration: BoxDecoration(
+                                          shape: BoxShape.circle,
+                                          color: CommercialRadarService.lastSourceMode.color,
+                                        ),
                                       ),
                                       const SizedBox(width: 6),
                                       Text(
@@ -1008,6 +896,11 @@ Fuente: ${item.sourceName} (${item.sourceUrl})
                   ),
                 ),
               ),
+            SliverToBoxAdapter(
+              child: SizedBox(
+                height: MediaQuery.paddingOf(context).bottom + 24.0,
+              ),
+            ),
           ],
         ),
       ),
@@ -1165,7 +1058,7 @@ Fuente: ${item.sourceName} (${item.sourceUrl})
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Metadata: Medio Verificado + Distintivo de Credibilidad + Antigüedad (Cero Emojis)
+                // Metadata: Medio Verificado + Distintivo de Credibilidad + Alcance + Antigüedad (Cero Emojis)
                 Wrap(
                   spacing: 6,
                   runSpacing: 4,
@@ -1200,30 +1093,86 @@ Fuente: ${item.sourceName} (${item.sourceUrl})
                           width: 0.8,
                         ),
                       ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            item.isLive ? Icons.sensors_rounded : Icons.verified_user_outlined,
-                            size: 11,
-                            color: item.isLive ? const Color(0xFF059669) : Colors.indigoAccent,
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 160),
+                        child: FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                item.isLive ? Icons.sensors_rounded : Icons.verified_user_outlined,
+                                size: 11,
+                                color: item.isLive ? const Color(0xFF059669) : Colors.indigoAccent,
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                item.isLive ? "En Vivo Verificada" : "Guía Verificada",
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold,
+                                  color: item.isLive 
+                                      ? (isDark ? const Color(0xFF34D399) : const Color(0xFF065F46))
+                                      : (isDark ? Colors.indigo[200] : Colors.indigo[800]),
+                                ),
+                              ),
+                            ],
                           ),
-                          const SizedBox(width: 4),
-                          Text(
-                            item.isLive ? "En Vivo Verificada" : "Guía Verificada",
-                            style: TextStyle(
-                              fontSize: 10,
-                              fontWeight: FontWeight.bold,
-                              color: item.isLive 
-                                  ? (isDark ? const Color(0xFF34D399) : const Color(0xFF065F46))
-                                  : (isDark ? Colors.indigo[200] : Colors.indigo[800]),
-                            ),
+                        ),
+                      ),
+                    ),
+                    // Badge Territorial (Local / Regional / Nacional)
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: (item.scope == RadarNewsScope.local
+                                ? Colors.teal
+                                : item.scope == RadarNewsScope.regional
+                                    ? Colors.cyan
+                                    : Colors.blueGrey)
+                            .withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 160),
+                        child: FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                item.scope == RadarNewsScope.local
+                                    ? Icons.near_me_outlined
+                                    : item.scope == RadarNewsScope.regional
+                                        ? Icons.map_outlined
+                                        : Icons.public_outlined,
+                                size: 11,
+                                color: item.scope == RadarNewsScope.local
+                                    ? Colors.tealAccent
+                                    : item.scope == RadarNewsScope.regional
+                                        ? Colors.cyanAccent
+                                        : Colors.blueGrey[200],
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                item.scopeLabel,
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold,
+                                  color: item.scope == RadarNewsScope.local
+                                      ? (isDark ? Colors.tealAccent : Colors.teal[800])
+                                      : item.scope == RadarNewsScope.regional
+                                          ? (isDark ? Colors.cyanAccent : Colors.cyan[800])
+                                          : (isDark ? Colors.blueGrey[200] : Colors.blueGrey[800]),
+                                ),
+                              ),
+                            ],
                           ),
-                        ],
+                        ),
                       ),
                     ),
                     Text(
-                      item.compactTimeAgo,
+                      item.displayDateOrBadge,
                       style: TextStyle(
                         fontSize: 11,
                         color: isDark ? Colors.grey[400] : Colors.grey[600],
@@ -1480,5 +1429,565 @@ class _RadarStickyHeaderDelegate extends SliverPersistentHeaderDelegate {
   @override
   bool shouldRebuild(covariant _RadarStickyHeaderDelegate oldDelegate) {
     return oldDelegate.child != child || oldDelegate.height != height;
+  }
+}
+
+/// Selector geográfico interactivo con buscador en tiempo real y catálogo oficial del Perú
+class LocationPickerSheet extends StatefulWidget {
+  final bool isDark;
+  final Color sheetBg;
+  final RadarLocation currentLocation;
+  final ValueChanged<RadarLocation> onLocationSelected;
+
+  final ProvinceInfo? initialStagedProvince;
+  final DepartmentInfo? initialStagedDepartment;
+
+  const LocationPickerSheet({
+    super.key,
+    required this.isDark,
+    required this.sheetBg,
+    required this.currentLocation,
+    required this.onLocationSelected,
+    this.initialStagedProvince,
+    this.initialStagedDepartment,
+  });
+
+  @override
+  State<LocationPickerSheet> createState() => _LocationPickerSheetState();
+}
+
+class _LocationPickerSheetState extends State<LocationPickerSheet> {
+  final TextEditingController _searchController = TextEditingController();
+  final TextEditingController _districtController = TextEditingController();
+  String _filter = '';
+
+  DepartmentInfo? _stagedDept;
+  ProvinceInfo? _stagedProv;
+
+  @override
+  void initState() {
+    super.initState();
+    _stagedProv = widget.initialStagedProvince;
+    _stagedDept = widget.initialStagedDepartment;
+    if (_stagedProv != null && widget.currentLocation.province == _stagedProv!.name) {
+      _districtController.text = widget.currentLocation.district ?? '';
+    }
+  }
+
+  static const List<RadarLocation> _quickLocations = [
+    RadarLocation(department: 'Todo el Perú', province: 'Nacional', corridor: 'Red Vial Nacional'),
+    RadarLocation(department: 'Lima', province: 'Lima', corridor: 'Panamericana / Eje Central'),
+    RadarLocation(department: 'La Libertad', province: 'Trujillo', corridor: 'Panamericana Norte'),
+    RadarLocation(department: 'Arequipa', province: 'Arequipa', corridor: 'Panamericana Sur'),
+    RadarLocation(department: 'Lambayeque', province: 'Chiclayo', corridor: 'Panamericana Norte'),
+    RadarLocation(department: 'Piura', province: 'Talara', corridor: 'Panamericana Norte'),
+    RadarLocation(department: 'Cusco', province: 'Cusco', corridor: 'Corredor Sur / Eje Andino'),
+    RadarLocation(department: 'Junín', province: 'Huancayo', corridor: 'Carretera Central'),
+    RadarLocation(department: 'Loreto', province: 'Maynas', corridor: 'Eje Fluvial Amazónico'),
+  ];
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    _districtController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = widget.isDark;
+    final primaryTextColor = isDark ? Colors.white : const Color(0xFF0F172A);
+    final secondaryTextColor = isDark ? Colors.grey[400]! : Colors.grey[600]!;
+
+    if (_stagedProv != null && _stagedDept != null) {
+      return _buildDistrictPrecisionView(isDark, primaryTextColor, secondaryTextColor);
+    }
+
+    return _buildProvinceSelectionView(isDark, primaryTextColor, secondaryTextColor);
+  }
+
+  Widget _buildDistrictPrecisionView(
+    bool isDark,
+    Color primaryTextColor,
+    Color secondaryTextColor,
+  ) {
+    final deptName = _stagedDept!.name;
+    final provName = _stagedProv!.name;
+    final corridor = _stagedDept!.mainCorridor;
+    final suggested = PeruUbigeoCatalog.getSuggestedDistricts(deptName, provName);
+
+    return InteractiveSheetWrapper(
+      backgroundColor: widget.sheetBg,
+      maxHeightFactor: 0.90,
+      applyEffectiveBottomPadding: true,
+      showHandle: true,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+        child: SingleChildScrollView(
+          physics: const BouncingScrollPhysics(),
+          padding: const EdgeInsets.only(
+            bottom: InteractiveSheetWrapper.kModalScrollBottomClearance,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Cabecera con retorno
+              Row(
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.arrow_back),
+                    color: primaryTextColor,
+                    onPressed: () {
+                      setState(() {
+                        _stagedProv = null;
+                        _stagedDept = null;
+                        _districtController.clear();
+                      });
+                    },
+                  ),
+                  const SizedBox(width: 4),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        FittedBox(
+                          fit: BoxFit.scaleDown,
+                          alignment: Alignment.centerLeft,
+                          child: Text(
+                            "$provName, $deptName",
+                            style: TextStyle(
+                              fontSize: 17,
+                              fontWeight: FontWeight.bold,
+                              color: primaryTextColor,
+                            ),
+                          ),
+                        ),
+                        Text(
+                          "Paso 3 de 3 • Precisa distrito o caserío (opcional)",
+                          style: TextStyle(fontSize: 11.5, color: secondaryTextColor),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+
+              // Chips de distritos sugeridos
+              if (suggested.isNotEmpty) ...[
+                Text(
+                  "Distritos / Sectores sugeridos:",
+                  style: TextStyle(
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 0.4,
+                    color: secondaryTextColor,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: suggested.map((dist) {
+                    final isChosen = _districtController.text.trim().toLowerCase() == dist.toLowerCase();
+                    return ActionChip(
+                      avatar: Icon(
+                        Icons.pin_drop,
+                        size: 14,
+                        color: isChosen ? Colors.white : Colors.blueAccent,
+                      ),
+                      label: Text(dist),
+                      labelStyle: TextStyle(
+                        fontSize: 12,
+                        fontWeight: isChosen ? FontWeight.bold : FontWeight.w500,
+                        color: isChosen ? Colors.white : primaryTextColor,
+                      ),
+                      backgroundColor: isChosen
+                          ? Colors.blueAccent
+                          : (isDark ? const Color(0xFF0F172A) : const Color(0xFFE2E8F0)),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                      onPressed: () {
+                        setState(() {
+                          _districtController.text = dist;
+                        });
+                      },
+                    );
+                  }).toList(),
+                ),
+                const SizedBox(height: 14),
+              ],
+
+              // Campo de texto libre opcional
+              Text(
+                "O ingresa cualquier localidad o caserío:",
+                style: TextStyle(
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 0.4,
+                  color: secondaryTextColor,
+                ),
+              ),
+              const SizedBox(height: 6),
+              TextField(
+                controller: _districtController,
+                onChanged: (_) => setState(() {}),
+                style: TextStyle(fontSize: 13.5, color: primaryTextColor),
+                decoration: InputDecoration(
+                  hintText: suggested.isNotEmpty
+                      ? "Ej. ${suggested.first}, o tu caserío..."
+                      : "Ej. Distrito, caserío o centro poblado...",
+                  hintStyle: TextStyle(fontSize: 12.5, color: secondaryTextColor),
+                  prefixIcon: const Icon(Icons.edit_location_alt_outlined, size: 20, color: Colors.blueAccent),
+                  suffixIcon: _districtController.text.isNotEmpty
+                      ? IconButton(
+                          icon: const Icon(Icons.clear, size: 18),
+                          onPressed: () {
+                            _districtController.clear();
+                            setState(() {});
+                          },
+                        )
+                      : null,
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  filled: true,
+                  fillColor: isDark ? const Color(0xFF0F172A) : const Color(0xFFF1F5F9),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: BorderSide.none,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+
+              // Tarjeta explicativa
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: Colors.blueAccent.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.blueAccent.withValues(alpha: 0.2)),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Icon(Icons.info_outline, size: 16, color: Colors.blueAccent),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        "El Radar priorizará noticias de tu localidad y las complementará con $provName y la región de $deptName.",
+                        style: TextStyle(fontSize: 11, color: secondaryTextColor, height: 1.3),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 18),
+
+              // Botón 1: Aplicar con Distrito/Localidad
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  key: const ValueKey('btn_apply_district'),
+                  onPressed: () {
+                    final text = _districtController.text.trim();
+                    widget.onLocationSelected(
+                      RadarLocation(
+                        department: deptName,
+                        province: provName,
+                        district: text.isNotEmpty ? text : null,
+                        corridor: corridor,
+                      ),
+                    );
+                  },
+                  icon: const Icon(Icons.check, size: 18),
+                  label: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      _districtController.text.trim().isNotEmpty
+                          ? "Aplicar con '${_districtController.text.trim()}'"
+                          : "Aplicar con Distrito / Localidad",
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5),
+                    ),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.blueAccent,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    elevation: 0,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 10),
+
+              // Botón 2: Usar toda la provincia
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  key: const ValueKey('btn_use_province'),
+                  onPressed: () {
+                    widget.onLocationSelected(
+                      RadarLocation(
+                        department: deptName,
+                        province: provName,
+                        district: null,
+                        corridor: corridor,
+                      ),
+                    );
+                  },
+                  icon: const Icon(Icons.location_city_rounded, size: 18),
+                  label: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      "Usar toda la provincia ($provName)",
+                      style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                    ),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: isDark ? Colors.grey[300] : const Color(0xFF334155),
+                    side: BorderSide(color: isDark ? Colors.white24 : Colors.grey[400]!),
+                    padding: const EdgeInsets.symmetric(vertical: 11),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildProvinceSelectionView(
+    bool isDark,
+    Color primaryTextColor,
+    Color secondaryTextColor,
+  ) {
+    final query = _filter.trim().toLowerCase();
+    final List<DepartmentInfo> filteredDepts;
+    if (query.isEmpty) {
+      filteredDepts = PeruUbigeoCatalog.departments;
+    } else {
+      filteredDepts = PeruUbigeoCatalog.departments.where((d) {
+        final matchDept = d.name.toLowerCase().contains(query);
+        final matchProv = d.provinces.any((p) => p.name.toLowerCase().contains(query));
+        return matchDept || matchProv;
+      }).toList();
+    }
+
+    return InteractiveSheetWrapper(
+      backgroundColor: widget.sheetBg,
+      maxHeightFactor: 0.90,
+      applyEffectiveBottomPadding: true,
+      showHandle: true,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Cabecera
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.blueAccent.withValues(alpha: 0.15),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.travel_explore_rounded, color: Colors.blueAccent, size: 22),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        "Enfoque Geográfico del Radar",
+                        style: TextStyle(
+                          fontSize: 17,
+                          fontWeight: FontWeight.bold,
+                          color: primaryTextColor,
+                        ),
+                      ),
+                      Text(
+                        "Sintoniza noticias, rutas y fletes de tu provincia o región",
+                        style: TextStyle(fontSize: 12, color: secondaryTextColor),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+
+            // Buscador en tiempo real
+            TextField(
+              controller: _searchController,
+              onChanged: (val) {
+                setState(() {
+                  _filter = val;
+                });
+              },
+              style: TextStyle(fontSize: 13.5, color: primaryTextColor),
+              decoration: InputDecoration(
+                hintText: "Buscar departamento, provincia o ciudad...",
+                hintStyle: TextStyle(fontSize: 12.5, color: secondaryTextColor),
+                prefixIcon: const Icon(Icons.search, size: 20, color: Colors.blueAccent),
+                suffixIcon: _filter.isNotEmpty
+                    ? IconButton(
+                        icon: const Icon(Icons.clear, size: 18),
+                        onPressed: () {
+                          _searchController.clear();
+                          setState(() {
+                            _filter = '';
+                          });
+                        },
+                      )
+                    : null,
+                contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                filled: true,
+                fillColor: isDark ? const Color(0xFF0F172A) : const Color(0xFFF1F5F9),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  borderSide: BorderSide.none,
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+
+            // Accesos Rápidos
+            if (_filter.isEmpty) ...[
+              Text(
+                "Accesos Rápidos",
+                style: TextStyle(
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 0.5,
+                  color: secondaryTextColor,
+                ),
+              ),
+              const SizedBox(height: 6),
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                physics: const BouncingScrollPhysics(),
+                child: Row(
+                  children: _quickLocations.map((loc) {
+                    final isSelected = loc == widget.currentLocation;
+                    return Padding(
+                      padding: const EdgeInsets.only(right: 6),
+                      child: ActionChip(
+                        avatar: Icon(
+                          loc.isNational ? Icons.public : Icons.location_on,
+                          size: 14,
+                          color: isSelected ? Colors.white : Colors.blueAccent,
+                        ),
+                        label: Text(loc.displayName),
+                        labelStyle: TextStyle(
+                          fontSize: 11.5,
+                          fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                          color: isSelected ? Colors.white : primaryTextColor,
+                        ),
+                        backgroundColor: isSelected
+                            ? Colors.blueAccent
+                            : (isDark ? const Color(0xFF0F172A) : const Color(0xFFE2E8F0)),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                        onPressed: () => widget.onLocationSelected(loc),
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ),
+              const SizedBox(height: 10),
+              const Divider(height: 1),
+            ],
+
+            // Lista desplegable jerárquica
+            Flexible(
+              child: ListView.builder(
+                shrinkWrap: true,
+                physics: const BouncingScrollPhysics(),
+                padding: const EdgeInsets.only(
+                  top: 8,
+                  bottom: InteractiveSheetWrapper.kModalScrollBottomClearance,
+                ),
+                itemCount: filteredDepts.length,
+                itemBuilder: (context, index) {
+                  final dept = filteredDepts[index];
+                  final List<ProvinceInfo> provincesToShow;
+                  if (query.isEmpty) {
+                    provincesToShow = dept.provinces;
+                  } else {
+                    provincesToShow = dept.provinces
+                        .where((p) => p.name.toLowerCase().contains(query) || dept.name.toLowerCase().contains(query))
+                        .toList();
+                  }
+
+                  return Theme(
+                    data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+                    child: ExpansionTile(
+                      key: PageStorageKey<String>('dept_${dept.name}'),
+                      initiallyExpanded: query.isNotEmpty,
+                      leading: Icon(
+                        Icons.map_rounded,
+                        size: 20,
+                        color: widget.currentLocation.department == dept.name ? Colors.blueAccent : Colors.grey,
+                      ),
+                      title: Text(
+                        dept.name,
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                          color: widget.currentLocation.department == dept.name ? Colors.blueAccent : primaryTextColor,
+                        ),
+                      ),
+                      subtitle: Text(
+                        dept.mainCorridor,
+                        style: TextStyle(fontSize: 11, color: secondaryTextColor),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      children: provincesToShow.map((prov) {
+                        final isProvSelected = widget.currentLocation.department == dept.name &&
+                            widget.currentLocation.province == prov.name;
+                        return ListTile(
+                          dense: true,
+                          contentPadding: const EdgeInsets.only(left: 36, right: 16),
+                          leading: Icon(
+                            Icons.location_city_rounded,
+                            size: 16,
+                            color: isProvSelected ? Colors.blueAccent : Colors.grey,
+                          ),
+                          title: Text(
+                            prov.name,
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: isProvSelected ? FontWeight.bold : FontWeight.normal,
+                              color: isProvSelected ? Colors.blueAccent : primaryTextColor,
+                            ),
+                          ),
+                          trailing: isProvSelected
+                              ? const Icon(Icons.check_circle, color: Colors.blueAccent, size: 18)
+                              : const Icon(Icons.chevron_right, size: 18, color: Colors.grey),
+                          onTap: () {
+                            setState(() {
+                              _stagedDept = dept;
+                              _stagedProv = prov;
+                              _districtController.text = (widget.currentLocation.province == prov.name
+                                  ? widget.currentLocation.district ?? ''
+                                  : '');
+                            });
+                          },
+                        );
+                      }).toList(),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }

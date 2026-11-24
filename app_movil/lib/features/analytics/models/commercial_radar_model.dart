@@ -8,6 +8,86 @@ enum RadarActionType {
   quickSale,
 }
 
+/// Modo de origen del feed de noticias del Radar Comercial
+enum RadarFeedSourceMode {
+  liveRssWithAi,        // Noticias reales RSS de Perú analizadas comercialmente con Gemini AI
+  liveRssLocalAnalysis, // Noticias reales RSS de Perú analizadas con motor local determinista
+  cachedRecent,         // Señales cargadas desde la caché local del día
+  offlineGuide,         // Guía oficial de referencia permanente y portales institucionales de contingencia
+}
+
+extension RadarFeedSourceModeExtension on RadarFeedSourceMode {
+  String get label {
+    switch (this) {
+      case RadarFeedSourceMode.liveRssWithAi:
+        return 'EN VIVO • RSS + IA';
+      case RadarFeedSourceMode.liveRssLocalAnalysis:
+        return 'NOTICIAS REALES • ANÁLISIS LOCAL';
+      case RadarFeedSourceMode.cachedRecent:
+        return 'CACHÉ RECIENTE';
+      case RadarFeedSourceMode.offlineGuide:
+        return 'GUÍA OFICIAL DE REFERENCIA (OFFLINE)';
+    }
+  }
+
+  IconData get icon {
+    switch (this) {
+      case RadarFeedSourceMode.liveRssWithAi:
+        return Icons.auto_awesome_rounded;
+      case RadarFeedSourceMode.liveRssLocalAnalysis:
+        return Icons.rss_feed_rounded;
+      case RadarFeedSourceMode.cachedRecent:
+        return Icons.history_rounded;
+      case RadarFeedSourceMode.offlineGuide:
+        return Icons.menu_book_rounded;
+    }
+  }
+
+  Color get color {
+    switch (this) {
+      case RadarFeedSourceMode.liveRssWithAi:
+        return const Color(0xFF10B981); // Emerald green
+      case RadarFeedSourceMode.liveRssLocalAnalysis:
+        return const Color(0xFF06B6D4); // Cyan
+      case RadarFeedSourceMode.cachedRecent:
+        return const Color(0xFFF59E0B); // Amber
+      case RadarFeedSourceMode.offlineGuide:
+        return const Color(0xFF8B5CF6); // Purple
+    }
+  }
+}
+
+/// Alcance territorial de la señal o noticia
+enum RadarNewsScope {
+  local,    // Provincial / Distrital
+  regional, // Departamental
+  nacional, // Todo el Perú
+}
+
+extension RadarNewsScopeExtension on RadarNewsScope {
+  String get code {
+    switch (this) {
+      case RadarNewsScope.local:
+        return 'local';
+      case RadarNewsScope.regional:
+        return 'regional';
+      case RadarNewsScope.nacional:
+        return 'nacional';
+    }
+  }
+
+  static RadarNewsScope fromString(String? val) {
+    switch (val?.toLowerCase().trim()) {
+      case 'local':
+        return RadarNewsScope.local;
+      case 'regional':
+        return RadarNewsScope.regional;
+      default:
+        return RadarNewsScope.nacional;
+    }
+  }
+}
+
 class RadarAction {
   final String label;
   final IconData icon;
@@ -35,6 +115,9 @@ class CommercialNewsItem {
   final DateTime publishedAt;
   final String region;
   final bool isLive;
+  final RadarNewsScope scope;
+  final String scopeLabel;
+  final bool isOfflineGuide;
 
   CommercialNewsItem({
     required this.id,
@@ -49,7 +132,15 @@ class CommercialNewsItem {
     required this.publishedAt,
     required this.region,
     this.isLive = false,
-  });
+    this.scope = RadarNewsScope.nacional,
+    String? scopeLabel,
+    this.isOfflineGuide = false,
+  }) : scopeLabel = scopeLabel ??
+            (scope == RadarNewsScope.local
+                ? 'Local • $region'
+                : scope == RadarNewsScope.regional
+                    ? 'Regional • $region'
+                    : 'Nacional • Perú');
 
   /// Sanitiza cualquier texto removiendo emojis Unicode
   static String sanitizeNoEmoji(String text) {
@@ -238,7 +329,17 @@ class CommercialNewsItem {
     } else if (diff.inDays < 7) {
       return 'Hace ${diff.inDays}d';
     } else {
-      return DateFormat('dd MMM', 'es').format(publishedAt);
+      try {
+        return DateFormat('dd MMM', 'es').format(publishedAt);
+      } catch (_) {
+        const months = [
+          'ene', 'feb', 'mar', 'abr', 'may', 'jun',
+          'jul', 'ago', 'sep', 'oct', 'nov', 'dic'
+        ];
+        final day = publishedAt.day.toString().padLeft(2, '0');
+        final month = months[(publishedAt.month - 1).clamp(0, 11)];
+        return '$day $month';
+      }
     }
   }
 
@@ -262,6 +363,14 @@ class CommercialNewsItem {
     }
   }
 
+  /// Badge u origen temporal honesto (evita fechas relativas falsas en guías permanentes)
+  String get displayDateOrBadge {
+    if (isOfflineGuide) {
+      return 'Guía Permanente';
+    }
+    return compactTimeAgo;
+  }
+
   CommercialNewsItem copyWith({
     String? id,
     String? title,
@@ -275,6 +384,9 @@ class CommercialNewsItem {
     DateTime? publishedAt,
     String? region,
     bool? isLive,
+    RadarNewsScope? scope,
+    String? scopeLabel,
+    bool? isOfflineGuide,
   }) {
     return CommercialNewsItem(
       id: id ?? this.id,
@@ -289,6 +401,9 @@ class CommercialNewsItem {
       publishedAt: publishedAt ?? this.publishedAt,
       region: region ?? this.region,
       isLive: isLive ?? this.isLive,
+      scope: scope ?? this.scope,
+      scopeLabel: scopeLabel ?? this.scopeLabel,
+      isOfflineGuide: isOfflineGuide ?? this.isOfflineGuide,
     );
   }
 
@@ -305,6 +420,9 @@ class CommercialNewsItem {
     'publishedAt': publishedAt.toIso8601String(),
     'region': region,
     'isLive': isLive,
+    'scope': scope.code,
+    'scopeLabel': scopeLabel,
+    'isOfflineGuide': isOfflineGuide,
   };
 
   factory CommercialNewsItem.fromJson(Map<String, dynamic> json) {
@@ -323,6 +441,9 @@ class CommercialNewsItem {
           : DateTime.now(),
       region: json['region'] ?? 'Perú',
       isLive: json['isLive'] == true,
+      scope: RadarNewsScopeExtension.fromString(json['scope'] as String?),
+      scopeLabel: json['scopeLabel'],
+      isOfflineGuide: json['isOfflineGuide'] == true,
     );
   }
 }
