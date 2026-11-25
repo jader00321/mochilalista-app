@@ -76,12 +76,14 @@ class ProductGeneralInfo extends StatelessWidget {
                   size: 20,
                 ),
                 const SizedBox(width: 10),
-                Text(
-                  "Información General",
-                  style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.bold,
-                    color: isDark ? Colors.blue[100] : Colors.blue[900],
+                Expanded(
+                  child: Text(
+                    "Información General",
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.bold,
+                      color: isDark ? Colors.blue[100] : Colors.blue[900],
+                    ),
                   ),
                 ),
               ],
@@ -153,12 +155,14 @@ class ProductGeneralInfo extends StatelessWidget {
                             color: isDark ? Colors.grey[400] : Colors.grey[600],
                           ),
                           const SizedBox(width: 8),
-                          Text(
-                            "Visibilidad de Variantes",
-                            style: TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.bold,
-                              color: textColor,
+                          Expanded(
+                            child: Text(
+                              "Visibilidad de Variantes",
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.bold,
+                                color: textColor,
+                              ),
                             ),
                           ),
                         ],

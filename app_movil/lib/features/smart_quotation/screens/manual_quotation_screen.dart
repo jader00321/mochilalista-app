@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
-import 'package:app_movil/core/widgets/marquee_text.dart';
+import 'package:app_movil/core/services/tour/interactive_tour_service.dart';
+import 'package:app_movil/core/widgets/tour/tour_step_model.dart';
+import 'package:app_movil/core/widgets/tour/configs/manual_quotation_tour.dart';
 
 // Providers y Servicios
 import 'package:app_movil/features/smart_quotation/providers/workbench_provider.dart';
@@ -76,8 +78,12 @@ class _ManualQuotationScreenState extends State<ManualQuotationScreen> {
   
   bool _isQuoteDataExpanded = false; 
   bool _isClientPanelExpanded = false;
+  bool? _quoteExpandedBeforeTour;
+  bool? _clientExpandedBeforeTour;
   bool _hasUnsavedChanges = false;
   bool _isOffersExpanded = false;
+  final _tourKeys = ManualQuotationTourKeys();
+  final _footerKey = GlobalKey<ManualQuoteFooterState>();
 
   late final NumberFormat _currency;
   final _quoteTitleCtrl = TextEditingController();
@@ -294,32 +300,61 @@ class _ManualQuotationScreenState extends State<ManualQuotationScreen> {
     return demand;
   }
 
+  SmartQuotationProvider? _smartQuotationProv;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _smartQuotationProv = Provider.of<SmartQuotationProvider>(
+      context,
+      listen: false,
+    );
+  }
+
   @override
   void dispose() {
-    if (mounted) {
-       final prov = Provider.of<SmartQuotationProvider>(context, listen: false);
-       if (_items.isNotEmpty && !_isSaving) {
+    final prov = _smartQuotationProv;
+    if (prov != null) {
+      if (_items.isNotEmpty && !_isSaving) {
+        final itemsSnapshot = List<MatchedProduct>.from(_items);
+        final quantitiesSnapshot = Map<int, int>.from(_quantities);
+        final pricesSnapshot = Map<int, double>.from(_overriddenPrices);
+        final namesSnapshot = Map<int, String>.from(_customNames);
+        final clientSnapshot = _selectedClient;
+        final cName = _clientNameCtrl.text;
+        final cPhone = _clientPhoneCtrl.text;
+        final cDni = _clientDniCtrl.text;
+        final cAddr = _clientAddressCtrl.text;
+        final cEmail = _clientEmailCtrl.text;
+        final cNotes = _clientNotesCtrl.text;
+        final qTitle = _quoteTitleCtrl.text;
+        final qNotes = _quoteNotesCtrl.text;
+        final school = _schoolCtrl.text;
+        final grade = _gradeCtrl.text;
+        final quotationIdSnapshot = _currentQuotationId;
+        Future.microtask(() {
           prov.saveManualDraft(
-            items: _items,
-            quantities: _quantities,
-            prices: _overriddenPrices,
-            names: _customNames,
-            client: _selectedClient,
-            cName: _clientNameCtrl.text,
-            cPhone: _clientPhoneCtrl.text,
-            cDni: _clientDniCtrl.text,
-            cAddr: _clientAddressCtrl.text,
-            cEmail: _clientEmailCtrl.text,
-            cNotes: _clientNotesCtrl.text,
-            qTitle: _quoteTitleCtrl.text,
-            qNotes: _quoteNotesCtrl.text,
-            school: _schoolCtrl.text,
-            grade: _gradeCtrl.text,
-            quotationId: _currentQuotationId,
+            items: itemsSnapshot,
+            quantities: quantitiesSnapshot,
+            prices: pricesSnapshot,
+            names: namesSnapshot,
+            client: clientSnapshot,
+            cName: cName,
+            cPhone: cPhone,
+            cDni: cDni,
+            cAddr: cAddr,
+            cEmail: cEmail,
+            cNotes: cNotes,
+            qTitle: qTitle,
+            qNotes: qNotes,
+            school: school,
+            grade: grade,
+            quotationId: quotationIdSnapshot,
           );
-       } else if (_items.isEmpty) {
-          prov.clearManualDraft();
-       }
+        });
+      } else if (_items.isEmpty) {
+        Future.microtask(() => prov.clearManualDraft());
+      }
     }
 
     _quoteTitleCtrl.dispose();
@@ -337,6 +372,60 @@ class _ManualQuotationScreenState extends State<ManualQuotationScreen> {
 
   void updateState(VoidCallback fn) {
     if (mounted) setState(fn);
+  }
+
+  Future<void> _expandQuoteSectionForTour() async {
+    if (!mounted) return;
+    _quoteExpandedBeforeTour ??= _isQuoteDataExpanded;
+    if (!_isQuoteDataExpanded) {
+      setState(() => _isQuoteDataExpanded = true);
+      await Future.delayed(const Duration(milliseconds: 300));
+    }
+  }
+
+  Future<void> _restoreQuoteSectionAfterTour() async {
+    final prev = _quoteExpandedBeforeTour;
+    _quoteExpandedBeforeTour = null;
+    if (!mounted) return;
+    if (prev != null && _isQuoteDataExpanded != prev) {
+      setState(() => _isQuoteDataExpanded = prev);
+      await Future.delayed(const Duration(milliseconds: 280));
+    }
+  }
+
+  Future<void> _expandClientSectionForTour() async {
+    if (!mounted) return;
+    _clientExpandedBeforeTour ??= _isClientPanelExpanded;
+    if (!_isClientPanelExpanded) {
+      setState(() => _isClientPanelExpanded = true);
+      await Future.delayed(const Duration(milliseconds: 300));
+    }
+  }
+
+  Future<void> _restoreClientSectionAfterTour() async {
+    final prev = _clientExpandedBeforeTour;
+    _clientExpandedBeforeTour = null;
+    if (!mounted) return;
+    if (prev != null && _isClientPanelExpanded != prev) {
+      setState(() => _isClientPanelExpanded = prev);
+      await Future.delayed(const Duration(milliseconds: 280));
+    }
+  }
+
+  ScreenTourConfig _buildManualTourConfig() {
+    return ManualQuotationTour.buildConfig(
+      keys: _tourKeys,
+      onExpandIdentification: _expandQuoteSectionForTour,
+      onRestoreIdentification: _restoreQuoteSectionAfterTour,
+      onExpandClientSchool: _expandClientSectionForTour,
+      onRestoreClientSchool: _restoreClientSectionAfterTour,
+      onExpandFooter: () async {
+        await _footerKey.currentState?.expandForTour();
+      },
+      onRestoreFooter: () async {
+        await _footerKey.currentState?.restoreAfterTour();
+      },
+    );
   }
 
   @override
@@ -360,65 +449,160 @@ class _ManualQuotationScreenState extends State<ManualQuotationScreen> {
       child: Scaffold(
         backgroundColor: bgColor,
         appBar: AppBar(
-          title: SizedBox(
-            width: double.infinity,
-            height: 24,
-            child: MarqueeText(
-              text: isClient ? "Mi Pedido" : (_currentQuotationId == null ? "Nueva Cotización" : "Editar Cotización"), 
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: textColor)
+          leadingWidth: 38,
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back_rounded),
+            padding: EdgeInsets.zero,
+            tooltip: 'Volver',
+            onPressed: () => Navigator.maybePop(context),
+          ),
+          titleSpacing: 0,
+          actionsPadding: EdgeInsets.zero,
+          title: Align(
+            alignment: Alignment.centerLeft,
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerLeft,
+              child: Text(
+                isClient
+                    ? "Mi Pedido"
+                    : (_currentQuotationId == null
+                        ? "Nueva Cotización"
+                        : "Editar Cotización"),
+                maxLines: 1,
+                style: TextStyle(
+                  fontSize: 17.5,
+                  fontWeight: FontWeight.bold,
+                  color: textColor,
+                ),
+              ),
             ),
           ),
           backgroundColor: isDark ? const Color(0xFF1A1A24) : Colors.white,
-          foregroundColor: textColor, elevation: 0,
+          foregroundColor: textColor,
+          elevation: 0,
           actions: [
-            const InfoTooltipButton(
+            InfoTooltipButton(
+              iconSize: 20,
+              padding: const EdgeInsets.all(4),
+              constraints: const BoxConstraints(minWidth: 34, minHeight: 34),
               title: "Cotización Manual",
               description:
                   "Crea o edita presupuestos personalizados seleccionando productos del catálogo o agregando ítems con precios a medida.",
-              tips: [
+              tips: const [
+                InfoTip(
+                  icon: Icons.description_outlined,
+                  text:
+                      "Abre Identificación de Cotización y Cliente y Colegio para personalizar título, notas o vincular al comprador.",
+                ),
                 InfoTip(
                   icon: Icons.search_rounded,
                   text:
-                      "Toca 'Agregar Producto' para buscar en tu inventario y añadir presentaciones al presupuesto.",
+                      "Toca Buscar Productos para consultar tu inventario con stock en vivo y añadir presentaciones.",
                 ),
                 InfoTip(
-                  icon: Icons.person_outline_rounded,
+                  icon: Icons.visibility_outlined,
                   text:
-                      "Asigna un cliente del directorio para vincularlo a su cuenta o enviar la cotización por WhatsApp.",
-                ),
-                InfoTip(
-                  icon: Icons.reorder_rounded,
-                  text:
-                      "Arrastra y suelta ítems para reorganizar el orden de la lista antes de guardar o compartir.",
+                      "Usa el botón de privacidad (ojo) para ocultar costos y ganancias cuando atiendas frente al cliente.",
                 ),
                 InfoTip(
                   icon: Icons.point_of_sale_rounded,
                   text:
-                      "Convierte la cotización en una venta directa con un solo toque desde el pie de página.",
+                      "Desliza la barra inferior TOTAL para convertir la cotización en una venta directa con un toque.",
                 ),
               ],
+              onStartInteractiveTour: () => InteractiveTourService.startManualTour(
+                context,
+                _buildManualTourConfig(),
+              ),
             ),
             Consumer<QuickSaleProvider>(
-              builder: (ctx, quickProv, _) => IconButton(
-                icon: Icon(
-                  quickProv.hideProfits ? Icons.visibility_off_outlined : Icons.visibility_outlined,
-                  size: 24,
-                  color: isDark ? Colors.white70 : Colors.black54,
+              builder: (ctx, quickProv, _) => KeyedSubtree(
+                key: _tourKeys.privacyEyeKey,
+                child: IconButton(
+                  icon: Icon(
+                    quickProv.hideProfits
+                        ? Icons.visibility_off_outlined
+                        : Icons.visibility_outlined,
+                    size: 20,
+                    color: isDark ? Colors.white70 : Colors.black54,
+                  ),
+                  padding: const EdgeInsets.all(4),
+                  constraints: const BoxConstraints(minWidth: 34, minHeight: 34),
+                  style: IconButton.styleFrom(
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
+                  splashRadius: 18,
+                  tooltip: quickProv.hideProfits
+                      ? "Modo Cliente (Privacidad activa)"
+                      : "Modo Vendedor",
+                  onPressed: () => quickProv.toggleHideProfits(),
                 ),
-                tooltip: quickProv.hideProfits ? "Modo Cliente (Privacidad activa)" : "Modo Vendedor",
-                onPressed: () => quickProv.toggleHideProfits(),
               ),
             ),
             if (_items.isNotEmpty)
-              IconButton(icon: Icon(Icons.delete_sweep, color: isDark ? Colors.red[400] : Colors.red, size: 28), tooltip: "Limpiar Todo", onPressed: _clearWholeList),
+              IconButton(
+                icon: Icon(
+                  Icons.delete_sweep,
+                  color: isDark ? Colors.red[400] : Colors.red,
+                  size: 21,
+                ),
+                padding: const EdgeInsets.all(4),
+                constraints: const BoxConstraints(minWidth: 34, minHeight: 34),
+                style: IconButton.styleFrom(
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+                splashRadius: 18,
+                tooltip: "Limpiar Todo",
+                onPressed: _clearWholeList,
+              ),
             if (!isClient)
-              Padding(
-                padding: const EdgeInsets.only(right: 16, left: 8, top: 8, bottom: 8),
-                child: FilledButton.icon(
-                  onPressed: _isSaving ? null : _openSaveModal,
-                  icon: _isSaving ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)) : const Icon(Icons.save, size: 20),
-                  label: const Text("GUARDAR", style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 0.5)),
-                  style: FilledButton.styleFrom(backgroundColor: Colors.blue[800], shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+              KeyedSubtree(
+                key: _tourKeys.saveButtonKey,
+                child: Padding(
+                  padding: const EdgeInsets.only(right: 8, left: 2, top: 8, bottom: 8),
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 92),
+                    child: FilledButton(
+                      onPressed: _isSaving ? null : _openSaveModal,
+                      style: FilledButton.styleFrom(
+                        backgroundColor: Colors.blue[800],
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                        minimumSize: Size.zero,
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                      ),
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            _isSaving
+                                ? const SizedBox(
+                                    width: 15,
+                                    height: 15,
+                                    child: CircularProgressIndicator(
+                                      color: Colors.white,
+                                      strokeWidth: 2,
+                                    ),
+                                  )
+                                : const Icon(Icons.save_rounded, size: 17),
+                            const SizedBox(width: 5),
+                            const Text(
+                              "Guardar",
+                              maxLines: 1,
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
                 ),
               )
           ],
@@ -490,6 +674,8 @@ class _ManualQuotationScreenState extends State<ManualQuotationScreen> {
                           if (!isClient)
                             SliverToBoxAdapter(
                               child: ManualQuoteHeadersSection(
+                                identificationKey: _tourKeys.identificationKey,
+                                clientSchoolKey: _tourKeys.clientSchoolKey,
                                 isDark: isDark, surfaceColor: surfaceColor, textColor: textColor, isGuest: isGuest,
                                 isQuoteDataExpanded: _isQuoteDataExpanded, isClientPanelExpanded: _isClientPanelExpanded,
                                 onQuoteDataExpansionChanged: (val) => setState(() => _isQuoteDataExpanded = val),
@@ -520,7 +706,11 @@ class _ManualQuotationScreenState extends State<ManualQuotationScreen> {
                             ),
                           SliverFillRemaining(
                             hasScrollBody: false, 
-                            child: ManualQuoteEmptyState(isDark: isDark, onAddPressed: () => _showCatalogModal(isDark)),
+                            child: ManualQuoteEmptyState(
+                              isDark: isDark,
+                              addButtonKey: _tourKeys.addProductsKey,
+                              onAddPressed: () => _showCatalogModal(isDark),
+                            ),
                           ),
                         ],
                       )
@@ -529,6 +719,8 @@ class _ManualQuotationScreenState extends State<ManualQuotationScreen> {
                         header: Column(
                           children: [
                             ManualQuoteHeadersSection(
+                              identificationKey: _tourKeys.identificationKey,
+                              clientSchoolKey: _tourKeys.clientSchoolKey,
                               isDark: isDark, surfaceColor: surfaceColor, textColor: textColor, isGuest: isGuest,
                               isQuoteDataExpanded: _isQuoteDataExpanded, isClientPanelExpanded: _isClientPanelExpanded,
                               onQuoteDataExpansionChanged: (val) => setState(() => _isQuoteDataExpanded = val),
@@ -621,17 +813,21 @@ class _ManualQuotationScreenState extends State<ManualQuotationScreen> {
               ],
             ),
         
-        bottomNavigationBar: ManualQuoteFooter(
-          itemCount: _items.length, 
-          totalSavings: _totalSavings, 
-          totalAmount: _totalAmount, 
-          estimatedProfit: _estimatedTotalProfit, 
-          isSaving: _isSaving, 
-          isDark: isDark, 
-          onSellPressed: _onSellPressed,
-          customLabel: isClient ? "ENVIAR PEDIDO A TIENDA" : "VENDER (CAJA)",
-          customColor: isClient ? Colors.green[700] : Colors.blue[800],
-          isClient: isClient
+        bottomNavigationBar: KeyedSubtree(
+          key: _tourKeys.footerKey,
+          child: ManualQuoteFooter(
+            key: _footerKey,
+            itemCount: _items.length,
+            totalSavings: _totalSavings,
+            totalAmount: _totalAmount,
+            estimatedProfit: _estimatedTotalProfit,
+            isSaving: _isSaving,
+            isDark: isDark,
+            onSellPressed: _onSellPressed,
+            customLabel: isClient ? "ENVIAR PEDIDO A TIENDA" : "VENDER (CAJA)",
+            customColor: isClient ? Colors.green[700] : Colors.blue[800],
+            isClient: isClient,
+          ),
         ),
         
         floatingActionButton: (_items.isNotEmpty && !_isQuoteDataExpanded && !_isClientPanelExpanded) 
@@ -655,47 +851,57 @@ class _ManualQuotationScreenState extends State<ManualQuotationScreen> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Row(
-            children: [
-              Icon(Icons.inventory_2_outlined, size: 18, color: isDark ? Colors.blue[300] : Colors.blue[800]),
-              const SizedBox(width: 8),
-              Text(
-                "Productos en Cotización (${_items.length})",
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: 0.2,
-                  color: isDark ? Colors.grey[300] : Colors.grey[800],
-                ),
-              ),
-            ],
-          ),
-          InkWell(
-            onTap: () => _showCatalogModal(isDark),
-            borderRadius: BorderRadius.circular(8),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-              decoration: BoxDecoration(
-                color: isDark ? Colors.orange.withValues(alpha: 0.2) : Colors.orange.shade50,
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(
-                  color: isDark ? Colors.orange.withValues(alpha: 0.4) : Colors.orange.shade300,
-                ),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.add_circle_outline, size: 15, color: isDark ? Colors.orange[300] : Colors.orange[800]),
-                  const SizedBox(width: 5),
-                  Text(
-                    "Añadir Ítem",
+          Expanded(
+            child: Row(
+              children: [
+                Icon(Icons.inventory_2_outlined, size: 18, color: isDark ? Colors.blue[300] : Colors.blue[800]),
+                const SizedBox(width: 8),
+                Flexible(
+                  child: Text(
+                    "Productos en Cotización (${_items.length})",
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                      fontSize: 12,
+                      fontSize: 13,
                       fontWeight: FontWeight.bold,
-                      color: isDark ? Colors.orange[300] : Colors.orange[900],
+                      letterSpacing: 0.2,
+                      color: isDark ? Colors.grey[300] : Colors.grey[800],
                     ),
                   ),
-                ],
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          KeyedSubtree(
+            key: _tourKeys.addProductsKey,
+            child: InkWell(
+              onTap: () => _showCatalogModal(isDark),
+              borderRadius: BorderRadius.circular(8),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                decoration: BoxDecoration(
+                  color: isDark ? Colors.orange.withValues(alpha: 0.2) : Colors.orange.shade50,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: isDark ? Colors.orange.withValues(alpha: 0.4) : Colors.orange.shade300,
+                  ),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.add_circle_outline, size: 15, color: isDark ? Colors.orange[300] : Colors.orange[800]),
+                    const SizedBox(width: 5),
+                    Text(
+                      "Añadir Ítem",
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                        color: isDark ? Colors.orange[300] : Colors.orange[900],
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),

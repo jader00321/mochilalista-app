@@ -112,8 +112,8 @@ void main() {
   });
 
   group('FASE 5A - Catálogo Canónico y Configuraciones de Tour', () {
-    test('1. Catálogo canónico knownScreenIds incluye los IDs oficiales (19 pantallas en catálogo completo)', () {
-      expect(InteractiveTourService.knownScreenIds.length, 19);
+    test('1. Catálogo canónico knownScreenIds incluye los IDs oficiales (35 pantallas en catálogo completo)', () {
+      expect(InteractiveTourService.knownScreenIds.length, 35);
       expect(InteractiveTourService.knownScreenIds, contains('catalog_screen'));
       expect(InteractiveTourService.knownScreenIds, contains('invoice_scan_screen'));
       expect(InteractiveTourService.knownScreenIds, contains('quotation_scan_screen'));

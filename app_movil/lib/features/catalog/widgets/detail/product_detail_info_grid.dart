@@ -29,7 +29,7 @@ class ProductDetailInfoGrid extends StatelessWidget {
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
           crossAxisCount: 2,
-          childAspectRatio: 1.9,
+          childAspectRatio: 1.4,
           crossAxisSpacing: 16,
           mainAxisSpacing: 16,
           children: [
@@ -152,14 +152,20 @@ class _InfoCard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisSize: MainAxisSize.min,
               children: [
-                Text(
-                  label,
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: isDark ? Colors.grey[400] : Colors.grey[500],
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: 0.5,
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: isDark ? Colors.grey[400] : Colors.grey[500],
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 0.5,
+                    ),
                   ),
                 ),
                 const SizedBox(height: 4),
@@ -172,7 +178,7 @@ class _InfoCard extends StatelessWidget {
                       fontSize: 13,
                       fontWeight: FontWeight.bold,
                       color: isDark ? Colors.white : Colors.black87,
-                      height: 1.2,
+                      height: 1.15,
                     ),
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,

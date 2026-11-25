@@ -118,8 +118,31 @@ class _BusinessInfoCardState extends State<BusinessInfoCard> with AutomaticKeepA
               children: [
                 const Icon(Icons.storefront, color: Colors.white, size: 24),
                 const SizedBox(width: 10),
-                Expanded(child: Text(widget.business!.commercialName, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18), overflow: TextOverflow.ellipsis)),
-                if (canSeeRuc) _buildRucBadge(context),
+                Expanded(
+                  flex: 3,
+                  child: Text(
+                    widget.business!.commercialName,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 18,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                if (canSeeRuc) ...[
+                  const SizedBox(width: 8),
+                  Flexible(
+                    flex: 2,
+                    fit: FlexFit.loose,
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerRight,
+                      child: _buildRucBadge(context),
+                    ),
+                  ),
+                ],
               ],
             ),
           ),
@@ -189,39 +212,61 @@ class _BusinessInfoCardState extends State<BusinessInfoCard> with AutomaticKeepA
                 if (canSeeAddress)
                   Row(
                     children: [
-                      Icon(Icons.location_on, size: 22, color: Colors.grey),
+                      const Icon(Icons.location_on, size: 22, color: Colors.grey),
                       const SizedBox(width: 12),
-                      Expanded(child: Text(widget.business!.address ?? "Referencia no registrada", style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontSize: 15))),
-                      if (hasMap)
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: Colors.green.withValues(alpha: 0.15),
-                            borderRadius: BorderRadius.circular(6),
+                      Expanded(
+                        flex: 3,
+                        child: Text(
+                          widget.business!.address ?? "Referencia no registrada",
+                          style: TextStyle(
+                            color: isDark ? Colors.white : Colors.black87,
+                            fontSize: 15,
                           ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(Icons.gps_fixed, size: 12, color: Colors.green[700]),
-                              const SizedBox(width: 3),
-                              Text("GPS", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.green[700])),
-                            ],
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      if (hasMap)
+                        Flexible(
+                          fit: FlexFit.loose,
+                          child: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: Colors.green.withValues(alpha: 0.15),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(Icons.gps_fixed, size: 12, color: Colors.green[700]),
+                                  const SizedBox(width: 3),
+                                  Text("GPS", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.green[700])),
+                                ],
+                              ),
+                            ),
                           ),
                         )
                       else
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: Colors.orange.withValues(alpha: 0.15),
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(Icons.gps_off, size: 12, color: Colors.orange[700]),
-                              const SizedBox(width: 3),
-                              Text("Sin GPS", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.orange[700])),
-                            ],
+                        Flexible(
+                          fit: FlexFit.loose,
+                          child: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: Colors.orange.withValues(alpha: 0.15),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(Icons.gps_off, size: 12, color: Colors.orange[700]),
+                                  const SizedBox(width: 3),
+                                  Text("Sin GPS", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.orange[700])),
+                                ],
+                              ),
+                            ),
                           ),
                         ),
                     ],
@@ -235,7 +280,9 @@ class _BusinessInfoCardState extends State<BusinessInfoCard> with AutomaticKeepA
                     children: [
                       Icon(Icons.location_off, size: 20, color: Colors.grey[500]),
                       const SizedBox(width: 12),
-                      Text("Ubicación en mapa no registrada", style: TextStyle(color: Colors.grey[500], fontSize: 15, fontStyle: FontStyle.italic)),
+                      Expanded(
+                        child: Text("Ubicación en mapa no registrada", style: TextStyle(color: Colors.grey[500], fontSize: 15, fontStyle: FontStyle.italic)),
+                      ),
                     ],
                   )
                 ],

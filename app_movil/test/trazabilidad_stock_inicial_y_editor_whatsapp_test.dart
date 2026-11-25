@@ -203,7 +203,7 @@ void main() {
         expect(style.icon, isA<IconData>());
       }
 
-      expect(WhatsAppMessageStyle.commercial.icon, Icons.receipt_long_rounded);
+      expect(WhatsAppMessageStyle.commercial.icon, Icons.shopping_bag_outlined);
       expect(WhatsAppMessageStyle.compact.icon, Icons.bolt_rounded);
       expect(WhatsAppMessageStyle.urgentOffer.icon, Icons.local_offer_rounded);
       expect(WhatsAppMessageStyle.accountDebt.icon, Icons.account_balance_wallet_rounded);
@@ -573,19 +573,23 @@ void main() {
       );
 
       // Verificamos que los chips tengan etiquetas limpias sin emojis Unicode en la UI
-      expect(find.text("Validez 7 días"), findsOneWidget);
+      expect(find.text("Validez"), findsOneWidget);
       expect(find.text("Envío / Entrega"), findsOneWidget);
-      expect(find.text("Mis Cuentas"), findsOneWidget);
+      expect(find.text("Medios de Pago"), findsOneWidget);
       expect(find.text("Saludo"), findsOneWidget);
       expect(find.text("Agradecimiento"), findsOneWidget);
 
-      // Tocamos el chip 'Validez 7 días'
-      await tester.tap(find.text("Validez 7 días"));
+      // Tocamos el chip 'Validez' (toggle de config.includeValidity) y 'Envío / Entrega' (inserta snippet)
+      await tester.tap(find.text("Validez"));
       await tester.pumpAndSettle();
-
       expect(toggledKey, 'validity');
+      expect(toggledVal, isFalse);
+
+      await tester.tap(find.text("Envío / Entrega"));
+      await tester.pumpAndSettle();
+      expect(toggledKey, 'delivery');
       expect(toggledVal, isTrue);
-      expect(messageCtrl.text, contains("Validez de la oferta"));
+      expect(messageCtrl.text, contains("Coordinamos envíos a domicilio"));
     });
   });
 }

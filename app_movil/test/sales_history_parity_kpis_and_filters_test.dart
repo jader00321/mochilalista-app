@@ -511,7 +511,7 @@ class _MockSaleProvider extends ChangeNotifier implements SaleProvider {
   Future<void> loadRecentHomeActivity() async {}
 
   @override
-  Future<void> loadSalesHistory() async {}
+  Future<void> loadSalesHistory({bool silent = false}) async {}
 
   @override
   Future<void> silentRefresh() async {}

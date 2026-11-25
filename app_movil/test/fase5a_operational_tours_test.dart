@@ -138,12 +138,12 @@ void main() {
       }
     });
 
-    test('InventoryTour cumple todas las reglas de negocio y pasos concisos (4)', () {
+    test('InventoryTour cumple todas las reglas de negocio y pasos concisos (5)', () {
       final config = InventoryTour.buildConfig();
       expect(config.screenId, equals('inventory_screen'));
       expect(config.screenTitle, isNotEmpty);
       expect(config.welcomeSummary, isNotEmpty);
-      expect(config.steps.length, equals(4));
+      expect(config.steps.length, equals(5));
 
       for (final step in config.steps) {
         expect(step.title, isNotEmpty);

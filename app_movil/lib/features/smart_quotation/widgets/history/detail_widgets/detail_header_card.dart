@@ -42,7 +42,17 @@ class DetailHeaderCard extends StatelessWidget {
             decoration: BoxDecoration(color: styles['color'].withValues(alpha: 0.15), borderRadius: BorderRadius.circular(20)),
             child: Row(
               mainAxisSize: MainAxisSize.min,
-              children: [Icon(styles['icon'], size: 20, color: styles['color']), const SizedBox(width: 10), Text(styles['label'], style: TextStyle(color: styles['color'], fontWeight: FontWeight.bold, fontSize: 15))],
+              children: [
+                Icon(styles['icon'], size: 20, color: styles['color']),
+                const SizedBox(width: 10),
+                Flexible(
+                  child: Text(
+                    styles['label'],
+                    style: TextStyle(color: styles['color'], fontWeight: FontWeight.bold, fontSize: 15),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
             ),
           ),
           const SizedBox(height: 20),

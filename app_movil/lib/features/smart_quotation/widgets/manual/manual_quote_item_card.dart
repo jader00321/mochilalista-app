@@ -514,102 +514,121 @@ class ManualQuoteItemCard extends StatelessWidget {
                         children: [
                           Row(
                             children: [
-                              Text(
-                                "Unitario",
-                                style: textTheme.labelSmall?.copyWith(
-                                  color: isDark
-                                      ? Colors.grey[500]
-                                      : Colors.grey[600],
+                              Flexible(
+                                child: FittedBox(
+                                  fit: BoxFit.scaleDown,
+                                  alignment: Alignment.centerLeft,
+                                  child: Text(
+                                    "Unitario",
+                                    maxLines: 1,
+                                    style: textTheme.labelSmall?.copyWith(
+                                      color: isDark
+                                          ? Colors.grey[500]
+                                          : Colors.grey[600],
+                                    ),
+                                  ),
                                 ),
                               ),
                               if (!isClient &&
                                   item.cost != null &&
                                   item.cost! > 0) ...[
-                                Builder(
-                                  builder: (ctx) {
-                                    final quickProv =
-                                        Provider.of<QuickSaleProvider>(ctx);
-                                    final double margin =
-                                        ((manualPrice - item.cost!) /
-                                            manualPrice) *
-                                        100;
-                                    final Color marginColor = margin >= 20
-                                        ? (isDark
-                                              ? Colors.green[400]!
-                                              : Colors.green[700]!)
-                                        : (margin >= 10
-                                              ? (isDark
-                                                    ? Colors.amber[400]!
-                                                    : Colors.amber[800]!)
-                                              : (isDark
-                                                    ? Colors.red[400]!
-                                                    : Colors.red[700]!));
+                                Flexible(
+                                  child: Builder(
+                                    builder: (ctx) {
+                                      final quickProv =
+                                          Provider.of<QuickSaleProvider>(ctx);
+                                      final double margin =
+                                          ((manualPrice - item.cost!) /
+                                              manualPrice) *
+                                          100;
+                                      final Color marginColor = margin >= 20
+                                          ? (isDark
+                                                ? Colors.green[400]!
+                                                : Colors.green[700]!)
+                                          : (margin >= 10
+                                                ? (isDark
+                                                      ? Colors.amber[400]!
+                                                      : Colors.amber[800]!)
+                                                : (isDark
+                                                      ? Colors.red[400]!
+                                                      : Colors.red[700]!));
 
-                                    return AnimatedSwitcher(
-                                      duration: const Duration(
-                                        milliseconds: 250,
-                                      ),
-                                      child: quickProv.hideProfits
-                                          ? const SizedBox.shrink(
-                                              key: ValueKey(
-                                                'manual_margin_hidden',
-                                              ),
-                                            )
-                                          : Row(
-                                              key: const ValueKey(
-                                                'manual_margin_visible',
-                                              ),
-                                              mainAxisSize: MainAxisSize.min,
-                                              children: [
-                                                const SizedBox(width: 6),
-                                                Container(
-                                                  padding:
-                                                      const EdgeInsets.symmetric(
-                                                        horizontal: 5,
-                                                        vertical: 1.5,
-                                                      ),
-                                                  decoration: BoxDecoration(
-                                                    color: marginColor
-                                                        .withValues(
-                                                          alpha: 0.12,
-                                                        ),
-                                                    borderRadius:
-                                                        BorderRadius.circular(
-                                                          4,
-                                                        ),
+                                      return AnimatedSwitcher(
+                                        duration: const Duration(
+                                          milliseconds: 250,
+                                        ),
+                                        child: quickProv.hideProfits
+                                            ? const SizedBox.shrink(
+                                                key: ValueKey(
+                                                  'manual_margin_hidden',
+                                                ),
+                                              )
+                                            : FittedBox(
+                                                fit: BoxFit.scaleDown,
+                                                alignment: Alignment.centerLeft,
+                                                child: Row(
+                                                  key: const ValueKey(
+                                                    'manual_margin_visible',
                                                   ),
-                                                  child: Row(
-                                                    mainAxisSize:
-                                                        MainAxisSize.min,
-                                                    children: [
-                                                      Container(
-                                                        width: 5,
-                                                        height: 5,
-                                                        decoration:
-                                                            BoxDecoration(
-                                                              color:
-                                                                  marginColor,
-                                                              shape: BoxShape
-                                                                  .circle,
+                                                  mainAxisSize:
+                                                      MainAxisSize.min,
+                                                  children: [
+                                                    const SizedBox(width: 6),
+                                                    Container(
+                                                      padding:
+                                                          const EdgeInsets.symmetric(
+                                                            horizontal: 5,
+                                                            vertical: 1.5,
+                                                          ),
+                                                      decoration: BoxDecoration(
+                                                        color: marginColor
+                                                            .withValues(
+                                                              alpha: 0.12,
+                                                            ),
+                                                        borderRadius:
+                                                            BorderRadius.circular(
+                                                              4,
                                                             ),
                                                       ),
-                                                      const SizedBox(width: 3),
-                                                      Text(
-                                                        "${margin.round()}% mrg",
-                                                        style: TextStyle(
-                                                          fontSize: 9,
-                                                          fontWeight:
-                                                              FontWeight.bold,
-                                                          color: marginColor,
-                                                        ),
+                                                      child: Row(
+                                                        mainAxisSize:
+                                                            MainAxisSize.min,
+                                                        children: [
+                                                          Container(
+                                                            width: 5,
+                                                            height: 5,
+                                                            decoration:
+                                                                BoxDecoration(
+                                                                  color:
+                                                                      marginColor,
+                                                                  shape: BoxShape
+                                                                      .circle,
+                                                                ),
+                                                          ),
+                                                          const SizedBox(
+                                                            width: 3,
+                                                          ),
+                                                          Text(
+                                                            "${margin.round()}% mrg",
+                                                            maxLines: 1,
+                                                            style: TextStyle(
+                                                              fontSize: 9,
+                                                              fontWeight:
+                                                                  FontWeight
+                                                                      .bold,
+                                                              color:
+                                                                  marginColor,
+                                                            ),
+                                                          ),
+                                                        ],
                                                       ),
-                                                    ],
-                                                  ),
+                                                    ),
+                                                  ],
                                                 ),
-                                              ],
-                                            ),
-                                    );
-                                  },
+                                              ),
+                                      );
+                                    },
+                                  ),
                                 ),
                               ],
                             ],

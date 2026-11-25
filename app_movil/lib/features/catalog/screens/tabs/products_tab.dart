@@ -29,7 +29,7 @@ import 'package:app_movil/core/widgets/tour/configs/inventory_tour.dart';
 
 class ProductsTab extends StatefulWidget {
   final TabController? tabController;
-  final InventoryTourKeys? tourKeys;
+  final InventoryTabTourKeys? tourKeys;
   const ProductsTab({super.key, this.tabController, this.tourKeys});
 
   @override
@@ -1107,6 +1107,16 @@ class _ProductsTabState extends State<ProductsTab>
   }
 
   Widget _buildSliverList(List<InventoryWrapper> items, bool isDark) {
+    Widget wrapFirstIfNeeded(int index, Widget child) {
+      if (index != 0 || widget.tourKeys == null) {
+        return child;
+      }
+      return KeyedSubtree(
+        key: widget.tourKeys!.productCardKey,
+        child: child,
+      );
+    }
+
     if (_viewMode == 1) {
       return SliverPadding(
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 110),
@@ -1118,12 +1128,15 @@ class _ProductsTabState extends State<ProductsTab>
             mainAxisSpacing: 12,
           ),
           delegate: SliverChildBuilderDelegate(
-            (ctx, i) => InventoryGridCard(
-              item: items[i],
-              onTap: () => _navigateToDetail(ctx, items[i]),
-              onTapPrice: () => _openPriceModal(ctx, items[i], isDark),
-              onTapStock: () => _openStockModal(ctx, items[i], isDark),
-              onMoreOptions: () => _openActions(ctx, items[i]),
+            (ctx, i) => wrapFirstIfNeeded(
+              i,
+              InventoryGridCard(
+                item: items[i],
+                onTap: () => _navigateToDetail(ctx, items[i]),
+                onTapPrice: () => _openPriceModal(ctx, items[i], isDark),
+                onTapStock: () => _openStockModal(ctx, items[i], isDark),
+                onMoreOptions: () => _openActions(ctx, items[i]),
+              ),
             ),
             childCount: items.length,
           ),
@@ -1138,12 +1151,15 @@ class _ProductsTabState extends State<ProductsTab>
           delegate: SliverChildBuilderDelegate((ctx, i) {
             return Column(
               children: [
-                InventoryCompactTile(
-                  item: items[i],
-                  onTap: () => _navigateToDetail(ctx, items[i]),
-                  onTapPrice: () => _openPriceModal(ctx, items[i], isDark),
-                  onTapStock: () => _openStockModal(ctx, items[i], isDark),
-                  onMoreOptions: () => _openActions(ctx, items[i]),
+                wrapFirstIfNeeded(
+                  i,
+                  InventoryCompactTile(
+                    item: items[i],
+                    onTap: () => _navigateToDetail(ctx, items[i]),
+                    onTapPrice: () => _openPriceModal(ctx, items[i], isDark),
+                    onTapStock: () => _openStockModal(ctx, items[i], isDark),
+                    onMoreOptions: () => _openActions(ctx, items[i]),
+                  ),
                 ),
                 if (i < items.length - 1)
                   Divider(
@@ -1163,12 +1179,15 @@ class _ProductsTabState extends State<ProductsTab>
       padding: const EdgeInsets.only(top: 8, bottom: 110),
       sliver: SliverList(
         delegate: SliverChildBuilderDelegate(
-          (ctx, i) => InventoryItemTile(
-            item: items[i],
-            onTap: () => _navigateToDetail(ctx, items[i]),
-            onTapPrice: () => _openPriceModal(ctx, items[i], isDark),
-            onTapStock: () => _openStockModal(ctx, items[i], isDark),
-            onMoreOptions: () => _openActions(ctx, items[i]),
+          (ctx, i) => wrapFirstIfNeeded(
+            i,
+            InventoryItemTile(
+              item: items[i],
+              onTap: () => _navigateToDetail(ctx, items[i]),
+              onTapPrice: () => _openPriceModal(ctx, items[i], isDark),
+              onTapStock: () => _openStockModal(ctx, items[i], isDark),
+              onMoreOptions: () => _openActions(ctx, items[i]),
+            ),
           ),
           childCount: items.length,
         ),
@@ -1184,19 +1203,25 @@ class _ProductsTabState extends State<ProductsTab>
         provider.activeProviderIds.isNotEmpty ||
         provider.activeState != null;
 
-    if (hasFilters) {
-      return const EmptyStateWidget(
-        icon: Icons.search_off,
-        title: "No hay resultados",
-        subtitle: "Intenta ajustando tus filtros o términos de búsqueda.",
-      );
-    }
+    final Widget content = hasFilters
+        ? const EmptyStateWidget(
+            icon: Icons.search_off,
+            title: "No hay resultados",
+            subtitle: "Intenta ajustando tus filtros o términos de búsqueda.",
+          )
+        : const EmptyStateWidget(
+            icon: Icons.inventory_2_outlined,
+            title: "Inventario Vacío",
+            subtitle:
+                "Aún no tienes productos registrados. Escanea una factura o agrega uno manualmente para empezar.",
+          );
 
-    return const EmptyStateWidget(
-      icon: Icons.inventory_2_outlined,
-      title: "Inventario Vacío",
-      subtitle:
-          "Aún no tienes productos registrados. Escanea una factura o agrega uno manualmente para empezar.",
+    if (widget.tourKeys == null) {
+      return content;
+    }
+    return KeyedSubtree(
+      key: widget.tourKeys!.productCardKey,
+      child: content,
     );
   }
 }

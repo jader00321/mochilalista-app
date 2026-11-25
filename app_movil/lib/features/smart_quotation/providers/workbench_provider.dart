@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart'; 
+import 'package:intl/intl.dart';
 import 'package:app_movil/features/smart_quotation/models/smart_quotation_model.dart';
 import 'package:app_movil/features/smart_quotation/models/crm_models.dart';
 import 'package:app_movil/features/smart_quotation/services/quotation_service.dart';
@@ -7,32 +7,34 @@ import 'package:app_movil/features/smart_quotation/services/quotation_naming_eng
 import 'package:app_movil/core/database/local_db.dart';
 
 enum WorkbenchSort { time, alpha }
+
 enum TimeFilter { today, thisWeek, thisMonth, sixMonths, allTime, custom }
 
 class WorkbenchProvider with ChangeNotifier {
   int? _negocioId;
   int? _usuarioId;
-  
+
   bool _isLoading = false;
+  bool _hasLoadedOnce = false;
   String _errorMessage = "";
-  
+
   final QuotationService _quotationService = QuotationService();
   final dbHelper = LocalDatabase.instance;
-  
+
   List<SmartQuotationModel> _allQuotations = [];
   List<SmartQuotationModel> _timeFilteredQuotations = [];
-  
-  List<SmartQuotationModel> _inProcessList = []; 
-  List<SmartQuotationModel> _readyAndPacksList = []; 
-  List<SmartQuotationModel> _soldList = []; 
-  List<SmartQuotationModel> _archivedList = []; 
 
-  Set<int> _annulledQuotationIds = {}; 
+  List<SmartQuotationModel> _inProcessList = [];
+  List<SmartQuotationModel> _readyAndPacksList = [];
+  List<SmartQuotationModel> _soldList = [];
+  List<SmartQuotationModel> _archivedList = [];
+
+  Set<int> _annulledQuotationIds = {};
 
   final Map<int, ValidationResult> _trafficLights = {};
 
   WorkbenchSort _sortType = WorkbenchSort.time;
-  bool _sortAsc = false; 
+  bool _sortAsc = false;
   String _selectedFilter = "Todo";
 
   TimeFilter _timeFilter = TimeFilter.sixMonths;
@@ -52,24 +54,31 @@ class WorkbenchProvider with ChangeNotifier {
   List<SmartQuotationModel> get readyAndPacksList => _readyAndPacksList;
   List<SmartQuotationModel> get soldList => _soldList;
   List<SmartQuotationModel> get archivedList => _archivedList;
-  
+
   List<SmartQuotationModel> get filteredInProcessList => _filteredInProcessList;
-  List<SmartQuotationModel> get filteredReadyAndPacksList => _filteredReadyAndPacksList;
+  List<SmartQuotationModel> get filteredReadyAndPacksList =>
+      _filteredReadyAndPacksList;
   List<SmartQuotationModel> get filteredSoldList => _filteredSoldList;
-  
+
   String get selectedFilter => _selectedFilter;
-  
+
   TimeFilter get timeFilter => _timeFilter;
   DateTimeRange? get customRange => _customRange;
 
   String get timeFilterLabel {
     switch (_timeFilter) {
-      case TimeFilter.today: return "Hoy";
-      case TimeFilter.thisWeek: return "Esta Semana";
-      case TimeFilter.thisMonth: return "Este Mes";
-      case TimeFilter.sixMonths: return "Últimos 6 Meses";
-      case TimeFilter.allTime: return "Todo";
-      case TimeFilter.custom: return "Personalizado";
+      case TimeFilter.today:
+        return "Hoy";
+      case TimeFilter.thisWeek:
+        return "Esta Semana";
+      case TimeFilter.thisMonth:
+        return "Este Mes";
+      case TimeFilter.sixMonths:
+        return "Últimos 6 Meses";
+      case TimeFilter.allTime:
+        return "Todo";
+      case TimeFilter.custom:
+        return "Personalizado";
     }
   }
 
@@ -77,18 +86,31 @@ class WorkbenchProvider with ChangeNotifier {
     final now = DateTime.now();
     switch (_timeFilter) {
       case TimeFilter.today:
-        return DateTimeRange(start: DateTime(now.year, now.month, now.day), end: now);
+        return DateTimeRange(
+          start: DateTime(now.year, now.month, now.day),
+          end: now,
+        );
       case TimeFilter.thisWeek:
         final startOfWeek = now.subtract(Duration(days: now.weekday - 1));
-        return DateTimeRange(start: DateTime(startOfWeek.year, startOfWeek.month, startOfWeek.day), end: now);
+        return DateTimeRange(
+          start: DateTime(startOfWeek.year, startOfWeek.month, startOfWeek.day),
+          end: now,
+        );
       case TimeFilter.thisMonth:
         return DateTimeRange(start: DateTime(now.year, now.month, 1), end: now);
       case TimeFilter.sixMonths:
-        return DateTimeRange(start: DateTime(now.year, now.month - 6, now.day), end: now);
+        return DateTimeRange(
+          start: DateTime(now.year, now.month - 6, now.day),
+          end: now,
+        );
       case TimeFilter.allTime:
-        return DateTimeRange(start: DateTime.fromMillisecondsSinceEpoch(0), end: DateTime(now.year + 10, now.month, now.day));
+        return DateTimeRange(
+          start: DateTime.fromMillisecondsSinceEpoch(0),
+          end: DateTime(now.year + 10, now.month, now.day),
+        );
       case TimeFilter.custom:
-        return _customRange ?? DateTimeRange(start: DateTime(now.year, now.month, 1), end: now);
+        return _customRange ??
+            DateTimeRange(start: DateTime(now.year, now.month, 1), end: now);
     }
   }
 
@@ -115,7 +137,10 @@ class WorkbenchProvider with ChangeNotifier {
   }
 
   int get productsSoldCount {
-    return _filteredSoldList.fold(0, (sum, q) => sum + q.items.fold(0, (sumI, i) => sumI + i.quantity));
+    return _filteredSoldList.fold(
+      0,
+      (sum, q) => sum + q.items.fold(0, (sumI, i) => sumI + i.quantity),
+    );
   }
 
   double get avgTicket {
@@ -127,7 +152,8 @@ class WorkbenchProvider with ChangeNotifier {
     if (_negocioId != negocioId || _usuarioId != usuarioId) {
       _negocioId = negocioId;
       _usuarioId = usuarioId;
-      
+      _hasLoadedOnce = false;
+
       Future.microtask(() {
         _allQuotations.clear();
         _inProcessList.clear();
@@ -136,7 +162,7 @@ class WorkbenchProvider with ChangeNotifier {
         _archivedList.clear();
         _trafficLights.clear();
         _errorMessage = "";
-        
+
         if (_negocioId != null) {
           loadDashboard();
         } else {
@@ -155,7 +181,7 @@ class WorkbenchProvider with ChangeNotifier {
       _sortAsc = !_sortAsc;
     } else {
       _sortType = type;
-      _sortAsc = type == WorkbenchSort.alpha ? true : false; 
+      _sortAsc = type == WorkbenchSort.alpha ? true : false;
     }
     _applyFilterAndSort();
     notifyListeners();
@@ -170,7 +196,8 @@ class WorkbenchProvider with ChangeNotifier {
   }
 
   void setTimeFilter(TimeFilter filter, {DateTimeRange? customRange}) {
-    if (_timeFilter != filter || (filter == TimeFilter.custom && _customRange != customRange)) {
+    if (_timeFilter != filter ||
+        (filter == TimeFilter.custom && _customRange != customRange)) {
       _timeFilter = filter;
       if (filter == TimeFilter.custom) {
         _customRange = customRange;
@@ -185,9 +212,13 @@ class WorkbenchProvider with ChangeNotifier {
   void _applyTimeFilter() {
     final range = activeRange;
     _timeFilteredQuotations = _allQuotations.where((q) {
-      final date = DateTime.tryParse(q.createdAt) ?? DateTime.fromMillisecondsSinceEpoch(0);
-      return date.isAfter(range.start.subtract(const Duration(seconds: 1))) && 
-             date.isBefore(range.end.add(const Duration(days: 1))); // Para incluir todo el día final
+      final date =
+          DateTime.tryParse(q.createdAt) ??
+          DateTime.fromMillisecondsSinceEpoch(0);
+      return date.isAfter(range.start.subtract(const Duration(seconds: 1))) &&
+          date.isBefore(
+            range.end.add(const Duration(days: 1)),
+          ); // Para incluir todo el día final
     }).toList();
   }
 
@@ -197,26 +228,37 @@ class WorkbenchProvider with ChangeNotifier {
     _filteredSoldList = _filterAndSortList(_soldList);
   }
 
-  List<SmartQuotationModel> _filterAndSortList(List<SmartQuotationModel> baseList) {
+  List<SmartQuotationModel> _filterAndSortList(
+    List<SmartQuotationModel> baseList,
+  ) {
     var filtered = baseList.where((q) {
       final validation = getValidationFor(q.id);
       if (_selectedFilter == "Todo") return true;
-      if (_selectedFilter == "Solo Alertas ⚠️") return validation != null && (!validation.canSell || validation.hasIssues);
+      if (_selectedFilter == "Solo Alertas ⚠️") {
+        return validation != null &&
+            (!validation.canSell || validation.hasIssues);
+      }
       if (_selectedFilter == "Manual") return q.type == "manual";
       if (_selectedFilter == "Escaneadas IA") return q.type == "ai_scan";
-      if (_selectedFilter == "Comunidad 🌐") return (q.clientName ?? "").contains("- Pedido");
+      if (_selectedFilter == "Comunidad 🌐") {
+        return (q.clientName ?? "").contains("- Pedido");
+      }
       return true;
     }).toList();
 
     filtered.sort((a, b) {
       int cmp;
       if (_sortType == WorkbenchSort.alpha) {
-        final nameA = a.clientName ?? "Z_Sin Cliente"; 
+        final nameA = a.clientName ?? "Z_Sin Cliente";
         final nameB = b.clientName ?? "Z_Sin Cliente";
         cmp = nameA.toLowerCase().compareTo(nameB.toLowerCase());
       } else {
-        final timeA = DateTime.tryParse(a.createdAt) ?? DateTime.fromMillisecondsSinceEpoch(0);
-        final timeB = DateTime.tryParse(b.createdAt) ?? DateTime.fromMillisecondsSinceEpoch(0);
+        final timeA =
+            DateTime.tryParse(a.createdAt) ??
+            DateTime.fromMillisecondsSinceEpoch(0);
+        final timeB =
+            DateTime.tryParse(b.createdAt) ??
+            DateTime.fromMillisecondsSinceEpoch(0);
         cmp = timeA.compareTo(timeB);
       }
       return _sortAsc ? cmp : -cmp;
@@ -225,122 +267,177 @@ class WorkbenchProvider with ChangeNotifier {
     return filtered;
   }
 
-  Future<void> loadDashboard() async {
+  Future<void> loadDashboard({bool silent = false}) async {
     if (_negocioId == null) return;
-    _isLoading = true;
-    notifyListeners();
-    
+    final bool hasCachedData =
+        _allQuotations.isNotEmpty ||
+        _inProcessList.isNotEmpty ||
+        _readyAndPacksList.isNotEmpty ||
+        _soldList.isNotEmpty;
+    final bool skipShimmer = silent || hasCachedData || _hasLoadedOnce;
+    if (!skipShimmer) {
+      _isLoading = true;
+      notifyListeners();
+    }
+
     try {
       final db = await dbHelper.database;
-      
+
       // 🧹 Saneamiento preventivo de borradores corruptos (0 ítems y total 0.0)
-      final corruptDrafts = await db.rawQuery('''
+      final corruptDrafts = await db.rawQuery(
+        '''
         SELECT id FROM smart_quotations 
         WHERE negocio_id = ? 
           AND (total_amount = 0.0 OR total_amount IS NULL) 
           AND (status = 'DRAFT' OR status = 'PENDING') 
           AND id NOT IN (SELECT DISTINCT quotation_id FROM smart_quotation_items)
-      ''', [_negocioId]);
+      ''',
+        [_negocioId],
+      );
 
       if (corruptDrafts.isNotEmpty) {
         await db.transaction((txn) async {
           for (var row in corruptDrafts) {
             final corruptId = row['id'] as int;
-            await txn.update('ventas', {'cotizacion_id': null}, where: 'cotizacion_id = ?', whereArgs: [corruptId]);
-            await txn.delete('smart_quotation_items', where: 'quotation_id = ?', whereArgs: [corruptId]);
-            await txn.delete('smart_quotations', where: 'id = ?', whereArgs: [corruptId]);
+            await txn.update(
+              'ventas',
+              {'cotizacion_id': null},
+              where: 'cotizacion_id = ?',
+              whereArgs: [corruptId],
+            );
+            await txn.delete(
+              'smart_quotation_items',
+              where: 'quotation_id = ?',
+              whereArgs: [corruptId],
+            );
+            await txn.delete(
+              'smart_quotations',
+              where: 'id = ?',
+              whereArgs: [corruptId],
+            );
           }
         });
       }
 
-      final quotesRows = await db.query('smart_quotations', where: 'negocio_id = ?', whereArgs: [_negocioId]);
+      final quotesRows = await db.query(
+        'smart_quotations',
+        where: 'negocio_id = ?',
+        whereArgs: [_negocioId],
+      );
       final itemsRows = await db.rawQuery(
         'SELECT * FROM smart_quotation_items WHERE quotation_id IN (SELECT id FROM smart_quotations WHERE negocio_id = ?)',
-        [_negocioId]
+        [_negocioId],
       );
 
       Map<int, List<Map<String, dynamic>>> itemsMap = {};
       for (var item in itemsRows) {
-          int qId = item['quotation_id'] as int;
-          itemsMap.putIfAbsent(qId, () => []).add(item);
+        int qId = item['quotation_id'] as int;
+        itemsMap.putIfAbsent(qId, () => []).add(item);
       }
 
       List<SmartQuotationModel> allQs = [];
       for (var q in quotesRows) {
-          var map = Map<String, dynamic>.from(q);
-          map['items'] = itemsMap[q['id']] ?? [];
-          allQs.add(SmartQuotationModel.fromJson(map));
+        var map = Map<String, dynamic>.from(q);
+        map['items'] = itemsMap[q['id']] ?? [];
+        allQs.add(SmartQuotationModel.fromJson(map));
       }
       _allQuotations = allQs;
-      
+
       // Fetch annulled sales to cross-reference
-      final annulledSales = await db.query('ventas', columns: ['cotizacion_id'], where: 'is_archived = 1 AND cotizacion_id IS NOT NULL');
-      _annulledQuotationIds = annulledSales.map((e) => e['cotizacion_id'] as int).toSet();
+      final annulledSales = await db.query(
+        'ventas',
+        columns: ['cotizacion_id'],
+        where: 'is_archived = 1 AND cotizacion_id IS NOT NULL',
+      );
+      _annulledQuotationIds = annulledSales
+          .map((e) => e['cotizacion_id'] as int)
+          .toSet();
 
       _applyTimeFilter();
       _organizeLists();
       await _evaluateHealthAndAutoDowngrade();
-
     } catch (e) {
       _handleException(e);
     } finally {
+      _hasLoadedOnce = true;
       _isLoading = false;
       notifyListeners();
     }
   }
 
   void _organizeLists() {
-    _inProcessList = _timeFilteredQuotations.where((q) => 
-        (q.status == 'DRAFT' || q.status == 'PENDING' || q.status == 'PENDING_APPROVAL') && q.type != 'pack' && _isRealQuotation(q)
-    ).toList();
+    _inProcessList = _timeFilteredQuotations
+        .where(
+          (q) =>
+              (q.status == 'DRAFT' ||
+                  q.status == 'PENDING' ||
+                  q.status == 'PENDING_APPROVAL') &&
+              q.type != 'pack' &&
+              _isRealQuotation(q),
+        )
+        .toList();
 
-    _readyAndPacksList = _timeFilteredQuotations.where((q) => 
-        (q.status == 'READY' || q.type == 'pack') && q.status != 'SOLD' && q.status != 'ARCHIVED' && _isRealQuotation(q)
-    ).toList();
+    _readyAndPacksList = _timeFilteredQuotations
+        .where(
+          (q) =>
+              (q.status == 'READY' || q.type == 'pack') &&
+              q.status != 'SOLD' &&
+              q.status != 'ARCHIVED' &&
+              _isRealQuotation(q),
+        )
+        .toList();
 
     _soldList = _timeFilteredQuotations.where((q) {
-        if (q.status != 'SOLD') return false; 
-        if (_annulledQuotationIds.contains(q.id)) return false;
-        return _isRealQuotation(q);
+      if (q.status != 'SOLD') return false;
+      if (_annulledQuotationIds.contains(q.id)) return false;
+      return _isRealQuotation(q);
     }).toList();
 
-    _archivedList = _timeFilteredQuotations.where((q) => 
-        q.status == 'ARCHIVED' && _isRealQuotation(q)
-    ).toList();
+    _archivedList = _timeFilteredQuotations
+        .where((q) => q.status == 'ARCHIVED' && _isRealQuotation(q))
+        .toList();
   }
 
   bool _isRealQuotation(SmartQuotationModel q) {
     final tipo = q.type.toLowerCase();
     // Excluir ventas de caja rápida/POS
-    if (tipo == 'pos_rapido' || tipo == 'quick_sale' || tipo == 'caja' || tipo == 'venta_paso') {
-      return false; 
+    if (tipo == 'pos_rapido' ||
+        tipo == 'quick_sale' ||
+        tipo == 'caja' ||
+        tipo == 'venta_paso') {
+      return false;
     }
-    
+
     // Filtro legacy para cotizaciones antiguas que no tengan el type correcto
-    if (q.institutionName != null && q.institutionName!.toLowerCase().contains('venta al paso')) return false;
+    if (q.institutionName != null &&
+        q.institutionName!.toLowerCase().contains('venta al paso')) {
+      return false;
+    }
     if (q.clientName != null) {
       final name = q.clientName!.toLowerCase();
       if (name.contains('caja') && name.contains('rápida')) return false;
-      if (name == 'sin cliente') return false; 
+      if (name == 'sin cliente') return false;
     }
     return true;
   }
 
   Future<void> _evaluateHealthAndAutoDowngrade() async {
     bool listsChanged = false;
-    
+
     // Batch validation sin notifyListeners individual
     await _batchValidate([..._inProcessList, ..._readyAndPacksList]);
-    
+
     for (var q in [..._inProcessList, ..._readyAndPacksList]) {
       final validation = _trafficLights[q.id];
-      
+
       if (q.status == 'READY' && validation != null && !validation.canSell) {
         await changeQuotationStatus(q.id, 'DRAFT', skipReload: true);
         final index = _allQuotations.indexWhere((item) => item.id == q.id);
         if (index != -1) {
-           _allQuotations[index] = _allQuotations[index].copyWith(status: 'DRAFT');
-           listsChanged = true;
+          _allQuotations[index] = _allQuotations[index].copyWith(
+            status: 'DRAFT',
+          );
+          listsChanged = true;
         }
       }
     }
@@ -365,9 +462,9 @@ class WorkbenchProvider with ChangeNotifier {
   Future<void> refreshAll() async {
     _isLoading = true;
     notifyListeners();
-    
+
     await _evaluateHealthAndAutoDowngrade();
-    
+
     _isLoading = false;
     notifyListeners();
   }
@@ -376,19 +473,26 @@ class WorkbenchProvider with ChangeNotifier {
     try {
       final result = await _quotationService.validateIntegrity(quotationId);
       _trafficLights[quotationId] = result;
-      notifyListeners(); 
+      notifyListeners();
     } catch (e) {
       debugPrint("Error verificando integridad local: $e");
     }
   }
 
   ValidationResult? getValidationFor(int id) => _trafficLights[id];
-  
+
   Future<int?> saveManualQuotation({
-    int? id, int? clientId, String? clientName, String? institution, String? grade,
-    String? notas, 
-    required List<Map<String, dynamic>> items, required double totalAmount,
-    double totalSavings = 0.0, String status = "DRAFT", String type = "manual",
+    int? id,
+    int? clientId,
+    String? clientName,
+    String? institution,
+    String? grade,
+    String? notas,
+    required List<Map<String, dynamic>> items,
+    required double totalAmount,
+    double totalSavings = 0.0,
+    String status = "DRAFT",
+    String type = "manual",
   }) async {
     if (items.isEmpty) {
       throw ArgumentError("No se puede guardar una cotización sin productos");
@@ -397,7 +501,9 @@ class WorkbenchProvider with ChangeNotifier {
     _isLoading = true;
     notifyListeners();
     try {
-      if (clientName == null || clientName.trim().isEmpty || clientName == "Cliente General") {
+      if (clientName == null ||
+          clientName.trim().isEmpty ||
+          clientName == "Cliente General") {
         final timeSuffix = DateFormat('dd-HHmm').format(DateTime.now());
         if (type == 'pack') {
           clientName = "Pack Escolar #$timeSuffix";
@@ -407,13 +513,21 @@ class WorkbenchProvider with ChangeNotifier {
       }
 
       final newId = await _quotationService.saveManualQuotation(
-        negocioId: _negocioId!, 
+        negocioId: _negocioId!,
         usuarioId: _usuarioId!,
-        id: id, clientId: clientId, clientName: clientName, institutionName: institution, 
-        gradeLevel: grade, notas: notas, totalAmount: totalAmount,
-        totalSavings: totalSavings, items: items, status: status, type: type,
+        id: id,
+        clientId: clientId,
+        clientName: clientName,
+        institutionName: institution,
+        gradeLevel: grade,
+        notas: notas,
+        totalAmount: totalAmount,
+        totalSavings: totalSavings,
+        items: items,
+        status: status,
+        type: type,
       );
-      await loadDashboard(); 
+      await loadDashboard();
       return newId;
     } catch (e) {
       _handleException(e);
@@ -424,30 +538,43 @@ class WorkbenchProvider with ChangeNotifier {
     }
   }
 
-  Future<bool> changeQuotationStatus(int id, String newStatus, {bool skipReload = false}) async {
+  Future<bool> changeQuotationStatus(
+    int id,
+    String newStatus, {
+    bool skipReload = false,
+  }) async {
     try {
-      final success = await _quotationService.updateQuotationStatus(id, newStatus);
-      if (success && !skipReload) await loadDashboard(); 
+      final success = await _quotationService.updateQuotationStatus(
+        id,
+        newStatus,
+      );
+      if (success && !skipReload) await loadDashboard();
       return success;
-    } catch (e) { 
+    } catch (e) {
       _handleException(e);
-      return false; 
+      return false;
     }
   }
 
-  Future<bool> refreshQuotation(int id, {
-    bool fixPrices = true, 
-    bool fixStock = false, 
+  Future<bool> refreshQuotation(
+    int id, {
+    bool fixPrices = true,
+    bool fixStock = false,
     bool fixNames = false,
-    bool fixBundles = false
+    bool fixBundles = false,
   }) async {
     _isLoading = true;
     notifyListeners();
 
     try {
-      final success = await _quotationService.refreshQuotation(id, 
-        fixPrices: fixPrices, fixStock: fixStock, fixNames: fixNames, fixBundles: fixBundles);
-      
+      final success = await _quotationService.refreshQuotation(
+        id,
+        fixPrices: fixPrices,
+        fixStock: fixStock,
+        fixNames: fixNames,
+        fixBundles: fixBundles,
+      );
+
       if (success) {
         await checkTrafficLight(id);
         await loadDashboard();
@@ -464,7 +591,13 @@ class WorkbenchProvider with ChangeNotifier {
 
   /// Sincroniza todas las ofertas (bundles) de una cotización con su estado actual en el catálogo
   Future<bool> syncBundles(int quotationId) async {
-    return refreshQuotation(quotationId, fixPrices: false, fixStock: false, fixNames: false, fixBundles: true);
+    return refreshQuotation(
+      quotationId,
+      fixPrices: false,
+      fixStock: false,
+      fixNames: false,
+      fixBundles: true,
+    );
   }
 
   Future<int?> cloneQuotation(int id) async {
@@ -474,13 +607,13 @@ class WorkbenchProvider with ChangeNotifier {
     try {
       final clone = await _quotationService.cloneQuotation(id, _usuarioId!);
       await loadDashboard();
-      return clone.id; 
-    } catch (e) { 
+      return clone.id;
+    } catch (e) {
       _handleException(e);
-      return null; 
-    } finally { 
-      _isLoading = false; 
-      notifyListeners(); 
+      return null;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
     }
   }
 
@@ -489,19 +622,31 @@ class WorkbenchProvider with ChangeNotifier {
     notifyListeners();
     try {
       final db = await dbHelper.database;
-      final qCheck = await db.query('smart_quotations', columns: ['status'], where: 'id = ?', whereArgs: [id]);
+      final qCheck = await db.query(
+        'smart_quotations',
+        columns: ['status'],
+        where: 'id = ?',
+        whereArgs: [id],
+      );
       if (qCheck.isNotEmpty && qCheck.first['status'] == 'SOLD') {
-        throw Exception("No se puede convertir a plantilla una cotización que ya fue vendida.");
+        throw Exception(
+          "No se puede convertir a plantilla una cotización que ya fue vendida.",
+        );
       }
-      await db.update('smart_quotations', {'type': 'pack', 'is_template': 1}, where: 'id = ?', whereArgs: [id]);
+      await db.update(
+        'smart_quotations',
+        {'type': 'pack', 'is_template': 1},
+        where: 'id = ?',
+        whereArgs: [id],
+      );
       await loadDashboard();
-      return id; 
-    } catch (e) { 
+      return id;
+    } catch (e) {
       _handleException(e);
-      return null; 
-    } finally { 
-      _isLoading = false; 
-      notifyListeners(); 
+      return null;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
     }
   }
 
@@ -510,18 +655,34 @@ class WorkbenchProvider with ChangeNotifier {
     notifyListeners();
     try {
       final db = await dbHelper.database;
-      final qCheck = await db.query('smart_quotations', columns: ['status'], where: 'id = ?', whereArgs: [id]);
+      final qCheck = await db.query(
+        'smart_quotations',
+        columns: ['status'],
+        where: 'id = ?',
+        whereArgs: [id],
+      );
       if (qCheck.isNotEmpty && qCheck.first['status'] == 'SOLD') {
-        throw Exception("No se puede eliminar una cotización que ya fue vendida.");
+        throw Exception(
+          "No se puede eliminar una cotización que ya fue vendida.",
+        );
       }
 
       await db.transaction((txn) async {
-        await txn.update('ventas', {'cotizacion_id': null}, where: 'cotizacion_id = ?', whereArgs: [id]);
-        await txn.delete('smart_quotation_items', where: 'quotation_id = ?', whereArgs: [id]);
+        await txn.update(
+          'ventas',
+          {'cotizacion_id': null},
+          where: 'cotizacion_id = ?',
+          whereArgs: [id],
+        );
+        await txn.delete(
+          'smart_quotation_items',
+          where: 'quotation_id = ?',
+          whereArgs: [id],
+        );
         await txn.delete('smart_quotations', where: 'id = ?', whereArgs: [id]);
       });
-      
-      await loadDashboard(); 
+
+      await loadDashboard();
       return true;
     } catch (e) {
       _handleException(e);
@@ -535,9 +696,15 @@ class WorkbenchProvider with ChangeNotifier {
   Future<bool> renameQuotation(int id, String newName, {int? clientId}) async {
     try {
       final db = await dbHelper.database;
-      final qCheck = await db.query('smart_quotations', where: 'id = ?', whereArgs: [id]);
+      final qCheck = await db.query(
+        'smart_quotations',
+        where: 'id = ?',
+        whereArgs: [id],
+      );
       if (qCheck.isNotEmpty && qCheck.first['status'] == 'SOLD') {
-        throw Exception("No se puede renombrar una cotización que ya fue vendida.");
+        throw Exception(
+          "No se puede renombrar una cotización que ya fue vendida.",
+        );
       }
 
       String finalName = newName.trim();
@@ -556,9 +723,14 @@ class WorkbenchProvider with ChangeNotifier {
         updateData["client_id"] = clientId;
       }
 
-      await db.update('smart_quotations', updateData, where: 'id = ?', whereArgs: [id]);
-      
-      await loadDashboard(); 
+      await db.update(
+        'smart_quotations',
+        updateData,
+        where: 'id = ?',
+        whereArgs: [id],
+      );
+
+      await loadDashboard();
       return true;
     } catch (e) {
       _handleException(e);

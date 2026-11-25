@@ -294,9 +294,11 @@ class _ClientDetailScreenState extends State<ClientDetailScreen> with SingleTick
               floating: false,
               actions: [
                 InfoTooltipButton(
+                  padding: const EdgeInsets.all(4),
+                  constraints: const BoxConstraints(minWidth: 34, minHeight: 34),
                   title: "Detalle y Estado de Cuenta",
                   description:
-                      "Visión 360° del cliente: balance de deuda, compras históricas, cotizaciones pendientes y libro contable de abonos.",
+                      "Visión 360° del cliente: balance de deuda, préstamos y saldo a favor, abonos en cascada y libro contable completo.",
                   onStartInteractiveTour: () => _startTour(context),
                   tips: const [
                     InfoTip(
@@ -305,25 +307,27 @@ class _ClientDetailScreenState extends State<ClientDetailScreen> with SingleTick
                           "Usa 'Abonar a Deuda' para registrar pagos parciales o totales que amortizan sus cuotas.",
                     ),
                     InfoTip(
-                      icon: Icons.chat_bubble_outline,
+                      icon: Icons.account_balance_rounded,
                       text:
-                          "Toca 'Recordar' para generar el mensaje de WhatsApp con el desglose exacto de cuotas vencidas y métodos de pago.",
+                          "Pulsa '+ Préstamo' para otorgar créditos en cuotas o retirar saldo a favor disponible.",
                     ),
                     InfoTip(
-                      icon: Icons.point_of_sale_rounded,
+                      icon: Icons.chat_bubble_outline,
                       text:
-                          "Inicia una 'Venta Rápida' pre-cargando los datos de este cliente automáticamente.",
+                          "Toca 'Recordar' o el ícono de WhatsApp para enviar el desglose de cuotas vencidas y medios de pago.",
                     ),
                     InfoTip(
                       icon: Icons.receipt_long_outlined,
                       text:
-                          "Navega entre 'Estado de Cuenta', 'Compras' y 'Listas / Cotiz.' para ver todo su historial.",
+                          "Navega entre 'Estado de Cuenta', 'Compras' y 'Listas / Cotiz.' para revisar todo su historial.",
                     ),
                   ],
                 ),
-                PopupMenuButton<String>(
-                  icon: const Icon(Icons.more_vert_rounded, color: Colors.white),
-                  tooltip: "Más opciones",
+                KeyedSubtree(
+                  key: _tourKeys.optionsMenuKey,
+                  child: PopupMenuButton<String>(
+                    icon: const Icon(Icons.more_vert_rounded, color: Colors.white),
+                    tooltip: "Más opciones",
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(14),
                   ),
@@ -380,6 +384,7 @@ class _ClientDetailScreenState extends State<ClientDetailScreen> with SingleTick
                       ),
                     ),
                   ],
+                  ),
                 ),
                 const SizedBox(width: 4),
               ],
@@ -397,6 +402,8 @@ class _ClientDetailScreenState extends State<ClientDetailScreen> with SingleTick
                   onGoToQuotation: _goToManualQuotation,
                   onFinanceActionCompleted: _refreshData,
                   whatsappContactKey: _tourKeys.whatsappContactKey,
+                  quickActionsKey: _tourKeys.quickActionsKey,
+                  loanActionsKey: _tourKeys.loanActionsKey,
                 ),
               ),
             ),
@@ -484,8 +491,20 @@ class _ClientDetailScreenState extends State<ClientDetailScreen> with SingleTick
             onPressed: () => _showPaymentModal(context),
             backgroundColor: isDark ? Colors.green[600] : Colors.green[700],
             elevation: isDark ? 0 : 4,
-            icon: const Icon(Icons.payments, color: Colors.white, size: 24),
-            label: const Text("Registrar Abono", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16, letterSpacing: 0.5)),
+            icon: const Icon(Icons.payments, color: Colors.white, size: 22),
+            label: const FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(
+                "Registrar Abono",
+                maxLines: 1,
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 15,
+                  letterSpacing: 0.4,
+                ),
+              ),
+            ),
           ),
         ],
       ),

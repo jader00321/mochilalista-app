@@ -1,8 +1,9 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:app_movil/core/providers/auth_provider.dart';
 import 'package:app_movil/features/analytics/models/commercial_radar_model.dart';
 import 'package:app_movil/features/analytics/services/commercial_radar_service.dart';
 import 'package:app_movil/features/analytics/widgets/dashboard/glass_card.dart';
@@ -16,11 +17,13 @@ import 'package:app_movil/core/widgets/interactive_sheet_wrapper.dart';
 class CommercialRadarCard extends StatefulWidget {
   final bool isDark;
   final String defaultRegion;
+  final int? profileId;
 
   const CommercialRadarCard({
     super.key,
     required this.isDark,
     this.defaultRegion = 'Talara / Piura',
+    this.profileId,
   });
 
   @override
@@ -38,6 +41,8 @@ class _CommercialRadarCardState extends State<CommercialRadarCard>
   final List<CommercialNewsItem> _newsItems = [];
   StreamSubscription<CommercialNewsItem>? _streamSubscription;
   late AnimationController _pulseController;
+  int? _resolvedProfileId;
+  bool _didInitProfileDependencies = false;
 
   final List<String> _categories = [
     'Todas',
@@ -48,7 +53,6 @@ class _CommercialRadarCardState extends State<CommercialRadarCard>
     'Fechas y Campañas',
   ];
 
-  static const String _prefRegionKey = 'commercial_radar_selected_region';
   static const List<String> _predefinedRegions = [
     'Talara / Piura',
     'Piura / Región Norte',
@@ -68,26 +72,81 @@ class _CommercialRadarCardState extends State<CommercialRadarCard>
       vsync: this,
       duration: const Duration(milliseconds: 1400),
     )..repeat(reverse: true);
-
-    // Cargar caché previo si existe para evitar saltos
-    final cached = CommercialRadarService.getCachedNews(_selectedRegion);
-    if (cached != null && cached.isNotEmpty) {
-      _newsItems.addAll(cached);
-      _isLoading = false;
-    }
-    _loadSavedRegion();
   }
 
-  Future<void> _loadSavedRegion() async {
+  int? _resolveActiveProfileId(BuildContext context) {
+    if (widget.profileId != null) return widget.profileId;
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final saved = prefs.getString(_prefRegionKey);
-      if (saved != null && saved.isNotEmpty && mounted) {
+      return Provider.of<AuthProvider?>(context)?.activeUserId;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final nextProfileId = _resolveActiveProfileId(context);
+    if (!_didInitProfileDependencies) {
+      _didInitProfileDependencies = true;
+      _resolvedProfileId = nextProfileId;
+      _hydrateAndLoadForProfile(loadProfileId: nextProfileId);
+    } else if (nextProfileId != _resolvedProfileId) {
+      _switchActiveProfile(nextProfileId);
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant CommercialRadarCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.profileId != oldWidget.profileId) {
+      final nextProfileId = _resolveActiveProfileId(context);
+      if (nextProfileId != _resolvedProfileId) {
+        _switchActiveProfile(nextProfileId);
+      }
+    }
+  }
+
+  void _switchActiveProfile(int? nextProfileId) {
+    _streamSubscription?.cancel();
+    setState(() {
+      _resolvedProfileId = nextProfileId;
+      _selectedRegion = widget.defaultRegion;
+      _newsItems.clear();
+      _isLoading = true;
+    });
+    _hydrateAndLoadForProfile(loadProfileId: nextProfileId);
+  }
+
+  void _hydrateAndLoadForProfile({required int? loadProfileId}) {
+    final cached = CommercialRadarService.getCachedNews(_selectedRegion);
+    if (cached != null && cached.isNotEmpty) {
+      _newsItems
+        ..clear()
+        ..addAll(cached);
+      _isLoading = false;
+    }
+    _loadSavedRegion(profileId: loadProfileId);
+  }
+
+  Future<void> _loadSavedRegion({int? profileId}) async {
+    final loadProfileId = profileId;
+    try {
+      final saved = await CommercialRadarService.loadRegionLabelForProfile(
+        profileId: loadProfileId,
+        defaultRegion: widget.defaultRegion,
+      );
+      if (!mounted || loadProfileId != _resolvedProfileId) return;
+      if (saved.isNotEmpty) {
         setState(() {
           _selectedRegion = saved;
+          if (_selectedRegion != widget.defaultRegion) {
+            _newsItems.clear();
+          }
         });
       }
     } catch (_) {}
+    if (!mounted || loadProfileId != _resolvedProfileId) return;
     _startRadarStream();
   }
 
@@ -142,14 +201,16 @@ class _CommercialRadarCardState extends State<CommercialRadarCard>
   }
 
   Future<void> _setRegion(String newRegion) async {
+    final activeProfileId = _resolvedProfileId;
     setState(() {
       _selectedRegion = newRegion;
       _newsItems.clear();
     });
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(_prefRegionKey, newRegion);
-    } catch (_) {}
+    await CommercialRadarService.saveRegionLabelForProfile(
+      newRegion,
+      profileId: activeProfileId,
+    );
+    if (!mounted || activeProfileId != _resolvedProfileId) return;
     _startRadarStream(forceRefresh: true);
   }
 
@@ -548,12 +609,16 @@ class _CommercialRadarCardState extends State<CommercialRadarCard>
                         color: Colors.blueAccent,
                       ),
                       const SizedBox(width: 4),
-                      Text(
-                        _selectedRegion,
-                        style: const TextStyle(
-                          fontSize: 12, 
-                          fontWeight: FontWeight.bold, 
-                          color: Colors.blueAccent,
+                      Flexible(
+                        child: Text(
+                          _selectedRegion,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.blueAccent,
+                          ),
                         ),
                       ),
                       const SizedBox(width: 4),
@@ -670,13 +735,19 @@ class _CommercialRadarCardState extends State<CommercialRadarCard>
           style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.bold),
           textAlign: TextAlign.center,
         ),
-        onPressed: () {
-          Navigator.push(
+        onPressed: () async {
+          await Navigator.push(
             context,
             MaterialPageRoute(
-              builder: (_) => CommercialRadarScreen(initialRegion: _selectedRegion),
+              builder: (_) => CommercialRadarScreen(
+                initialRegion: _selectedRegion,
+                profileId: _resolvedProfileId,
+              ),
             ),
           );
+          if (mounted) {
+            await _loadSavedRegion(profileId: _resolvedProfileId);
+          }
         },
       ),
     );

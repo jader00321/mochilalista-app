@@ -14,6 +14,8 @@ class ProductDetailSliverAppBar extends StatelessWidget {
   final VoidCallback onShowImage;
   final VoidCallback onAuditTrail;
   final VoidCallback onEdit;
+  final VoidCallback? onStartInteractiveTour;
+  final Key? auditEditActionsKey;
 
   const ProductDetailSliverAppBar({
     super.key,
@@ -25,6 +27,8 @@ class ProductDetailSliverAppBar extends StatelessWidget {
     required this.onShowImage,
     required this.onAuditTrail,
     required this.onEdit,
+    this.onStartInteractiveTour,
+    this.auditEditActionsKey,
   });
 
   @override
@@ -36,6 +40,7 @@ class ProductDetailSliverAppBar extends StatelessWidget {
           ? const Color(0xFF14141C)
           : Theme.of(context).primaryColor,
       iconTheme: const IconThemeData(color: Colors.white),
+      actionsPadding: EdgeInsets.zero,
       actions: [
         Container(
           margin: const EdgeInsets.only(right: 4),
@@ -43,12 +48,16 @@ class ProductDetailSliverAppBar extends StatelessWidget {
             color: Colors.black38,
             borderRadius: BorderRadius.circular(12),
           ),
-          child: const InfoTooltipButton(
+          child: InfoTooltipButton(
             iconColor: Colors.white70,
+            iconSize: 20,
+            padding: const EdgeInsets.all(6),
+            constraints: const BoxConstraints(minWidth: 34, minHeight: 34),
+            onStartInteractiveTour: onStartInteractiveTour,
             title: 'Detalle de Producto',
             description:
                 'Toda la información de tu producto en un solo lugar: precio de compra, precio de venta, stock, presentaciones disponibles y más.',
-            tips: [
+            tips: const [
               InfoTip(
                 icon: Icons.swap_horiz,
                 text:
@@ -62,7 +71,7 @@ class ProductDetailSliverAppBar extends StatelessWidget {
               InfoTip(
                 icon: Icons.history,
                 text:
-                    'El botón de reloj (⏰) abre el historial de cambios de precios y stock del producto.',
+                    'El botón de reloj abre el historial de cambios de precios y stock del producto.',
               ),
               InfoTip(
                 icon: Icons.edit,
@@ -77,33 +86,49 @@ class ProductDetailSliverAppBar extends StatelessWidget {
             ],
           ),
         ),
-        Container(
-          margin: const EdgeInsets.only(right: 8),
-          decoration: BoxDecoration(
-            color: Colors.black45,
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: IconButton(
-            icon: const Icon(
-              Icons.history,
-              color: Colors.white,
-              size: 24,
+        Row(
+          key: auditEditActionsKey,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              margin: const EdgeInsets.only(right: 6),
+              decoration: BoxDecoration(
+                color: Colors.black45,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: IconButton(
+                icon: const Icon(
+                  Icons.history,
+                  color: Colors.white,
+                  size: 22,
+                ),
+                padding: const EdgeInsets.all(6),
+                constraints: const BoxConstraints(minWidth: 34, minHeight: 34),
+                style: IconButton.styleFrom(
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+                onPressed: onAuditTrail,
+                tooltip: "Auditoría de Producto",
+              ),
             ),
-            onPressed: onAuditTrail,
-            tooltip: "Auditoría de Producto",
-          ),
-        ),
-        Container(
-          margin: const EdgeInsets.only(right: 12),
-          decoration: BoxDecoration(
-            color: Colors.black45,
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: IconButton(
-            icon: const Icon(Icons.edit, color: Colors.white, size: 24),
-            onPressed: onEdit,
-            tooltip: "Editar Producto",
-          ),
+            Container(
+              margin: const EdgeInsets.only(right: 10),
+              decoration: BoxDecoration(
+                color: Colors.black45,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: IconButton(
+                icon: const Icon(Icons.edit, color: Colors.white, size: 22),
+                padding: const EdgeInsets.all(6),
+                constraints: const BoxConstraints(minWidth: 34, minHeight: 34),
+                style: IconButton.styleFrom(
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+                onPressed: onEdit,
+                tooltip: "Editar Producto",
+              ),
+            ),
+          ],
         ),
       ],
       flexibleSpace: FlexibleSpaceBar(

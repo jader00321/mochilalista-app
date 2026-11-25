@@ -77,7 +77,18 @@ class DetailClientCard extends StatelessWidget {
               
               if (saleData['cliente_telefono'] != null && saleData['cliente_telefono'].toString().isNotEmpty && saleData['cliente_telefono'] != "000000000") ...[
                 const SizedBox(height: 12),
-                Row(children: [Icon(Icons.phone, size: 24, color: isDark ? Colors.grey[400] : Colors.grey), const SizedBox(width: 12), Text(saleData['cliente_telefono'].toString(), style: TextStyle(color: textColor, fontSize: 16))]),
+                Row(
+                  children: [
+                    Icon(Icons.phone, size: 24, color: isDark ? Colors.grey[400] : Colors.grey),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        saleData['cliente_telefono'].toString(),
+                        style: TextStyle(color: textColor, fontSize: 16),
+                      ),
+                    ),
+                  ],
+                ),
               ],
 
               if (!isQuickSale && (institution.isNotEmpty || grade.isNotEmpty)) ...[
@@ -88,7 +99,22 @@ class DetailClientCard extends StatelessWidget {
                    child: Column(
                      children: [
                        if (institution.isNotEmpty) Row(children: [Icon(Icons.school, size: 22, color: isDark ? Colors.indigo[200] : Colors.indigo), const SizedBox(width: 12), Expanded(child: Text(institution, style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15, color: isDark ? Colors.white : Colors.black87)))]),
-                       if (grade.isNotEmpty) Padding(padding: const EdgeInsets.only(top: 10), child: Row(children: [Icon(Icons.class_, size: 22, color: isDark ? Colors.indigo[200] : Colors.indigo), const SizedBox(width: 12), Text(grade, style: TextStyle(fontSize: 15, color: isDark ? Colors.white : Colors.black87))])),
+                       if (grade.isNotEmpty)
+                         Padding(
+                           padding: const EdgeInsets.only(top: 10),
+                           child: Row(
+                             children: [
+                               Icon(Icons.class_, size: 22, color: isDark ? Colors.indigo[200] : Colors.indigo),
+                               const SizedBox(width: 12),
+                               Expanded(
+                                 child: Text(
+                                   grade,
+                                   style: TextStyle(fontSize: 15, color: isDark ? Colors.white : Colors.black87),
+                                 ),
+                               ),
+                             ],
+                           ),
+                         ),
                      ],
                    ),
                  )

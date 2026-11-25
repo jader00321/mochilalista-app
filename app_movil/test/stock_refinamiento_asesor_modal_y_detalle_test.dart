@@ -598,6 +598,7 @@ void main() {
           categoria_id INTEGER,
           marca_id INTEGER,
           negocio_id INTEGER DEFAULT 1,
+          fecha_creacion TEXT,
           estado TEXT DEFAULT 'activo'
         )
       ''');

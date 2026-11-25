@@ -82,14 +82,16 @@ class PresentationDiscountSection extends StatelessWidget {
               size: 20,
             ),
             const SizedBox(width: 8),
-            Text(
-              "Módulo de Descuentos",
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.bold,
-                color: descuentoActivo
-                    ? (isDark ? Colors.purple[300] : Colors.purple[800])
-                    : (isDark ? Colors.grey[400] : Colors.grey[700]),
+            Expanded(
+              child: Text(
+                "Módulo de Descuentos",
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                  color: descuentoActivo
+                      ? (isDark ? Colors.purple[300] : Colors.purple[800])
+                      : (isDark ? Colors.grey[400] : Colors.grey[700]),
+                ),
               ),
             ),
           ],
@@ -118,11 +120,13 @@ class PresentationDiscountSection extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                "Activar promoción",
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  color: isDark ? Colors.white : Colors.black87,
+              Expanded(
+                child: Text(
+                  "Activar promoción",
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: isDark ? Colors.white : Colors.black87,
+                  ),
                 ),
               ),
               Switch(

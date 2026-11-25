@@ -199,10 +199,12 @@ void main() {
       SharedPreferences.setMockInitialValues({});
     });
 
-    test('WhatsAppMessageStyle incluye los 6 estilos con labels y descripciones', () {
-      expect(WhatsAppMessageStyle.values.length, equals(6));
+    test('WhatsAppMessageStyle incluye todos los estilos oficiales con labels y descripciones', () {
+      expect(WhatsAppMessageStyle.values.length, equals(8));
       expect(WhatsAppMessageStyle.values, contains(WhatsAppMessageStyle.commercial));
+      expect(WhatsAppMessageStyle.values, contains(WhatsAppMessageStyle.wholesale));
       expect(WhatsAppMessageStyle.values, contains(WhatsAppMessageStyle.compact));
+      expect(WhatsAppMessageStyle.values, contains(WhatsAppMessageStyle.school));
       expect(WhatsAppMessageStyle.values, contains(WhatsAppMessageStyle.urgentOffer));
       expect(WhatsAppMessageStyle.values, contains(WhatsAppMessageStyle.accountDebt));
       expect(WhatsAppMessageStyle.values, contains(WhatsAppMessageStyle.followUp));
@@ -325,15 +327,17 @@ void main() {
       expect(footerNote, contains("🤝 Gracias por su compra"));
     });
 
-    test('WhatsAppMessageStyle tiene 6 estilos para distribución exacta en cuadrícula 2x3', () {
+    test('WhatsAppMessageStyle expone los 8 estilos oficiales en el orden del catálogo', () {
       final styles = WhatsAppMessageStyle.values;
-      expect(styles.length, equals(6));
+      expect(styles.length, equals(8));
       expect(styles[0], equals(WhatsAppMessageStyle.commercial));
-      expect(styles[1], equals(WhatsAppMessageStyle.compact));
-      expect(styles[2], equals(WhatsAppMessageStyle.urgentOffer));
-      expect(styles[3], equals(WhatsAppMessageStyle.accountDebt));
-      expect(styles[4], equals(WhatsAppMessageStyle.followUp));
-      expect(styles[5], equals(WhatsAppMessageStyle.deliveryReady));
+      expect(styles[1], equals(WhatsAppMessageStyle.wholesale));
+      expect(styles[2], equals(WhatsAppMessageStyle.compact));
+      expect(styles[3], equals(WhatsAppMessageStyle.school));
+      expect(styles[4], equals(WhatsAppMessageStyle.urgentOffer));
+      expect(styles[5], equals(WhatsAppMessageStyle.accountDebt));
+      expect(styles[6], equals(WhatsAppMessageStyle.followUp));
+      expect(styles[7], equals(WhatsAppMessageStyle.deliveryReady));
     });
   });
 

@@ -12,9 +12,20 @@ import 'package:app_movil/features/scanner/widgets/review/review_item_card.dart'
 import 'package:app_movil/features/scanner/widgets/review/raw_data_audit_modal.dart';
 import 'package:app_movil/features/scanner/widgets/review/invoice_metadata_modal.dart';
 import 'package:app_movil/core/widgets/interactive_sheet_wrapper.dart';
+import 'package:app_movil/core/services/tour/interactive_tour_service.dart';
+import 'package:app_movil/core/widgets/info_tooltip_button.dart';
+import 'package:app_movil/core/widgets/tour/configs/invoice_review_tour.dart';
+import 'package:app_movil/core/widgets/tour/tour_step_model.dart';
 
 class InvoiceReviewScreen extends StatefulWidget {
-  const InvoiceReviewScreen({super.key});
+  final bool autoTriggerTour;
+  final InvoiceReviewTourKeys? tourKeys;
+
+  const InvoiceReviewScreen({
+    super.key,
+    this.autoTriggerTour = true,
+    this.tourKeys,
+  });
 
   @override
   State<InvoiceReviewScreen> createState() => _InvoiceReviewScreenState();
@@ -32,10 +43,13 @@ class _InvoiceReviewScreenState extends State<InvoiceReviewScreen> {
   late MultiSplitViewController _splitController;
   final ScrollController _scrollController = ScrollController();
   bool _showScrollToTop = false;
+  late final InvoiceReviewTourKeys _tourKeys;
+  bool _didAttemptAutoTour = false;
 
   @override
   void initState() {
     super.initState();
+    _tourKeys = widget.tourKeys ?? InvoiceReviewTourKeys();
     _splitController = MultiSplitViewController(
       areas: [Area(size: 0.35, min: 0.20), Area(size: 0.65, min: 0.45)],
     );
@@ -46,6 +60,32 @@ class _InvoiceReviewScreenState extends State<InvoiceReviewScreen> {
       } else if (_scrollController.offset <= 200 && _showScrollToTop) {
         setState(() => _showScrollToTop = false);
       }
+    });
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _maybeStartAutoTour();
+    });
+  }
+
+  ScreenTourConfig _buildTourConfig() {
+    return InvoiceReviewTour.buildConfig(keys: _tourKeys);
+  }
+
+  void _startTour(BuildContext context) {
+    InteractiveTourService.startManualTour(context, _buildTourConfig());
+  }
+
+  void _maybeStartAutoTour() {
+    if (!widget.autoTriggerTour || _didAttemptAutoTour || !mounted) return;
+    final provider = Provider.of<ScannerProvider>(context, listen: false);
+    if (provider.currentImage == null) return;
+    _didAttemptAutoTour = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+      await InteractiveTourService.maybeStartAutomaticTour(
+        context,
+        _buildTourConfig(),
+      );
     });
   }
 
@@ -309,8 +349,10 @@ class _InvoiceReviewScreenState extends State<InvoiceReviewScreen> {
     return Scaffold(
       backgroundColor: bgColor,
       appBar: AppBar(
+        titleSpacing: 0,
         title: FittedBox(
           fit: BoxFit.scaleDown,
+          alignment: Alignment.centerLeft,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -335,46 +377,73 @@ class _InvoiceReviewScreenState extends State<InvoiceReviewScreen> {
         foregroundColor: Colors.white,
         elevation: 0,
         actions: [
+          InfoTooltipButton(
+            iconColor: Colors.white,
+            constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+            padding: const EdgeInsets.all(6),
+            onStartInteractiveTour: () => _startTour(context),
+            title: "Revisión de Factura IA",
+            description:
+                "Compara la foto original con los ítems y costos extraídos por la IA antes de ingresarlos a inventario.",
+            tips: const [
+              InfoTip(
+                icon: Icons.vertical_split_rounded,
+                text:
+                    "Arrastra la barra central para ampliar la fotografía de la factura o los renglones inferiores.",
+              ),
+              InfoTip(
+                icon: Icons.receipt_long_rounded,
+                text:
+                    "Toca Resumen para validar proveedor, RUC, fecha y monto total antes de confirmar.",
+              ),
+            ],
+          ),
           IconButton(
-            icon: const Icon(Icons.code, color: Colors.white, size: 24),
+            icon: const Icon(Icons.code, color: Colors.white, size: 22),
             tooltip: "Ver Auditoría IA",
+            visualDensity: VisualDensity.compact,
+            constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+            padding: const EdgeInsets.all(6),
             onPressed: () => RawDataAuditModal.show(context, isDark),
           ),
           Padding(
             padding: const EdgeInsets.only(right: 8.0),
-            child: TextButton.icon(
-              icon: const Icon(
-                Icons.receipt_long_rounded,
-                color: Colors.white,
-                size: 18,
-              ),
-              label: const Text(
-                "Resumen",
-                style: TextStyle(
+            child: KeyedSubtree(
+              key: _tourKeys.metadataBtnKey,
+              child: TextButton.icon(
+                icon: const Icon(
+                  Icons.receipt_long_rounded,
                   color: Colors.white,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 12,
+                  size: 16,
                 ),
-              ),
-              style: TextButton.styleFrom(
-                backgroundColor: isDark
-                    ? Colors.green.withValues(alpha: 0.2)
-                    : Colors.white.withValues(alpha: 0.2),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
+                label: const Text(
+                  "Resumen",
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 12,
+                  ),
                 ),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 4,
+                style: TextButton.styleFrom(
+                  backgroundColor: isDark
+                      ? Colors.green.withValues(alpha: 0.2)
+                      : Colors.white.withValues(alpha: 0.2),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
                 ),
-              ),
-              onPressed: () => InvoiceMetadataModal.show(
-                context: context,
-                isDark: isDark,
-                providerNameCtrl: _providerNameCtrl,
-                rucCtrl: _rucCtrl,
-                dateCtrl: _dateCtrl,
-                montoTotalCtrl: _montoTotalCtrl,
+                onPressed: () => InvoiceMetadataModal.show(
+                  context: context,
+                  isDark: isDark,
+                  providerNameCtrl: _providerNameCtrl,
+                  rucCtrl: _rucCtrl,
+                  dateCtrl: _dateCtrl,
+                  montoTotalCtrl: _montoTotalCtrl,
+                ),
               ),
             ),
           ),
@@ -399,34 +468,40 @@ class _InvoiceReviewScreenState extends State<InvoiceReviewScreen> {
               ),
           ],
         ),
-        child: SizedBox(
-          height: 50,
-          child: FilledButton.icon(
-            onPressed: provider.isLoading ? null : _analyzeAndContinue,
-            icon: provider.isLoading
-                ? const SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(
-                      color: Colors.white,
-                      strokeWidth: 2,
-                    ),
-                  )
-                : const Icon(Icons.check_circle_outline, size: 20),
-            label: Text(
-              provider.isLoading
-                  ? "PROCESANDO..."
-                  : "CONFIRMAR E IR A INVENTARIO",
-              style: const TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 14,
+        child: KeyedSubtree(
+          key: _tourKeys.continueBtnKey,
+          child: SizedBox(
+            height: 50,
+            child: FilledButton.icon(
+              onPressed: provider.isLoading ? null : _analyzeAndContinue,
+              icon: provider.isLoading
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                        color: Colors.white,
+                        strokeWidth: 2,
+                      ),
+                    )
+                  : const Icon(Icons.check_circle_outline, size: 20),
+              label: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  provider.isLoading
+                      ? "PROCESANDO..."
+                      : "CONFIRMAR E IR A INVENTARIO",
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14,
+                  ),
+                ),
               ),
-            ),
-            style: FilledButton.styleFrom(
-              backgroundColor: isDark ? Colors.green[600] : Colors.green[800],
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
+              style: FilledButton.styleFrom(
+                backgroundColor: isDark ? Colors.green[600] : Colors.green[800],
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
               ),
             ),
           ),
@@ -434,9 +509,11 @@ class _InvoiceReviewScreenState extends State<InvoiceReviewScreen> {
       ),
 
       body: SafeArea(
-        child: Container(
-          color: isDark ? const Color(0xFF14141C) : Colors.grey[200],
-          child: MultiSplitViewTheme(
+        child: KeyedSubtree(
+          key: _tourKeys.splitWorkspaceKey,
+          child: Container(
+            color: isDark ? const Color(0xFF14141C) : Colors.grey[200],
+            child: MultiSplitViewTheme(
             data: MultiSplitViewThemeData(dividerThickness: 35),
             child: MultiSplitView(
               axis: Axis.vertical,
@@ -510,6 +587,7 @@ class _InvoiceReviewScreenState extends State<InvoiceReviewScreen> {
                 }
               },
             ),
+            ),
           ),
         ),
       ),
@@ -537,13 +615,20 @@ class _InvoiceReviewScreenState extends State<InvoiceReviewScreen> {
                 color: Colors.black54,
                 borderRadius: BorderRadius.circular(6),
               ),
-              child: const Text(
-                "🔍 Pellizca para Zoom",
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 10,
-                  fontWeight: FontWeight.bold,
-                ),
+              child: const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.zoom_in, size: 12, color: Colors.white),
+                  SizedBox(width: 4),
+                  Text(
+                    "Pellizca para Zoom",
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
@@ -553,11 +638,13 @@ class _InvoiceReviewScreenState extends State<InvoiceReviewScreen> {
   }
 
   Widget _buildFormSection(bool isDark) {
-    return Container(
-      decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF14141C) : Colors.grey[50],
-      ),
-      child: Stack(
+    return KeyedSubtree(
+      key: _tourKeys.itemsListKey,
+      child: Container(
+        decoration: BoxDecoration(
+          color: isDark ? const Color(0xFF14141C) : Colors.grey[50],
+        ),
+        child: Stack(
         children: [
           _localItems.isEmpty
               ? Center(
@@ -661,6 +748,7 @@ class _InvoiceReviewScreenState extends State<InvoiceReviewScreen> {
               ),
             ),
         ],
+      ),
       ),
     );
   }

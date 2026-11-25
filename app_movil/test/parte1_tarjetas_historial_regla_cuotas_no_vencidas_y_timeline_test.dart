@@ -493,8 +493,9 @@ void main() {
       // Cuota 2 en plazo debe decir "Vence:"
       expect(find.textContaining('Vence:'), findsOneWidget);
 
-      // Botón de mora en cuota 1 (con mora aplicada): debe decir "Mora (+S/ 5.00)"
-      expect(find.text('Mora (+S/ 5.00)'), findsOneWidget);
+      // Botón de mora en cuota 1 (con mora aplicada): botón conciso "Mora" + píldora de desglose
+      expect(find.text('Mora'), findsOneWidget);
+      expect(find.textContaining('Mora: S/ 5.00'), findsOneWidget);
       // Botón de mora en cuota 2 (vigente): debe decir "Prog. Mora"
       expect(find.text('Prog. Mora'), findsOneWidget);
 

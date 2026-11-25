@@ -45,7 +45,7 @@ Aquí se detallan todos los procedimientos paso a paso, comandos de terminal, pr
    - 3.4. Matriz Inteligente SemVer y Barra de Progreso de Despliegue
    - 3.5. Despacho Asistido de APK por WhatsApp y Portapapeles Windows
    - 3.6. Protocolo Dual de Sincronización Offline (`.mlsync` / `MLS1-...`) y Rescate 1-Clic
-   - 3.7. Comportamiento en la App Móvil: Snapshot `.bak` y Novedades v9.39.0
+   - 3.7. Comportamiento en la App Móvil: Snapshot `.bak` y Novedades v9.40.0
 4. [GUÍA 4: Protocolo de Respuesta ante Incidentes y Seguridad Adversarial](#guía-4-protocolo-de-respuesta-ante-incidentes-y-seguridad-adversarial)
    - 4.1. Incidente: Pantalla de "Reloj Desajustado / Manipulación Temporal"
    - 4.2. Incidente: Pantalla de "Licencia Pendiente de Migración" (Doble Candado Anti-Clonación)
@@ -166,7 +166,7 @@ Abre tu navegador web en `http://localhost:8080`. Dispones de **8 módulos de co
      - **`PROSPECTO`:** Contacto comercial en prospección sin licencia generada ni expiración ficticia (`license_expires = null`).
      - **`TRIAL GRATUITO (Días Reales)`:** Permite ingresar los días exactos que le restan al comerciante en su teléfono (`trial_days_remaining`, ej. `17 días`). No impone ventana artificial de actualización (`updates_until = null`), respetando la naturaleza Offline-First de la app móvil.
      - **`CON LICENCIA ACTIVA`:** Planes comerciales tarifados (`MENSUAL`, `TRIMESTRAL`, `SEMESTRAL`, `ANUAL`, `PERPETUO`).
-   * **Versión de App Instalada:** (por defecto: `9.39.0` — Esquema SQLite `v36`).
+   * **Versión de App Instalada:** (por defecto: `9.40.0` — Esquema SQLite `v36`).
    * **Gestión de Créditos IA:**
      - **Saldo IA Reportado en Celular:** Créditos que el cliente indica tener disponibles en su app móvil (ej. `49 IA`).
      - **Bonos IA Pendientes por Emitir:** Escaneos adicionales que se incorporarán en la próxima emisión de token criptográfico Ed25519 (ej. `+20 IA`). Ambos valores se muestran desacoplados de forma transparente, previniendo falsas sumas anticipadas en el CRM.
@@ -449,7 +449,7 @@ Certifica que las firmas v1, v2 y v3 corresponden exclusivamente al certificado 
 | Categoría | Ejemplos | ¿Quién tiene derecho a instalarla? | Vigencia |
 | :--- | :--- | :--- | :--- |
 | **HOTFIX** (Estabilidad) | `9.23.1`, `9.24.1` | **TODOS los clientes**, tanto con suscripción como con **Licencia Perpetua vitalicia**. | **Vitalicio** (Garantía de software funcional). |
-| **FEATURE_RELEASE** (Nuevas Funciones) | `9.39.0`, `10.0.0` | Clientes con **suscripción activa** o Licencia Perpetua con pase vigente (`updates_until`). | Requiere suscripción o Pase Anual de Updates (S/ 150.00). |
+| **FEATURE_RELEASE** (Nuevas Funciones) | `9.40.0`, `10.0.0` | Clientes con **suscripción activa** o Licencia Perpetua con pase vigente (`updates_until`). | Requiere suscripción o Pase Anual de Updates (S/ 150.00). |
 
 ---
 
@@ -514,14 +514,15 @@ Permite auditar el estado real del celular del cliente sin conexión a internet 
 
 ---
 
-### 3.7. Comportamiento en la App Móvil: Snapshot `.bak` y Novedades v9.39.0
+### 3.7. Comportamiento en la App Móvil: Snapshot `.bak` y Novedades v9.40.0
 1. **Snapshot `.bak` Transparente:** La app crea una copia `mochilalista.db_pre_upgrade_vX.bak` antes de aplicar migraciones de esquema SQLite. Si ocurre un fallo eléctrico o de hardware durante la migración, la app restaura el `.bak` automáticamente sin perder ningún dato de venta o inventario.
-2. **Novedades Comerciales Oficiales (v9.39.0+83 — Plan Maestro 20):**
-   * **Planes Comerciales Plegables y Ficha de Beneficios:** Nueva vista en acordeón con modal flotante detallado y mensajes de pedido WhatsApp ordenados con `Ref. soporte: MLS1-...`.
-   * **Operaciones Financieras Ergonómicas:** Mayor área de trabajo útil, eliminación de espacio muerto inferior y tarjetas contextuales retraíbles.
-   * **Radar Comercial IA Renovado:** Noticias reales de Perú vía RSS + Gemini analizador, portales oficiales `https://www.gob.pe/...` y selector nacional de 3 niveles (Departamento, Provincia y Distrito/Localidad).
-3. **Historial Inmediato Anterior (`v9.38.0+82` — Plan Maestro 19):**
-   * Protocolo dual `.mlsync` / `MLS1-...` de diagnóstico offline, switch de atención rápida en pedidos WhatsApp y rescate 1-clic de `PENDIENTE_MIGRACION`.
+2. **Novedades Comerciales Oficiales (v9.40.0+84 — Plan Maestro 21):**
+   * **Inicio más amplio y fluido:** Encabezado superior optimizado para ver tus herramientas clave de inmediato y navegación sin parpadeos al volver desde tu Perfil.
+   * **Guías interactivas ampliadas y respetuosas:** Nuevas guías paso a paso por cada pestaña de Gestión de Negocio, Cotización Manual, Detalle Financiero de Ventas y pantallas secundarias, sin reactivarse automáticamente al actualizar la app.
+   * **Radar Comercial IA independiente por perfil de negocio:** Cada sucursal o perfil en tu celular conserva su propia ubicación y noticias guardadas.
+3. **Historial Inmediato Anterior (`v9.39.0+83` — Plan Maestro 20):**
+   * Planes Comerciales plegables con modal de detalle y mensajes WhatsApp ordenados (`Ref. soporte: MLS1-...`), Operaciones Financieras ergonómicas con tarjetas contextuales retraíbles y Radar Comercial IA renovado con noticias reales del Perú (`https://www.gob.pe/...`) y selector territorial en 3 niveles.
+   * Previo (`v9.38.0+82` — Plan Maestro 19): Protocolo dual `.mlsync` / `MLS1-...` de diagnóstico offline, switch de atención rápida en pedidos WhatsApp y rescate 1-clic de `PENDIENTE_MIGRACION`.
 
 ---
 

@@ -612,6 +612,7 @@ class _SmartRestockScreenState extends State<SmartRestockScreen> {
     return Scaffold(
       backgroundColor: isDark ? const Color(0xFF0F172A) : const Color(0xFFF1F5F9),
       appBar: AppBar(
+        titleSpacing: 0,
         title: const FittedBox(
           fit: BoxFit.scaleDown,
           alignment: Alignment.centerLeft,
@@ -624,27 +625,30 @@ class _SmartRestockScreenState extends State<SmartRestockScreen> {
         elevation: 0,
         actions: [
           const InfoTooltipButton(
+            constraints: BoxConstraints(minWidth: 32, minHeight: 32),
+            padding: EdgeInsets.all(6),
             title: "Reabastecimiento Inteligente",
             description:
-                "Calcula en base a tu velocidad de ventas cuándo te quedarás sin stock y cuántas unidades debes pedir a tus proveedores.",
+                "Calcula a partir de tu velocidad real de ventas y stock vendible cuándo te quedarás sin inventario y cuántas unidades pedir a tus proveedores.",
             tips: [
               InfoTip(
                 icon: Icons.speed_rounded,
-                text: "ROP (Punto de Reorden): Nivel de stock donde debes solicitar producto antes de que se agote.",
+                text: "ROP (Punto de Reorden): Nivel de stock donde debes reponer mercadería antes de entrar en quiebre.",
               ),
               InfoTip(
                 icon: Icons.shield_outlined,
-                text: "Stock de Seguridad: Cantidad de reserva para absorber picos inesperados de demanda.",
+                text: "Stock de Seguridad y Pool Compartido: Contempla reservas para picos de demanda y presentaciones enlazadas al mismo producto padre.",
               ),
               InfoTip(
-                icon: Icons.tune,
-                text: "Marca productos con el checkbox y ajusta cantidades con (+ / -) antes de Exportar OC.",
+                icon: Icons.tune_rounded,
+                text: "Selecciona ítems con el checkbox, ajusta cantidades sugeridas (+ / -) y genera tu Orden de Compra al instante.",
               ),
             ],
           ),
           IconButton(
             icon: const Icon(Icons.refresh),
             tooltip: 'Actualizar',
+            visualDensity: VisualDensity.compact,
             onPressed: _loadData,
           ),
         ],

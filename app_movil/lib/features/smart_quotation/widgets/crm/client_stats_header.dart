@@ -17,6 +17,8 @@ class ClientStatsHeader extends StatefulWidget {
   final VoidCallback? onGoToQuotation;
   final VoidCallback onFinanceActionCompleted;
   final Key? whatsappContactKey;
+  final Key? quickActionsKey;
+  final Key? loanActionsKey;
 
   const ClientStatsHeader({
     super.key,
@@ -28,6 +30,8 @@ class ClientStatsHeader extends StatefulWidget {
     this.onGoToQuotation,
     required this.onFinanceActionCompleted,
     this.whatsappContactKey,
+    this.quickActionsKey,
+    this.loanActionsKey,
   });
 
   @override
@@ -186,13 +190,22 @@ class _ClientStatsHeaderState extends State<ClientStatsHeader> with TickerProvid
                       children: [
                         const Icon(Icons.phone, color: Colors.white70, size: 14),
                         const SizedBox(width: 4),
-                        Text(
-                          widget.client.phone.isNotEmpty && widget.client.phone != "000000000"
-                              ? widget.client.phone
-                              : "Sin teléfono", 
-                          style: const TextStyle(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.w500),
+                        Expanded(
+                          child: Text(
+                            widget.client.phone.isNotEmpty &&
+                                    widget.client.phone != "000000000"
+                                ? widget.client.phone
+                                : "Sin teléfono",
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: Colors.white70,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
                         ),
-                        const Spacer(),
+                        const SizedBox(width: 8),
                         ScaleTransition(
                           key: widget.whatsappContactKey,
                           scale: _bounceAnimationWpp,
@@ -251,42 +264,99 @@ class _ClientStatsHeaderState extends State<ClientStatsHeader> with TickerProvid
           Row(
             children: [
               Expanded(
-                flex: 7,
-                child: ElevatedButton.icon(
-                  onPressed: widget.onGoToQuickSale,
-                  icon: const Icon(Icons.point_of_sale, size: 15),
-                  label: const FittedBox(
-                    fit: BoxFit.scaleDown,
-                    child: Text(
-                      "Caja Rápida",
-                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
-                    ),
-                  ),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.pinkAccent,
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    padding: const EdgeInsets.symmetric(
-                      vertical: 9,
-                      horizontal: 6,
-                    ),
-                    elevation: 0,
+                flex: widget.onGoToQuotation != null ? 13 : 7,
+                child: KeyedSubtree(
+                  key: widget.quickActionsKey,
+                  child: Row(
+                    children: [
+                      Expanded(
+                        flex: 7,
+                        child: ElevatedButton.icon(
+                          onPressed: widget.onGoToQuickSale,
+                          icon: const Icon(Icons.point_of_sale, size: 15),
+                          label: const FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: Text(
+                              "Caja Rápida",
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.pinkAccent,
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            padding: const EdgeInsets.symmetric(
+                              vertical: 9,
+                              horizontal: 6,
+                            ),
+                            elevation: 0,
+                          ),
+                        ),
+                      ),
+                      if (widget.onGoToQuotation != null) ...[
+                        const SizedBox(width: 6),
+                        Expanded(
+                          flex: 6,
+                          child: ElevatedButton.icon(
+                            onPressed: widget.onGoToQuotation,
+                            icon: const Icon(
+                              Icons.request_quote_outlined,
+                              size: 15,
+                            ),
+                            label: const FittedBox(
+                              fit: BoxFit.scaleDown,
+                              child: Text(
+                                "Cotizar",
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.indigo,
+                              foregroundColor: Colors.white,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              padding: const EdgeInsets.symmetric(
+                                vertical: 9,
+                                horizontal: 6,
+                              ),
+                              elevation: 0,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
                   ),
                 ),
               ),
-              if (widget.onGoToQuotation != null) ...[
-                const SizedBox(width: 6),
-                Expanded(
-                  flex: 6,
+              const SizedBox(width: 6),
+              Expanded(
+                flex: 7,
+                child: KeyedSubtree(
+                  key: widget.loanActionsKey,
                   child: ElevatedButton.icon(
-                    onPressed: widget.onGoToQuotation,
-                    icon: const Icon(Icons.request_quote_outlined, size: 15),
+                    onPressed: () {
+                      ClientFinanceActionsModal.show(
+                        context,
+                        client: widget.client,
+                        isDark: widget.isDark,
+                        initialTab: 0,
+                        onCompleted: widget.onFinanceActionCompleted,
+                      );
+                    },
+                    icon: const Icon(Icons.account_balance_rounded, size: 15),
                     label: const FittedBox(
                       fit: BoxFit.scaleDown,
                       child: Text(
-                        "Cotizar",
+                        "+ Préstamo",
                         style: TextStyle(
                           fontWeight: FontWeight.bold,
                           fontSize: 12,
@@ -294,7 +364,9 @@ class _ClientStatsHeaderState extends State<ClientStatsHeader> with TickerProvid
                       ),
                     ),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.indigo,
+                      backgroundColor: widget.isDark
+                          ? const Color(0xFF0F766E)
+                          : const Color(0xFF0D9488),
                       foregroundColor: Colors.white,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12),
@@ -305,43 +377,6 @@ class _ClientStatsHeaderState extends State<ClientStatsHeader> with TickerProvid
                       ),
                       elevation: 0,
                     ),
-                  ),
-                ),
-              ],
-              const SizedBox(width: 6),
-              Expanded(
-                flex: 7,
-                child: ElevatedButton.icon(
-                  onPressed: () {
-                    ClientFinanceActionsModal.show(
-                      context,
-                      client: widget.client,
-                      isDark: widget.isDark,
-                      initialTab: 0,
-                      onCompleted: widget.onFinanceActionCompleted,
-                    );
-                  },
-                  icon: const Icon(Icons.account_balance_rounded, size: 15),
-                  label: const FittedBox(
-                    fit: BoxFit.scaleDown,
-                    child: Text(
-                      "+ Préstamo",
-                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
-                    ),
-                  ),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: widget.isDark
-                        ? const Color(0xFF0F766E)
-                        : const Color(0xFF0D9488),
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    padding: const EdgeInsets.symmetric(
-                      vertical: 9,
-                      horizontal: 6,
-                    ),
-                    elevation: 0,
                   ),
                 ),
               ),

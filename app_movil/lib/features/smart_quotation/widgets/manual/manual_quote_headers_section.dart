@@ -41,6 +41,8 @@ class ManualQuoteHeadersSection extends StatelessWidget {
   // Reactividad y restauración de título
   final bool isAutoTitleMode;
   final VoidCallback? onRestoreAutoTitle;
+  final Key? identificationKey;
+  final Key? clientSchoolKey;
 
   const ManualQuoteHeadersSection({
     super.key,
@@ -69,6 +71,8 @@ class ManualQuoteHeadersSection extends StatelessWidget {
     required this.onClearClient,
     this.isAutoTitleMode = true,
     this.onRestoreAutoTitle,
+    this.identificationKey,
+    this.clientSchoolKey,
   });
 
   @override
@@ -86,6 +90,7 @@ class ManualQuoteHeadersSection extends StatelessWidget {
             children: [
               // 🪗 SECCIÓN 1: Identificación con MorphingAccordion
               MorphingAccordion(
+                key: identificationKey,
                 title: "Identificación de Cotización",
                 icon: Icons.description_outlined,
                 iconColor: isDark ? Colors.blue[300] : Colors.blue[800],
@@ -168,6 +173,7 @@ class ManualQuoteHeadersSection extends StatelessWidget {
 
               // 🪗 SECCIÓN 2: Cliente y Colegio con MorphingAccordion
               MorphingAccordion(
+                key: clientSchoolKey,
                 title: "Cliente y Colegio",
                 icon: Icons.school_outlined,
                 iconColor: isDark ? Colors.green[300] : Colors.green[800],

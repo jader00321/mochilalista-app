@@ -53,6 +53,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   final _inventoryTourKeys = InventoryTourKeys();
   final _catalogTourKeys = CatalogTourKeys();
   final _clientTrackingTourKeys = ClientTrackingTourKeys();
+  final _inventoryScreenKey = GlobalKey<InventoryScreenState>();
   final _catalogScreenKey = GlobalKey<CatalogScreenState>();
   bool _pendingTourAfterReset = false;
 
@@ -132,10 +133,19 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           HomeScreenTour.buildConfig(keys: _tourKeys),
         );
       } else if (_currentIndex == 1) {
-        await InteractiveTourService.maybeStartAutomaticTour(
-          context,
-          InventoryTour.buildConfig(keys: _inventoryTourKeys),
-        );
+        if (_inventoryScreenKey.currentState != null) {
+          await _inventoryScreenKey.currentState!.startActiveTabTour(
+            automatic: true,
+          );
+        } else {
+          await InteractiveTourService.maybeStartAutomaticTour(
+            context,
+            InventoryTour.buildConfigForTab(
+              tabIndex: 0,
+              keys: _inventoryTourKeys,
+            ),
+          );
+        }
       } else if (_currentIndex == 2) {
         await InteractiveTourService.maybeStartAutomaticTour(
           context,
@@ -166,7 +176,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             final auth = Provider.of<AuthProvider>(context, listen: false);
             if (auth.hasActiveContext) {
               Provider.of<NotificationProvider>(context, listen: false).fetchNotifications();
-              Provider.of<WorkbenchProvider>(context, listen: false).loadDashboard();
+              Provider.of<WorkbenchProvider>(context, listen: false).loadDashboard(silent: true);
               if (!auth.isCommunityClient) {
                 Provider.of<SaleProvider>(context, listen: false).silentRefresh();
               }
@@ -207,7 +217,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     if (isGuest) {
       screens = [
         _HomeDashboardView(tourKeys: _tourKeys, onProfileReturned: _onProfileReturned),
-        InventoryScreen(autoTriggerTour: false, tourKeys: _inventoryTourKeys),    
+        InventoryScreen(
+          key: _inventoryScreenKey,
+          autoTriggerTour: false,
+          tourKeys: _inventoryTourKeys,
+        ),
         CatalogScreen(key: _catalogScreenKey, autoTriggerTour: false, tourKeys: _catalogTourKeys),      
       ];
       destinations = [
@@ -229,7 +243,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     } else {
       screens = [
         _HomeDashboardView(tourKeys: _tourKeys, onProfileReturned: _onProfileReturned),
-        InventoryScreen(autoTriggerTour: false, tourKeys: _inventoryTourKeys),    
+        InventoryScreen(
+          key: _inventoryScreenKey,
+          autoTriggerTour: false,
+          tourKeys: _inventoryTourKeys,
+        ),
         CatalogScreen(key: _catalogScreenKey, autoTriggerTour: false, tourKeys: _catalogTourKeys),      
         if (auth.canManageClients)
           ClientTrackingScreen(autoTriggerTour: false, tourKeys: _clientTrackingTourKeys), 
@@ -272,10 +290,19 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 HomeScreenTour.buildConfig(keys: _tourKeys),
               );
             } else if (index == 1) {
-              InteractiveTourService.maybeStartAutomaticTour(
-                context,
-                InventoryTour.buildConfig(keys: _inventoryTourKeys),
-              );
+              if (_inventoryScreenKey.currentState != null) {
+                _inventoryScreenKey.currentState!.startActiveTabTour(
+                  automatic: true,
+                );
+              } else {
+                InteractiveTourService.maybeStartAutomaticTour(
+                  context,
+                  InventoryTour.buildConfigForTab(
+                    tabIndex: 0,
+                    keys: _inventoryTourKeys,
+                  ),
+                );
+              }
             } else if (index == 2) {
               InteractiveTourService.maybeStartAutomaticTour(
                 context,
@@ -369,7 +396,7 @@ class _HomeDashboardViewState extends State<_HomeDashboardView> with SingleTicke
               ),
             ),
             Padding(
-              padding: const EdgeInsets.fromLTRB(20.0, 14.0, 20.0, 0.0),
+              padding: const EdgeInsets.fromLTRB(20.0, 10.0, 20.0, 0.0),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -388,25 +415,25 @@ class _HomeDashboardViewState extends State<_HomeDashboardView> with SingleTicke
                       },
                     ),
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 8),
                   _buildLicenseBanner(context, isDark),
-                  const SizedBox(height: 4),
+                  const SizedBox(height: 2),
                   if (!isGuest && (auth.isOwner || auth.isWorker)) ...[
                     const RepaintBoundary(child: RestockSmartBanner()),
                     // 🔧 Recordatorio amigable de PIN de seguridad con snooze inteligente de 7 días
                     if (!auth.hasPinCache && !auth.isPinReminderSnoozed) ...[
                       _buildSecurityPinBanner(context, isDark, auth),
-                      const SizedBox(height: 16),
+                      const SizedBox(height: 12),
                     ],
                   ],
                   if (isGuest) ...[
                     const ExplorerConversionDock(),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 10),
                     _buildGuestBanner(context, isDark),
                   ]
                   else if (auth.isOwner || auth.isWorker) ...[
                     const RepaintBoundary(child: WeeklySalesChart()),
-                    const SizedBox(height: 20),
+                    const SizedBox(height: 12),
                     KeyedSubtree(
                       key: widget.tourKeys.activityKey,
                       child: RepaintBoundary(
@@ -428,14 +455,14 @@ class _HomeDashboardViewState extends State<_HomeDashboardView> with SingleTicke
                       ),
                     ),
 
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 16),
                   RepaintBoundary(
                     child: SmartActionGrid(
                       tourKey: widget.tourKeys.smartActionsKey,
                     ),
                   ),
                   if (!isGuest && (auth.isOwner || auth.isWorker)) ...[
-                    const SizedBox(height: 32),
+                    const SizedBox(height: 24),
                     const RepaintBoundary(child: RecentActivityList()),
                   ],
                   SizedBox(

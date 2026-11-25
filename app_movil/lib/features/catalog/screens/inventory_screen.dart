@@ -16,6 +16,7 @@ import 'package:app_movil/core/widgets/info_tooltip_button.dart';
 import 'package:app_movil/core/widgets/deep_nav_return_pill.dart';
 import 'package:app_movil/features/auth/screens/onboarding/onboarding_screen.dart';
 import 'package:app_movil/core/services/tour/interactive_tour_service.dart';
+import 'package:app_movil/core/widgets/tour/tour_step_model.dart';
 import 'package:app_movil/core/widgets/tour/configs/inventory_tour.dart';
 
 class PlaceholderTab extends StatelessWidget {
@@ -61,21 +62,59 @@ class InventoryScreen extends StatefulWidget {
   });
 
   @override
-  State<InventoryScreen> createState() => _InventoryScreenState();
+  State<InventoryScreen> createState() => InventoryScreenState();
 }
 
-class _InventoryScreenState extends State<InventoryScreen>
+class InventoryScreenState extends State<InventoryScreen>
     with TickerProviderStateMixin {
   final _tourKeys = InventoryTourKeys();
+  final _offersTabKey = GlobalKey<OffersTabState>();
   InventoryTourKeys get _effectiveTourKeys => widget.tourKeys ?? _tourKeys;
   late TabController _tabController;
   late AnimationController _glowController;
   late Animation<double> _glowAnimation;
+  int _lastObservedTabIndex = 0;
 
   Future<void> _ensureProductsTabActiveForTour() async {
+    if (!mounted) return;
     if (_tabController.index != 0) {
       _tabController.animateTo(0);
       await Future.delayed(const Duration(milliseconds: 300));
+    }
+  }
+
+  /// Construye la configuración de guía interactiva contextual para la pestaña actualmente visible.
+  ScreenTourConfig buildTourConfigForCurrentTab() {
+    return InventoryTour.buildConfigForTab(
+      tabIndex: _tabController.index,
+      keys: _effectiveTourKeys,
+      onEnsureProductsTabActive: _ensureProductsTabActiveForTour,
+      onExpandOffersInsights: () async {
+        await _offersTabKey.currentState?.expandInsightsForTour();
+      },
+      onRestoreOffersInsights: () async {
+        await _offersTabKey.currentState?.restoreInsightsAfterTour();
+      },
+    );
+  }
+
+  /// Dispara la guía interactiva correspondiente a la pestaña activa (automática o manual).
+  Future<void> startActiveTabTour({bool automatic = false}) async {
+    if (!mounted) return;
+    final config = buildTourConfigForCurrentTab();
+    if (automatic) {
+      await InteractiveTourService.maybeStartAutomaticTour(context, config);
+    } else {
+      await InteractiveTourService.startManualTour(context, config);
+    }
+  }
+
+  void _onTabSelectionChanged() {
+    if (!mounted) return;
+    if (_tabController.index != _lastObservedTabIndex) {
+      setState(() {
+        _lastObservedTabIndex = _tabController.index;
+      });
     }
   }
 
@@ -87,6 +126,8 @@ class _InventoryScreenState extends State<InventoryScreen>
       vsync: this,
       initialIndex: widget.initialTabIndex,
     );
+    _lastObservedTabIndex = _tabController.index;
+    _tabController.addListener(_onTabSelectionChanged);
 
     _glowController = AnimationController(
       vsync: this,
@@ -97,24 +138,20 @@ class _InventoryScreenState extends State<InventoryScreen>
     );
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
       Provider.of<InventoryProvider>(
         context,
         listen: false,
       ).loadInventory(reset: true);
       if (widget.autoTriggerTour) {
-        InteractiveTourService.maybeStartAutomaticTour(
-          context,
-          InventoryTour.buildConfig(
-            keys: _effectiveTourKeys,
-            onEnsureProductsTabActive: _ensureProductsTabActiveForTour,
-          ),
-        );
+        startActiveTabTour(automatic: true);
       }
     });
   }
 
   @override
   void dispose() {
+    _tabController.removeListener(_onTabSelectionChanged);
     _tabController.dispose();
     _glowController.dispose();
     super.dispose();
@@ -188,9 +225,14 @@ class _InventoryScreenState extends State<InventoryScreen>
       endDrawer: FilterDrawer(onApplyFilters: _applyFilters),
 
       appBar: AppBar(
-        title: const Text(
-          "Gestión de Negocio",
-          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20),
+        titleSpacing: 8,
+        title: const FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Text(
+            "Gestión de Negocio",
+            maxLines: 1,
+            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20),
+          ),
         ),
         centerTitle: true,
         elevation: 0,
@@ -253,27 +295,8 @@ class _InventoryScreenState extends State<InventoryScreen>
               ),
             ),
           ),
-          // 🔧 TAREA 3.4: Info Tooltip discreto
-          InfoTooltipButton(
-            iconColor: Colors.white70,
-            title: 'Gestión de Negocio',
-            description: 'Aquí administras todo tu inventario: productos, categorías, marcas, proveedores y ofertas. Desde aquí puedes organizar, buscar y filtrar todo tu catálogo.',
-            tips: const [
-              InfoTip(icon: Icons.search, text: 'Usa el buscador y los filtros del panel derecho para encontrar productos rápidamente.'),
-              InfoTip(icon: Icons.receipt_long, text: 'El botón naranja con IA abre el historial de facturas procesadas por la inteligencia artificial.'),
-              InfoTip(icon: Icons.category, text: 'Organiza tus productos en Categorías y Márcas para tener un catálogo ordenado.'),
-              InfoTip(icon: Icons.local_offer, text: 'Crea ofertas y combos en la pestaña de Ofertas para atraer más clientes.'),
-              InfoTip(icon: Icons.find_replace, text: 'Usa el botón de Detectar Duplicados (🔄) en cada pestaña para fusionar registros repetidos.'),
-            ],
-            onStartInteractiveTour: () => InteractiveTourService.startManualTour(
-              context,
-              InventoryTour.buildConfig(
-                keys: _effectiveTourKeys,
-                onEnsureProductsTabActive: _ensureProductsTabActiveForTour,
-              ),
-            ),
-            tourButtonLabel: 'Iniciar guía interactiva paso a paso',
-          ),
+          // Guía contextual e información específica de la pestaña activa
+          _buildContextualInfoTooltip(_tabController.index),
         ],
 
         bottom: PreferredSize(
@@ -360,10 +383,13 @@ class _InventoryScreenState extends State<InventoryScreen>
                       tabController: _tabController,
                       tourKeys: _effectiveTourKeys,
                     ),
-                    const OffersTab(),
-                    const CategoriesTab(),
-                    const BrandsTab(),
-                    const ProvidersTab(),
+                    OffersTab(
+                      key: _offersTabKey,
+                      tourKeys: _effectiveTourKeys,
+                    ),
+                    CategoriesTab(tourKeys: _effectiveTourKeys),
+                    BrandsTab(tourKeys: _effectiveTourKeys),
+                    ProvidersTab(tourKeys: _effectiveTourKeys),
                   ],
                 ),
               ),
@@ -373,5 +399,106 @@ class _InventoryScreenState extends State<InventoryScreen>
         ],
       ),
     );
+  }
+
+  Widget _buildContextualInfoTooltip(int tabIndex) {
+    switch (tabIndex) {
+      case 1:
+        return InfoTooltipButton(
+          iconColor: Colors.white70,
+          title: 'Ofertas y Bundles',
+          description:
+              'Detecta productos estancados y crea paquetes promocionales, 2x1 o liquidaciones calculando stock máximo automáticamente.',
+          tips: const [
+            InfoTip(
+              icon: Icons.lightbulb_outline_rounded,
+              text:
+                  'Revisa Insights y Sugerencias para convertir inventario lento en efectivo.',
+            ),
+            InfoTip(
+              icon: Icons.add_box_outlined,
+              text:
+                  'Usa + Nuevo para configurar ofertas Flash, Liquidez o combos Escolares.',
+            ),
+          ],
+          onStartInteractiveTour: () => startActiveTabTour(automatic: false),
+        );
+      case 2:
+        return InfoTooltipButton(
+          iconColor: Colors.white70,
+          title: 'Categorías de Catálogo',
+          description:
+              'Organiza tus líneas de negocio, auto-clasifica productos con IA o fusiona categorías duplicadas sin perder artículos.',
+          tips: const [
+            InfoTip(
+              icon: Icons.auto_awesome_rounded,
+              text:
+                  'Auto-categorizar IA agrupa artículos sueltos en segundos.',
+            ),
+            InfoTip(
+              icon: Icons.find_replace_rounded,
+              text:
+                  'Detectar Duplicados unifica categorías repetidas en una sola.',
+            ),
+          ],
+          onStartInteractiveTour: () => startActiveTabTour(automatic: false),
+        );
+      case 3:
+        return InfoTooltipButton(
+          iconColor: Colors.white70,
+          title: 'Marcas de Productos',
+          description:
+              'Administra las marcas del inventario, revisa artículos vinculados en el modal de detalle y fusiona duplicados.',
+          tips: const [
+            InfoTip(
+              icon: Icons.branding_watermark_outlined,
+              text:
+                  'Toca una marca para editarla, suspenderla o ver cuántos productos tiene.',
+            ),
+          ],
+          onStartInteractiveTour: () => startActiveTabTour(automatic: false),
+        );
+      case 4:
+        return InfoTooltipButton(
+          iconColor: Colors.white70,
+          title: 'Proveedores y Compras',
+          description:
+              'Centraliza distribuidores, RUC y datos de contacto. Toca cualquier ficha para ver productos vinculados y fusionar repetidos.',
+          tips: const [
+            InfoTip(
+              icon: Icons.local_shipping_outlined,
+              text:
+                  'Tener RUC y razón social limpios mejora el escaneo de facturas con IA.',
+            ),
+          ],
+          onStartInteractiveTour: () => startActiveTabTour(automatic: false),
+        );
+      case 0:
+      default:
+        return InfoTooltipButton(
+          iconColor: Colors.white70,
+          title: 'Gestión de Negocio',
+          description:
+              'Aquí administras todo tu inventario: productos, categorías, marcas, proveedores y ofertas. Busca, filtra y edita tu catálogo al instante.',
+          tips: const [
+            InfoTip(
+              icon: Icons.search_rounded,
+              text:
+                  'Usa el buscador y los filtros del panel derecho para encontrar productos rápidamente.',
+            ),
+            InfoTip(
+              icon: Icons.receipt_long_rounded,
+              text:
+                  'El botón superior con IA abre el historial de facturas procesadas.',
+            ),
+            InfoTip(
+              icon: Icons.find_replace_rounded,
+              text:
+                  'Cambia de pestaña para ver guías dedicadas de Ofertas, Categorías, Marcas y Proveedores.',
+            ),
+          ],
+          onStartInteractiveTour: () => startActiveTabTour(automatic: false),
+        );
+    }
   }
 }

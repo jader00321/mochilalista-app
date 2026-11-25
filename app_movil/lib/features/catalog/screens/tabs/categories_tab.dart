@@ -10,9 +10,11 @@ import 'package:app_movil/core/widgets/custom_snackbar.dart';
 import 'package:app_movil/core/widgets/duplicate_warning_dialog.dart';
 import 'package:app_movil/core/widgets/duplicate_merge_modal.dart';
 import 'package:app_movil/features/catalog/widgets/auto_categorization_modal.dart';
+import 'package:app_movil/core/widgets/tour/configs/inventory_tour.dart';
 
 class CategoriesTab extends StatefulWidget {
-  const CategoriesTab({super.key});
+  final InventoryTabTourKeys? tourKeys;
+  const CategoriesTab({super.key, this.tourKeys});
 
   @override
   State<CategoriesTab> createState() => _CategoriesTabState();
@@ -375,69 +377,75 @@ class _CategoriesTabState extends State<CategoriesTab> {
         return Scaffold(
           backgroundColor: Colors.transparent,
 
-          floatingActionButton: FloatingActionButton.extended(
-            onPressed: () =>
-                _showFormDialog(context, isDark: isDark, isGuest: isGuest),
-            label: Text(
-              "Nueva Categoría",
-              style: TextStyle(
-                color: isDark ? Colors.black87 : Colors.white,
-                fontWeight: FontWeight.bold,
+          floatingActionButton: KeyedSubtree(
+            key: widget.tourKeys?.categoriesFabKey,
+            child: FloatingActionButton.extended(
+              onPressed: () =>
+                  _showFormDialog(context, isDark: isDark, isGuest: isGuest),
+              label: Text(
+                "Nueva Categoría",
+                style: TextStyle(
+                  color: isDark ? Colors.black87 : Colors.white,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
+              icon: Icon(
+                Icons.add,
+                color: isDark ? Colors.black87 : Colors.white,
+              ),
+              backgroundColor: isDark ? Colors.blue[300] : Colors.blue[800],
             ),
-            icon: Icon(
-              Icons.add,
-              color: isDark ? Colors.black87 : Colors.white,
-            ),
-            backgroundColor: isDark ? Colors.blue[300] : Colors.blue[800],
           ),
 
           body: Column(
             children: [
-              SortableToolbar(
-                title: "${categories.length} Categorías",
-                currentSort: provider.catSort,
-                isAscending: provider.catAsc,
-                onSortChanged: (type) => provider.sortCategories(type),
-                trailing: !isGuest
-                    ? Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          IconButton(
-                            icon: Icon(
-                              Icons.auto_awesome,
-                              color: isDark ? Colors.amber[300] : Colors.amber[800],
-                              size: 19,
+              KeyedSubtree(
+                key: widget.tourKeys?.categoriesToolbarKey,
+                child: SortableToolbar(
+                  title: "${categories.length} Categorías",
+                  currentSort: provider.catSort,
+                  isAscending: provider.catAsc,
+                  onSortChanged: (type) => provider.sortCategories(type),
+                  trailing: !isGuest
+                      ? Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            IconButton(
+                              icon: Icon(
+                                Icons.auto_awesome,
+                                color: isDark ? Colors.amber[300] : Colors.amber[800],
+                                size: 19,
+                              ),
+                              tooltip: 'Auto-categorizar Productos',
+                              padding: EdgeInsets.zero,
+                              constraints: const BoxConstraints.tightFor(width: 32, height: 32),
+                              visualDensity: VisualDensity.compact,
+                              onPressed: () => AutoCategorizationModal.show(
+                                context,
+                                isDark: isDark,
+                              ),
                             ),
-                            tooltip: 'Auto-categorizar Productos',
-                            padding: EdgeInsets.zero,
-                            constraints: const BoxConstraints.tightFor(width: 32, height: 32),
-                            visualDensity: VisualDensity.compact,
-                            onPressed: () => AutoCategorizationModal.show(
-                              context,
-                              isDark: isDark,
+                            const SizedBox(width: 2),
+                            IconButton(
+                              icon: Icon(
+                                Icons.find_replace,
+                                color: isDark ? Colors.blue[300] : Colors.blue[800],
+                                size: 19,
+                              ),
+                              tooltip: 'Detectar Duplicados',
+                              padding: EdgeInsets.zero,
+                              constraints: const BoxConstraints.tightFor(width: 32, height: 32),
+                              visualDensity: VisualDensity.compact,
+                              onPressed: () => DuplicateMergeModal.show(
+                                context,
+                                type: MergeEntityType.category,
+                                isDark: isDark,
+                              ),
                             ),
-                          ),
-                          const SizedBox(width: 2),
-                          IconButton(
-                            icon: Icon(
-                              Icons.find_replace,
-                              color: isDark ? Colors.blue[300] : Colors.blue[800],
-                              size: 19,
-                            ),
-                            tooltip: 'Detectar Duplicados',
-                            padding: EdgeInsets.zero,
-                            constraints: const BoxConstraints.tightFor(width: 32, height: 32),
-                            visualDensity: VisualDensity.compact,
-                            onPressed: () => DuplicateMergeModal.show(
-                              context,
-                              type: MergeEntityType.category,
-                              isDark: isDark,
-                            ),
-                          ),
-                        ],
-                      )
-                    : null,
+                          ],
+                        )
+                      : null,
+                ),
               ),
 
               // 🔧 TAREA 4.5: Banner de categorías predefinidas sugeridas
@@ -445,7 +453,9 @@ class _CategoriesTabState extends State<CategoriesTab> {
                 _buildSuggestedCategoriesBanner(context, provider, categories, isDark),
 
               Expanded(
-                child: RefreshIndicator(
+                child: KeyedSubtree(
+                  key: widget.tourKeys?.categoriesListKey,
+                  child: RefreshIndicator(
                   onRefresh: () async => await provider.loadMasterData(),
                   color: Colors.blue[800],
                   child: categories.isEmpty
@@ -602,6 +612,7 @@ class _CategoriesTabState extends State<CategoriesTab> {
                           },
                         ),
                 ),
+                ),
               ),
             ],
           ),
@@ -624,6 +635,7 @@ class _CategoriesTabState extends State<CategoriesTab> {
     if (availableSuggestions.isEmpty) return const SizedBox.shrink();
 
     return Container(
+      key: widget.tourKeys?.categoriesSuggestedKey,
       margin: const EdgeInsets.fromLTRB(16, 6, 16, 10),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
@@ -641,6 +653,7 @@ class _CategoriesTabState extends State<CategoriesTab> {
               Icon(Icons.lightbulb_outline, size: 20, color: Colors.amber[600]),
               const SizedBox(width: 8),
               Expanded(
+                flex: 3,
                 child: Text(
                   "Categorías Sugeridas",
                   style: TextStyle(
@@ -653,11 +666,16 @@ class _CategoriesTabState extends State<CategoriesTab> {
                 ),
               ),
               const SizedBox(width: 6),
-              Text(
-                "Toca para agregar",
-                style: TextStyle(
-                  fontSize: 11,
-                  color: isDark ? Colors.grey[400] : Colors.grey[600],
+              Flexible(
+                flex: 2,
+                child: Text(
+                  "Toca para agregar",
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: isDark ? Colors.grey[400] : Colors.grey[600],
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
               const SizedBox(width: 4),

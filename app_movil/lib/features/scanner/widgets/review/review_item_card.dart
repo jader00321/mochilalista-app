@@ -293,9 +293,13 @@ class _ReviewItemCardState extends State<ReviewItemCard> {
                               children: [
                                 Icon(_showCodigo ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down, size: 18, color: widget.isDark ? Colors.grey[400] : Colors.grey[600]),
                                 const SizedBox(width: 4),
-                                Text(
-                                  _showCodigo ? "Ocultar código de barras" : "Ver código de barras", 
-                                  style: TextStyle(fontSize: 12, color: widget.isDark ? Colors.grey[400] : Colors.grey[600], fontStyle: FontStyle.italic)
+                                Flexible(
+                                  child: Text(
+                                    _showCodigo ? "Ocultar código de barras" : "Ver código de barras",
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(fontSize: 12, color: widget.isDark ? Colors.grey[400] : Colors.grey[600], fontStyle: FontStyle.italic),
+                                  ),
                                 ),
                                 if (!_showCodigo && _codigoCtrl.text.isNotEmpty) ...[
                                   const SizedBox(width: 8),

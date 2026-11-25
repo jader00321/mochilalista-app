@@ -10,6 +10,7 @@ import 'package:app_movil/core/providers/license_provider.dart';
 import 'package:app_movil/core/services/backup/google_drive_backup_service.dart';
 import 'package:app_movil/core/services/backup/i_google_drive_backup_service.dart';
 import 'package:app_movil/core/services/device_fingerprint.dart';
+import 'package:app_movil/core/services/tour/interactive_tour_service.dart';
 import 'package:app_movil/core/utils/app_logger.dart';
 import 'package:app_movil/features/auth/screens/license/license_status_and_activation_screen.dart';
 import 'package:app_movil/features/auth/widgets/eula_acceptance_modal.dart';
@@ -178,7 +179,8 @@ class StartupFlowCoordinator {
             }
           }
 
-          // Marcar la versión actual de inmediato para que NUNCA se interprete como update
+          // Sellar como instalación limpia genuina y registrar versión actual
+          await InteractiveTourService.sealCleanFirstInstallIfUnsealed();
           await licenseProv.updateLastExecutedVersion(currentVersion);
 
           // Redirigir a Licencia y Activación recomendando activar antes de los 30 días
@@ -202,6 +204,10 @@ class StartupFlowCoordinator {
           // lastExecutedAppVersion == null pero SÍ tiene datos comerciales en SQLite
           // =====================================================================
           AppLogger.i('StartupFlowCoordinator', 'Detectado Usuario Antiguo con Datos Previos (Escenario B1).');
+          await InteractiveTourService.sealAutomaticToursForExistingOrUpdatedInstall(
+            respectCurrentVersionOptIn: true,
+            currentAppVersion: currentVersion,
+          );
 
           if (!hasAcceptedEula && context.mounted) {
             final accepted = await EulaAcceptanceModal.show(context);
@@ -236,6 +242,12 @@ class StartupFlowCoordinator {
       final isNewVersion = (lastVersion != currentVersion);
 
       if (isNewVersion) {
+        // Sellar guías automáticas ante actualización de APK (solo respeta opt-in manual en la versión actual)
+        await InteractiveTourService.sealAutomaticToursForExistingOrUpdatedInstall(
+          respectCurrentVersionOptIn: true,
+          currentAppVersion: currentVersion,
+        );
+
         // Si la nueva versión requiere aceptación de EULA pendiente
         if (!hasAcceptedEula && context.mounted) {
           final accepted = await EulaAcceptanceModal.show(context);
@@ -295,6 +307,17 @@ class StartupFlowCoordinator {
         if (accepted != true) {
           return StartupScenarioResult.eulaCancelled;
         }
+      }
+
+      // Garantizar sello de cohorte en arranque normal antes de evaluar tours de HomeScreen
+      final hasData = await hasPriorCommercialData(db: customDb);
+      if (hasData) {
+        await InteractiveTourService.sealAutomaticToursForExistingOrUpdatedInstall(
+          respectCurrentVersionOptIn: true,
+          currentAppVersion: currentVersion,
+        );
+      } else {
+        await InteractiveTourService.sealCleanFirstInstallIfUnsealed();
       }
 
       // Disparo asíncrono no bloqueante del respaldo periódico en segundo plano

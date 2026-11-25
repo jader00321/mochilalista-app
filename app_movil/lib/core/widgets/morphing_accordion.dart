@@ -76,7 +76,12 @@ class _MorphingAccordionState extends State<MorphingAccordion>
     super.didUpdateWidget(oldWidget);
     if (widget.initialExpanded != oldWidget.initialExpanded &&
         widget.initialExpanded != _isExpanded) {
-      _toggle();
+      _isExpanded = widget.initialExpanded;
+      if (_isExpanded) {
+        _animController.forward();
+      } else {
+        _animController.reverse();
+      }
     }
   }
 

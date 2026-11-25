@@ -13,39 +13,112 @@ import 'package:app_movil/features/smart_quotation/widgets/history/detail_widget
 import 'package:app_movil/features/smart_quotation/widgets/history/detail_widgets/whatsapp_preview_modal.dart'; 
 import 'package:app_movil/features/smart_quotation/screens/pdf_preview_screen.dart';
 import 'package:app_movil/features/smart_quotation/screens/whatsapp_preview_screen.dart';
-import 'package:app_movil/features/smart_quotation/widgets/crm/payment_entry_modal.dart'; 
+import 'package:app_movil/features/smart_quotation/widgets/crm/payment_entry_modal.dart';
+import 'package:app_movil/core/services/tour/interactive_tour_service.dart';
+import 'package:app_movil/core/widgets/info_tooltip_button.dart';
+import 'package:app_movil/core/widgets/tour/configs/sale_financial_detail_tour.dart';
+import 'package:app_movil/core/widgets/tour/tour_step_model.dart';
 
 class SaleFinancialDetailScreen extends StatefulWidget {
   final int saleId;
+  final bool autoTriggerTour;
+  final SaleFinancialDetailTourKeys? tourKeys;
 
-  const SaleFinancialDetailScreen({super.key, required this.saleId});
+  const SaleFinancialDetailScreen({
+    super.key,
+    required this.saleId,
+    this.autoTriggerTour = true,
+    this.tourKeys,
+  });
 
   @override
-  State<SaleFinancialDetailScreen> createState() => _SaleFinancialDetailScreenState();
+  State<SaleFinancialDetailScreen> createState() =>
+      _SaleFinancialDetailScreenState();
 }
 
 class _SaleFinancialDetailScreenState extends State<SaleFinancialDetailScreen> {
   bool _isLoading = true;
   Map<String, dynamic>? _saleData;
+  late final SaleFinancialDetailTourKeys _tourKeys;
+  final ExpansibleController _firstInstallmentController =
+      ExpansibleController();
+  bool? _firstCuotaExpandedBeforeTour;
+  bool _didAttemptAutoTour = false;
 
   @override
   void initState() {
     super.initState();
+    _tourKeys = widget.tourKeys ?? SaleFinancialDetailTourKeys();
     _loadData();
+  }
+
+  @override
+  void dispose() {
+    _firstInstallmentController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _expandFirstInstallmentForTour() async {
+    if (!mounted) return;
+    final cuotas = (_saleData?['cuotas'] as List<dynamic>?) ?? const [];
+    if (cuotas.isEmpty) return;
+
+    try {
+      _firstCuotaExpandedBeforeTour ??= _firstInstallmentController.isExpanded;
+      if (!_firstInstallmentController.isExpanded) {
+        _firstInstallmentController.expand();
+        await Future.delayed(const Duration(milliseconds: 280));
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _restoreFirstInstallmentAfterTour() async {
+    final prev = _firstCuotaExpandedBeforeTour;
+    _firstCuotaExpandedBeforeTour = null;
+    if (!mounted) return;
+
+    try {
+      if (prev == false && _firstInstallmentController.isExpanded) {
+        _firstInstallmentController.collapse();
+        await Future.delayed(const Duration(milliseconds: 220));
+      }
+    } catch (_) {}
+  }
+
+  ScreenTourConfig _buildTourConfig() {
+    return SaleFinancialDetailTour.buildConfig(
+      keys: _tourKeys,
+      onExpandFirstInstallment: _expandFirstInstallmentForTour,
+      onRestoreFirstInstallment: _restoreFirstInstallmentAfterTour,
+    );
+  }
+
+  void _startTour(BuildContext context) {
+    InteractiveTourService.startManualTour(context, _buildTourConfig());
   }
 
   Future<void> _loadData() async {
     if (!mounted) return;
     setState(() => _isLoading = true);
-    
+
     final provider = Provider.of<SaleProvider>(context, listen: false);
     final data = await provider.getSaleDetail(widget.saleId);
-    
+
     if (mounted) {
       setState(() {
         _saleData = data;
         _isLoading = false;
       });
+      if (widget.autoTriggerTour && !_didAttemptAutoTour && data != null) {
+        _didAttemptAutoTour = true;
+        WidgetsBinding.instance.addPostFrameCallback((_) async {
+          if (!mounted) return;
+          await InteractiveTourService.maybeStartAutomaticTour(
+            context,
+            _buildTourConfig(),
+          );
+        });
+      }
     }
   }
 
@@ -219,49 +292,118 @@ class _SaleFinancialDetailScreenState extends State<SaleFinancialDetailScreen> {
     return Scaffold(
       backgroundColor: bgColor,
       appBar: AppBar(
+        leadingWidth: 38,
         titleSpacing: 0,
-        title: FittedBox(
-          fit: BoxFit.scaleDown,
+        actionsPadding: EdgeInsets.zero,
+        title: Align(
           alignment: Alignment.centerLeft,
-          child: Text(
-            isLoan
-                ? "Detalle del Préstamo #${_saleData?['numero_secuencial'] ?? widget.saleId}"
-                : "Detalle de Venta #${_saleData?['numero_secuencial'] ?? widget.saleId}",
-            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(
+              isLoan
+                  ? "Detalle del Préstamo #${_saleData?['numero_secuencial'] ?? widget.saleId}"
+                  : "Detalle de Venta #${_saleData?['numero_secuencial'] ?? widget.saleId}",
+              maxLines: 1,
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+            ),
           ),
         ),
         backgroundColor: Colors.transparent,
         elevation: 0,
         actions: [
-          IconButton(
-            icon: const Icon(Icons.picture_as_pdf, color: Colors.redAccent),
-            tooltip: "Ver PDF",
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => PdfPreviewScreen(
-                    quotationId: _saleData?['cotizacion_id'] ?? 0,
-                    saleId: widget.saleId,
-                  ),
-                ),
-              );
-            },
+          InfoTooltipButton(
+            iconSize: 20,
+            padding: const EdgeInsets.all(4),
+            constraints: const BoxConstraints(minWidth: 34, minHeight: 34),
+            title: "Detalle Financiero de Venta",
+            description:
+                "Controla el saldo pendiente, cronograma de cuotas con recargo de mora, abonos directos y envío del estado de cuenta.",
+            tips: const [
+              InfoTip(
+                icon: Icons.expand_more_rounded,
+                text:
+                    "Toca cualquier cuota para desplegar su Monto Base, Mora acumulada y botones de cobro o prórroga.",
+              ),
+              InfoTip(
+                icon: Icons.timer_outlined,
+                text:
+                    "En cuotas vencidas aplica mora con 'Mora' y en cuotas vigentes programa reglas automáticas con 'Prog. Mora'.",
+              ),
+              InfoTip(
+                icon: Icons.edit_calendar_rounded,
+                text:
+                    "Usa 'Fecha' dentro de una cuota pendiente para reprogramar su vencimiento cuando acuerdes prórroga.",
+              ),
+              InfoTip(
+                icon: Icons.picture_as_pdf_rounded,
+                text:
+                    "Comparte el cronograma en PDF o envía un recordatorio formal por WhatsApp desde la barra superior.",
+              ),
+            ],
+            onStartInteractiveTour: () => _startTour(context),
           ),
-          IconButton(
-            icon: const Icon(Icons.chat, color: Color(0xFF25D366)),
-            tooltip: "Enviar WhatsApp",
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => WhatsAppPreviewScreen(
-                    quotationId: _saleData?['cotizacion_id'] ?? 0,
-                    saleId: widget.saleId,
+          KeyedSubtree(
+            key: _tourKeys.exportActionsKey,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                IconButton(
+                  icon: const Icon(
+                    Icons.picture_as_pdf,
+                    color: Colors.redAccent,
+                    size: 21,
                   ),
+                  padding: const EdgeInsets.all(4),
+                  constraints: const BoxConstraints(
+                    minWidth: 34,
+                    minHeight: 34,
+                  ),
+                  style: IconButton.styleFrom(
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
+                  tooltip: "Ver PDF",
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => PdfPreviewScreen(
+                          quotationId: _saleData?['cotizacion_id'] ?? 0,
+                          saleId: widget.saleId,
+                        ),
+                      ),
+                    );
+                  },
                 ),
-              );
-            },
+                IconButton(
+                  icon: const Icon(
+                    Icons.chat,
+                    color: Color(0xFF25D366),
+                    size: 21,
+                  ),
+                  padding: const EdgeInsets.all(4),
+                  constraints: const BoxConstraints(
+                    minWidth: 34,
+                    minHeight: 34,
+                  ),
+                  style: IconButton.styleFrom(
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
+                  tooltip: "Enviar WhatsApp",
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => WhatsAppPreviewScreen(
+                          quotationId: _saleData?['cotizacion_id'] ?? 0,
+                          saleId: widget.saleId,
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ],
+            ),
           ),
           const SizedBox(width: 4),
         ],
@@ -275,6 +417,7 @@ class _SaleFinancialDetailScreenState extends State<SaleFinancialDetailScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Container(
+                key: _tourKeys.receiptButtonKey,
                 width: double.infinity,
                 padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
                 child: ElevatedButton.icon(
@@ -282,8 +425,15 @@ class _SaleFinancialDetailScreenState extends State<SaleFinancialDetailScreen> {
                     Navigator.push(context, MaterialPageRoute(builder: (_) => SaleHistoryDetailScreen(saleId: widget.saleId)));
                   },
                   icon: const Icon(Icons.receipt_long, size: 22),
-                  label: const Text("Ver Comprobante / Compartir", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                  style: ElevatedButton.styleFrom(backgroundColor: Colors.blue[800], foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(vertical: 14), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14))),
+                  label: const FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      "Ver Comprobante / Compartir",
+                      maxLines: 1,
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                    ),
+                  ),
+                  style: ElevatedButton.styleFrom(backgroundColor: Colors.blue[800], foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14))),
                 ),
               ),
 
@@ -291,6 +441,7 @@ class _SaleFinancialDetailScreenState extends State<SaleFinancialDetailScreen> {
                 _buildLogisticsCard(isDark, cardColor),
 
               Container(
+                key: _tourKeys.balanceCardKey,
                 margin: const EdgeInsets.all(16),
                 padding: const EdgeInsets.all(24),
                 decoration: BoxDecoration(
@@ -317,24 +468,67 @@ class _SaleFinancialDetailScreenState extends State<SaleFinancialDetailScreen> {
                         decoration: BoxDecoration(color: Colors.red.withAlpha((0.2 * 255).toInt()), borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.red.withAlpha((0.5 * 255).toInt()))),
                         child: Text("Mora acumulada: + ${AppCurrency.format(moraTotal)}", style: const TextStyle(color: Colors.redAccent, fontSize: 12, fontWeight: FontWeight.bold)),
                       ),
-                    Text(AppCurrency.format(saldo), style: TextStyle(color: saldo == 0 ? Colors.greenAccent : Colors.white, fontSize: 36, fontWeight: FontWeight.bold)),
+                    FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text(
+                        AppCurrency.format(saldo),
+                        style: TextStyle(
+                          color: saldo == 0 ? Colors.greenAccent : Colors.white,
+                          fontSize: 36,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
                     const Padding(padding: EdgeInsets.symmetric(vertical: 16), child: Divider(color: Colors.white24, height: 1)),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(isLoan ? "Monto Total" : "Costo Total", style: const TextStyle(color: Colors.white54, fontSize: 13)),
-                            Text(AppCurrency.format(total), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
-                          ],
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                isLoan ? "Monto Total" : "Costo Total",
+                                style: const TextStyle(color: Colors.white54, fontSize: 13),
+                              ),
+                              FittedBox(
+                                fit: BoxFit.scaleDown,
+                                alignment: Alignment.centerLeft,
+                                child: Text(
+                                  AppCurrency.format(total),
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 16,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.end,
-                          children: [
-                            const Text("Abonado", style: TextStyle(color: Colors.white54, fontSize: 13)),
-                            Text(AppCurrency.format(pagado), style: const TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold, fontSize: 16)),
-                          ],
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
+                              const Text(
+                                "Abonado",
+                                style: TextStyle(color: Colors.white54, fontSize: 13),
+                              ),
+                              FittedBox(
+                                fit: BoxFit.scaleDown,
+                                alignment: Alignment.centerRight,
+                                child: Text(
+                                  AppCurrency.format(pagado),
+                                  style: const TextStyle(
+                                    color: Colors.greenAccent,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 16,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       ],
                     )
@@ -409,6 +603,7 @@ class _SaleFinancialDetailScreenState extends State<SaleFinancialDetailScreen> {
                     }
 
                     return Card(
+                      key: i == 0 ? _tourKeys.scheduleTileKey : null,
                       elevation: 0,
                       color: cardColor,
                       margin: const EdgeInsets.only(bottom: 12),
@@ -416,43 +611,56 @@ class _SaleFinancialDetailScreenState extends State<SaleFinancialDetailScreen> {
                       child: Theme(
                         data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
                         child: ExpansionTile(
+                          controller: i == 0 ? _firstInstallmentController : null,
                           iconColor: textColor,
                           collapsedIconColor: isDark ? Colors.grey[400] : Colors.grey,
                           leading: CircleAvatar(backgroundColor: statusColor.withValues(alpha: 0.15), child: Icon(statusIcon, color: statusColor)),
-                          title: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                "Cuota ${c['numero_cuota']}",
-                                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: textColor),
-                              ),
-                              if (isAutoMora) ...[
-                                const SizedBox(width: 6),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
-                                  decoration: BoxDecoration(
-                                    color: Colors.amber.withValues(alpha: 0.15),
-                                    borderRadius: BorderRadius.circular(4),
-                                    border: Border.all(color: Colors.amber.withValues(alpha: 0.5), width: 0.8),
+                          title: Align(
+                            alignment: Alignment.centerLeft,
+                            child: FittedBox(
+                              fit: BoxFit.scaleDown,
+                              alignment: Alignment.centerLeft,
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(
+                                    "Cuota ${c['numero_cuota']}",
+                                    maxLines: 1,
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 16,
+                                      color: textColor,
+                                    ),
                                   ),
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Icon(Icons.bolt_rounded, size: 11, color: isDark ? Colors.amber[300] : Colors.amber[800]),
-                                      const SizedBox(width: 2),
-                                      Text(
-                                        "Auto",
-                                        style: TextStyle(
-                                          fontSize: 9.5,
-                                          fontWeight: FontWeight.bold,
-                                          color: isDark ? Colors.amber[300] : Colors.amber[800],
-                                        ),
+                                  if (isAutoMora) ...[
+                                    const SizedBox(width: 6),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                                      decoration: BoxDecoration(
+                                        color: Colors.amber.withValues(alpha: 0.15),
+                                        borderRadius: BorderRadius.circular(4),
+                                        border: Border.all(color: Colors.amber.withValues(alpha: 0.5), width: 0.8),
                                       ),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                            ],
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Icon(Icons.bolt_rounded, size: 11, color: isDark ? Colors.amber[300] : Colors.amber[800]),
+                                          const SizedBox(width: 2),
+                                          Text(
+                                            "Auto",
+                                            style: TextStyle(
+                                              fontSize: 9.5,
+                                              fontWeight: FontWeight.bold,
+                                              color: isDark ? Colors.amber[300] : Colors.amber[800],
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ],
+                              ),
+                            ),
                           ),
                           subtitle: Padding(
                             padding: const EdgeInsets.only(top: 2),
@@ -494,29 +702,47 @@ class _SaleFinancialDetailScreenState extends State<SaleFinancialDetailScreen> {
                               ],
                             ),
                           ),
-                          trailing: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            crossAxisAlignment: CrossAxisAlignment.end,
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                AppCurrency.format(cMonto),
-                                style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: textColor),
+                          trailing: ConstrainedBox(
+                            constraints: const BoxConstraints(
+                              maxWidth: 108,
+                              maxHeight: 48,
+                            ),
+                            child: FittedBox(
+                              fit: BoxFit.scaleDown,
+                              alignment: Alignment.centerRight,
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                crossAxisAlignment: CrossAxisAlignment.end,
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(
+                                    AppCurrency.format(cMonto),
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.w900,
+                                      fontSize: 16,
+                                      color: textColor,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: statusColor.withValues(alpha: 0.15),
+                                      borderRadius: BorderRadius.circular(4),
+                                      border: Border.all(color: statusColor.withValues(alpha: 0.35), width: 0.8),
+                                    ),
+                                    child: Text(
+                                      statusText,
+                                      style: TextStyle(
+                                        color: statusColor,
+                                        fontSize: 10.5,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ),
+                                ],
                               ),
-                              const SizedBox(height: 2),
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                decoration: BoxDecoration(
-                                  color: statusColor.withValues(alpha: 0.15),
-                                  borderRadius: BorderRadius.circular(4),
-                                  border: Border.all(color: statusColor.withValues(alpha: 0.35), width: 0.8),
-                                ),
-                                child: Text(
-                                  statusText,
-                                  style: TextStyle(color: statusColor, fontSize: 10.5, fontWeight: FontWeight.bold),
-                                ),
-                              ),
-                            ],
+                            ),
                           ),
                           children: [
                             Container(
@@ -577,9 +803,14 @@ class _SaleFinancialDetailScreenState extends State<SaleFinancialDetailScreen> {
                                     // Barra unificada de 4 acciones simétricas
                                     Row(
                                       children: [
-                                        // 1. [📅 Fecha]
+                                        // 1. Fecha
                                         Expanded(
-                                          child: InkWell(
+                                          flex: 1,
+                                          child: KeyedSubtree(
+                                            key: i == 0
+                                                ? _tourKeys.installmentDateKey
+                                                : null,
+                                            child: InkWell(
                                             borderRadius: BorderRadius.circular(8),
                                             onTap: () async {
                                               final newDate = await showDatePicker(
@@ -663,10 +894,20 @@ class _SaleFinancialDetailScreenState extends State<SaleFinancialDetailScreen> {
                                               ),
                                             ),
                                           ),
+                                          ),
                                         ),
                                         const SizedBox(width: 6),
 
-                                        // 2. [⚙️ Mora / 🛡️ Prog. Mora]
+                                        // 2-4. Mora / Recordar / Cobrar
+                                        Expanded(
+                                          flex: 3,
+                                          child: KeyedSubtree(
+                                            key: i == 0
+                                                ? _tourKeys
+                                                    .installmentActionsKey
+                                                : null,
+                                            child: Row(
+                                              children: [
                                         Expanded(
                                           child: InkWell(
                                             borderRadius: BorderRadius.circular(8),
@@ -787,6 +1028,10 @@ class _SaleFinancialDetailScreenState extends State<SaleFinancialDetailScreen> {
                                         ),
                                       ],
                                     ),
+                                  ),
+                                ),
+                                      ],
+                                    ),
                                   ],
                                 ],
                               ),
@@ -798,7 +1043,21 @@ class _SaleFinancialDetailScreenState extends State<SaleFinancialDetailScreen> {
                   },
                 )
               ] else ...[
-                 Center(child: Padding(padding: const EdgeInsets.all(24), child: Text("Esta venta se realizó al contado (Sin cuotas)", style: TextStyle(color: isDark ? Colors.grey[500] : Colors.grey, fontSize: 15, fontStyle: FontStyle.italic))))
+                 Center(
+                   child: Container(
+                     key: _tourKeys.scheduleTileKey,
+                     padding: const EdgeInsets.all(24),
+                     child: Text(
+                       "Esta venta se realizó al contado (Sin cuotas)",
+                       textAlign: TextAlign.center,
+                       style: TextStyle(
+                         color: isDark ? Colors.grey[500] : Colors.grey,
+                         fontSize: 15,
+                         fontStyle: FontStyle.italic,
+                       ),
+                     ),
+                   ),
+                 )
               ],
 
               if (!isLoan) ...[
@@ -860,24 +1119,59 @@ class _SaleFinancialDetailScreenState extends State<SaleFinancialDetailScreen> {
                                   Text("Cotizado como: $originalText", style: TextStyle(fontSize: 12, fontStyle: FontStyle.italic, color: isDark ? Colors.grey[400] : Colors.grey[600])),
                                 ],
                                 const SizedBox(height: 4),
-                                Row(
+                                Wrap(
+                                  spacing: 8,
+                                  runSpacing: 2,
+                                  crossAxisAlignment:
+                                      WrapCrossAlignment.center,
                                   children: [
                                     Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                      decoration: BoxDecoration(color: Colors.blueGrey.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(4)),
-                                      child: Text("$quantity $salesUnit", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: isDark ? Colors.blueGrey[300] : Colors.blueGrey[700])),
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 6,
+                                        vertical: 2,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: Colors.blueGrey.withValues(
+                                          alpha: 0.1,
+                                        ),
+                                        borderRadius: BorderRadius.circular(4),
+                                      ),
+                                      child: Text(
+                                        "$quantity $salesUnit",
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.bold,
+                                          color: isDark
+                                              ? Colors.blueGrey[300]
+                                              : Colors.blueGrey[700],
+                                        ),
+                                      ),
                                     ),
-                                    const SizedBox(width: 8),
-                                    Text("x ${AppCurrency.format(unitP)}", style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[600], fontSize: 13)),
-                                    if (originalP > unitP) ...[
-                                      const SizedBox(width: 6),
-                                      Text(AppCurrency.format(originalP), style: TextStyle(color: Colors.red[300], fontSize: 11, decoration: TextDecoration.lineThrough)),
-                                    ]
+                                    Text(
+                                      "x ${AppCurrency.format(unitP)}",
+                                      style: TextStyle(
+                                        color: isDark
+                                            ? Colors.grey[400]
+                                            : Colors.grey[600],
+                                        fontSize: 13,
+                                      ),
+                                    ),
+                                    if (originalP > unitP)
+                                      Text(
+                                        AppCurrency.format(originalP),
+                                        style: TextStyle(
+                                          color: Colors.red[300],
+                                          fontSize: 11,
+                                          decoration:
+                                              TextDecoration.lineThrough,
+                                        ),
+                                      ),
                                   ],
                                 ),
                               ],
                             ),
                           ),
+                          const SizedBox(width: 8),
                           Text(AppCurrency.format(unitP * quantity), style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: textColor)),
                         ],
                       ),
@@ -985,14 +1279,17 @@ class _SaleFinancialDetailScreenState extends State<SaleFinancialDetailScreen> {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: 12.5,
-            color: labelColor,
-            fontWeight: isBold ? FontWeight.bold : FontWeight.normal,
+        Expanded(
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 12.5,
+              color: labelColor,
+              fontWeight: isBold ? FontWeight.bold : FontWeight.normal,
+            ),
           ),
         ),
+        const SizedBox(width: 8),
         Text(
           value,
           style: TextStyle(

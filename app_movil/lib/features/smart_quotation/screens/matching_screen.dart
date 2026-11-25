@@ -33,17 +33,25 @@ import 'package:app_movil/features/smart_quotation/screens/whatsapp_preview_scre
 import 'package:app_movil/features/smart_quotation/screens/quotation_detail_screen.dart';
 import 'package:app_movil/features/smart_quotation/screens/client_orders_screen.dart'; 
 import 'package:app_movil/core/screens/home_screen.dart'; 
+import 'package:app_movil/core/services/tour/interactive_tour_service.dart';
+import 'package:app_movil/core/widgets/info_tooltip_button.dart';
+import 'package:app_movil/core/widgets/tour/configs/matching_tour.dart';
+import 'package:app_movil/core/widgets/tour/tour_step_model.dart';
 
 class MatchingScreen extends StatefulWidget {
   final List<ExtractedItem> extractedItems;
   final ExtractedMetadata? metadata;
   final bool prioritizeWholesale;
+  final bool autoTriggerTour;
+  final MatchingTourKeys? tourKeys;
 
   const MatchingScreen({
     super.key,
     required this.extractedItems,
     this.metadata,
     this.prioritizeWholesale = false,
+    this.autoTriggerTour = true,
+    this.tourKeys,
   });
 
   @override
@@ -70,6 +78,10 @@ class _MatchingScreenState extends State<MatchingScreen> {
   bool _isClientPanelExpanded = false;
   bool _isAutoTitleMode = true;
   bool _isGeneratingTitle = false;
+  late final MatchingTourKeys _tourKeys;
+  bool _didAttemptAutoTour = false;
+  bool? _clientExpandedBeforeTour;
+  bool? _quoteExpandedBeforeTour;
 
   void _syncAutoTitle({bool force = false}) {
     if (_isGeneratingTitle) return;
@@ -105,6 +117,7 @@ class _MatchingScreenState extends State<MatchingScreen> {
   @override
   void initState() {
     super.initState();
+    _tourKeys = widget.tourKeys ?? MatchingTourKeys();
     
     final provider = Provider.of<MatchingProvider>(context, listen: false);
     final auth = Provider.of<AuthProvider>(context, listen: false);
@@ -138,14 +151,18 @@ class _MatchingScreenState extends State<MatchingScreen> {
       initSchool = provider.metadata?.institutionName ?? initSchool;
       initClient = provider.selectedClient?.fullName ?? provider.metadata?.studentName ?? initClient;
       initGrade = provider.metadata?.gradeLevel ?? initGrade;
-    } else {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        provider.initializeAndMatch(
-            widget.extractedItems, 
-            widget.metadata, 
-            isClientRole: isClient,
-            prioritizeWholesale: widget.prioritizeWholesale,
+        _maybeStartAutoTour();
+      });
+    } else {
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        await provider.initializeAndMatch(
+          widget.extractedItems, 
+          widget.metadata, 
+          isClientRole: isClient,
+          prioritizeWholesale: widget.prioritizeWholesale,
         );
+        if (mounted) _maybeStartAutoTour();
       });
     }
 
@@ -181,6 +198,70 @@ class _MatchingScreenState extends State<MatchingScreen> {
       if (!_isGeneratingTitle && _isAutoTitleMode) {
         setState(() => _isAutoTitleMode = false);
       }
+    });
+  }
+
+  Future<void> _expandClientPanelForTour() async {
+    if (!mounted) return;
+    _clientExpandedBeforeTour ??= _isClientPanelExpanded;
+    if (!_isClientPanelExpanded) {
+      setState(() => _isClientPanelExpanded = true);
+      await Future.delayed(const Duration(milliseconds: 300));
+    }
+  }
+
+  Future<void> _restoreClientPanelAfterTour() async {
+    final prev = _clientExpandedBeforeTour;
+    _clientExpandedBeforeTour = null;
+    if (!mounted) return;
+    if (prev != null && _isClientPanelExpanded != prev) {
+      setState(() => _isClientPanelExpanded = prev);
+      await Future.delayed(const Duration(milliseconds: 280));
+    }
+  }
+
+  Future<void> _expandQuoteDataForTour() async {
+    if (!mounted) return;
+    _quoteExpandedBeforeTour ??= _isQuoteDataExpanded;
+    if (!_isQuoteDataExpanded) {
+      setState(() => _isQuoteDataExpanded = true);
+      await Future.delayed(const Duration(milliseconds: 300));
+    }
+  }
+
+  Future<void> _restoreQuoteDataAfterTour() async {
+    final prev = _quoteExpandedBeforeTour;
+    _quoteExpandedBeforeTour = null;
+    if (!mounted) return;
+    if (prev != null && _isQuoteDataExpanded != prev) {
+      setState(() => _isQuoteDataExpanded = prev);
+      await Future.delayed(const Duration(milliseconds: 280));
+    }
+  }
+
+  ScreenTourConfig _buildTourConfig() {
+    return MatchingTour.buildConfig(
+      keys: _tourKeys,
+      onExpandClientPanel: _expandClientPanelForTour,
+      onRestoreClientPanel: _restoreClientPanelAfterTour,
+      onExpandQuoteData: _expandQuoteDataForTour,
+      onRestoreQuoteData: _restoreQuoteDataAfterTour,
+    );
+  }
+
+  void _startTour(BuildContext context) {
+    InteractiveTourService.startManualTour(context, _buildTourConfig());
+  }
+
+  void _maybeStartAutoTour() {
+    if (!widget.autoTriggerTour || _didAttemptAutoTour || !mounted) return;
+    _didAttemptAutoTour = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+      await InteractiveTourService.maybeStartAutomaticTour(
+        context,
+        _buildTourConfig(),
+      );
     });
   }
 
@@ -569,7 +650,6 @@ class _MatchingScreenState extends State<MatchingScreen> {
     final matchingProvider = Provider.of<MatchingProvider>(context);
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final bgColor = Theme.of(context).scaffoldBackgroundColor;
-    final textColor = isDark ? Colors.white : Colors.black87;
     final textTheme = Theme.of(context).textTheme;
 
     final authProv = Provider.of<AuthProvider>(context, listen: false);
@@ -580,6 +660,8 @@ class _MatchingScreenState extends State<MatchingScreen> {
       canPop: false,
       onPopInvokedWithResult: (didPop, _) async {
         if (didPop) return;
+        if (await InteractiveTourService.cancelActiveTour()) return;
+        if (!context.mounted) return;
         final shouldPop = await _onWillPop(isDark);
         if (shouldPop && context.mounted) Navigator.of(context).pop();
       },
@@ -604,25 +686,62 @@ class _MatchingScreenState extends State<MatchingScreen> {
           iconTheme: const IconThemeData(color: Colors.white),
           elevation: 0,
           actions: [
+            InfoTooltipButton(
+              iconColor: Colors.white,
+              constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+              padding: const EdgeInsets.all(6),
+              onStartInteractiveTour: () => _startTour(context),
+              title: "Cotización Inteligente IA",
+              description:
+                  "Revisa y ajusta los artículos conciliados por la IA, añade filas manuales, configura cliente o colegio y cierra la venta o proforma.",
+              tips: const [
+                InfoTip(
+                  icon: Icons.touch_app_rounded,
+                  text:
+                      "Toca cualquier fila emparejada para cambiar presentación, precio o ver equivalentes sugeridos.",
+                ),
+                InfoTip(
+                  icon: Icons.expand_more_rounded,
+                  text:
+                      "Despliega los paneles superiores para elegir modo General, Mayorista o Escolar y añadir notas.",
+                ),
+              ],
+            ),
             if (matchingProvider.hasModifications)
               IconButton(
-                icon: Icon(Icons.settings_backup_restore, color: isDark ? Colors.orange[300] : Colors.orangeAccent, size: 26),
+                icon: Icon(
+                  Icons.settings_backup_restore,
+                  color: isDark ? Colors.orange[300] : Colors.orangeAccent,
+                  size: 22,
+                ),
                 tooltip: "Reiniciar Análisis",
+                visualDensity: VisualDensity.compact,
+                constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                padding: const EdgeInsets.all(6),
                 onPressed: () => _resetToInitial(isDark),
               ),
             Center(
               child: Padding(
-                padding: const EdgeInsets.only(right: 16.0, left: 8.0),
+                padding: const EdgeInsets.only(right: 10.0, left: 4.0),
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(color: isDark ? Colors.white10 : Colors.white24, borderRadius: BorderRadius.circular(12)),
+                  padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: isDark ? Colors.white10 : Colors.white24,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
                   child: FittedBox(
                     fit: BoxFit.scaleDown,
-                    child: Text("${matchingProvider.matchedCount}/${matchingProvider.pairs.length} Listos", style: textTheme.titleMedium?.copyWith(color: textColor)),
+                    child: Text(
+                      "${matchingProvider.matchedCount}/${matchingProvider.pairs.length} Listos",
+                      style: textTheme.titleSmall?.copyWith(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                   ),
                 ),
               ),
-            )
+            ),
           ],
         ),
         
@@ -639,6 +758,41 @@ class _MatchingScreenState extends State<MatchingScreen> {
                       
                       if (matchingProvider.isLoading)
                         const SliverFillRemaining(child: Center(child: CircularProgressIndicator()))
+                      else if (matchingProvider.pairs.isEmpty)
+                        SliverToBoxAdapter(
+                          child: KeyedSubtree(
+                            key: _tourKeys.matchedItemsKey,
+                            child: Container(
+                              margin: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                              padding: const EdgeInsets.all(16),
+                              decoration: BoxDecoration(
+                                color: isDark ? const Color(0xFF1E1E28) : Colors.white,
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(
+                                  color: isDark ? Colors.white12 : Colors.grey.shade300,
+                                ),
+                              ),
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    Icons.fact_check_outlined,
+                                    color: isDark ? Colors.blue[300] : Colors.blue[700],
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Text(
+                                      "Aquí verás los útiles emparejados con tu inventario y equivalentes sugeridos.",
+                                      style: TextStyle(
+                                        fontSize: 13,
+                                        color: isDark ? Colors.grey[300] : Colors.grey[700],
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        )
                       else
                         SliverPadding(
                           padding: const EdgeInsets.only(top: 16),
@@ -650,6 +804,7 @@ class _MatchingScreenState extends State<MatchingScreen> {
                                 // Para no complicar la lista indexada, si es el PRIMER item de un bundle, dibujamos todo el contenedor del bundle.
                                 // Si es un item de un bundle que ya no es el primero, retornamos SizedBox vacío (ya se dibujó).
                                 final pair = matchingProvider.pairs[i];
+                                Widget rowWidget;
                                 
                                 if (pair.bundleId != null) {
                                   // ¿Es el primero de su grupo en la lista?
@@ -662,7 +817,7 @@ class _MatchingScreenState extends State<MatchingScreen> {
                                   
                                   double totalSavings = bundlePairs.fold(0.0, (sum, p) => sum + (p.originalUnitPrice * p.selectedQuantity)) - bundleModel.precioVentaTotal;
                                   
-                                  return Container(
+                                  rowWidget = Container(
                                     margin: const EdgeInsets.only(bottom: 16, left: 16, right: 16),
                                     clipBehavior: Clip.antiAlias,
                                     decoration: BoxDecoration(
@@ -757,24 +912,32 @@ class _MatchingScreenState extends State<MatchingScreen> {
                                       ],
                                     ),
                                   );
+                                } else {
+                                  // Render normal
+                                  bool isRepeated = matchingProvider.isProductRepeated(pair.selectedProduct?.presentationId);
+                                  rowWidget = Padding(
+                                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                                    child: MatchingItemRow(
+                                      pair: pair,
+                                      index: i,
+                                      isRepeated: isRepeated, 
+                                      isClient: isClient, 
+                                      onTapProduct: () => _openDetailsModal(context, pair),
+                                      onChangeRequest: () => _openSearchModal(context, pair, isDark),
+                                      onDelete: () => _confirmAndDeletePair(context, pair, isDark),
+                                      onUnlink: () => matchingProvider.unmatchItem(pair.sourceItem.id),
+                                      onSuggestedReplacements: () => _openSuggestedReplacementsModal(context, pair, isDark),
+                                    ),
+                                  );
                                 }
 
-                                // Render normal
-                                bool isRepeated = matchingProvider.isProductRepeated(pair.selectedProduct?.presentationId);
-                                return Padding(
-                                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                                  child: MatchingItemRow(
-                                    pair: pair,
-                                    index: i,
-                                    isRepeated: isRepeated, 
-                                    isClient: isClient, 
-                                    onTapProduct: () => _openDetailsModal(context, pair),
-                                    onChangeRequest: () => _openSearchModal(context, pair, isDark),
-                                    onDelete: () => _confirmAndDeletePair(context, pair, isDark),
-                                    onUnlink: () => matchingProvider.unmatchItem(pair.sourceItem.id),
-                                    onSuggestedReplacements: () => _openSuggestedReplacementsModal(context, pair, isDark),
-                                  ),
-                                );
+                                if (i == 0) {
+                                  return KeyedSubtree(
+                                    key: _tourKeys.matchedItemsKey,
+                                    child: rowWidget,
+                                  );
+                                }
+                                return rowWidget;
                               },
                               childCount: matchingProvider.pairs.length,
                             ),
@@ -786,10 +949,13 @@ class _MatchingScreenState extends State<MatchingScreen> {
                           child: Padding(
                             padding: const EdgeInsets.symmetric(vertical: 24),
                             child: Center(
-                              child: TextButton.icon(
-                                icon: Icon(Icons.add_circle_outline, size: 24, color: isDark ? Colors.blue[300] : Colors.blue),
-                                label: Text("Agregar Fila Manual", style: textTheme.titleMedium?.copyWith(color: isDark ? Colors.blue[300] : Colors.blue)),
-                                onPressed: () => matchingProvider.addManualRow(),
+                              child: KeyedSubtree(
+                                key: _tourKeys.manualAddKey,
+                                child: TextButton.icon(
+                                  icon: Icon(Icons.add_circle_outline, size: 24, color: isDark ? Colors.blue[300] : Colors.blue),
+                                  label: Text("Agregar Fila Manual", style: textTheme.titleMedium?.copyWith(color: isDark ? Colors.blue[300] : Colors.blue)),
+                                  onPressed: () => matchingProvider.addManualRow(),
+                                ),
                               ),
                             ),
                           ),
@@ -799,23 +965,26 @@ class _MatchingScreenState extends State<MatchingScreen> {
                     ],
                   ),
                 ),
-                MatchingSmartBottomBar(
-                  provider: matchingProvider,
-                  isDark: isDark,
-                  theme: textTheme,
-                  isClient: isClient,
-                  isEnabled: !matchingProvider.isLoading && matchingProvider.pairs.isNotEmpty,
-                  onActionTap: () {
-                    if (isClient) {
-                      _handleActionWithConfirmation('client_send', isDark);
-                    } else {
-                      MatchingActionsBottomSheet.show(
-                        context,
-                        isDark: isDark,
-                        onActionSelected: (actionType) => _handleActionWithConfirmation(actionType, isDark),
-                      );
-                    }
-                  },
+                KeyedSubtree(
+                  key: _tourKeys.bottomBarKey,
+                  child: MatchingSmartBottomBar(
+                    provider: matchingProvider,
+                    isDark: isDark,
+                    theme: textTheme,
+                    isClient: isClient,
+                    isEnabled: !matchingProvider.isLoading && matchingProvider.pairs.isNotEmpty,
+                    onActionTap: () {
+                      if (isClient) {
+                        _handleActionWithConfirmation('client_send', isDark);
+                      } else {
+                        MatchingActionsBottomSheet.show(
+                          context,
+                          isDark: isDark,
+                          onActionSelected: (actionType) => _handleActionWithConfirmation(actionType, isDark),
+                        );
+                      }
+                    },
+                  ),
                 ), 
               ],
             ),
@@ -839,81 +1008,86 @@ class _MatchingScreenState extends State<MatchingScreen> {
       child: Column(
         children: [
           // 🪗 ACORDEÓN 1: Identificación de Cotización
-          MorphingAccordion(
-            title: "Identificación de Cotización",
-            icon: Icons.description_outlined,
-            iconColor: isDark ? Colors.blue[300] : Colors.blue[800],
-            initialExpanded: _isQuoteDataExpanded,
-            onExpansionChanged: (val) => setState(() => _isQuoteDataExpanded = val),
-            summaryBadge: titleText.isNotEmpty
-                ? Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: isDark ? Colors.blue[900]!.withValues(alpha: 0.3) : Colors.blue.shade50,
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: Text(
-                      titleText.length > 20 ? '${titleText.substring(0, 18)}...' : titleText,
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.bold,
-                        color: isDark ? Colors.blue[200] : Colors.blue[800],
+          KeyedSubtree(
+            key: _tourKeys.quoteNotesAccordionKey,
+            child: MorphingAccordion(
+              title: "Identificación de Cotización",
+              icon: Icons.description_outlined,
+              iconColor: isDark ? Colors.blue[300] : Colors.blue[800],
+              initialExpanded: _isQuoteDataExpanded,
+              onExpansionChanged: (val) => setState(() => _isQuoteDataExpanded = val),
+              summaryBadge: titleText.isNotEmpty
+                  ? Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: isDark ? Colors.blue[900]!.withValues(alpha: 0.3) : Colors.blue.shade50,
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(
+                        titleText.length > 20 ? '${titleText.substring(0, 18)}...' : titleText,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                          color: isDark ? Colors.blue[200] : Colors.blue[800],
+                        ),
+                      ),
+                    )
+                  : null,
+              content: Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    TextField(
+                      controller: _quoteTitleCtrl,
+                      style: TextStyle(fontSize: 15.5, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87),
+                      decoration: InputDecoration(
+                        labelText: "Nombre / Título de la Cotización",
+                        labelStyle: TextStyle(fontSize: 13, color: isDark ? Colors.blue[300] : Colors.blue[800]),
+                        floatingLabelBehavior: FloatingLabelBehavior.auto,
+                        prefixIcon: Icon(Icons.description, color: isDark ? Colors.blue[300] : Colors.blue),
+                        suffixIcon: !_isAutoTitleMode
+                            ? IconButton(
+                                icon: const Icon(Icons.restore_outlined),
+                                color: isDark ? Colors.amber[300] : Colors.orange[800],
+                                tooltip: "Restaurar nombre automático",
+                                onPressed: _restoreAutoTitle,
+                              )
+                            : Tooltip(
+                                message: "Nombre dinámico sincronizado",
+                                child: Icon(Icons.auto_awesome, size: 18, color: isDark ? Colors.blue[300] : Colors.blue[600]),
+                              ),
+                        filled: true,
+                        fillColor: isDark ? const Color(0xFF14141C) : Colors.blue.withValues(alpha: 0.05),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 15),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: isDark ? Colors.white12 : Colors.grey.shade300)),
+                        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: isDark ? Colors.white10 : Colors.grey.shade300)),
+                        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: isDark ? Colors.blue[300]! : Colors.blue[700]!, width: 1.5)),
                       ),
                     ),
-                  )
-                : null,
-            content: Padding(
-              padding: const EdgeInsets.only(top: 8),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  TextField(
-                    controller: _quoteTitleCtrl,
-                    style: TextStyle(fontSize: 15.5, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87),
-                    decoration: InputDecoration(
-                      labelText: "Nombre / Título de la Cotización",
-                      labelStyle: TextStyle(fontSize: 13, color: isDark ? Colors.blue[300] : Colors.blue[800]),
-                      floatingLabelBehavior: FloatingLabelBehavior.auto,
-                      prefixIcon: Icon(Icons.description, color: isDark ? Colors.blue[300] : Colors.blue),
-                      suffixIcon: !_isAutoTitleMode
-                          ? IconButton(
-                              icon: const Icon(Icons.restore_outlined),
-                              color: isDark ? Colors.amber[300] : Colors.orange[800],
-                              tooltip: "Restaurar nombre automático",
-                              onPressed: _restoreAutoTitle,
-                            )
-                          : Tooltip(
-                              message: "Nombre dinámico sincronizado",
-                              child: Icon(Icons.auto_awesome, size: 18, color: isDark ? Colors.blue[300] : Colors.blue[600]),
-                            ),
-                      filled: true,
-                      fillColor: isDark ? const Color(0xFF14141C) : Colors.blue.withValues(alpha: 0.05),
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 15),
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: isDark ? Colors.white12 : Colors.grey.shade300)),
-                      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: isDark ? Colors.white10 : Colors.grey.shade300)),
-                      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: isDark ? Colors.blue[300]! : Colors.blue[700]!, width: 1.5)),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: _quoteNotesCtrl,
+                      style: TextStyle(fontSize: 14, color: isDark ? Colors.white : Colors.black87),
+                      maxLines: 2,
+                      minLines: 1,
+                      decoration: InputDecoration(
+                        labelText: "Notas de Cotización (Opcional)",
+                        labelStyle: TextStyle(fontSize: 13, color: isDark ? Colors.grey[400] : Colors.grey[600]),
+                        floatingLabelBehavior: FloatingLabelBehavior.auto,
+                        prefixIcon: Icon(Icons.sticky_note_2_outlined, color: isDark ? Colors.grey[400] : Colors.grey),
+                        filled: true,
+                        fillColor: isDark ? const Color(0xFF14141C) : Colors.grey[100],
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: isDark ? Colors.white12 : Colors.grey.shade300)),
+                        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: isDark ? Colors.white10 : Colors.grey.shade300)),
+                        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: isDark ? Colors.blue[300]! : Colors.blue[700]!, width: 1.5)),
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: _quoteNotesCtrl,
-                    style: TextStyle(fontSize: 14, color: isDark ? Colors.white : Colors.black87),
-                    maxLines: 2,
-                    minLines: 1,
-                    decoration: InputDecoration(
-                      labelText: "Notas de Cotización (Opcional)",
-                      labelStyle: TextStyle(fontSize: 13, color: isDark ? Colors.grey[400] : Colors.grey[600]),
-                      floatingLabelBehavior: FloatingLabelBehavior.auto,
-                      prefixIcon: Icon(Icons.sticky_note_2_outlined, color: isDark ? Colors.grey[400] : Colors.grey),
-                      filled: true,
-                      fillColor: isDark ? const Color(0xFF14141C) : Colors.grey[100],
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: isDark ? Colors.white12 : Colors.grey.shade300)),
-                      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: isDark ? Colors.white10 : Colors.grey.shade300)),
-                      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: isDark ? Colors.blue[300]! : Colors.blue[700]!, width: 1.5)),
-                    ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),
@@ -921,126 +1095,133 @@ class _MatchingScreenState extends State<MatchingScreen> {
           const SizedBox(height: 8),
 
           // 🪗 ACORDEÓN 2: Cliente y Colegio / Pedido / Negocio adaptativo
-          Builder(
-            builder: (context) {
-              final mode = _currentMode;
-              final String accordionTitle;
-              final IconData accordionIcon;
-              switch (mode) {
-                case QuotationContextMode.general:
-                  accordionTitle = isClient ? "Mis Datos de Pedido" : "Datos del Cliente y Pedido";
-                  accordionIcon = Icons.shopping_bag_outlined;
-                  break;
-                case QuotationContextMode.wholesale:
-                  accordionTitle = isClient ? "Mis Datos de Negocio" : "Datos del Cliente y Negocio";
-                  accordionIcon = Icons.storefront_rounded;
-                  break;
-                case QuotationContextMode.school:
-                  accordionTitle = isClient ? "Mis Datos y Colegio" : "Datos del Cliente y Colegio";
-                  accordionIcon = Icons.school_outlined;
-                  break;
-              }
+          KeyedSubtree(
+            key: _tourKeys.clientAccordionKey,
+            child: Builder(
+              builder: (context) {
+                final mode = _currentMode;
+                final String accordionTitle;
+                final IconData accordionIcon;
+                switch (mode) {
+                  case QuotationContextMode.general:
+                    accordionTitle = isClient ? "Mis Datos de Pedido" : "Datos del Cliente y Pedido";
+                    accordionIcon = Icons.shopping_bag_outlined;
+                    break;
+                  case QuotationContextMode.wholesale:
+                    accordionTitle = isClient ? "Mis Datos de Negocio" : "Datos del Cliente y Negocio";
+                    accordionIcon = Icons.storefront_rounded;
+                    break;
+                  case QuotationContextMode.school:
+                    accordionTitle = isClient ? "Mis Datos y Colegio" : "Datos del Cliente y Colegio";
+                    accordionIcon = Icons.school_outlined;
+                    break;
+                }
 
-              return MorphingAccordion(
-                title: accordionTitle,
-                icon: accordionIcon,
-                iconColor: isDark ? Colors.amber[300] : Colors.orange[800],
-                initialExpanded: _isClientPanelExpanded,
-                onExpansionChanged: (val) => setState(() => _isClientPanelExpanded = val),
-                summaryBadge: (clientDisplayName.isNotEmpty || schoolText.isNotEmpty)
-                    ? Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: isDark ? Colors.orange[900]!.withValues(alpha: 0.3) : Colors.orange.shade50,
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: Text(
-                          clientDisplayName.isNotEmpty
-                              ? (clientDisplayName.length > 15 ? '${clientDisplayName.substring(0, 13)}...' : clientDisplayName)
-                              : (schoolText.length > 15 ? '${schoolText.substring(0, 13)}...' : schoolText),
-                          style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.bold,
-                            color: isDark ? Colors.orange[200] : Colors.orange[900],
+                return MorphingAccordion(
+                  title: accordionTitle,
+                  icon: accordionIcon,
+                  iconColor: isDark ? Colors.amber[300] : Colors.orange[800],
+                  initialExpanded: _isClientPanelExpanded,
+                  onExpansionChanged: (val) => setState(() => _isClientPanelExpanded = val),
+                  summaryBadge: (clientDisplayName.isNotEmpty || schoolText.isNotEmpty)
+                      ? Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: isDark ? Colors.orange[900]!.withValues(alpha: 0.3) : Colors.orange.shade50,
+                            borderRadius: BorderRadius.circular(6),
                           ),
-                        ),
-                      )
-                    : null,
-                content: Padding(
-                  padding: const EdgeInsets.only(top: 8),
-                  child: Column(
-                    children: [
-                      // Selector de Modo Rápido en 1 Toque (General, Mayorista, Escolar)
-                      Container(
-                        margin: const EdgeInsets.only(bottom: 12),
-                        padding: const EdgeInsets.all(4),
-                        decoration: BoxDecoration(
-                          color: isDark ? const Color(0xFF1E1E2C) : Colors.grey.shade100,
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: isDark ? Colors.white12 : Colors.grey.shade300),
-                        ),
-                        child: Row(
-                          children: QuotationContextMode.values.map((m) {
-                            final isSelected = _currentMode == m;
-                            return Expanded(
-                              child: InkWell(
-                                onTap: () {
-                                  HapticFeedback.selectionClick();
-                                  setState(() {
-                                    _currentMode = m;
-                                    provider.updateMetadata(mode: m);
-                                  });
-                                  _syncAutoTitle(force: true);
-                                },
-                                borderRadius: BorderRadius.circular(9),
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(vertical: 8),
-                                  decoration: BoxDecoration(
-                                    color: isSelected
-                                        ? (isDark ? Colors.blue[900]!.withValues(alpha: 0.6) : Colors.white)
-                                        : Colors.transparent,
-                                    borderRadius: BorderRadius.circular(9),
-                                    boxShadow: isSelected
-                                        ? [
-                                            BoxShadow(
-                                              color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.08),
-                                              blurRadius: 4,
-                                              offset: const Offset(0, 1),
-                                            )
-                                          ]
-                                        : null,
-                                  ),
-                                  child: Row(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      Icon(
-                                        m.icon, 
-                                        size: 14, 
-                                        color: isSelected 
-                                            ? (isDark ? Colors.blue[200] : Colors.blue[900]) 
-                                            : (isDark ? Colors.grey[400] : Colors.grey[700]),
+                          child: Text(
+                            clientDisplayName.isNotEmpty
+                                ? (clientDisplayName.length > 15 ? '${clientDisplayName.substring(0, 13)}...' : clientDisplayName)
+                                : (schoolText.length > 15 ? '${schoolText.substring(0, 13)}...' : schoolText),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                              color: isDark ? Colors.orange[200] : Colors.orange[900],
+                            ),
+                          ),
+                        )
+                      : null,
+                  content: Padding(
+                    padding: const EdgeInsets.only(top: 8),
+                    child: Column(
+                      children: [
+                        // Selector de Modo Rápido en 1 Toque (General, Mayorista, Escolar)
+                        Container(
+                          margin: const EdgeInsets.only(bottom: 12),
+                          padding: const EdgeInsets.all(4),
+                          decoration: BoxDecoration(
+                            color: isDark ? const Color(0xFF1E1E2C) : Colors.grey.shade100,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: isDark ? Colors.white12 : Colors.grey.shade300),
+                          ),
+                          child: Row(
+                            children: QuotationContextMode.values.map((m) {
+                              final isSelected = _currentMode == m;
+                              return Expanded(
+                                child: InkWell(
+                                  onTap: () {
+                                    HapticFeedback.selectionClick();
+                                    setState(() {
+                                      _currentMode = m;
+                                      provider.updateMetadata(mode: m);
+                                    });
+                                    _syncAutoTitle(force: true);
+                                  },
+                                  borderRadius: BorderRadius.circular(9),
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+                                    decoration: BoxDecoration(
+                                      color: isSelected
+                                          ? (isDark ? Colors.blue[900]!.withValues(alpha: 0.6) : Colors.white)
+                                          : Colors.transparent,
+                                      borderRadius: BorderRadius.circular(9),
+                                      boxShadow: isSelected
+                                          ? [
+                                              BoxShadow(
+                                                color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.08),
+                                                blurRadius: 4,
+                                                offset: const Offset(0, 1),
+                                              )
+                                            ]
+                                          : null,
+                                    ),
+                                    child: FittedBox(
+                                      fit: BoxFit.scaleDown,
+                                      child: Row(
+                                        mainAxisAlignment: MainAxisAlignment.center,
+                                        children: [
+                                          Icon(
+                                            m.icon, 
+                                            size: 14, 
+                                            color: isSelected 
+                                                ? (isDark ? Colors.blue[200] : Colors.blue[900]) 
+                                                : (isDark ? Colors.grey[400] : Colors.grey[700]),
+                                          ),
+                                          const SizedBox(width: 4),
+                                          Text(
+                                            m == QuotationContextMode.general
+                                                ? "General"
+                                                : (m == QuotationContextMode.wholesale ? "Mayorista" : "Escolar"),
+                                            style: TextStyle(
+                                              fontSize: 12,
+                                              fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                                              color: isSelected
+                                                  ? (isDark ? Colors.blue[200] : Colors.blue[900])
+                                                  : (isDark ? Colors.grey[400] : Colors.grey[700]),
+                                            ),
+                                          ),
+                                        ],
                                       ),
-                                      const SizedBox(width: 4),
-                                      Text(
-                                        m == QuotationContextMode.general
-                                            ? "General"
-                                            : (m == QuotationContextMode.wholesale ? "Mayorista" : "Escolar"),
-                                        style: TextStyle(
-                                          fontSize: 12,
-                                          fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-                                          color: isSelected
-                                              ? (isDark ? Colors.blue[200] : Colors.blue[900])
-                                              : (isDark ? Colors.grey[400] : Colors.grey[700]),
-                                        ),
-                                      ),
-                                    ],
+                                    ),
                                   ),
                                 ),
-                              ),
-                            );
-                          }).toList(),
+                              );
+                            }).toList(),
+                          ),
                         ),
-                      ),
                       ManualQuoteInstitutionHeader(
                         schoolCtrl: _schoolCtrl,
                         gradeCtrl: _gradeCtrl,
@@ -1072,6 +1253,7 @@ class _MatchingScreenState extends State<MatchingScreen> {
                 ),
               );
             },
+          ),
           ),
         ],
       ),

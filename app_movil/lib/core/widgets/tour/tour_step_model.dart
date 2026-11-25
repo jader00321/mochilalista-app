@@ -63,11 +63,19 @@ class ScreenTourConfig {
   /// Lista ordenada de pasos que conforman el recorrido
   final List<TourStep> steps;
 
+  /// Hook opcional ejecutado al cerrar la guía (p. ej. restaurar estado de la pantalla)
+  final Future<void> Function()? onDismiss;
+
+  /// Hook opcional ejecutado si el usuario cancela anticipadamente (X o botón Atrás)
+  final Future<void> Function()? onCancel;
+
   const ScreenTourConfig({
     required this.screenId,
     required this.screenTitle,
     required this.welcomeSummary,
     this.icon = Icons.explore_rounded,
     required this.steps,
+    this.onDismiss,
+    this.onCancel,
   });
 }

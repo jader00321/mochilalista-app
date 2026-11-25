@@ -18,6 +18,9 @@ import 'package:app_movil/features/catalog/widgets/detail/product_detail_financi
 import 'package:app_movil/features/catalog/widgets/detail/product_detail_stock_alert.dart';
 import 'package:app_movil/features/catalog/widgets/detail/product_detail_info_grid.dart';
 import 'package:app_movil/features/catalog/widgets/detail/product_detail_image_modal.dart';
+import 'package:app_movil/core/services/tour/interactive_tour_service.dart';
+import 'package:app_movil/core/widgets/tour/configs/product_detail_tour.dart';
+import 'package:app_movil/core/widgets/tour/tour_step_model.dart';
 
 /// Pantalla de Detalle de Producto.
 /// Orquesta la visualización completa de variantes, márgenes, rentabilidad,
@@ -26,12 +29,16 @@ class ProductDetailScreen extends StatefulWidget {
   final Product product;
   final int initialPresentationId;
   final String? heroTag;
+  final bool autoTriggerTour;
+  final ProductDetailTourKeys? tourKeys;
 
   const ProductDetailScreen({
     super.key,
     required this.product,
     required this.initialPresentationId,
     this.heroTag,
+    this.autoTriggerTour = true,
+    this.tourKeys,
   });
 
   @override
@@ -41,10 +48,13 @@ class ProductDetailScreen extends StatefulWidget {
 class _ProductDetailScreenState extends State<ProductDetailScreen> {
   late ProductPresentation _selectedPresentation;
   late Product _currentProduct;
+  late final ProductDetailTourKeys _tourKeys;
+  bool _didAttemptAutoTour = false;
 
   @override
   void initState() {
     super.initState();
+    _tourKeys = widget.tourKeys ?? ProductDetailTourKeys();
     _currentProduct = widget.product;
     _updateSelectedPresentation(widget.initialPresentationId);
 
@@ -52,8 +62,26 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
       await _refreshData();
       if (mounted) {
         Provider.of<InventoryProvider>(context, listen: false).loadMasterData();
+        if (widget.autoTriggerTour && !_didAttemptAutoTour) {
+          _didAttemptAutoTour = true;
+          WidgetsBinding.instance.addPostFrameCallback((_) async {
+            if (!mounted) return;
+            await InteractiveTourService.maybeStartAutomaticTour(
+              context,
+              _buildTourConfig(),
+            );
+          });
+        }
       }
     });
+  }
+
+  ScreenTourConfig _buildTourConfig() {
+    return ProductDetailTour.buildConfig(keys: _tourKeys);
+  }
+
+  void _startTour(BuildContext context) {
+    InteractiveTourService.startManualTour(context, _buildTourConfig());
   }
 
   void _updateSelectedPresentation(int id) {
@@ -299,6 +327,19 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
         ? "${_selectedPresentation.unidadesPorVenta} unid / ${_selectedPresentation.unidadVenta}"
         : "No registrado";
 
+    final bool isSharedAlert = _selectedPresentation.usaStockCompartido &&
+        stockVisual == 0 &&
+        _selectedPresentation.stockActual > 0;
+    final bool isStandardAlert = stockVisual >= 0 &&
+        stockVisual <= 5 &&
+        (stockVisual == 0 ||
+            _currentProduct.fechaCreacionParsed == null ||
+            DateTime.now()
+                    .difference(_currentProduct.fechaCreacionParsed!)
+                    .inDays >=
+                7);
+    final bool hasVisibleStockAlert = isSharedAlert || isStandardAlert;
+
     return Scaffold(
       backgroundColor: bgColor,
       body: Stack(
@@ -318,6 +359,8 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                   onShowImage: () => _showImageModal(displayImage, isDark),
                   onAuditTrail: _onAuditTrail,
                   onEdit: _navigateToEdit,
+                  onStartInteractiveTour: () => _startTour(context),
+                  auditEditActionsKey: _tourKeys.auditEditActionsKey,
                 ),
 
                 // 2. Contenido Principal
@@ -341,47 +384,64 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                         const SizedBox(height: 24),
 
                         // Selector horizontal de variantes
-                        ProductDetailVariantSelector(
-                          presentations: _currentProduct.presentaciones,
-                          selectedPresentationId: _selectedPresentation.id,
-                          isDark: isDark,
-                          textColor: textColor,
-                          onSelectPresentation: (p) {
-                            setState(() => _selectedPresentation = p);
-                          },
+                        KeyedSubtree(
+                          key: _tourKeys.variantSelectorKey,
+                          child: ProductDetailVariantSelector(
+                            presentations: _currentProduct.presentaciones,
+                            selectedPresentationId: _selectedPresentation.id,
+                            isDark: isDark,
+                            textColor: textColor,
+                            onSelectPresentation: (p) {
+                              setState(() => _selectedPresentation = p);
+                            },
+                          ),
                         ),
                         const SizedBox(height: 24),
 
                         // Dashboard financiero interactivo
-                        ProductDetailFinancialDashboard(
-                          selectedPresentation: _selectedPresentation,
-                          isDark: isDark,
-                          hasOffer: hasOffer,
-                          finalPrice: finalPrice,
-                          onOpenDiscountModal: () => _openDiscountModal(isDark),
-                          onOpenPriceModal: () => _openPriceModal(isDark),
-                          onOpenRestockModal: _openRestockModal,
+                        KeyedSubtree(
+                          key: _tourKeys.financialDashboardKey,
+                          child: ProductDetailFinancialDashboard(
+                            selectedPresentation: _selectedPresentation,
+                            isDark: isDark,
+                            hasOffer: hasOffer,
+                            finalPrice: finalPrice,
+                            quickActionsKey: _tourKeys.quickActionsKey,
+                            onOpenDiscountModal: () => _openDiscountModal(isDark),
+                            onOpenPriceModal: () => _openPriceModal(isDark),
+                            onOpenRestockModal: _openRestockModal,
+                          ),
                         ),
                         const SizedBox(height: 10),
 
-                        // Alerta inteligente de stock
-                        ProductDetailStockAlert(
-                          stockVisual: stockVisual,
-                          presentation: _selectedPresentation,
-                          isDark: isDark,
-                          fechaCreacion: _currentProduct.fechaCreacionParsed,
-                          onRestock: _openRestockModal,
-                          onEditProduct: _navigateToEdit,
+                        // Alerta inteligente de stock (si está oculta, ancla al grid de rotación y detalle)
+                        KeyedSubtree(
+                          key: hasVisibleStockAlert
+                              ? _tourKeys.stockAlertKey
+                              : null,
+                          child: ProductDetailStockAlert(
+                            stockVisual: stockVisual,
+                            presentation: _selectedPresentation,
+                            isDark: isDark,
+                            fechaCreacion: _currentProduct.fechaCreacionParsed,
+                            onRestock: _openRestockModal,
+                            onEditProduct: _navigateToEdit,
+                          ),
                         ),
 
                         // Grid 2x2 y descripción detallada
-                        ProductDetailInfoGrid(
-                          barcode: displayBarcode,
-                          unitInfo: unitInfo,
-                          categoryName: categoryName,
-                          providerName: providerName,
-                          description: displayDesc,
-                          isDark: isDark,
+                        KeyedSubtree(
+                          key: !hasVisibleStockAlert
+                              ? _tourKeys.stockAlertKey
+                              : null,
+                          child: ProductDetailInfoGrid(
+                            barcode: displayBarcode,
+                            unitInfo: unitInfo,
+                            categoryName: categoryName,
+                            providerName: providerName,
+                            description: displayDesc,
+                            isDark: isDark,
+                          ),
                         ),
                         const SizedBox(height: 40),
                       ],

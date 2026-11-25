@@ -24,6 +24,12 @@ class CommercialRadarService {
   static const String _cacheDatePrefix = 'commercial_radar_date_v5_';
   static const Duration _cacheDuration = Duration(hours: 4);
 
+  /// Claves heredadas (globales) y bandera de migración única (Plan Maestro 21 - Pilar 3)
+  static const String legacyLocationJsonPrefKey = 'commercial_radar_selected_location_json';
+  static const String legacyRegionPrefKey = 'commercial_radar_selected_region';
+  static const String legacySavedNewsPrefKey = 'commercial_radar_bookmarked_items_json';
+  static const String legacyMigratedPrefKey = 'commercial_radar_legacy_migrated_v21';
+
   /// Cliente HTTP inyectable para pruebas unitarias sin tráfico real de red
   static http.Client? customHttpClient;
 
@@ -39,6 +45,9 @@ class CommercialRadarService {
   /// Caché estática en memoria para 0ms de latencia y 0 saltos de renderizado
   static final Map<String, List<CommercialNewsItem>> _memoryCache = {};
 
+  /// Lock de coalescencia para evitar migraciones concurrentes dentro del mismo frame
+  static Future<void>? _activeLegacyMigration;
+
   /// Instancia de LinkHealthVerifier vinculada al cliente HTTP configurado
   static LinkHealthVerifier get _linkVerifier => LinkHealthVerifier(client: customHttpClient);
 
@@ -48,9 +57,35 @@ class CommercialRadarService {
     return '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
   }
 
+  /// Clave de SharedPreferences para ubicación JSON estructurada aislada por perfil
+  static String locationJsonPrefKey(int? profileId) =>
+      profileId != null ? 'commercial_radar_profile_${profileId}_location_json' : legacyLocationJsonPrefKey;
+
+  /// Clave de SharedPreferences para etiqueta de región aislada por perfil
+  static String regionPrefKey(int? profileId) =>
+      profileId != null ? 'commercial_radar_profile_${profileId}_region' : legacyRegionPrefKey;
+
+  /// Clave de SharedPreferences para noticias guardadas aisladas por perfil
+  static String savedNewsPrefKey(int? profileId) =>
+      profileId != null ? 'commercial_radar_saved_profile_$profileId' : legacySavedNewsPrefKey;
+
+  /// Clave de caché territorial diferenciada por departamento, provincia y distrito
+  static String buildCacheKey(RadarLocation loc) {
+    if (loc.isNational) return 'Todo el Perú';
+    final dist = (loc.district ?? '').trim();
+    return '${loc.department.trim()}_${loc.province.trim()}_$dist';
+  }
+
+  /// Obtiene la lista completa de noticias en memoria para una ubicación estructurada
+  static List<CommercialNewsItem>? getCachedNewsForLocation(RadarLocation loc) {
+    return _memoryCache[buildCacheKey(loc)];
+  }
+
   /// Obtiene la lista completa de noticias en memoria si ya existen
   static List<CommercialNewsItem>? getCachedNews(String region) {
-    return _memoryCache[region];
+    final direct = _memoryCache[region];
+    if (direct != null) return direct;
+    return _memoryCache[buildCacheKey(RadarLocation.fromLegacyString(region))];
   }
 
   /// Limpia la memoria si se requiere
@@ -207,8 +242,158 @@ class CommercialRadarService {
     );
   }
 
-  /// Obtiene todas las noticias guardadas permanentemente por el usuario
-  static Future<List<CommercialNewsItem>> getSavedNews() async {
+  /// Migra de forma atómica y por única vez preferencias globales heredadas (ubicación y noticias
+  /// guardadas) hacia el primer perfil activo cuando `commercial_radar_legacy_migrated_v21` no
+  /// ha sido marcado todavía. Los perfiles subsecuentes comienzan limpios con su configuración base.
+  static Future<void> migrateLegacyToProfileIfNeeded({required int profileId}) async {
+    final inFlight = _activeLegacyMigration;
+    if (inFlight != null) {
+      await inFlight;
+      return;
+    }
+
+    final future = _runLegacyMigrationIfNeeded(profileId: profileId);
+    _activeLegacyMigration = future;
+    try {
+      await future;
+    } finally {
+      if (identical(_activeLegacyMigration, future)) {
+        _activeLegacyMigration = null;
+      }
+    }
+  }
+
+  static Future<void> _runLegacyMigrationIfNeeded({required int profileId}) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (prefs.getBool(legacyMigratedPrefKey) == true) return;
+
+      final targetLocKey = locationJsonPrefKey(profileId);
+      final targetRegKey = regionPrefKey(profileId);
+      final targetSavedKey = savedNewsPrefKey(profileId);
+
+      if (!prefs.containsKey(targetLocKey) && !prefs.containsKey(targetRegKey)) {
+        final legacyJson = prefs.getString(legacyLocationJsonPrefKey);
+        final legacyReg = prefs.getString(legacyRegionPrefKey);
+
+        if (legacyJson != null && legacyJson.trim().isNotEmpty) {
+          await prefs.setString(targetLocKey, legacyJson);
+          try {
+            final parsed = RadarLocation.fromJson(jsonDecode(legacyJson) as Map<String, dynamic>);
+            await prefs.setString(
+              targetRegKey,
+              (legacyReg != null && legacyReg.trim().isNotEmpty) ? legacyReg : parsed.displayName,
+            );
+          } catch (_) {
+            if (legacyReg != null && legacyReg.trim().isNotEmpty) {
+              await prefs.setString(targetRegKey, legacyReg);
+            }
+          }
+        } else if (legacyReg != null && legacyReg.trim().isNotEmpty) {
+          await prefs.setString(targetRegKey, legacyReg);
+          final parsed = RadarLocation.fromLegacyString(legacyReg);
+          await prefs.setString(targetLocKey, jsonEncode(parsed.toJson()));
+        }
+      }
+
+      if (!prefs.containsKey(targetSavedKey)) {
+        final legacySaved = await _readLegacySavedNews(prefs: prefs);
+        if (legacySaved.isNotEmpty) {
+          await prefs.setString(
+            targetSavedKey,
+            jsonEncode(legacySaved.map((e) => e.toJson()).toList()),
+          );
+        }
+      }
+
+      await prefs.setBool(legacyMigratedPrefKey, true);
+    } catch (_) {}
+  }
+
+  /// Carga la ubicación estructurada del Radar para el perfil indicado (o modo global si es null)
+  static Future<RadarLocation> loadLocationForProfile({
+    int? profileId,
+    required RadarLocation fallback,
+  }) async {
+    try {
+      if (profileId != null) {
+        await migrateLegacyToProfileIfNeeded(profileId: profileId);
+      }
+      final prefs = await SharedPreferences.getInstance();
+      final savedLocJson = prefs.getString(locationJsonPrefKey(profileId));
+      if (savedLocJson != null && savedLocJson.trim().isNotEmpty) {
+        try {
+          final decoded = jsonDecode(savedLocJson) as Map<String, dynamic>;
+          return RadarLocation.fromJson(decoded);
+        } catch (_) {}
+      }
+      final savedReg = prefs.getString(regionPrefKey(profileId));
+      if (savedReg != null && savedReg.trim().isNotEmpty) {
+        return RadarLocation.fromLegacyString(savedReg);
+      }
+    } catch (_) {}
+    return fallback;
+  }
+
+  /// Persiste la ubicación estructurada del Radar para el perfil indicado
+  static Future<void> saveLocationForProfile(
+    RadarLocation location, {
+    int? profileId,
+  }) async {
+    try {
+      if (profileId != null) {
+        await migrateLegacyToProfileIfNeeded(profileId: profileId);
+      }
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(locationJsonPrefKey(profileId), jsonEncode(location.toJson()));
+      await prefs.setString(regionPrefKey(profileId), location.displayName);
+    } catch (_) {}
+  }
+
+  /// Carga la etiqueta de región para la tarjeta del Radar aislada por perfil
+  static Future<String> loadRegionLabelForProfile({
+    int? profileId,
+    required String defaultRegion,
+  }) async {
+    try {
+      if (profileId != null) {
+        await migrateLegacyToProfileIfNeeded(profileId: profileId);
+      }
+      final prefs = await SharedPreferences.getInstance();
+      final savedReg = prefs.getString(regionPrefKey(profileId));
+      if (savedReg != null && savedReg.trim().isNotEmpty) {
+        return savedReg;
+      }
+      final savedLocJson = prefs.getString(locationJsonPrefKey(profileId));
+      if (savedLocJson != null && savedLocJson.trim().isNotEmpty) {
+        try {
+          final decoded = jsonDecode(savedLocJson) as Map<String, dynamic>;
+          return RadarLocation.fromJson(decoded).displayName;
+        } catch (_) {}
+      }
+    } catch (_) {}
+    return defaultRegion;
+  }
+
+  /// Persiste la etiqueta de región desde la tarjeta del Radar sincronizando su JSON de perfil
+  static Future<void> saveRegionLabelForProfile(
+    String regionLabel, {
+    int? profileId,
+  }) async {
+    try {
+      if (profileId != null) {
+        await migrateLegacyToProfileIfNeeded(profileId: profileId);
+      }
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(regionPrefKey(profileId), regionLabel);
+      final parsed = RadarLocation.fromLegacyString(regionLabel);
+      await prefs.setString(locationJsonPrefKey(profileId), jsonEncode(parsed.toJson()));
+    } catch (_) {}
+  }
+
+  static Future<List<CommercialNewsItem>> _readLegacySavedNews({
+    SharedPreferences? prefs,
+  }) async {
     List<CommercialNewsItem> items = [];
     try {
       final db = await LocalDatabase.instance.database;
@@ -239,13 +424,34 @@ class CommercialRadarService {
 
     if (items.isEmpty) {
       try {
-        final prefs = await SharedPreferences.getInstance();
-        final str = prefs.getString('commercial_radar_bookmarked_items_json');
+        final sp = prefs ?? await SharedPreferences.getInstance();
+        final str = sp.getString(legacySavedNewsPrefKey);
         if (str != null && str.isNotEmpty) {
           final List<dynamic> list = jsonDecode(str);
           items = list.map((e) => CommercialNewsItem.fromJson(e as Map<String, dynamic>)).toList();
         }
       } catch (_) {}
+    }
+
+    return items;
+  }
+
+  /// Obtiene todas las noticias guardadas permanentemente por el perfil activo
+  static Future<List<CommercialNewsItem>> getSavedNews({int? profileId}) async {
+    List<CommercialNewsItem> items = [];
+
+    if (profileId != null) {
+      await migrateLegacyToProfileIfNeeded(profileId: profileId);
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        final str = prefs.getString(savedNewsPrefKey(profileId));
+        if (str != null && str.isNotEmpty) {
+          final List<dynamic> list = jsonDecode(str);
+          items = list.map((e) => CommercialNewsItem.fromJson(e as Map<String, dynamic>)).toList();
+        }
+      } catch (_) {}
+    } else {
+      items = await _readLegacySavedNews();
     }
 
     if (items.isEmpty) return [];
@@ -261,102 +467,126 @@ class CommercialRadarService {
     }
 
     if (hasChanges) {
-      unawaited(_persistUpgradedSavedNews(upgraded));
+      unawaited(_persistUpgradedSavedNews(upgraded, profileId: profileId));
     }
 
     return upgraded;
   }
 
-  static Future<void> _persistUpgradedSavedNews(List<CommercialNewsItem> items) async {
-    try {
-      final db = await LocalDatabase.instance.database;
-      await _ensureSavedTable(db);
-      final batch = db.batch();
-      for (final item in items) {
-        batch.insert(
-          _savedTableName,
-          {
-            'id': item.id,
-            'json_data': jsonEncode(item.toJson()),
-            'created_at': DateTime.now().toIso8601String(),
-          },
-          conflictAlgorithm: ConflictAlgorithm.replace,
-        );
-      }
-      await batch.commit(noResult: true);
-    } catch (_) {}
+  static Future<void> _persistUpgradedSavedNews(
+    List<CommercialNewsItem> items, {
+    int? profileId,
+  }) async {
+    if (profileId == null) {
+      try {
+        final db = await LocalDatabase.instance.database;
+        await _ensureSavedTable(db);
+        final batch = db.batch();
+        for (final item in items) {
+          batch.insert(
+            _savedTableName,
+            {
+              'id': item.id,
+              'json_data': jsonEncode(item.toJson()),
+              'created_at': DateTime.now().toIso8601String(),
+            },
+            conflictAlgorithm: ConflictAlgorithm.replace,
+          );
+        }
+        await batch.commit(noResult: true);
+      } catch (_) {}
+    }
 
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString(
-        'commercial_radar_bookmarked_items_json',
+        savedNewsPrefKey(profileId),
         jsonEncode(items.map((e) => e.toJson()).toList()),
       );
     } catch (_) {}
   }
 
-  /// Guarda permanentemente una noticia en SQLite y SharedPreferences
-  static Future<void> saveNewsItem(CommercialNewsItem item) async {
+  /// Guarda permanentemente una noticia aislada por perfil (y SQLite solo en modo sin perfil)
+  static Future<void> saveNewsItem(
+    CommercialNewsItem item, {
+    int? profileId,
+  }) async {
     final sanitizedItem = sanitizeAndUpgradeNewsItem(item);
-    try {
-      final db = await LocalDatabase.instance.database;
-      await _ensureSavedTable(db);
-      final jsonStr = jsonEncode(sanitizedItem.toJson());
-      await db.insert(
-        _savedTableName,
-        {
-          'id': sanitizedItem.id,
-          'json_data': jsonStr,
-          'created_at': DateTime.now().toIso8601String(),
-        },
-        conflictAlgorithm: ConflictAlgorithm.replace,
-      );
-    } catch (_) {}
+    if (profileId != null) {
+      await migrateLegacyToProfileIfNeeded(profileId: profileId);
+    } else {
+      try {
+        final db = await LocalDatabase.instance.database;
+        await _ensureSavedTable(db);
+        final jsonStr = jsonEncode(sanitizedItem.toJson());
+        await db.insert(
+          _savedTableName,
+          {
+            'id': sanitizedItem.id,
+            'json_data': jsonStr,
+            'created_at': DateTime.now().toIso8601String(),
+          },
+          conflictAlgorithm: ConflictAlgorithm.replace,
+        );
+      } catch (_) {}
+    }
 
     try {
       final prefs = await SharedPreferences.getInstance();
-      final current = await getSavedNews();
+      final current = await getSavedNews(profileId: profileId);
       if (!current.any((i) => i.id == sanitizedItem.id)) {
         current.insert(0, sanitizedItem);
       }
       await prefs.setString(
-        'commercial_radar_bookmarked_items_json',
+        savedNewsPrefKey(profileId),
         jsonEncode(current.map((e) => e.toJson()).toList()),
       );
     } catch (_) {}
   }
 
-  /// Elimina una noticia guardada de SQLite y SharedPreferences
-  static Future<void> removeSavedNews(String id) async {
-    try {
-      final db = await LocalDatabase.instance.database;
-      await _ensureSavedTable(db);
-      await db.delete(_savedTableName, where: 'id = ?', whereArgs: [id]);
-    } catch (_) {}
+  /// Elimina una noticia guardada para el perfil indicado
+  static Future<void> removeSavedNews(
+    String id, {
+    int? profileId,
+  }) async {
+    if (profileId != null) {
+      await migrateLegacyToProfileIfNeeded(profileId: profileId);
+    } else {
+      try {
+        final db = await LocalDatabase.instance.database;
+        await _ensureSavedTable(db);
+        await db.delete(_savedTableName, where: 'id = ?', whereArgs: [id]);
+      } catch (_) {}
+    }
 
     try {
       final prefs = await SharedPreferences.getInstance();
-      final current = await getSavedNews();
+      final current = await getSavedNews(profileId: profileId);
       current.removeWhere((i) => i.id == id);
       await prefs.setString(
-        'commercial_radar_bookmarked_items_json',
+        savedNewsPrefKey(profileId),
         jsonEncode(current.map((e) => e.toJson()).toList()),
       );
     } catch (_) {}
   }
 
-  /// Verifica si una noticia está guardada
-  static Future<bool> isNewsSaved(String id) async {
+  /// Verifica si una noticia está guardada para el perfil indicado
+  static Future<bool> isNewsSaved(
+    String id, {
+    int? profileId,
+  }) async {
+    if (profileId != null) {
+      final current = await getSavedNews(profileId: profileId);
+      return current.any((i) => i.id == id);
+    }
     try {
       final db = await LocalDatabase.instance.database;
       await _ensureSavedTable(db);
       final rows = await db.query(_savedTableName, where: 'id = ?', whereArgs: [id], limit: 1);
       return rows.isNotEmpty;
     } catch (_) {
-      final prefs = await SharedPreferences.getInstance();
-      final str = prefs.getString('commercial_radar_bookmarked_items_json');
-      if (str != null && str.contains(id)) return true;
-      return false;
+      final current = await getSavedNews();
+      return current.any((i) => i.id == id);
     }
   }
 
@@ -371,7 +601,7 @@ class CommercialRadarService {
     bool forceRefresh = false,
   }) async* {
     final loc = location ?? RadarLocation.fromLegacyString(region);
-    final cacheKey = loc.isNational ? 'Todo el Perú' : '${loc.department}_${loc.province}';
+    final cacheKey = buildCacheKey(loc);
     final todayStr = getTodayDateStr();
 
     // 1. Memoria rápida si no es recarga forzada
@@ -385,7 +615,7 @@ class CommercialRadarService {
 
     // 2. Caché persistente del mismo día
     if (!forceRefresh) {
-      final cached = await _loadFromCache(cacheKey, todayStr);
+      final cached = await _loadFromCache(cacheKey, todayStr, location: loc);
       if (cached != null && cached.isNotEmpty) {
         lastSourceMode = RadarFeedSourceMode.cachedRecent;
         final balanced = interleaveCategories(cached);
@@ -404,7 +634,7 @@ class CommercialRadarService {
       if (currentInMem != null && currentInMem.isNotEmpty) {
         existingOfDay = List.from(currentInMem);
       } else {
-        final fromDisk = await _loadFromCache(cacheKey, todayStr);
+        final fromDisk = await _loadFromCache(cacheKey, todayStr, location: loc);
         if (fromDisk != null) existingOfDay = fromDisk;
       }
     }
@@ -427,7 +657,7 @@ class CommercialRadarService {
 
     // 5. Contingencia si no se obtuvieron noticias de red
     if (newlyFetched.isEmpty) {
-      final fromDisk = await _loadFromCache(cacheKey, todayStr);
+      final fromDisk = await _loadFromCache(cacheKey, todayStr, location: loc);
       if (fromDisk != null && fromDisk.isNotEmpty) {
         newlyFetched = fromDisk;
         determinedMode = RadarFeedSourceMode.cachedRecent;
@@ -906,7 +1136,11 @@ class CommercialRadarService {
   }
 
   /// Caché local por región con verificación estricta de fecha del día (Caducidad Matutina)
-  static Future<List<CommercialNewsItem>?> _loadFromCache(String cacheKey, String currentTodayStr) async {
+  static Future<List<CommercialNewsItem>?> _loadFromCache(
+    String cacheKey,
+    String currentTodayStr, {
+    RadarLocation? location,
+  }) async {
     try {
       final prefs = await SharedPreferences.getInstance();
       final key = '$_cacheKeyPrefix$cacheKey';
@@ -929,7 +1163,7 @@ class CommercialRadarService {
       final List<dynamic> list = jsonDecode(jsonStr);
       return list.map((e) {
         final it = CommercialNewsItem.fromJson(e as Map<String, dynamic>);
-        return sanitizeAndUpgradeNewsItem(it, region: cacheKey);
+        return sanitizeAndUpgradeNewsItem(it, region: location?.displayName ?? cacheKey);
       }).toList();
     } catch (_) {
       return null;

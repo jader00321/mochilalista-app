@@ -3030,7 +3030,7 @@ class _ClientFinanceActionsModalState extends State<ClientFinanceActionsModal>
                   isInt: true,
                 ),
               ),
-              const SizedBox(width: 10),
+              const SizedBox(width: 8),
               Expanded(
                 flex: 2,
                 child: _buildInput(
@@ -3041,17 +3041,18 @@ class _ClientFinanceActionsModalState extends State<ClientFinanceActionsModal>
                   textColor: textColor,
                 ),
               ),
-              const SizedBox(width: 10),
+              const SizedBox(width: 8),
               Expanded(
-                flex: 3,
+                flex: 4,
                 child: DropdownButtonFormField<String>(
                   initialValue: _frecuencia,
+                  isExpanded: true,
                   dropdownColor: widget.isDark
                       ? const Color(0xFF23232F)
                       : Colors.white,
                   style: TextStyle(
                       color: textColor,
-                      fontSize: 14,
+                      fontSize: 13.5,
                       fontWeight: FontWeight.bold),
                   decoration: InputDecoration(
                     labelText: "Frecuencia",
@@ -3068,17 +3069,26 @@ class _ClientFinanceActionsModalState extends State<ClientFinanceActionsModal>
                         borderRadius: BorderRadius.circular(12),
                         borderSide: BorderSide.none),
                     contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 12, vertical: 12),
+                        horizontal: 10, vertical: 12),
                     isDense: true,
                   ),
                   items: const [
-                    DropdownMenuItem(value: "diario", child: Text("Diario")),
                     DropdownMenuItem(
-                        value: "semanal", child: Text("Semanal")),
+                      value: "diario",
+                      child: Text("Diario", overflow: TextOverflow.ellipsis),
+                    ),
                     DropdownMenuItem(
-                        value: "quincenal", child: Text("Quincenal")),
+                      value: "semanal",
+                      child: Text("Semanal", overflow: TextOverflow.ellipsis),
+                    ),
                     DropdownMenuItem(
-                        value: "mensual", child: Text("Mensual")),
+                      value: "quincenal",
+                      child: Text("Quincenal", overflow: TextOverflow.ellipsis),
+                    ),
+                    DropdownMenuItem(
+                      value: "mensual",
+                      child: Text("Mensual", overflow: TextOverflow.ellipsis),
+                    ),
                   ],
                   onChanged: (v) {
                     if (v != null) {
@@ -3126,26 +3136,39 @@ class _ClientFinanceActionsModalState extends State<ClientFinanceActionsModal>
                       color: widget.isDark
                           ? Colors.orange[300]
                           : Colors.orange[700]),
-                  const SizedBox(width: 10),
-                  Text(
-                    "Fecha Base / Inicio:",
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      color: widget.isDark
-                          ? Colors.grey[300]
-                          : Colors.grey[700],
+                  const SizedBox(width: 8),
+                  Flexible(
+                    child: Text(
+                      "Fecha Base / Inicio:",
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: widget.isDark
+                            ? Colors.grey[300]
+                            : Colors.grey[700],
+                      ),
                     ),
                   ),
-                  const Spacer(),
-                  Text(
-                    _formatDateSpanish(_startDate),
-                    style: TextStyle(
-                      fontSize: 13.5,
-                      fontWeight: FontWeight.bold,
-                      color: widget.isDark
-                          ? Colors.orange[300]
-                          : Colors.orange[800],
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Align(
+                      alignment: Alignment.centerRight,
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.centerRight,
+                        child: Text(
+                          _formatDateSpanish(_startDate),
+                          style: TextStyle(
+                            fontSize: 13.5,
+                            fontWeight: FontWeight.bold,
+                            color: widget.isDark
+                                ? Colors.orange[300]
+                                : Colors.orange[800],
+                          ),
+                        ),
+                      ),
                     ),
                   ),
                   const SizedBox(width: 6),

@@ -85,10 +85,13 @@ class SaleActionFooter extends StatelessWidget {
                 child: pendingDebt > 0.01
                     ? ElevatedButton.icon(
                         onPressed: onRegisterPayment,
-                        icon: const Icon(Icons.payments_outlined, size: 22),
-                        label: const Text("Cobrar Deuda", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                        icon: const Icon(Icons.payments_outlined, size: 20),
+                        label: const FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: Text("Cobrar Deuda", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                        ),
                         style: ElevatedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 18), 
+                          padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 8), 
                           backgroundColor: isDark ? (Colors.tealAccent[400] ?? Colors.teal) : Colors.teal[700], 
                           foregroundColor: Colors.white, 
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))
@@ -96,10 +99,13 @@ class SaleActionFooter extends StatelessWidget {
                       )
                     : ElevatedButton.icon(
                         onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => PdfPreviewScreen(quotationId: cotizacionId, saleId: saleId))),
-                        icon: const Icon(Icons.verified, size: 22),
-                        label: const Text("Liquidado", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                        icon: const Icon(Icons.verified, size: 20),
+                        label: const FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: Text("Liquidado", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                        ),
                         style: ElevatedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 18), 
+                          padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 8), 
                           backgroundColor: isDark ? Colors.green[700] : Colors.green[800], 
                           foregroundColor: Colors.white, 
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))
@@ -111,10 +117,13 @@ class SaleActionFooter extends StatelessWidget {
                 flex: 2,
                 child: ElevatedButton.icon(
                   onPressed: onSellAgainQuickSale,
-                  icon: const Icon(Icons.refresh, size: 24),
-                  label: const Text("Volver a Vender", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                  icon: const Icon(Icons.refresh, size: 22),
+                  label: const FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text("Volver a Vender", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                  ),
                   style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 18), 
+                    padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 8), 
                     backgroundColor: isDark ? Colors.pink[400] : Colors.pinkAccent, 
                     foregroundColor: Colors.white, 
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))
@@ -126,10 +135,13 @@ class SaleActionFooter extends StatelessWidget {
                 flex: 2,
                 child: ElevatedButton.icon(
                   onPressed: onDuplicateOptions,
-                  icon: const Icon(Icons.content_copy, size: 24),
-                  label: const Text("Opciones", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                  icon: const Icon(Icons.content_copy, size: 22),
+                  label: const FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text("Opciones", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                  ),
                   style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 18), 
+                    padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 8), 
                     backgroundColor: isDark ? Colors.blue[400] : Colors.blue[800], 
                     foregroundColor: Colors.white, 
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))
@@ -141,10 +153,13 @@ class SaleActionFooter extends StatelessWidget {
                 flex: 2,
                 child: ElevatedButton.icon(
                   onPressed: onRegisterPayment,
-                  icon: const Icon(Icons.payments_outlined, size: 22),
-                  label: const Text("Cobrar Deuda", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                  icon: const Icon(Icons.payments_outlined, size: 20),
+                  label: const FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text("Cobrar Deuda", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                  ),
                   style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 18), 
+                    padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 8), 
                     backgroundColor: isDark ? (Colors.tealAccent[400] ?? Colors.teal) : Colors.teal[700], 
                     foregroundColor: Colors.white, 
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))

@@ -858,44 +858,52 @@ class _WhatsAppPreviewScreenState extends State<WhatsAppPreviewScreen> {
     return Scaffold(
       backgroundColor: bgColor,
       appBar: AppBar(
-        title: const Text(
-          "Editor WhatsApp",
-          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20),
+        titleSpacing: 0,
+        title: const FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: Alignment.centerLeft,
+          child: Text(
+            "Editor WhatsApp",
+            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20),
+          ),
         ),
         backgroundColor: isDark ? const Color(0xFF142C23) : const Color(0xFF00A884),
         foregroundColor: Colors.white,
         elevation: 0,
         actions: [
-          InfoTooltipButton(
+          const InfoTooltipButton(
+            iconColor: Colors.white,
+            constraints: BoxConstraints(minWidth: 32, minHeight: 32),
+            padding: EdgeInsets.all(6),
             title: "Guía del Editor WhatsApp",
-            description: "Personaliza tu mensaje con 6 estilos comerciales, formato rápido, "
-                "deshacer/rehacer ilimitado y vista previa en burbuja realista de WhatsApp.",
-            tips: const [
+            description: "Personaliza mensajes de cotización, comprobantes de venta o recordatorios de cuotas con estilos comerciales y vista previa realista.",
+            tips: [
               InfoTip(
                 icon: Icons.style_rounded,
-                text: "Escoge entre 6 estilos comerciales (Formal, Ejecutivo, Oferta Urgente, etc.) con 1 solo toque.",
+                text: "Elige entre 6 estilos comerciales (Formal, Ejecutivo, Oferta Urgente y más) con 1 solo toque.",
               ),
               InfoTip(
                 icon: Icons.tune_rounded,
-                text: "Activa o desactiva subtotales, sección de ahorro, cuentas bancarias y datos de entrega al instante.",
+                text: "Activa o oculta subtotales, ahorros, cronograma de pagos, cuentas bancarias y datos del negocio al instante.",
               ),
               InfoTip(
                 icon: Icons.visibility_rounded,
-                text: "Toca el icono ⓘ en cualquier tarjeta para previsualizar el bloque exacto generado con tus datos reales.",
+                text: "Toca el botón de ayuda (i) en las tarjetas para previsualizar el bloque exacto generado con tus datos.",
               ),
               InfoTip(
                 icon: Icons.history_rounded,
-                text: "Revierte o recupera cambios manuales de inmediato con respuesta garantizada en un solo toque.",
+                text: "Edita libremente el mensaje con historial deshacer/rehacer ilimitado y envío directo al contacto.",
               ),
               InfoTip(
                 icon: Icons.chat_bubble_outline_rounded,
-                text: "Verifica la estética realista del mensaje antes del envío con scroll suave y edición directa en burbuja.",
+                text: "Verifica la burbuja de chat realista y confirma la actualización del teléfono o negocio antes de enviar.",
               ),
             ],
           ),
           IconButton(
-            icon: const Icon(Icons.restart_alt, size: 26),
+            icon: const Icon(Icons.restart_alt, size: 24),
             tooltip: "Restaurar Mensaje Original",
+            visualDensity: VisualDensity.compact,
             onPressed: () {
               _recordUndoSnapshot();
               setState(() => _isManualEdit = false);

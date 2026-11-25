@@ -8,9 +8,20 @@ import 'package:app_movil/core/widgets/interactive_sheet_wrapper.dart';
 // Módulos UI
 import 'package:app_movil/features/scanner/widgets/staging/staging_vendor_card.dart';
 import 'package:app_movil/features/scanner/widgets/staging/staging_product_group_card.dart';
+import 'package:app_movil/core/services/tour/interactive_tour_service.dart';
+import 'package:app_movil/core/widgets/info_tooltip_button.dart';
+import 'package:app_movil/core/widgets/tour/configs/invoice_staging_tour.dart';
+import 'package:app_movil/core/widgets/tour/tour_step_model.dart';
 
 class InvoiceStagingScreen extends StatefulWidget {
-  const InvoiceStagingScreen({super.key});
+  final bool autoTriggerTour;
+  final InvoiceStagingTourKeys? tourKeys;
+
+  const InvoiceStagingScreen({
+    super.key,
+    this.autoTriggerTour = true,
+    this.tourKeys,
+  });
 
   @override
   State<InvoiceStagingScreen> createState() => _InvoiceStagingScreenState();
@@ -20,16 +31,21 @@ class _InvoiceStagingScreenState extends State<InvoiceStagingScreen> {
   final ScrollController _scrollController = ScrollController();
   final Map<String, GlobalKey> _groupKeys = {};
   bool _showScrollToTop = false;
+  late final InvoiceStagingTourKeys _tourKeys;
+  bool _didAttemptAutoTour = false;
 
   @override
   void initState() {
     super.initState();
+    _tourKeys = widget.tourKeys ?? InvoiceStagingTourKeys();
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
       final invProv = Provider.of<InventoryProvider>(context, listen: false);
       invProv.loadCategories();
       invProv.loadBrands();
       invProv.loadMasterData();
       invProv.loadInventory(reset: true);
+      _maybeStartAutoTour();
     });
 
     _scrollController.addListener(() {
@@ -38,6 +54,28 @@ class _InvoiceStagingScreenState extends State<InvoiceStagingScreen> {
       } else if (_scrollController.offset <= 200 && _showScrollToTop) {
         setState(() => _showScrollToTop = false);
       }
+    });
+  }
+
+  ScreenTourConfig _buildTourConfig() {
+    return InvoiceStagingTour.buildConfig(keys: _tourKeys);
+  }
+
+  void _startTour(BuildContext context) {
+    InteractiveTourService.startManualTour(context, _buildTourConfig());
+  }
+
+  void _maybeStartAutoTour() {
+    if (!widget.autoTriggerTour || _didAttemptAutoTour || !mounted) return;
+    final provider = Provider.of<ScannerProvider>(context, listen: false);
+    if (provider.stagingData == null) return;
+    _didAttemptAutoTour = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+      await InteractiveTourService.maybeStartAutomaticTour(
+        context,
+        _buildTourConfig(),
+      );
     });
   }
 
@@ -531,14 +569,18 @@ class _InvoiceStagingScreenState extends State<InvoiceStagingScreen> {
       canPop: false,
       onPopInvokedWithResult: (didPop, result) async {
         if (didPop) return;
+        if (await InteractiveTourService.cancelActiveTour()) return;
+        if (!context.mounted) return;
         final shouldPop = await _onWillPop();
         if (shouldPop && context.mounted) Navigator.of(context).pop();
       },
       child: Scaffold(
         backgroundColor: bgColor,
         appBar: AppBar(
+          titleSpacing: 0,
           title: const FittedBox(
             fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
             child: Text(
               "Clasificar y Confirmar",
               style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20),
@@ -550,12 +592,36 @@ class _InvoiceStagingScreenState extends State<InvoiceStagingScreen> {
           foregroundColor: Colors.white,
           elevation: 0,
           actions: [
+            InfoTooltipButton(
+              iconColor: Colors.white,
+              constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+              padding: const EdgeInsets.all(6),
+              onStartInteractiveTour: () => _startTour(context),
+              title: "Clasificación en Inventario",
+              description:
+                  "Vincula proveedor y agrupa variantes de la factura con productos existentes o nuevos antes de guardar el stock.",
+              tips: const [
+                InfoTip(
+                  icon: Icons.tune_rounded,
+                  text:
+                      "Edita presentaciones, costos y precios de venta en cada bloque antes del ingreso final.",
+                ),
+                InfoTip(
+                  icon: Icons.save_alt_rounded,
+                  text:
+                      "El guardado registra factura, costos e ingreso de unidades de forma atómica.",
+                ),
+              ],
+            ),
             IconButton(
-              icon: const Icon(Icons.restore_page, size: 26),
+              icon: const Icon(Icons.restore_page, size: 24),
               tooltip: "Deshacer cambios y restaurar",
+              visualDensity: VisualDensity.compact,
+              constraints: const BoxConstraints(minWidth: 34, minHeight: 34),
+              padding: const EdgeInsets.all(6),
               onPressed: provider.isLoading ? null : _confirmResetProcess,
             ),
-            const SizedBox(width: 8),
+            const SizedBox(width: 6),
           ],
         ),
         body: GestureDetector(
@@ -566,86 +632,89 @@ class _InvoiceStagingScreenState extends State<InvoiceStagingScreen> {
               Column(
                 children: [
                   // BARRA DE ESTADÍSTICAS Y PROGRESO
-                  Container(
-                    color: isDark ? const Color(0xFF23232F) : Colors.blue[900],
-                    padding: const EdgeInsets.symmetric(
-                      vertical: 16,
-                      horizontal: 16,
-                    ),
-                    child: Column(
-                      children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            _buildStatChip(
-                              Icons.check_circle,
-                              "Vinculados",
-                              provider.countLinked,
-                              isDark ? Colors.green[400]! : Colors.greenAccent,
-                            ),
-                            _buildStatChip(
-                              Icons.add_circle,
-                              "Nuevos",
-                              provider.countNew,
-                              isDark
-                                  ? Colors.blue[400]!
-                                  : Colors.lightBlueAccent,
-                            ),
-                            _buildStatChip(
-                              Icons.inventory_2,
-                              "Total",
-                              provider.totalActiveVariants,
-                              Colors.white,
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 12),
-                        // Barra de progreso visual
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(4),
-                          child: Row(
+                  KeyedSubtree(
+                    key: _tourKeys.smartGroupingBarKey,
+                    child: Container(
+                      color: isDark ? const Color(0xFF23232F) : Colors.blue[900],
+                      padding: const EdgeInsets.symmetric(
+                        vertical: 16,
+                        horizontal: 16,
+                      ),
+                      child: Column(
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              if (provider.totalActiveVariants > 0) ...[
-                                Expanded(
-                                  flex: provider.countLinked,
-                                  child: Container(
-                                    height: 6,
-                                    color: isDark
-                                        ? Colors.green[400]
-                                        : Colors.greenAccent,
-                                  ),
-                                ),
-                                Expanded(
-                                  flex: provider.countNew,
-                                  child: Container(
-                                    height: 6,
-                                    color: isDark
-                                        ? Colors.blue[400]
-                                        : Colors.lightBlueAccent,
-                                  ),
-                                ),
-                                Expanded(
-                                  flex:
-                                      provider.totalActiveVariants -
-                                      provider.countLinked -
-                                      provider.countNew,
-                                  child: Container(
-                                    height: 6,
-                                    color: Colors.white24,
-                                  ),
-                                ),
-                              ] else ...[
-                                Expanded(
-                                  child: Container(
-                                    height: 6,
-                                    color: Colors.white24,
-                                  ),
-                                ),
-                              ],
+                              _buildStatChip(
+                                Icons.check_circle,
+                                "Vinculados",
+                                provider.countLinked,
+                                isDark ? Colors.green[400]! : Colors.greenAccent,
+                              ),
+                              _buildStatChip(
+                                Icons.add_circle,
+                                "Nuevos",
+                                provider.countNew,
+                                isDark
+                                    ? Colors.blue[400]!
+                                    : Colors.lightBlueAccent,
+                              ),
+                              _buildStatChip(
+                                Icons.inventory_2,
+                                "Total",
+                                provider.totalActiveVariants,
+                                Colors.white,
+                              ),
                             ],
                           ),
-                        ),
-                      ],
+                          const SizedBox(height: 12),
+                          // Barra de progreso visual
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(4),
+                            child: Row(
+                              children: [
+                                if (provider.totalActiveVariants > 0) ...[
+                                  Expanded(
+                                    flex: provider.countLinked,
+                                    child: Container(
+                                      height: 6,
+                                      color: isDark
+                                          ? Colors.green[400]
+                                          : Colors.greenAccent,
+                                    ),
+                                  ),
+                                  Expanded(
+                                    flex: provider.countNew,
+                                    child: Container(
+                                      height: 6,
+                                      color: isDark
+                                          ? Colors.blue[400]
+                                          : Colors.lightBlueAccent,
+                                    ),
+                                  ),
+                                  Expanded(
+                                    flex:
+                                        provider.totalActiveVariants -
+                                        provider.countLinked -
+                                        provider.countNew,
+                                    child: Container(
+                                      height: 6,
+                                      color: Colors.white24,
+                                    ),
+                                  ),
+                                ] else ...[
+                                  Expanded(
+                                    child: Container(
+                                      height: 6,
+                                      color: Colors.white24,
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
 
@@ -657,15 +726,18 @@ class _InvoiceStagingScreenState extends State<InvoiceStagingScreen> {
                       itemCount: staging.productosAgrupados.length + 2,
                       itemBuilder: (ctx, i) {
                         if (i == 0) {
-                          return StagingVendorCard(
-                            provider: provider,
-                            staging: staging,
-                            isDark: isDark,
+                          return KeyedSubtree(
+                            key: _tourKeys.vendorCardKey,
+                            child: StagingVendorCard(
+                              provider: provider,
+                              staging: staging,
+                              isDark: isDark,
+                            ),
                           );
                         }
 
                         if (i == staging.productosAgrupados.length + 1) {
-                          return Container(
+                          final manualBtn = Container(
                             margin: const EdgeInsets.symmetric(
                               horizontal: 16,
                               vertical: 20,
@@ -674,12 +746,15 @@ class _InvoiceStagingScreenState extends State<InvoiceStagingScreen> {
                             height: 60,
                             child: OutlinedButton.icon(
                               onPressed: () => provider.addNewProductGroup(),
-                              icon: const Icon(Icons.add, size: 26),
-                              label: const Text(
-                                "AGREGAR PRODUCTO MANUALMENTE",
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.bold,
+                              icon: const Icon(Icons.add, size: 24),
+                              label: const FittedBox(
+                                fit: BoxFit.scaleDown,
+                                child: Text(
+                                  "AGREGAR PRODUCTO MANUALMENTE",
+                                  style: TextStyle(
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.bold,
+                                  ),
                                 ),
                               ),
                               style: OutlinedButton.styleFrom(
@@ -701,13 +776,20 @@ class _InvoiceStagingScreenState extends State<InvoiceStagingScreen> {
                               ),
                             ),
                           );
+                          if (staging.productosAgrupados.isEmpty) {
+                            return KeyedSubtree(
+                              key: _tourKeys.productGroupsKey,
+                              child: manualBtn,
+                            );
+                          }
+                          return manualBtn;
                         }
 
                         final groupIndex = i - 1;
                         final group = staging.productosAgrupados[groupIndex];
                         final groupKey = _groupKeys.putIfAbsent(group.uuidTemporal, () => GlobalKey());
 
-                        return KeyedSubtree(
+                        final cardWidget = KeyedSubtree(
                           key: groupKey,
                           child: StagingProductGroupCard(
                             key: ValueKey(group.uuidTemporal),
@@ -716,6 +798,14 @@ class _InvoiceStagingScreenState extends State<InvoiceStagingScreen> {
                             isDark: isDark,
                           ),
                         );
+
+                        if (groupIndex == 0) {
+                          return KeyedSubtree(
+                            key: _tourKeys.productGroupsKey,
+                            child: cardWidget,
+                          );
+                        }
+                        return cardWidget;
                       },
                     ),
                   ),
@@ -765,8 +855,10 @@ class _InvoiceStagingScreenState extends State<InvoiceStagingScreen> {
               ),
             ),
           ),
-          child: SizedBox(
-            height: 55,
+          child: KeyedSubtree(
+            key: _tourKeys.commitButtonKey,
+            child: SizedBox(
+              height: 55,
               child: ElevatedButton(
                 onPressed: provider.isLoading
                     ? null
@@ -787,9 +879,9 @@ class _InvoiceStagingScreenState extends State<InvoiceStagingScreen> {
                   elevation: isDark ? 0 : 4,
                 ),
                 child: provider.isLoading
-                    ? Row(
+                    ? const Row(
                         mainAxisAlignment: MainAxisAlignment.center,
-                        children: const [
+                        children: [
                           SizedBox(
                             width: 24,
                             height: 24,
@@ -809,19 +901,23 @@ class _InvoiceStagingScreenState extends State<InvoiceStagingScreen> {
                           ),
                         ],
                       )
-                    : Text(
-                        provider.hasUnresolvedStock
-                            ? "VER ERRORES DE STOCK (${provider.unresolvedStockErrorsCount})"
-                            : "GUARDAR E INGRESAR STOCK",
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
-                          letterSpacing: 0.5,
+                    : FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text(
+                          provider.hasUnresolvedStock
+                              ? "VER ERRORES DE STOCK (${provider.unresolvedStockErrorsCount})"
+                              : "GUARDAR E INGRESAR STOCK",
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                            letterSpacing: 0.5,
+                          ),
                         ),
                       ),
               ),
             ),
+          ),
         ),
       ),
     );

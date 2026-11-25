@@ -260,26 +260,36 @@ class _AuditTrailScreenState extends State<AuditTrailScreen> {
     return Scaffold(
       backgroundColor: isDark ? const Color(0xFF0F172A) : const Color(0xFFF1F5F9),
       appBar: AppBar(
-        title: const Text("Trazabilidad", style: TextStyle(fontWeight: FontWeight.bold)),
+        titleSpacing: 0,
+        title: const FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: Alignment.centerLeft,
+          child: Text(
+            "Trazabilidad",
+            style: TextStyle(fontWeight: FontWeight.bold),
+          ),
+        ),
         backgroundColor: Colors.transparent,
         elevation: 0,
         actions: const [
           InfoTooltipButton(
+            constraints: BoxConstraints(minWidth: 32, minHeight: 32),
+            padding: EdgeInsets.all(6),
             title: "Trazabilidad de Stock (Kardex)",
             description:
-                "Historial cronológico de auditoría para cada movimiento de stock: compras por factura, ventas directas y ajustes de inventario.",
+                "Bitácora cronológica auditable de cada entrada y salida de inventario: ingresos por factura, ventas directas y ajustes manuales.",
             tips: [
               InfoTip(
                 icon: Icons.timeline_rounded,
-                text: "Cada evento muestra la fecha, tipo de movimiento, cantidad operada y saldos resultantes.",
+                text: "Cada registro detalla fecha, tipo de operación, cantidad operada y saldo resultante.",
               ),
               InfoTip(
                 icon: Icons.receipt_outlined,
-                text: "Las compras registradas indican la factura de procedencia y su proveedor.",
+                text: "Las compras vinculadas muestran la factura de origen, proveedor y variaciones de costo.",
               ),
               InfoTip(
                 icon: Icons.shield_outlined,
-                text: "Permite auditar diferencias de existencias y controlar la rotación exacta del producto.",
+                text: "Filtra por tipo de evento para auditar diferencias de stock compartido o controlar rotación.",
               ),
             ],
           ),

@@ -860,33 +860,41 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
     return Scaffold(
       backgroundColor: bgColor,
       appBar: AppBar(
-        title: Text(
-          "Factura #${_invoice!.displayId}",
-          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+        titleSpacing: 0,
+        title: FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: Alignment.centerLeft,
+          child: Text(
+            "Factura #${_invoice!.displayId}",
+            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+          ),
         ),
         backgroundColor: isDark ? const Color(0xFF1A1A24) : Colors.teal[800],
         foregroundColor: Colors.white,
         elevation: 0,
         actions: [
           const InfoTooltipButton(
+            iconColor: Colors.white,
+            constraints: BoxConstraints(minWidth: 32, minHeight: 32),
+            padding: EdgeInsets.all(6),
             title: "Detalle y Auditoría de Factura",
             description:
-                "Visor interactivo con división de pantalla: compara la foto original de la factura contra los datos extraídos por IA o registrados manualmente.",
+                "Visor interactivo con división de pantalla: contrasta la foto original del comprobante contra los datos procesados por IA o ingresados manualmente.",
             tips: [
               InfoTip(
                 icon: Icons.unfold_more_rounded,
                 text:
-                    "Arrastra la barra divisoria central para expandir el visor de la foto o el listado de productos.",
+                    "Arrastra la barra divisoria central para ampliar el visor de imagen o revisar con comodidad el detalle inferior.",
               ),
               InfoTip(
                 icon: Icons.zoom_in_rounded,
                 text:
-                    "Haz zoom con dos dedos en la imagen de la factura para comprobar precios o códigos borrosos.",
+                    "Pellizca con dos dedos sobre la factura para comprobar importes, RUC o códigos pequeños.",
               ),
               InfoTip(
                 icon: Icons.checklist_rounded,
                 text:
-                    "Revisa los ítems vinculados directamente a tus presentaciones de producto y stock en almacén.",
+                    "Inspecciona presentaciones vinculadas, datos crudos de auditoría IA y descarga de respaldo en Descargas.",
               ),
             ],
           ),

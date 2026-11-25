@@ -24,6 +24,18 @@ import 'package:app_movil/core/widgets/tour/configs/catalog_tour.dart';
 import 'package:app_movil/core/widgets/tour/configs/invoice_scan_tour.dart';
 import 'package:app_movil/core/widgets/tour/configs/quotation_scan_tour.dart';
 import 'package:app_movil/core/widgets/tour/configs/sales_checkout_tour.dart';
+import 'package:app_movil/core/widgets/tour/configs/manual_quotation_tour.dart';
+import 'package:app_movil/core/widgets/tour/configs/sale_financial_detail_tour.dart';
+import 'package:app_movil/core/widgets/tour/configs/commercial_radar_tour.dart';
+import 'package:app_movil/core/widgets/tour/configs/quotation_detail_tour.dart';
+import 'package:app_movil/core/widgets/tour/configs/sale_history_detail_tour.dart';
+import 'package:app_movil/core/widgets/tour/configs/product_detail_tour.dart';
+import 'package:app_movil/core/widgets/tour/configs/product_edit_tour.dart';
+import 'package:app_movil/core/widgets/tour/configs/ai_settings_tour.dart';
+import 'package:app_movil/core/widgets/tour/configs/notifications_tour.dart';
+import 'package:app_movil/core/widgets/tour/configs/matching_tour.dart';
+import 'package:app_movil/core/widgets/tour/configs/invoice_review_tour.dart';
+import 'package:app_movil/core/widgets/tour/configs/invoice_staging_tour.dart';
 
 import 'package:app_movil/core/providers/auth_provider.dart';
 import 'package:app_movil/core/providers/theme_provider.dart';
@@ -195,37 +207,58 @@ void main() {
     InteractiveTourService.autoTriggerOverrideForTesting = null;
   });
 
-  group('Fase 5B - Catálogo Canónico de 19 Pantallas Oficiales', () {
-    test('InteractiveTourService.knownScreenIds contiene exactamente 19 pantallas registradas', () {
-      expect(InteractiveTourService.knownScreenIds.length, 19);
+  group('Fase 5B - Catálogo Canónico de 35 Pantallas Oficiales', () {
+    test('InteractiveTourService.knownScreenIds contiene exactamente 35 pantallas registradas', () {
+      expect(InteractiveTourService.knownScreenIds.length, 35);
     });
 
-    test('knownScreenIds incluye las 5 nuevas pantallas de Fase 5B', () {
+    test('knownScreenIds incluye las 5 nuevas pantallas de Fase 5B y todas las de Plan 21', () {
       expect(InteractiveTourService.knownScreenIds, contains('client_detail_screen'));
       expect(InteractiveTourService.knownScreenIds, contains('loyalty_center_screen'));
       expect(InteractiveTourService.knownScreenIds, contains('analytics_dashboard_screen'));
       expect(InteractiveTourService.knownScreenIds, contains('bundle_builder_screen'));
       expect(InteractiveTourService.knownScreenIds, contains('printer_config_screen'));
+      expect(InteractiveTourService.knownScreenIds, contains('ai_settings_screen'));
+      expect(InteractiveTourService.knownScreenIds, contains('notifications_screen'));
+      expect(InteractiveTourService.knownScreenIds, contains('matching_screen'));
+      expect(InteractiveTourService.knownScreenIds, contains('invoice_review_screen'));
+      expect(InteractiveTourService.knownScreenIds, contains('invoice_staging_screen'));
     });
 
     test('knownScreenIds EXCLUYE estrictamente lock_screen para blindaje de seguridad PIN', () {
       expect(InteractiveTourService.knownScreenIds, isNot(contains('lock_screen')));
     });
 
-    test('Paridad exacta 1:1 de conjuntos (Set) entre knownScreenIds y los 19 configs reales', () {
+    test('Paridad exacta 1:1 de conjuntos (Set) entre knownScreenIds y los 35 configs reales', () {
       final configScreenIds = <String>{
         HomeScreenTour.buildConfig(keys: HomeScreenTourKeys()).screenId,
         ProfileScreenTour.buildConfig(keys: ProfileScreenTourKeys()).screenId,
+        AiSettingsTour.buildConfig(keys: AiSettingsTourKeys()).screenId,
+        NotificationsTour.buildConfig(keys: NotificationsTourKeys()).screenId,
+        CommercialRadarTour.buildConfig(keys: CommercialRadarTourKeys()).screenId,
         ProductCreateTour.buildConfig(keys: ProductCreateTourKeys()).screenId,
+        ProductDetailTour.buildConfig(keys: ProductDetailTourKeys()).screenId,
+        ProductEditTour.buildConfig(keys: ProductEditTourKeys()).screenId,
         QuickSaleTour.buildConfig(keys: QuickSaleTourKeys()).screenId,
-        InventoryTour.buildConfig(keys: InventoryTourKeys()).screenId,
+        InventoryTour.buildConfigForTab(tabIndex: 0, keys: InventoryTourKeys()).screenId,
+        InventoryTour.buildConfigForTab(tabIndex: 1, keys: InventoryTourKeys()).screenId,
+        InventoryTour.buildConfigForTab(tabIndex: 2, keys: InventoryTourKeys()).screenId,
+        InventoryTour.buildConfigForTab(tabIndex: 3, keys: InventoryTourKeys()).screenId,
+        InventoryTour.buildConfigForTab(tabIndex: 4, keys: InventoryTourKeys()).screenId,
         WorkbenchTour.buildConfig(keys: WorkbenchTourKeys()).screenId,
+        ManualQuotationTour.buildConfig(keys: ManualQuotationTourKeys()).screenId,
+        MatchingTour.buildConfig(keys: MatchingTourKeys()).screenId,
+        QuotationDetailTour.buildConfig(keys: QuotationDetailTourKeys()).screenId,
         ClientTrackingTour.buildConfig(keys: ClientTrackingTourKeys()).screenId,
         SalesHistoryTour.buildConfig(keys: SalesHistoryTourKeys()).screenId,
+        SaleHistoryDetailTour.buildConfig(keys: SaleHistoryDetailTourKeys()).screenId,
+        SaleFinancialDetailTour.buildConfig(keys: SaleFinancialDetailTourKeys()).screenId,
         BackupScreenTour.buildConfig(keys: BackupScreenTourKeys()).screenId,
         LicenseStatusTour.buildConfig(keys: LicenseStatusTourKeys()).screenId,
         CatalogTour.buildConfig(keys: CatalogTourKeys()).screenId,
         InvoiceScanTour.buildConfig(keys: InvoiceScanTourKeys()).screenId,
+        InvoiceReviewTour.buildConfig(keys: InvoiceReviewTourKeys()).screenId,
+        InvoiceStagingTour.buildConfig(keys: InvoiceStagingTourKeys()).screenId,
         QuotationScanTour.buildConfig(keys: QuotationScanTourKeys()).screenId,
         SalesCheckoutTour.buildConfig(keys: SalesCheckoutTourKeys()).screenId,
         ClientDetailTour.buildConfig(keys: ClientDetailTourKeys()).screenId,
@@ -235,7 +268,8 @@ void main() {
         PrinterConfigTour.buildConfig(keys: PrinterConfigTourKeys()).screenId,
       };
 
-      expect(configScreenIds.length, 19);
+      expect(configScreenIds.length, 35);
+      expect(InteractiveTourService.knownScreenIds.length, 35);
       expect(InteractiveTourService.knownScreenIds.toSet(), equals(configScreenIds));
       expect(InteractiveTourService.knownScreenIds, isNot(contains('lock_screen')));
       expect(InteractiveTourService.knownScreenIds, isNot(contains('products_tab')));
@@ -244,13 +278,13 @@ void main() {
   });
 
   group('Fase 5B - Integridad de Modelos y Textos de los 5 Nuevos Tours', () {
-    test('ClientDetailTour tiene 4 pasos pedagógicos completos sin emojis crudos', () {
+    test('ClientDetailTour tiene 7 pasos pedagógicos completos sin emojis crudos', () {
       final keys = ClientDetailTourKeys();
       final config = ClientDetailTour.buildConfig(keys: keys);
 
       expect(config.screenId, 'client_detail_screen');
       expect(config.screenTitle, 'Detalle de Cliente y Abonos');
-      expect(config.steps.length, 4);
+      expect(config.steps.length, 7);
 
       for (final step in config.steps) {
         expect(step.title.isNotEmpty, isTrue);

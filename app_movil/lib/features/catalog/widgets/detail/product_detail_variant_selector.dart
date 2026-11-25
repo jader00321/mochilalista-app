@@ -38,7 +38,7 @@ class ProductDetailVariantSelector extends StatelessWidget {
         ),
         const SizedBox(height: 12),
         SizedBox(
-          height: 126,
+          height: 138,
           child: ListView.separated(
             scrollDirection: Axis.horizontal,
             itemCount: presentations.length,

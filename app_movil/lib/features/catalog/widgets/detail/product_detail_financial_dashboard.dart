@@ -13,6 +13,7 @@ class ProductDetailFinancialDashboard extends StatelessWidget {
   final VoidCallback onOpenDiscountModal;
   final VoidCallback onOpenRestockModal;
   final VoidCallback? onOpenPriceModal;
+  final Key? quickActionsKey;
 
   const ProductDetailFinancialDashboard({
     super.key,
@@ -23,6 +24,7 @@ class ProductDetailFinancialDashboard extends StatelessWidget {
     required this.onOpenDiscountModal,
     required this.onOpenRestockModal,
     this.onOpenPriceModal,
+    this.quickActionsKey,
   });
 
   Color _getMarginColor(int marginPercent, bool isDark) {
@@ -93,9 +95,7 @@ class ProductDetailFinancialDashboard extends StatelessWidget {
                       style: TextStyle(
                         fontSize: 11,
                         fontWeight: FontWeight.bold,
-                        color: isDark
-                            ? Colors.orange[300]
-                            : Colors.orange[800],
+                        color: isDark ? Colors.orange[300] : Colors.orange[800],
                       ),
                     ),
                     const SizedBox(height: 4),
@@ -135,12 +135,8 @@ class ProductDetailFinancialDashboard extends StatelessWidget {
                         fontSize: 11,
                         fontWeight: FontWeight.bold,
                         color: utilidadNeta >= 0
-                            ? (isDark
-                                ? Colors.green[400]
-                                : Colors.green[700])
-                            : (isDark
-                                ? Colors.red[400]
-                                : Colors.red[700]),
+                            ? (isDark ? Colors.green[400] : Colors.green[700])
+                            : (isDark ? Colors.red[400] : Colors.red[700]),
                       ),
                     ),
                     const SizedBox(height: 4),
@@ -153,12 +149,8 @@ class ProductDetailFinancialDashboard extends StatelessWidget {
                           fontSize: 16,
                           fontWeight: FontWeight.w900,
                           color: utilidadNeta >= 0
-                              ? (isDark
-                                  ? Colors.green[400]
-                                  : Colors.green[700])
-                              : (isDark
-                                  ? Colors.red[400]
-                                  : Colors.red[700]),
+                              ? (isDark ? Colors.green[400] : Colors.green[700])
+                              : (isDark ? Colors.red[400] : Colors.red[700]),
                         ),
                       ),
                     ),
@@ -193,28 +185,36 @@ class ProductDetailFinancialDashboard extends StatelessWidget {
                         vertical: 2,
                       ),
                       decoration: BoxDecoration(
-                        color: _getMarginColor(margenPorcentaje, isDark)
-                            .withValues(alpha: isDark ? 0.2 : 0.1),
+                        color: _getMarginColor(
+                          margenPorcentaje,
+                          isDark,
+                        ).withValues(alpha: isDark ? 0.2 : 0.1),
                         borderRadius: BorderRadius.circular(6),
                       ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            _getMarginIcon(margenPorcentaje),
-                            size: 12,
-                            color: _getMarginColor(margenPorcentaje, isDark),
-                          ),
-                          const SizedBox(width: 3),
-                          Text(
-                            "+$margenPorcentaje%",
-                            style: TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w900,
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              _getMarginIcon(margenPorcentaje),
+                              size: 12,
                               color: _getMarginColor(margenPorcentaje, isDark),
                             ),
-                          ),
-                        ],
+                            const SizedBox(width: 3),
+                            Text(
+                              "+$margenPorcentaje%",
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w900,
+                                color: _getMarginColor(
+                                  margenPorcentaje,
+                                  isDark,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ],
@@ -231,215 +231,249 @@ class ProductDetailFinancialDashboard extends StatelessWidget {
           const SizedBox(height: 20),
 
           // FILA 2: PRECIO Y STOCK
-          Row(
-            children: [
-              Expanded(
-                flex: 6,
-                child: Material(
-                  color: Colors.transparent,
-                  child: InkWell(
-                    borderRadius: BorderRadius.circular(12),
-                    onTap: onOpenPriceModal ?? onOpenDiscountModal,
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                        vertical: 8.0,
-                        horizontal: 4.0,
-                      ),
-                      child: Row(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(
-                              color: isDark
-                                  ? Colors.green.withValues(alpha: 0.15)
-                                  : Colors.green.shade50,
-                              shape: BoxShape.circle,
+          KeyedSubtree(
+            key: quickActionsKey,
+            child: Row(
+              children: [
+                Expanded(
+                  flex: 6,
+                  child: Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(12),
+                      onTap: onOpenPriceModal ?? onOpenDiscountModal,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          vertical: 8.0,
+                          horizontal: 4.0,
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(10),
+                              decoration: BoxDecoration(
+                                color: isDark
+                                    ? Colors.green.withValues(alpha: 0.15)
+                                    : Colors.green.shade50,
+                                shape: BoxShape.circle,
+                              ),
+                              child: Icon(
+                                Icons.attach_money,
+                                color: isDark
+                                    ? Colors.green[400]
+                                    : Colors.green[700],
+                                size: 22,
+                              ),
                             ),
-                            child: Icon(
-                              Icons.attach_money,
-                              color: isDark
-                                  ? Colors.green[400]
-                                  : Colors.green[700],
-                              size: 24,
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
-                                  children: [
-                                    Text(
-                                      "PRECIO DE VENTA",
-                                      style: TextStyle(
-                                        fontSize: 11,
-                                        fontWeight: FontWeight.bold,
-                                        color: isDark
-                                            ? Colors.grey[400]
-                                            : Colors.grey[600],
-                                      ),
-                                    ),
-                                    const SizedBox(width: 6),
-                                    Icon(
-                                      Icons.edit,
-                                      size: 12,
-                                      color: isDark
-                                          ? Colors.grey[500]
-                                          : Colors.grey[400],
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 2),
-                                if (hasOffer) ...[
-                                  Wrap(
-                                    crossAxisAlignment: WrapCrossAlignment.center,
-                                    spacing: 6,
-                                    children: [
-                                      Text(
-                                        "S/ ${selectedPresentation.precioVentaFinal.toStringAsFixed(2)}",
-                                        style: TextStyle(
-                                          decoration: TextDecoration.lineThrough,
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  FittedBox(
+                                    fit: BoxFit.scaleDown,
+                                    alignment: Alignment.centerLeft,
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Text(
+                                          "PRECIO DE VENTA",
+                                          style: TextStyle(
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.bold,
+                                            color: isDark
+                                                ? Colors.grey[400]
+                                                : Colors.grey[600],
+                                          ),
+                                        ),
+                                        const SizedBox(width: 4),
+                                        Icon(
+                                          Icons.edit,
+                                          size: 12,
                                           color: isDark
                                               ? Colors.grey[500]
-                                              : Colors.grey,
-                                          fontSize: 13,
-                                          fontWeight: FontWeight.bold,
+                                              : Colors.grey[400],
                                         ),
-                                      ),
-                                      if (selectedPresentation.discountPercentRounded > 0)
-                                        Container(
-                                          padding: const EdgeInsets.symmetric(
-                                            horizontal: 5,
-                                            vertical: 1.5,
-                                          ),
-                                          decoration: BoxDecoration(
-                                            color: isDark
-                                                ? Colors.red[900]!.withValues(alpha: 0.35)
-                                                : Colors.red[50],
-                                            borderRadius: BorderRadius.circular(4),
-                                            border: Border.all(
-                                              color: isDark
-                                                  ? Colors.red[700]!
-                                                  : Colors.red.shade300,
-                                            ),
-                                          ),
-                                          child: Text(
-                                            "-${selectedPresentation.discountPercentRounded}%",
-                                            style: TextStyle(
-                                              fontSize: 10,
-                                              fontWeight: FontWeight.bold,
-                                              color: isDark
-                                                  ? Colors.red[300]
-                                                  : Colors.red[800],
-                                            ),
-                                          ),
-                                        ),
-                                    ],
+                                      ],
+                                    ),
                                   ),
                                   const SizedBox(height: 2),
-                                ],
-                                FittedBox(
-                                  fit: BoxFit.scaleDown,
-                                  alignment: Alignment.centerLeft,
-                                  child: Text(
-                                    "S/ ${finalPrice.toStringAsFixed(2)}",
-                                    style: TextStyle(
-                                      fontSize: 24,
-                                      fontWeight: FontWeight.w900,
-                                      color: hasOffer
-                                          ? (isDark
-                                              ? Colors.red[400]
-                                              : Colors.red[800])
-                                          : (isDark
-                                              ? Colors.green[400]
-                                              : Colors.green[800]),
+                                  if (hasOffer) ...[
+                                    Wrap(
+                                      crossAxisAlignment:
+                                          WrapCrossAlignment.center,
+                                      spacing: 6,
+                                      children: [
+                                        Text(
+                                          "S/ ${selectedPresentation.precioVentaFinal.toStringAsFixed(2)}",
+                                          style: TextStyle(
+                                            decoration:
+                                                TextDecoration.lineThrough,
+                                            color: isDark
+                                                ? Colors.grey[500]
+                                                : Colors.grey,
+                                            fontSize: 13,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                        if (selectedPresentation
+                                                .discountPercentRounded >
+                                            0)
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(
+                                              horizontal: 5,
+                                              vertical: 1.5,
+                                            ),
+                                            decoration: BoxDecoration(
+                                              color: isDark
+                                                  ? Colors.red[900]!.withValues(
+                                                      alpha: 0.35,
+                                                    )
+                                                  : Colors.red[50],
+                                              borderRadius:
+                                                  BorderRadius.circular(4),
+                                              border: Border.all(
+                                                color: isDark
+                                                    ? Colors.red[700]!
+                                                    : Colors.red.shade300,
+                                              ),
+                                            ),
+                                            child: Text(
+                                              "-${selectedPresentation.discountPercentRounded}%",
+                                              style: TextStyle(
+                                                fontSize: 10,
+                                                fontWeight: FontWeight.bold,
+                                                color: isDark
+                                                    ? Colors.red[300]
+                                                    : Colors.red[800],
+                                              ),
+                                            ),
+                                          ),
+                                      ],
                                     ),
-                                    maxLines: 1,
+                                    const SizedBox(height: 2),
+                                  ],
+                                  FittedBox(
+                                    fit: BoxFit.scaleDown,
+                                    alignment: Alignment.centerLeft,
+                                    child: Text(
+                                      "S/ ${finalPrice.toStringAsFixed(2)}",
+                                      style: TextStyle(
+                                        fontSize: 24,
+                                        fontWeight: FontWeight.w900,
+                                        color: hasOffer
+                                            ? (isDark
+                                                  ? Colors.red[400]
+                                                  : Colors.red[800])
+                                            : (isDark
+                                                  ? Colors.green[400]
+                                                  : Colors.green[800]),
+                                      ),
+                                      maxLines: 1,
+                                    ),
                                   ),
-                                ),
-                              ],
+                                ],
+                              ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
                     ),
                   ),
                 ),
-              ),
 
-              Container(
-                height: 50,
-                width: 1,
-                color: isDark ? Colors.white10 : Colors.grey.shade200,
-                margin: const EdgeInsets.symmetric(horizontal: 16),
-              ),
+                Container(
+                  height: 50,
+                  width: 1,
+                  color: isDark ? Colors.white10 : Colors.grey.shade200,
+                  margin: const EdgeInsets.symmetric(horizontal: 16),
+                ),
 
-              // STOCK DISP.
-              Expanded(
-                flex: 4,
-                child: Material(
-                  color: Colors.transparent,
-                  child: InkWell(
-                    borderRadius: BorderRadius.circular(12),
-                    onTap: onOpenRestockModal,
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                        vertical: 6.0,
-                        horizontal: 4.0,
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.center,
-                        children: [
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              if (selectedPresentation.usaStockCompartido) ...[
-                                Icon(
-                                  Icons.hub_rounded,
-                                  size: 12,
-                                  color: isDark ? Colors.blue[300] : const Color(0xFF1E40AF),
-                                ),
-                                const SizedBox(width: 3),
-                              ],
-                              Text(
-                                "STOCK DISPONIBLE",
-                                style: TextStyle(
-                                  fontSize: 10.5,
-                                  fontWeight: FontWeight.bold,
-                                  color: selectedPresentation.usaStockCompartido
-                                      ? (isDark ? Colors.blue[300] : const Color(0xFF1E40AF))
-                                      : (isDark ? Colors.purple[300] : Colors.purple[700]),
-                                ),
+                // STOCK DISP.
+                Expanded(
+                  flex: 4,
+                  child: Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(12),
+                      onTap: onOpenRestockModal,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          vertical: 6.0,
+                          horizontal: 4.0,
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            FittedBox(
+                              fit: BoxFit.scaleDown,
+                              alignment: Alignment.center,
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  if (selectedPresentation
+                                      .usaStockCompartido) ...[
+                                    Icon(
+                                      Icons.hub_rounded,
+                                      size: 12,
+                                      color: isDark
+                                          ? Colors.blue[300]
+                                          : const Color(0xFF1E40AF),
+                                    ),
+                                    const SizedBox(width: 3),
+                                  ],
+                                  Text(
+                                    "STOCK DISPONIBLE",
+                                    style: TextStyle(
+                                      fontSize: 10.5,
+                                      fontWeight: FontWeight.bold,
+                                      color:
+                                          selectedPresentation
+                                              .usaStockCompartido
+                                          ? (isDark
+                                                ? Colors.blue[300]
+                                                : const Color(0xFF1E40AF))
+                                          : (isDark
+                                                ? Colors.purple[300]
+                                                : Colors.purple[700]),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Icon(
+                                    Icons.edit,
+                                    size: 12,
+                                    color:
+                                        selectedPresentation.usaStockCompartido
+                                        ? (isDark
+                                              ? Colors.blue[300]
+                                              : const Color(0xFF1E40AF))
+                                        : (isDark
+                                              ? Colors.purple[300]
+                                              : Colors.purple[700]),
+                                  ),
+                                ],
                               ),
-                              const SizedBox(width: 4),
-                              Icon(
-                                Icons.edit,
-                                size: 12,
-                                color: selectedPresentation.usaStockCompartido
-                                    ? (isDark ? Colors.blue[300] : const Color(0xFF1E40AF))
-                                    : (isDark ? Colors.purple[300] : Colors.purple[700]),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 6),
-                          Text(
-                            "$stockVisual",
-                            style: TextStyle(
-                              fontSize: 24,
-                              fontWeight: FontWeight.w900,
-                              color: stockVisual > 0
-                                  ? (isDark ? Colors.white : Colors.black87)
-                                  : (isDark ? Colors.red[300] : Colors.red),
                             ),
-                          ),
-                        ],
+                            const SizedBox(height: 6),
+                            Text(
+                              "$stockVisual",
+                              style: TextStyle(
+                                fontSize: 24,
+                                fontWeight: FontWeight.w900,
+                                color: stockVisual > 0
+                                    ? (isDark ? Colors.white : Colors.black87)
+                                    : (isDark ? Colors.red[300] : Colors.red),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
 
           // Franja Informativa Unificada para Variantes Compartidas
@@ -449,10 +483,14 @@ class ProductDetailFinancialDashboard extends StatelessWidget {
               width: double.infinity,
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               decoration: BoxDecoration(
-                color: isDark ? const Color(0xFF1E3A8A).withValues(alpha: 0.2) : const Color(0xFFEFF6FF),
+                color: isDark
+                    ? const Color(0xFF1E3A8A).withValues(alpha: 0.2)
+                    : const Color(0xFFEFF6FF),
                 borderRadius: BorderRadius.circular(10),
                 border: Border.all(
-                  color: isDark ? Colors.blue.shade800 : const Color(0xFFBFDBFE),
+                  color: isDark
+                      ? Colors.blue.shade800
+                      : const Color(0xFFBFDBFE),
                 ),
               ),
               child: Row(
@@ -469,7 +507,9 @@ class ProductDetailFinancialDashboard extends StatelessWidget {
                       style: TextStyle(
                         fontSize: 11.5,
                         fontWeight: FontWeight.w600,
-                        color: isDark ? Colors.blue[200] : const Color(0xFF1E40AF),
+                        color: isDark
+                            ? Colors.blue[200]
+                            : const Color(0xFF1E40AF),
                       ),
                     ),
                   ),

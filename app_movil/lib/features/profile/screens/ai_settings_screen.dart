@@ -7,11 +7,22 @@ import 'package:intl/intl.dart';
 import 'package:app_movil/core/providers/license_provider.dart';
 import 'package:app_movil/core/models/ai_key_model.dart';
 import 'package:app_movil/core/services/ai/ai_vault_service.dart';
+import 'package:app_movil/core/services/tour/interactive_tour_service.dart';
 import 'package:app_movil/core/widgets/custom_snackbar.dart';
+import 'package:app_movil/core/widgets/info_tooltip_button.dart';
+import 'package:app_movil/core/widgets/tour/configs/ai_settings_tour.dart';
+import 'package:app_movil/core/widgets/tour/tour_step_model.dart';
 
 /// Pantalla de Monitoreo de Cuota IA, Selector de Modo y Bóveda Segura Multi-Clave BYOK
 class AiSettingsScreen extends StatefulWidget {
-  const AiSettingsScreen({super.key});
+  final bool autoTriggerTour;
+  final AiSettingsTourKeys? tourKeys;
+
+  const AiSettingsScreen({
+    super.key,
+    this.autoTriggerTour = true,
+    this.tourKeys,
+  });
 
   @override
   State<AiSettingsScreen> createState() => _AiSettingsScreenState();
@@ -22,15 +33,38 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
   String? _activeKeyId;
   bool _isLoadingVault = true;
   String? _testingKeyId;
+  late final AiSettingsTourKeys _tourKeys;
+  bool _didAttemptAutoTour = false;
 
   @override
   void initState() {
     super.initState();
+    _tourKeys = widget.tourKeys ?? AiSettingsTourKeys();
     _loadVaultData();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         context.read<LicenseProvider?>()?.refreshAiScans();
       }
+    });
+  }
+
+  ScreenTourConfig _buildTourConfig() {
+    return AiSettingsTour.buildConfig(keys: _tourKeys);
+  }
+
+  void _startTour(BuildContext context) {
+    InteractiveTourService.startManualTour(context, _buildTourConfig());
+  }
+
+  void _maybeStartAutoTour() {
+    if (!widget.autoTriggerTour || _didAttemptAutoTour || !mounted) return;
+    _didAttemptAutoTour = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+      await InteractiveTourService.maybeStartAutomaticTour(
+        context,
+        _buildTourConfig(),
+      );
     });
   }
 
@@ -47,6 +81,8 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
       }
     } catch (_) {
       if (mounted) setState(() => _isLoadingVault = false);
+    } finally {
+      _maybeStartAutoTour();
     }
   }
 
@@ -411,10 +447,38 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text(
-          "Cotizador Universal IA y Cuota",
-          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17),
+        titleSpacing: 0,
+        title: const FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: Alignment.centerLeft,
+          child: Text(
+            "Cotizador Universal IA y Cuota",
+            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17),
+          ),
         ),
+        actions: [
+          InfoTooltipButton(
+            constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+            padding: const EdgeInsets.all(6),
+            onStartInteractiveTour: () => _startTour(context),
+            title: "Configuración IA y Bóveda BYOK",
+            description:
+                "Controla tu bolsa acumulativa compartida de MochilaLista o conecta tus propias API Keys de Google Gemini almacenadas con cifrado local.",
+            tips: const [
+              InfoTip(
+                icon: Icons.swap_horiz_rounded,
+                text:
+                    "Cambia entre Bolsa MochilaLista y Clave Propia (BYOK) según necesites; en BYOK tu cuota acumulada queda congelada intacta.",
+              ),
+              InfoTip(
+                icon: Icons.vpn_key_rounded,
+                text:
+                    "Guarda múltiples claves de respaldo y verifica su estado en vivo con Probar Clave antes de escanear.",
+              ),
+            ],
+          ),
+          const SizedBox(width: 4),
+        ],
       ),
       body: SafeArea(
         child: SingleChildScrollView(
@@ -424,32 +488,44 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               // 1. Selector Explícito de Modo de Procesamiento IA
-              _buildModeSelector(
-                isByokMode: isByokMode,
-                accumulatedScans: accumulatedScans,
-                activeKey: activeKey,
-                isDark: isDark,
+              KeyedSubtree(
+                key: _tourKeys.modeSelectorKey,
+                child: _buildModeSelector(
+                  isByokMode: isByokMode,
+                  accumulatedScans: accumulatedScans,
+                  activeKey: activeKey,
+                  isDark: isDark,
+                ),
               ),
               const SizedBox(height: 16),
 
               // 2. Tarjeta de Bolsa Acumulativa Compartida (Sin Reseteo Mensual)
-              _buildCumulativeQuotaCard(
-                isByokMode: isByokMode,
-                accumulatedScans: accumulatedScans,
-                license: license,
-                isDark: isDark,
+              KeyedSubtree(
+                key: _tourKeys.quotaCardKey,
+                child: _buildCumulativeQuotaCard(
+                  isByokMode: isByokMode,
+                  accumulatedScans: accumulatedScans,
+                  license: license,
+                  isDark: isDark,
+                ),
               ),
               const SizedBox(height: 16),
 
               // 3. Bóveda Segura Multi-Clave BYOK
-              _buildVaultCard(
-                isDark: isDark,
-                isByokMode: isByokMode,
+              KeyedSubtree(
+                key: _tourKeys.vaultKey,
+                child: _buildVaultCard(
+                  isDark: isDark,
+                  isByokMode: isByokMode,
+                ),
               ),
               const SizedBox(height: 16),
 
               // 4. Guía Paso a Paso ¿Cómo obtener una API Key gratis?
-              _buildStepByStepGuideCard(isDark),
+              KeyedSubtree(
+                key: _tourKeys.securityGuideKey,
+                child: _buildStepByStepGuideCard(isDark),
+              ),
               const SizedBox(height: 24),
             ],
           ),

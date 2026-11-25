@@ -31,11 +31,29 @@ class ManualQuoteFooter extends StatefulWidget {
   });
 
   @override
-  State<ManualQuoteFooter> createState() => _ManualQuoteFooterState();
+  State<ManualQuoteFooter> createState() => ManualQuoteFooterState();
 }
 
-class _ManualQuoteFooterState extends State<ManualQuoteFooter> {
+class ManualQuoteFooterState extends State<ManualQuoteFooter> {
   bool _isExpanded = false;
+  bool? _expandedBeforeTour;
+
+  Future<void> expandForTour() async {
+    if (!mounted) return;
+    _expandedBeforeTour ??= _isExpanded;
+    if (!_isExpanded) {
+      setState(() => _isExpanded = true);
+    }
+  }
+
+  Future<void> restoreAfterTour() async {
+    final prev = _expandedBeforeTour;
+    _expandedBeforeTour = null;
+    if (!mounted) return;
+    if (prev != null && _isExpanded != prev) {
+      setState(() => _isExpanded = prev);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -76,59 +94,70 @@ class _ManualQuoteFooterState extends State<ManualQuoteFooter> {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Text("TOTAL", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 1, color: widget.isDark ? Colors.grey[400] : Colors.grey)),
-                          if (!widget.isClient) ...[
-                            const SizedBox(width: 8),
-                            Consumer<QuickSaleProvider>(
-                              builder: (ctx, quickProv, _) {
-                                return AnimatedSwitcher(
-                                  duration: const Duration(milliseconds: 300),
-                                  transitionBuilder: (child, animation) {
-                                    return FadeTransition(
-                                      opacity: animation,
-                                      child: ScaleTransition(
-                                        scale: Tween<double>(begin: 0.85, end: 1.0).animate(
-                                          CurvedAnimation(parent: animation, curve: Curves.easeOutBack),
-                                        ),
-                                        child: child,
-                                      ),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Text("TOTAL", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 1, color: widget.isDark ? Colors.grey[400] : Colors.grey)),
+                            if (!widget.isClient) ...[
+                              const SizedBox(width: 8),
+                              Flexible(
+                                child: Consumer<QuickSaleProvider>(
+                                  builder: (ctx, quickProv, _) {
+                                    return AnimatedSwitcher(
+                                      duration: const Duration(milliseconds: 300),
+                                      transitionBuilder: (child, animation) {
+                                        return FadeTransition(
+                                          opacity: animation,
+                                          child: ScaleTransition(
+                                            scale: Tween<double>(begin: 0.85, end: 1.0).animate(
+                                              CurvedAnimation(parent: animation, curve: Curves.easeOutBack),
+                                            ),
+                                            child: child,
+                                          ),
+                                        );
+                                      },
+                                      child: (!quickProv.hideProfits && widget.estimatedProfit > 0)
+                                          ? Container(
+                                              key: const ValueKey('visible_manual_profit_badge'),
+                                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                              decoration: BoxDecoration(
+                                                color: widget.isDark ? Colors.green.withValues(alpha: 0.2) : Colors.green.shade50,
+                                                borderRadius: BorderRadius.circular(6),
+                                                border: Border.all(
+                                                  color: widget.isDark ? Colors.green.withValues(alpha: 0.4) : Colors.green.shade300,
+                                                ),
+                                              ),
+                                              child: Text(
+                                                "Ganancia ~${AppCurrency.format(widget.estimatedProfit)}",
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                                style: TextStyle(
+                                                  fontSize: 10,
+                                                  fontWeight: FontWeight.bold,
+                                                  color: widget.isDark ? Colors.green[300] : Colors.green[800],
+                                                ),
+                                              ),
+                                            )
+                                          : const SizedBox.shrink(key: ValueKey('empty_manual_profit_badge')),
                                     );
                                   },
-                                  child: (!quickProv.hideProfits && widget.estimatedProfit > 0)
-                                      ? Container(
-                                          key: const ValueKey('visible_manual_profit_badge'),
-                                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                          decoration: BoxDecoration(
-                                            color: widget.isDark ? Colors.green.withValues(alpha: 0.2) : Colors.green.shade50,
-                                            borderRadius: BorderRadius.circular(6),
-                                            border: Border.all(
-                                              color: widget.isDark ? Colors.green.withValues(alpha: 0.4) : Colors.green.shade300,
-                                            ),
-                                          ),
-                                          child: Text(
-                                            "Ganancia ~${AppCurrency.format(widget.estimatedProfit)}",
-                                            style: TextStyle(
-                                              fontSize: 10,
-                                              fontWeight: FontWeight.bold,
-                                              color: widget.isDark ? Colors.green[300] : Colors.green[800],
-                                            ),
-                                          ),
-                                        )
-                                      : const SizedBox.shrink(key: ValueKey('empty_manual_profit_badge')),
-                                );
-                              },
-                            ),
+                                ),
+                              ),
+                            ],
                           ],
-                        ],
-                      ),
-                      Text(AppCurrency.format(widget.totalAmount), style: TextStyle(fontSize: 26, fontWeight: FontWeight.w900, color: widget.isDark ? Colors.green[400] : const Color(0xFF2E7D32))),
-                    ],
+                        ),
+                        FittedBox(
+                          fit: BoxFit.scaleDown,
+                          alignment: Alignment.centerLeft,
+                          child: Text(AppCurrency.format(widget.totalAmount), style: TextStyle(fontSize: 26, fontWeight: FontWeight.w900, color: widget.isDark ? Colors.green[400] : const Color(0xFF2E7D32))),
+                        ),
+                      ],
+                    ),
                   ),
+                  const SizedBox(width: 8),
                   Text("${widget.itemCount} prod.", style: TextStyle(color: widget.isDark ? Colors.grey[300] : Colors.grey[800], fontSize: 16, fontWeight: FontWeight.bold)),
                 ],
               ),
@@ -146,7 +175,9 @@ class _ManualQuoteFooterState extends State<ManualQuoteFooter> {
                           children: [
                             Icon(Icons.local_offer, color: widget.isDark ? Colors.green[400] : Colors.green[700], size: 18),
                             const SizedBox(width: 8),
-                            Text("Ahorro aplicado: ${AppCurrency.format(widget.totalSavings)}", style: TextStyle(color: widget.isDark ? Colors.green[400] : Colors.green[700], fontSize: 14, fontWeight: FontWeight.bold)),
+                            Expanded(
+                              child: Text("Ahorro aplicado: ${AppCurrency.format(widget.totalSavings)}", style: TextStyle(color: widget.isDark ? Colors.green[400] : Colors.green[700], fontSize: 14, fontWeight: FontWeight.bold)),
+                            ),
                           ],
                         ),
                       ),
@@ -158,7 +189,10 @@ class _ManualQuoteFooterState extends State<ManualQuoteFooter> {
                         icon: widget.isSaving 
                             ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
                             : Icon(widget.isClient ? Icons.send_rounded : Icons.point_of_sale, size: 24),
-                        label: Text(widget.customLabel, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, letterSpacing: 0.5)),
+                        label: FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: Text(widget.customLabel, maxLines: 1, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, letterSpacing: 0.5)),
+                        ),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: btnColor, 
                           foregroundColor: Colors.white, 

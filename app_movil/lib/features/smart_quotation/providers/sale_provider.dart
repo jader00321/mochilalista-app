@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart'; 
+import 'package:intl/intl.dart';
 import 'package:app_movil/features/smart_quotation/services/sales_service.dart';
 import 'package:app_movil/features/smart_quotation/services/quotation_service.dart';
 import 'package:app_movil/features/smart_quotation/services/client_service.dart';
@@ -16,6 +16,7 @@ class SaleProvider with ChangeNotifier {
 
   bool _isLoading = false;
   bool _isRefreshing = false;
+  bool _hasLoadedOnce = false;
   String _errorMessage = "";
   List<SaleModel> _salesHistory = [];
   List<SaleModel> _masterSales = [];
@@ -30,11 +31,11 @@ class SaleProvider with ChangeNotifier {
 
   String? _currentStartDate;
   String? _currentEndDate;
-  String _activeQuickFilter = "seis_meses"; 
+  String _activeQuickFilter = "seis_meses";
   String _currentSortBy = "fecha_venta";
   String _currentOrder = "desc";
   String _searchQuery = "";
-  String _currentTab = "todas"; 
+  String _currentTab = "todas";
   String _financialStatus = "todos"; // 'todos', 'pagados', 'con_deuda'
 
   SaleProvider() {
@@ -45,9 +46,21 @@ class SaleProvider with ChangeNotifier {
   void _initDefaultTimeFilter() {
     _activeQuickFilter = "seis_meses";
     final now = DateTime.now();
-    _currentStartDate = DateTime(now.year, now.month - 6, now.day).toIso8601String();
-    _currentEndDate = DateTime(now.year, now.month, now.day, 23, 59, 59).toIso8601String();
+    _currentStartDate = DateTime(
+      now.year,
+      now.month - 6,
+      now.day,
+    ).toIso8601String();
+    _currentEndDate = DateTime(
+      now.year,
+      now.month,
+      now.day,
+      23,
+      59,
+      59,
+    ).toIso8601String();
   }
+
   bool get isLoading => _isLoading;
   bool get isRefreshing => _isRefreshing;
   String get errorMessage => _errorMessage;
@@ -63,7 +76,7 @@ class SaleProvider with ChangeNotifier {
   String get currentTab => _currentTab;
   String get currentSortBy => _currentSortBy;
   String get currentOrder => _currentOrder;
-  String get searchQuery => _searchQuery; 
+  String get searchQuery => _searchQuery;
   String get financialStatus => _financialStatus;
   String? get currentStartDate => _currentStartDate;
   String? get currentEndDate => _currentEndDate;
@@ -76,10 +89,14 @@ class SaleProvider with ChangeNotifier {
       if (sale.isArchived || sale.origenVenta == 'prestamo_personal') continue;
       try {
         final saleDate = DateTime.parse(sale.saleDate);
-        if (saleDate.year == today.year && saleDate.month == today.month && saleDate.day == today.day) {
+        if (saleDate.year == today.year &&
+            saleDate.month == today.month &&
+            saleDate.day == today.day) {
           sum += sale.totalAmount;
         }
-      } catch (e) { continue; }
+      } catch (e) {
+        continue;
+      }
     }
     return sum;
   }
@@ -92,17 +109,21 @@ class SaleProvider with ChangeNotifier {
       if (sale.isArchived || sale.origenVenta == 'prestamo_personal') continue;
       try {
         final saleDate = DateTime.parse(sale.saleDate);
-        if (saleDate.year == today.year && saleDate.month == today.month && saleDate.day == today.day) {
+        if (saleDate.year == today.year &&
+            saleDate.month == today.month &&
+            saleDate.day == today.day) {
           count++;
         }
-      } catch (e) { continue; }
+      } catch (e) {
+        continue;
+      }
     }
     return count;
   }
 
   double? _currentMonthMargin;
   double? _currentMonthSalesTotal;
-  
+
   double? get currentMonthMargin => _currentMonthMargin;
   double? get currentMonthSalesTotal => _currentMonthSalesTotal;
 
@@ -112,16 +133,19 @@ class SaleProvider with ChangeNotifier {
       final db = await _salesService.dbHelper.database;
       final now = DateTime.now();
       final start = DateTime(now.year, now.month, 1).toIso8601String();
-      
-      final result = await db.rawQuery('''
+
+      final result = await db.rawQuery(
+        '''
         SELECT 
           SUM(i.cantidad * i.precio_unitario) as ventas,
           SUM(i.cantidad * COALESCE(i.original_unit_price, i.precio_unitario)) as costos
         FROM venta_items i
         JOIN ventas v ON i.venta_id = v.id
         WHERE v.negocio_id = ? AND v.fecha_venta >= ? AND v.is_archived = 0 AND IFNULL(v.origen_venta, '') != 'prestamo_personal'
-      ''', [_negocioId, start]);
-      
+      ''',
+        [_negocioId, start],
+      );
+
       if (result.isNotEmpty) {
         final ventas = (result.first['ventas'] as num?)?.toDouble() ?? 0.0;
         final costos = (result.first['costos'] as num?)?.toDouble() ?? 0.0;
@@ -138,7 +162,7 @@ class SaleProvider with ChangeNotifier {
         }
         notifyListeners();
       }
-    } catch(e) {
+    } catch (e) {
       // ignore
     }
   }
@@ -147,7 +171,8 @@ class SaleProvider with ChangeNotifier {
     if (_negocioId != negocioId) {
       _negocioId = negocioId;
       _usuarioId = usuarioId;
-      
+      _hasLoadedOnce = false;
+
       Future.microtask(() {
         _salesHistory = [];
         _recentHomeSales = [];
@@ -182,7 +207,10 @@ class SaleProvider with ChangeNotifier {
     _errorMessage = e.toString().replaceAll("Exception:", "").trim();
   }
 
-  Future<bool> updateFullClient(int clientId, Map<String, dynamic> clientData) async {
+  Future<bool> updateFullClient(
+    int clientId,
+    Map<String, dynamic> clientData,
+  ) async {
     if (_negocioId == null) return false;
     try {
       await _clientService.updateClient(clientId, clientData);
@@ -208,8 +236,13 @@ class SaleProvider with ChangeNotifier {
     if (_negocioId == null || _usuarioId == null) return false;
     try {
       await _quotationService.saveManualQuotation(
-        negocioId: _negocioId!, usuarioId: _usuarioId!,
-        id: quotationId, totalAmount: 0, totalSavings: 0, items: [], notas: newNote
+        negocioId: _negocioId!,
+        usuarioId: _usuarioId!,
+        id: quotationId,
+        totalAmount: 0,
+        totalSavings: 0,
+        items: [],
+        notas: newNote,
       );
       final idx = _salesHistory.indexWhere((s) => s.quotationId == quotationId);
       if (idx != -1) {
@@ -249,15 +282,24 @@ class SaleProvider with ChangeNotifier {
     }
   }
 
-  Future<SmartQuotationModel?> prepareForSale(SmartQuotationModel current, int? newClientId) async {
+  Future<SmartQuotationModel?> prepareForSale(
+    SmartQuotationModel current,
+    int? newClientId,
+  ) async {
     if (_negocioId == null || _usuarioId == null) return null;
     _isLoading = true;
     notifyListeners();
 
     try {
-      bool mustClone = current.isTemplate || (current.clientId != null && current.clientId != newClientId); 
+      bool mustClone =
+          current.isTemplate ||
+          (current.clientId != null && current.clientId != newClientId);
       if (mustClone) {
-        return await _quotationService.cloneQuotation(current.id, _usuarioId!, targetClientId: newClientId);
+        return await _quotationService.cloneQuotation(
+          current.id,
+          _usuarioId!,
+          targetClientId: newClientId,
+        );
       } else {
         return current;
       }
@@ -272,13 +314,13 @@ class SaleProvider with ChangeNotifier {
 
   Future<String?> processCheckout({
     required int quotationId,
-    required int? clientId, 
-    String? clientName,     
-    String? saleNote,       
+    required int? clientId,
+    String? clientName,
+    String? saleNote,
     required String paymentMethod,
     required String paymentStatus,
     required String deliveryStatus,
-    String? deliveryDate, 
+    String? deliveryDate,
     required double total,
     required double paid,
     double discount = 0.0,
@@ -289,22 +331,24 @@ class SaleProvider with ChangeNotifier {
     List<Map<String, dynamic>>? detalleVenta,
     int? recompensaCanjeId,
   }) async {
-    if (_negocioId == null || _usuarioId == null) return "Error: Sesión no válida.";
-    
+    if (_negocioId == null || _usuarioId == null) {
+      return "Error: Sesión no válida.";
+    }
+
     _isLoading = true;
     notifyListeners();
 
     try {
       final saleData = {
-        "cotizacion_id": origenVenta == "pos_rapido" ? null : quotationId, 
+        "cotizacion_id": origenVenta == "pos_rapido" ? null : quotationId,
         "cliente_id": clientId,
-        "client_name_override": clientName, 
-        "notas": saleNote, 
+        "client_name_override": clientName,
+        "notas": saleNote,
         "origen_venta": origenVenta,
         "metodo_pago": paymentMethod,
         "estado_pago": paymentStatus,
         "estado_entrega": deliveryStatus,
-        "fecha_entrega": deliveryDate, 
+        "fecha_entrega": deliveryDate,
         "monto_total": total,
         "monto_pagado": paid,
         "descuento_aplicado": discount,
@@ -316,12 +360,12 @@ class SaleProvider with ChangeNotifier {
       };
 
       await _salesService.createSale(saleData, _negocioId!, _usuarioId!);
-      await loadFilteredHistory(reset: true); 
+      await loadFilteredHistory(reset: true);
       await loadRecentHomeActivity();
-      return null; 
+      return null;
     } catch (e) {
       _handleException(e);
-      return _errorMessage; 
+      return _errorMessage;
     } finally {
       // 🔥 Aseguramos que la UI deje de cargar incluso si falla SQLite
       _isLoading = false;
@@ -332,20 +376,20 @@ class SaleProvider with ChangeNotifier {
   Future<ClientModel?> getClientById(int id) async {
     if (_negocioId == null) return null;
     try {
-        return await _clientService.getClientById(id);
+      return await _clientService.getClientById(id);
     } catch (e) {
-        _handleException(e);
-        return null;
+      _handleException(e);
+      return null;
     }
   }
 
   Future<List<ClientModel>> searchClients(String query) async {
     if (_negocioId == null || query.isEmpty) return [];
     try {
-        return await _clientService.searchClients(query, _negocioId!);
+      return await _clientService.searchClients(query, _negocioId!);
     } catch (e) {
-        _handleException(e);
-        return [];
+      _handleException(e);
+      return [];
     }
   }
 
@@ -369,7 +413,7 @@ class SaleProvider with ChangeNotifier {
       if (detail['cliente_id'] != null) {
         final clientData = await getClientById(detail['cliente_id']);
         if (clientData != null && clientData.notes != null) {
-           detail['cliente_notas'] = clientData.notes;
+          detail['cliente_notas'] = clientData.notes;
         }
       }
       return detail;
@@ -407,7 +451,11 @@ class SaleProvider with ChangeNotifier {
     final mIdx = _masterSales.indexWhere((s) => s.id == saleId);
     if (mIdx != -1) {
       final old = _masterSales[mIdx];
-      final status = newPaymentStatus ?? (newPaidAmount >= old.trueTotalAmount - 0.01 ? 'pagado' : 'pendiente');
+      final status =
+          newPaymentStatus ??
+          (newPaidAmount >= old.trueTotalAmount - 0.01
+              ? 'pagado'
+              : 'pendiente');
       _masterSales[mIdx] = old.copyWith(
         paidAmount: newPaidAmount,
         paymentStatus: status,
@@ -417,7 +465,11 @@ class SaleProvider with ChangeNotifier {
     final aIdx = _archivedSales.indexWhere((s) => s.id == saleId);
     if (aIdx != -1) {
       final old = _archivedSales[aIdx];
-      final status = newPaymentStatus ?? (newPaidAmount >= old.trueTotalAmount - 0.01 ? 'pagado' : 'pendiente');
+      final status =
+          newPaymentStatus ??
+          (newPaidAmount >= old.trueTotalAmount - 0.01
+              ? 'pagado'
+              : 'pendiente');
       _archivedSales[aIdx] = old.copyWith(
         paidAmount: newPaidAmount,
         paymentStatus: status,
@@ -468,10 +520,14 @@ class SaleProvider with ChangeNotifier {
         list = _masterSales.where((s) => !s.isArchived).toList();
         break;
       case 'smart_quotation':
-        list = _masterSales.where((s) => !s.isArchived && s.origenVenta == 'smart_quotation').toList();
+        list = _masterSales
+            .where((s) => !s.isArchived && s.origenVenta == 'smart_quotation')
+            .toList();
         break;
       case 'pos_rapido':
-        list = _masterSales.where((s) => !s.isArchived && s.origenVenta == 'pos_rapido').toList();
+        list = _masterSales
+            .where((s) => !s.isArchived && s.origenVenta == 'pos_rapido')
+            .toList();
         break;
       case 'archivadas':
         list = _archivedSales.isNotEmpty
@@ -490,7 +546,10 @@ class SaleProvider with ChangeNotifier {
         final idStr = s.id.toString();
         final displayId = s.displayId.toLowerCase();
         final notes = (s.notes ?? '').toLowerCase();
-        return name.contains(q) || idStr.contains(q) || displayId.contains(q) || notes.contains(q);
+        return name.contains(q) ||
+            idStr.contains(q) ||
+            displayId.contains(q) ||
+            notes.contains(q);
       }).toList();
     }
 
@@ -510,8 +569,12 @@ class SaleProvider with ChangeNotifier {
           break;
         case 'fecha_venta':
         default:
-          final dateA = DateTime.tryParse(a.saleDate) ?? DateTime.fromMillisecondsSinceEpoch(0);
-          final dateB = DateTime.tryParse(b.saleDate) ?? DateTime.fromMillisecondsSinceEpoch(0);
+          final dateA =
+              DateTime.tryParse(a.saleDate) ??
+              DateTime.fromMillisecondsSinceEpoch(0);
+          final dateB =
+              DateTime.tryParse(b.saleDate) ??
+              DateTime.fromMillisecondsSinceEpoch(0);
           comparison = dateA.compareTo(dateB);
           break;
       }
@@ -525,7 +588,11 @@ class SaleProvider with ChangeNotifier {
     if (_negocioId == null) return;
     try {
       bool isArchivedTab = _currentTab == "archivadas";
-      final targetLimit = (_masterSales.length > _salesHistory.length ? _masterSales.length : _salesHistory.length).clamp(_limit, 500);
+      final targetLimit =
+          (_masterSales.length > _salesHistory.length
+                  ? _masterSales.length
+                  : _salesHistory.length)
+              .clamp(_limit, 500);
 
       final newSales = await _salesService.getHistory(
         _negocioId!,
@@ -548,7 +615,9 @@ class SaleProvider with ChangeNotifier {
       }
 
       _applyTabFilterInMemory();
-      _currentSkip = isArchivedTab ? _archivedSales.length : _masterSales.length;
+      _currentSkip = isArchivedTab
+          ? _archivedSales.length
+          : _masterSales.length;
       _hasMoreData = newSales.length >= targetLimit;
 
       _currentStats = await _salesService.getStats(
@@ -559,7 +628,7 @@ class SaleProvider with ChangeNotifier {
         origenVenta: null,
         financialStatus: _financialStatus != 'todos' ? _financialStatus : null,
       );
-      
+
       await loadRecentHomeActivity();
       notifyListeners();
     } catch (e) {
@@ -567,20 +636,34 @@ class SaleProvider with ChangeNotifier {
     }
   }
 
-  Future<void> loadSalesHistory() async {
+  Future<void> loadSalesHistory({bool silent = false}) async {
     resetFilters();
-    await loadFilteredHistory(reset: true);
+    await _loadFilteredHistoryInternal(reset: true, silent: silent);
   }
 
   Future<void> loadFilteredHistory({bool reset = false}) async {
+    await _loadFilteredHistoryInternal(reset: reset, silent: false);
+  }
+
+  Future<void> _loadFilteredHistoryInternal({
+    bool reset = false,
+    bool silent = false,
+  }) async {
     if (_negocioId == null) return;
-    
+    final bool hasCachedData =
+        _hasLoadedOnce || _salesHistory.isNotEmpty || _masterSales.isNotEmpty;
+    final bool useSilent = silent || hasCachedData;
+
     if (reset) {
-      _isLoading = true;
-      _isRefreshing = true;
+      if (!useSilent) {
+        _isLoading = true;
+        _isRefreshing = true;
+      }
       _currentSkip = 0;
       _hasMoreData = true;
-      notifyListeners();
+      if (!useSilent) {
+        notifyListeners();
+      }
       _loadDynamicStats();
     } else {
       if (_isLoadingMore || !_hasMoreData || _isRefreshing) return;
@@ -613,30 +696,35 @@ class SaleProvider with ChangeNotifier {
         _mergeSales(newSales, replace: reset);
         if (reset) {
           // Pre-carga a 0ms para la pestaña de Archivadas / Anuladas
-          _salesService.getHistory(
-            _negocioId!,
-            skip: 0,
-            limit: _limit,
-            startDate: _currentStartDate,
-            endDate: _currentEndDate,
-            isArchived: true,
-            origenVenta: null,
-            sortBy: _currentSortBy,
-            order: _currentOrder,
-          ).then((archivedList) {
-            _mergeArchivedSales(archivedList, replace: true);
-            _applyTabFilterInMemory();
-            notifyListeners();
-          }).catchError((_) {});
+          _salesService
+              .getHistory(
+                _negocioId!,
+                skip: 0,
+                limit: _limit,
+                startDate: _currentStartDate,
+                endDate: _currentEndDate,
+                isArchived: true,
+                origenVenta: null,
+                sortBy: _currentSortBy,
+                order: _currentOrder,
+              )
+              .then((archivedList) {
+                _mergeArchivedSales(archivedList, replace: true);
+                _applyTabFilterInMemory();
+                notifyListeners();
+              })
+              .catchError((_) {});
         }
       }
-      
-      _applyTabFilterInMemory();
-      _currentSkip = isArchivedTab ? _archivedSales.length : _masterSales.length;
 
+      _applyTabFilterInMemory();
+      _currentSkip = isArchivedTab
+          ? _archivedSales.length
+          : _masterSales.length;
     } catch (e) {
       _handleException(e);
     } finally {
+      _hasLoadedOnce = true;
       _isLoading = false;
       _isRefreshing = false;
       _isLoadingMore = false;
@@ -676,7 +764,7 @@ class SaleProvider with ChangeNotifier {
         origenVenta: null,
         financialStatus: _financialStatus != 'todos' ? _financialStatus : null,
       );
-      notifyListeners(); 
+      notifyListeners();
     } catch (e) {
       _handleException(e);
     }
@@ -692,7 +780,7 @@ class SaleProvider with ChangeNotifier {
     String? order,
   }) async {
     if (_negocioId == null) return [];
-    
+
     try {
       String? startDate = ignoreDateFilter ? null : _currentStartDate;
       String? endDate = ignoreDateFilter ? null : _currentEndDate;
@@ -701,10 +789,11 @@ class SaleProvider with ChangeNotifier {
           ? origenVenta
           : null;
 
-      final effectiveFinancial = (financialStatus != null && financialStatus != 'todos')
+      final effectiveFinancial =
+          (financialStatus != null && financialStatus != 'todos')
           ? financialStatus
           : (_financialStatus != 'todos' ? _financialStatus : null);
-      
+
       return await _salesService.getHistory(
         _negocioId!,
         skip: 0,
@@ -712,7 +801,7 @@ class SaleProvider with ChangeNotifier {
         startDate: startDate,
         endDate: endDate,
         searchQuery: _searchQuery,
-        isArchived: onlyArchived, 
+        isArchived: onlyArchived,
         origenVenta: effectiveOrigen,
         sortBy: sortBy ?? _currentSortBy,
         order: order ?? _currentOrder,
@@ -742,14 +831,22 @@ class SaleProvider with ChangeNotifier {
     return list.length;
   }
 
-  Future<bool> updateDeliveryStatus(int saleId, String newStatus, {String? fotoPath}) async {
+  Future<bool> updateDeliveryStatus(
+    int saleId,
+    String newStatus, {
+    String? fotoPath,
+  }) async {
     if (_negocioId == null) return false;
     _isLoading = true;
     notifyListeners();
 
     try {
-      await _salesService.updateDeliveryStatus(saleId, newStatus, fotoPath: fotoPath);
-      return true; 
+      await _salesService.updateDeliveryStatus(
+        saleId,
+        newStatus,
+        fotoPath: fotoPath,
+      );
+      return true;
     } catch (e) {
       _handleException(e);
       return false;
@@ -759,15 +856,23 @@ class SaleProvider with ChangeNotifier {
     }
   }
 
-  Future<bool> updateInstallmentDate(int cuotaId, String newDate, {int? saleId}) async {
+  Future<bool> updateInstallmentDate(
+    int cuotaId,
+    String newDate, {
+    int? saleId,
+  }) async {
     if (_negocioId == null) return false;
     _isLoading = true;
     notifyListeners();
 
     try {
-      final success = await _clientService.updateInstallmentDueDate(cuotaId, newDate);
+      final success = await _clientService.updateInstallmentDueDate(
+        cuotaId,
+        newDate,
+      );
       if (success) {
-        final int? sId = saleId ?? await _salesService.getVentaIdFromCuota(cuotaId);
+        final int? sId =
+            saleId ?? await _salesService.getVentaIdFromCuota(cuotaId);
         if (sId != null) {
           await syncSaleInMemory(sId);
         }
@@ -782,7 +887,11 @@ class SaleProvider with ChangeNotifier {
     }
   }
 
-  void setQuickFilter(String filterType, {DateTime? customStart, DateTime? customEnd}) {
+  void setQuickFilter(
+    String filterType, {
+    DateTime? customStart,
+    DateTime? customEnd,
+  }) {
     _activeQuickFilter = filterType;
     final now = DateTime.now();
     String? startStr;
@@ -791,25 +900,64 @@ class SaleProvider with ChangeNotifier {
     switch (filterType) {
       case 'hoy':
         startStr = DateTime(now.year, now.month, now.day).toIso8601String();
-        endStr = DateTime(now.year, now.month, now.day, 23, 59, 59).toIso8601String();
+        endStr = DateTime(
+          now.year,
+          now.month,
+          now.day,
+          23,
+          59,
+          59,
+        ).toIso8601String();
         break;
       case 'semana':
         final startOfWeek = now.subtract(Duration(days: now.weekday - 1));
-        startStr = DateTime(startOfWeek.year, startOfWeek.month, startOfWeek.day).toIso8601String();
-        endStr = DateTime(now.year, now.month, now.day, 23, 59, 59).toIso8601String();
+        startStr = DateTime(
+          startOfWeek.year,
+          startOfWeek.month,
+          startOfWeek.day,
+        ).toIso8601String();
+        endStr = DateTime(
+          now.year,
+          now.month,
+          now.day,
+          23,
+          59,
+          59,
+        ).toIso8601String();
         break;
       case 'este_mes':
         startStr = DateTime(now.year, now.month, 1).toIso8601String();
-        endStr = DateTime(now.year, now.month, now.day, 23, 59, 59).toIso8601String();
+        endStr = DateTime(
+          now.year,
+          now.month,
+          now.day,
+          23,
+          59,
+          59,
+        ).toIso8601String();
         break;
       case 'seis_meses':
         startStr = DateTime(now.year, now.month - 6, now.day).toIso8601String();
-        endStr = DateTime(now.year, now.month, now.day, 23, 59, 59).toIso8601String();
+        endStr = DateTime(
+          now.year,
+          now.month,
+          now.day,
+          23,
+          59,
+          59,
+        ).toIso8601String();
         break;
       case 'personalizado':
         if (customStart != null && customEnd != null) {
           startStr = customStart.toIso8601String();
-          endStr = DateTime(customEnd.year, customEnd.month, customEnd.day, 23, 59, 59).toIso8601String();
+          endStr = DateTime(
+            customEnd.year,
+            customEnd.month,
+            customEnd.day,
+            23,
+            59,
+            59,
+          ).toIso8601String();
         }
         break;
       case 'todo':
@@ -849,7 +997,9 @@ class SaleProvider with ChangeNotifier {
     notifyListeners();
 
     // Si conmutó a archivadas y no hay archivadas en memoria, consultar a SQLite
-    if (tabKey == 'archivadas' && _archivedSales.isEmpty && !_masterSales.any((s) => s.isArchived)) {
+    if (tabKey == 'archivadas' &&
+        _archivedSales.isEmpty &&
+        !_masterSales.any((s) => s.isArchived)) {
       loadFilteredHistory(reset: true);
     } else if (tabKey != 'archivadas' && _masterSales.isEmpty) {
       loadFilteredHistory(reset: true);
@@ -862,7 +1012,10 @@ class SaleProvider with ChangeNotifier {
       await _salesService.voidSale(saleId, _negocioId!, motivoAnulacion);
       final mIdx = _masterSales.indexWhere((element) => element.id == saleId);
       if (mIdx != -1) {
-        final archived = _masterSales[mIdx].copyWith(isArchived: true, motivoAnulacion: motivoAnulacion);
+        final archived = _masterSales[mIdx].copyWith(
+          isArchived: true,
+          motivoAnulacion: motivoAnulacion,
+        );
         _masterSales[mIdx] = archived;
         _archivedSales.removeWhere((s) => s.id == saleId);
         _archivedSales.insert(0, archived);
@@ -885,7 +1038,10 @@ class SaleProvider with ChangeNotifier {
       _archivedSales.removeWhere((s) => s.id == saleId);
       final mIdx = _masterSales.indexWhere((element) => element.id == saleId);
       if (mIdx != -1) {
-        _masterSales[mIdx] = _masterSales[mIdx].copyWith(isArchived: false, motivoAnulacion: null);
+        _masterSales[mIdx] = _masterSales[mIdx].copyWith(
+          isArchived: false,
+          motivoAnulacion: null,
+        );
       }
       _applyTabFilterInMemory();
       notifyListeners();
@@ -902,12 +1058,14 @@ class SaleProvider with ChangeNotifier {
     if (_negocioId == null) return "";
     try {
       bool isArchivedTab = _currentTab == "archivadas";
-      String? origen = (_currentTab == "todas" || _currentTab == "archivadas") ? null : _currentTab;
+      String? origen = (_currentTab == "todas" || _currentTab == "archivadas")
+          ? null
+          : _currentTab;
 
       final allSales = await _salesService.getHistory(
         _negocioId!,
         skip: 0,
-        limit: -1, 
+        limit: -1,
         startDate: _currentStartDate,
         endDate: _currentEndDate,
         searchQuery: _searchQuery,
@@ -919,26 +1077,34 @@ class SaleProvider with ChangeNotifier {
       );
 
       if (allSales.isEmpty) return "";
-      
-      String curr = currencyName.split(' ').first; 
-      String csv = "ID Venta,Fecha,Cliente,Origen Venta,Metodo Pago,Estado Pago,Estado Entrega,Total($curr),Pagado($curr),Descuento($curr),Deuda($curr)\n";
-      
+
+      String curr = currencyName.split(' ').first;
+      String csv =
+          "ID Venta,Fecha,Cliente,Origen Venta,Metodo Pago,Estado Pago,Estado Entrega,Total($curr),Pagado($curr),Descuento($curr),Deuda($curr)\n";
+
       for (var sale in allSales) {
         if (sale.origenVenta == 'prestamo_personal') continue;
-        final dateFormatted = DateFormat('dd/MM/yyyy HH:mm').format(DateTime.parse(sale.saleDate));
-        
+        final dateFormatted = DateFormat(
+          'dd/MM/yyyy HH:mm',
+        ).format(DateTime.parse(sale.saleDate));
+
         String clientName = sale.clientName ?? "Cliente General";
         clientName = clientName.replaceAll(',', ' '); // Avoid CSV break
-        
-        String originName = sale.origenVenta == 'smart_quotation' ? 'Listas Escolares' 
-                          : sale.origenVenta == 'pos_rapido' ? 'Caja Rapida' 
-                          : sale.origenVenta;
 
-        double debt = (sale.trueTotalAmount > sale.paidAmount && sale.paymentStatus != 'pagado') 
-            ? (sale.trueTotalAmount - sale.paidAmount) 
+        String originName = sale.origenVenta == 'smart_quotation'
+            ? 'Listas Escolares'
+            : sale.origenVenta == 'pos_rapido'
+            ? 'Caja Rapida'
+            : sale.origenVenta;
+
+        double debt =
+            (sale.trueTotalAmount > sale.paidAmount &&
+                sale.paymentStatus != 'pagado')
+            ? (sale.trueTotalAmount - sale.paidAmount)
             : 0.0;
 
-        csv += "${sale.displayId},$dateFormatted,$clientName,$originName,${sale.paymentMethod},${sale.paymentStatus},${sale.deliveryStatus},${sale.trueTotalAmount},${sale.paidAmount},${sale.discount},$debt\n";
+        csv +=
+            "${sale.displayId},$dateFormatted,$clientName,$originName,${sale.paymentMethod},${sale.paymentStatus},${sale.deliveryStatus},${sale.trueTotalAmount},${sale.paidAmount},${sale.discount},$debt\n";
       }
       return csv;
     } catch (e) {
@@ -954,7 +1120,7 @@ class SaleProvider with ChangeNotifier {
       if (detail['cliente_id'] != null) {
         final clientData = await getClientById(detail['cliente_id']);
         if (clientData != null && clientData.notes != null) {
-           detail['cliente_notas'] = clientData.notes;
+          detail['cliente_notas'] = clientData.notes;
         }
       }
       return detail;
@@ -1000,7 +1166,8 @@ class SaleProvider with ChangeNotifier {
       nuevoMontoTotal: nuevoMontoTotal,
     );
     if (success) {
-      final int? sId = saleId ?? await _salesService.getVentaIdFromCuota(cuotaId);
+      final int? sId =
+          saleId ?? await _salesService.getVentaIdFromCuota(cuotaId);
       if (sId != null) {
         await syncSaleInMemory(sId);
       } else {
@@ -1013,7 +1180,8 @@ class SaleProvider with ChangeNotifier {
   Future<bool> quitarMorosidad(int cuotaId, {int? saleId}) async {
     final success = await _salesService.quitarMorosidad(cuotaId);
     if (success) {
-      final int? sId = saleId ?? await _salesService.getVentaIdFromCuota(cuotaId);
+      final int? sId =
+          saleId ?? await _salesService.getVentaIdFromCuota(cuotaId);
       if (sId != null) {
         await syncSaleInMemory(sId);
       } else {
@@ -1043,7 +1211,8 @@ class SaleProvider with ChangeNotifier {
       calcularDesdeVencimiento: calcularDesdeVencimiento,
     );
     if (success) {
-      final int? sId = saleId ?? await _salesService.getVentaIdFromCuota(cuotaId);
+      final int? sId =
+          saleId ?? await _salesService.getVentaIdFromCuota(cuotaId);
       if (sId != null) {
         await syncSaleInMemory(sId);
       } else {
@@ -1053,7 +1222,15 @@ class SaleProvider with ChangeNotifier {
     return success;
   }
 
-  Future<void> evaluarMorosidadPeriodica({int? ventaId, int? clienteId, DateTime? referenceDate}) async {
-    await _salesService.evaluarMorosidadPeriodica(ventaId: ventaId, clienteId: clienteId, referenceDate: referenceDate);
+  Future<void> evaluarMorosidadPeriodica({
+    int? ventaId,
+    int? clienteId,
+    DateTime? referenceDate,
+  }) async {
+    await _salesService.evaluarMorosidadPeriodica(
+      ventaId: ventaId,
+      clienteId: clienteId,
+      referenceDate: referenceDate,
+    );
   }
 }

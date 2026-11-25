@@ -266,7 +266,7 @@ void main() {
       expect(find.text('Otorgar Préstamo'), findsWidgets);
       expect(find.text('Retirar Saldo'), findsOneWidget);
       expect(find.textContaining('En cuotas o pago único'), findsOneWidget);
-      expect(find.textContaining('Límite de Crédito Sugerido (Plata):'), findsOneWidget);
+      expect(find.textContaining('Límite de Crédito Sugerido:'), findsOneWidget);
       expect(find.text('Registrar Préstamo'), findsOneWidget);
 
       // Cambiar a Retirar Saldo

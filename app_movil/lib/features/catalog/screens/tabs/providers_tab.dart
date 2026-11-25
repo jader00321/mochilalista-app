@@ -9,9 +9,11 @@ import 'package:app_movil/core/widgets/sortable_toolbar.dart';
 import 'package:app_movil/core/widgets/custom_snackbar.dart';
 import 'package:app_movil/core/widgets/duplicate_warning_dialog.dart';
 import 'package:app_movil/core/widgets/duplicate_merge_modal.dart';
+import 'package:app_movil/core/widgets/tour/configs/inventory_tour.dart';
 
 class ProvidersTab extends StatefulWidget {
-  const ProvidersTab({super.key});
+  final InventoryTabTourKeys? tourKeys;
+  const ProvidersTab({super.key, this.tourKeys});
 
   @override
   State<ProvidersTab> createState() => _ProvidersTabState();
@@ -417,52 +419,60 @@ class _ProvidersTabState extends State<ProvidersTab> {
         return Scaffold(
           backgroundColor: Colors.transparent,
 
-          floatingActionButton: FloatingActionButton.extended(
-            onPressed: () =>
-                _showFormDialog(context, isDark: isDark, isGuest: isGuest),
-            label: Text(
-              "Nuevo Proveedor",
-              style: TextStyle(
-                color: isDark ? Colors.black87 : Colors.white,
-                fontWeight: FontWeight.bold,
+          floatingActionButton: KeyedSubtree(
+            key: widget.tourKeys?.providersFabKey,
+            child: FloatingActionButton.extended(
+              onPressed: () =>
+                  _showFormDialog(context, isDark: isDark, isGuest: isGuest),
+              label: Text(
+                "Nuevo Proveedor",
+                style: TextStyle(
+                  color: isDark ? Colors.black87 : Colors.white,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
+              icon: Icon(
+                Icons.add,
+                color: isDark ? Colors.black87 : Colors.white,
+              ),
+              backgroundColor: isDark ? Colors.purple[300] : Colors.purple[700],
             ),
-            icon: Icon(
-              Icons.add,
-              color: isDark ? Colors.black87 : Colors.white,
-            ),
-            backgroundColor: isDark ? Colors.purple[300] : Colors.purple[700],
           ),
 
           body: Column(
             children: [
-              SortableToolbar(
-                title: "${providers.length} Proveedores",
-                currentSort: provider.provSort,
-                isAscending: provider.provAsc,
-                onSortChanged: (type) => provider.sortProviders(type),
-                trailing: !isGuest
-                    ? IconButton(
-                        icon: Icon(
-                          Icons.find_replace,
-                          color: isDark ? Colors.purple[300] : Colors.purple[700],
-                          size: 19,
-                        ),
-                        tooltip: 'Detectar Duplicados',
-                        padding: EdgeInsets.zero,
-                        constraints: const BoxConstraints.tightFor(width: 32, height: 32),
-                        visualDensity: VisualDensity.compact,
-                        onPressed: () => DuplicateMergeModal.show(
-                          context,
-                          type: MergeEntityType.provider,
-                          isDark: isDark,
-                        ),
-                      )
-                    : null,
+              KeyedSubtree(
+                key: widget.tourKeys?.providersToolbarKey,
+                child: SortableToolbar(
+                  title: "${providers.length} Proveedores",
+                  currentSort: provider.provSort,
+                  isAscending: provider.provAsc,
+                  onSortChanged: (type) => provider.sortProviders(type),
+                  trailing: !isGuest
+                      ? IconButton(
+                          icon: Icon(
+                            Icons.find_replace,
+                            color: isDark ? Colors.purple[300] : Colors.purple[700],
+                            size: 19,
+                          ),
+                          tooltip: 'Detectar Duplicados',
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints.tightFor(width: 32, height: 32),
+                          visualDensity: VisualDensity.compact,
+                          onPressed: () => DuplicateMergeModal.show(
+                            context,
+                            type: MergeEntityType.provider,
+                            isDark: isDark,
+                          ),
+                        )
+                      : null,
+                ),
               ),
 
               Expanded(
-                child: RefreshIndicator(
+                child: KeyedSubtree(
+                  key: widget.tourKeys?.providersListKey,
+                  child: RefreshIndicator(
                   onRefresh: () async => await provider.loadMasterData(),
                   color: Colors.purple[700],
                   child: providers.isEmpty
@@ -617,6 +627,7 @@ class _ProvidersTabState extends State<ProvidersTab> {
                             );
                           },
                         ),
+                  ),
                 ),
               ),
             ],

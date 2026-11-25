@@ -10,9 +10,11 @@ import 'package:app_movil/core/widgets/custom_snackbar.dart';
 import 'package:app_movil/core/widgets/image_picker_field.dart';
 import 'package:app_movil/core/widgets/duplicate_warning_dialog.dart';
 import 'package:app_movil/core/widgets/duplicate_merge_modal.dart';
+import 'package:app_movil/core/widgets/tour/configs/inventory_tour.dart';
 
 class BrandsTab extends StatefulWidget {
-  const BrandsTab({super.key});
+  final InventoryTabTourKeys? tourKeys;
+  const BrandsTab({super.key, this.tourKeys});
 
   @override
   State<BrandsTab> createState() => _BrandsTabState();
@@ -115,52 +117,60 @@ class _BrandsTabState extends State<BrandsTab> {
         return Scaffold(
           backgroundColor: Colors.transparent,
 
-          floatingActionButton: FloatingActionButton.extended(
-            onPressed: () =>
-                _showFormDialog(context, isDark: isDark, isGuest: isGuest),
-            label: Text(
-              "Nueva Marca",
-              style: TextStyle(
-                color: isDark ? Colors.black87 : Colors.white,
-                fontWeight: FontWeight.bold,
+          floatingActionButton: KeyedSubtree(
+            key: widget.tourKeys?.brandsFabKey,
+            child: FloatingActionButton.extended(
+              onPressed: () =>
+                  _showFormDialog(context, isDark: isDark, isGuest: isGuest),
+              label: Text(
+                "Nueva Marca",
+                style: TextStyle(
+                  color: isDark ? Colors.black87 : Colors.white,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
+              icon: Icon(
+                Icons.add,
+                color: isDark ? Colors.black87 : Colors.white,
+              ),
+              backgroundColor: isDark ? Colors.orange[300] : Colors.orange[800],
             ),
-            icon: Icon(
-              Icons.add,
-              color: isDark ? Colors.black87 : Colors.white,
-            ),
-            backgroundColor: isDark ? Colors.orange[300] : Colors.orange[800],
           ),
 
           body: Column(
             children: [
-              SortableToolbar(
-                title: "${brands.length} Marcas",
-                currentSort: provider.brandSort,
-                isAscending: provider.brandAsc,
-                onSortChanged: (type) => provider.sortBrands(type),
-                trailing: !isGuest
-                    ? IconButton(
-                        icon: Icon(
-                          Icons.find_replace,
-                          color: isDark ? Colors.orange[300] : Colors.orange[800],
-                          size: 19,
-                        ),
-                        tooltip: 'Detectar Duplicados',
-                        padding: EdgeInsets.zero,
-                        constraints: const BoxConstraints.tightFor(width: 32, height: 32),
-                        visualDensity: VisualDensity.compact,
-                        onPressed: () => DuplicateMergeModal.show(
-                          context,
-                          type: MergeEntityType.brand,
-                          isDark: isDark,
-                        ),
-                      )
-                    : null,
+              KeyedSubtree(
+                key: widget.tourKeys?.brandsToolbarKey,
+                child: SortableToolbar(
+                  title: "${brands.length} Marcas",
+                  currentSort: provider.brandSort,
+                  isAscending: provider.brandAsc,
+                  onSortChanged: (type) => provider.sortBrands(type),
+                  trailing: !isGuest
+                      ? IconButton(
+                          icon: Icon(
+                            Icons.find_replace,
+                            color: isDark ? Colors.orange[300] : Colors.orange[800],
+                            size: 19,
+                          ),
+                          tooltip: 'Detectar Duplicados',
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints.tightFor(width: 32, height: 32),
+                          visualDensity: VisualDensity.compact,
+                          onPressed: () => DuplicateMergeModal.show(
+                            context,
+                            type: MergeEntityType.brand,
+                            isDark: isDark,
+                          ),
+                        )
+                      : null,
+                ),
               ),
 
               Expanded(
-                child: RefreshIndicator(
+                child: KeyedSubtree(
+                  key: widget.tourKeys?.brandsListKey,
+                  child: RefreshIndicator(
                   onRefresh: () async => await provider.loadMasterData(),
                   color: Colors.orange[800],
                   child: brands.isEmpty
@@ -299,6 +309,7 @@ class _BrandsTabState extends State<BrandsTab> {
                             );
                           },
                         ),
+                ),
                 ),
               ),
             ],

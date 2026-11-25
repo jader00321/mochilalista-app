@@ -305,22 +305,31 @@ class _ProductDetailStockAlertState extends State<ProductDetailStockAlert> {
             ),
           ),
           const SizedBox(width: 8),
-          ElevatedButton.icon(
-            onPressed: widget.onRestock,
-            icon: const Icon(Icons.add_business, size: 16),
-            label: const Text(
-              "Abastecer",
-              style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
-            ),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: isZero ? Colors.red[700] : Colors.orange[800],
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
+          Flexible(
+            flex: 0,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 108),
+              child: ElevatedButton.icon(
+                onPressed: widget.onRestock,
+                icon: const Icon(Icons.add_business, size: 15),
+                label: const FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    "Abastecer",
+                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                  ),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: isZero ? Colors.red[700] : Colors.orange[800],
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  elevation: 0,
+                  visualDensity: VisualDensity.compact,
+                ),
               ),
-              elevation: 0,
-              visualDensity: VisualDensity.compact,
             ),
           ),
           const SizedBox(width: 4),

@@ -320,35 +320,45 @@ class _PdfPreviewScreenState extends State<PdfPreviewScreen> with SingleTickerPr
     return Scaffold(
       backgroundColor: bgColor,
       appBar: AppBar(
-        title: const Text("Vista Previa PDF", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 19)),
+        titleSpacing: 0,
+        title: const FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: Alignment.centerLeft,
+          child: Text(
+            "Vista Previa PDF",
+            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 19),
+          ),
+        ),
         backgroundColor: isDark ? const Color(0xFF14141E) : Colors.blue[900],
         foregroundColor: Colors.white,
         elevation: 0,
         actions: [
           const InfoTooltipButton(
             iconColor: Colors.white,
+            constraints: BoxConstraints(minWidth: 32, minHeight: 32),
+            padding: EdgeInsets.all(6),
             title: "Guía de Vista Previa PDF",
-            description: "Personaliza y genera documentos comerciales en alta definición, listos para imprimir en impresoras térmicas POS o compartir en formato ejecutivo.",
+            description: "Personaliza y genera proformas, comprobantes de venta y estados de cuotas en alta definición para imprimir o compartir.",
             tips: [
               InfoTip(
                 icon: Icons.aspect_ratio_rounded,
-                text: "Cambia entre Hoja A4 ejecutiva y Ticket térmico continuo de 80mm para impresoras POS.",
+                text: "Alterna entre Hoja A4 ejecutiva y Ticket térmico continuo de 80mm según tu impresora POS configurada.",
               ),
               InfoTip(
                 icon: Icons.dashboard_customize_outlined,
-                text: "Elige entre 4 plantillas estructurales y 6 paletas de color con opción de guardado por defecto.",
+                text: "Elige entre 4 plantillas estructurales y 6 paletas de color con guardado como formato predeterminado.",
               ),
               InfoTip(
                 icon: Icons.pinch_outlined,
-                text: "Haz zoom libre con dos dedos o doble toque en cualquier parte del visor para revisar detalles.",
+                text: "Haz zoom libre con dos dedos o doble toque en cualquier parte del visor para comprobar importes y cronogramas.",
               ),
               InfoTip(
                 icon: Icons.person_search_outlined,
-                text: "Busca clientes en tu agenda o personaliza notas y cuentas de cobro al pie antes de generar.",
+                text: "Vincula clientes CRM o ajusta condiciones y cuentas de cobro al pie antes de exportar.",
               ),
               InfoTip(
                 icon: Icons.share_outlined,
-                text: "Descarga el archivo PDF directamente en Descargas, imprímelo por Bluetooth/WiFi o compártelo al instante.",
+                text: "Guarda el PDF en Descargas, imprime directo por Bluetooth/WiFi o compártelo al instante.",
               ),
             ],
           ),

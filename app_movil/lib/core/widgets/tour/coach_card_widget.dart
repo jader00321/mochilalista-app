@@ -150,13 +150,28 @@ class CoachCardWidget extends StatelessWidget {
 
     final isLastStep = currentIndex >= totalSteps - 1;
     final media = MediaQuery.of(context);
-    final viewportSize = media.size;
 
-    final localArrowCenterX = (layout.arrowCenterX - layout.cardLeft).clamp(
-      16.0,
-      math.max(16.0, layout.cardWidth - 16.0),
-    );
-    final arrowLeft = math.max(0.0, localArrowCenterX - 10.0);
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final Size viewportSize =
+            (constraints.hasBoundedWidth &&
+                    constraints.hasBoundedHeight &&
+                    constraints.maxWidth.isFinite &&
+                    constraints.maxHeight.isFinite &&
+                    !constraints.biggest.isEmpty)
+                ? constraints.biggest
+                : (!media.size.isEmpty
+                    ? media.size
+                    : Size(
+                        layout.cardLeft * 2 + layout.cardWidth,
+                        math.max(layout.cardTop + layout.maxCardHeight + 24.0, 480.0),
+                      ));
+
+        final localArrowCenterX = (layout.arrowCenterX - layout.cardLeft).clamp(
+          16.0,
+          math.max(16.0, layout.cardWidth - 16.0),
+        );
+        final arrowLeft = math.max(0.0, localArrowCenterX - 10.0);
 
     Widget buildArrow(bool isPointingUp) {
       return SizedBox(
@@ -434,19 +449,44 @@ class CoachCardWidget extends StatelessWidget {
     );
 
     final hasTarget = layout.targetRect != Rect.zero && !layout.targetRect.isEmpty;
+    final double safeTopMargin = media.viewPadding.top + 10.0;
+    final double safeBottomMargin = math.max(
+          media.viewPadding.bottom,
+          media.viewInsets.bottom,
+        ) +
+        12.0;
+    final double maxBottomMargin = math.max(
+      safeBottomMargin,
+      viewportSize.height - safeTopMargin - 120.0,
+    );
+    final double maxTopOffset = math.max(
+      safeTopMargin,
+      viewportSize.height - safeBottomMargin - 120.0,
+    );
+    final double arrowAllowance = layout.showArrow ? 10.0 : 0.0;
 
     switch (layout.placement) {
       case CoachCardPlacement.above:
+        final double rawBottom = hasTarget
+            ? (viewportSize.height - layout.targetRect.top + 4.0)
+            : (viewportSize.height - layout.cardTop - layout.maxCardHeight);
+        final double clampedBottom =
+            rawBottom.clamp(safeBottomMargin, maxBottomMargin).toDouble();
+        final double boundedMaxHeight = math.min(
+          layout.maxCardHeight + arrowAllowance,
+          math.max(
+            120.0 + arrowAllowance,
+            viewportSize.height - clampedBottom - safeTopMargin,
+          ),
+        );
         return Stack(
           children: [
             Positioned(
               left: layout.cardLeft,
               width: layout.cardWidth,
-              bottom: hasTarget
-                  ? (viewportSize.height - layout.targetRect.top + 4.0)
-                  : (viewportSize.height - layout.cardTop - layout.maxCardHeight),
+              bottom: clampedBottom,
               child: ConstrainedBox(
-                constraints: BoxConstraints(maxHeight: layout.maxCardHeight),
+                constraints: BoxConstraints(maxHeight: boundedMaxHeight),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -461,16 +501,26 @@ class CoachCardWidget extends StatelessWidget {
         );
 
       case CoachCardPlacement.below:
+        final double rawTop = hasTarget
+            ? (layout.targetRect.bottom + 4.0)
+            : layout.cardTop;
+        final double clampedTop =
+            rawTop.clamp(safeTopMargin, maxTopOffset).toDouble();
+        final double boundedMaxHeight = math.min(
+          layout.maxCardHeight + arrowAllowance,
+          math.max(
+            120.0 + arrowAllowance,
+            viewportSize.height - safeBottomMargin - clampedTop,
+          ),
+        );
         return Stack(
           children: [
             Positioned(
               left: layout.cardLeft,
               width: layout.cardWidth,
-              top: hasTarget
-                  ? (layout.targetRect.bottom + 4.0)
-                  : layout.cardTop,
+              top: clampedTop,
               child: ConstrainedBox(
-                constraints: BoxConstraints(maxHeight: layout.maxCardHeight),
+                constraints: BoxConstraints(maxHeight: boundedMaxHeight),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -499,6 +549,8 @@ class CoachCardWidget extends StatelessWidget {
           ],
         );
     }
+      },
+    );
   }
 }
 

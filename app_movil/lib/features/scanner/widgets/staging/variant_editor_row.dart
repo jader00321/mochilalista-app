@@ -1025,7 +1025,13 @@ class VariantEditorRowState extends State<VariantEditorRow> {
                     children: [
                       Icon(Icons.inventory_2_outlined, size: 15, color: widget.isDark ? Colors.blue[300] : Colors.blue[700]),
                       const SizedBox(width: 6),
-                      Text("Identificación", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: widget.isDark ? Colors.blue[300] : Colors.blue[700])),
+                      Flexible(
+                        child: FittedBox(
+                          fit: BoxFit.scaleDown,
+                          alignment: Alignment.centerLeft,
+                          child: Text("Identificación", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: widget.isDark ? Colors.blue[300] : Colors.blue[700])),
+                        ),
+                      ),
                     ],
                   ),
                 // 1. Nombre
@@ -1284,7 +1290,13 @@ class VariantEditorRowState extends State<VariantEditorRow> {
                           children: [
                             Icon(Icons.sell_outlined, size: 15, color: widget.isDark ? Colors.blue[300] : Colors.blue[700]),
                             const SizedBox(width: 6),
-                            Text("Venta y Precio", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: widget.isDark ? Colors.blue[300] : Colors.blue[700])),
+                            Flexible(
+                              child: FittedBox(
+                                fit: BoxFit.scaleDown,
+                                alignment: Alignment.centerLeft,
+                                child: Text("Venta y Precio", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: widget.isDark ? Colors.blue[300] : Colors.blue[700])),
+                              ),
+                            ),
                           ],
                         ),
                         const SizedBox(height: 8),

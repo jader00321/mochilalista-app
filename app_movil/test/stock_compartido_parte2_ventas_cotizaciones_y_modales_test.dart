@@ -90,6 +90,7 @@ void main() {
           categoria_id INTEGER,
           marca_id INTEGER,
           unidad_medida TEXT,
+          fecha_creacion TEXT,
           estado TEXT DEFAULT 'activo'
         )
       ''');
@@ -189,6 +190,7 @@ void main() {
           numero_cuota INTEGER,
           monto REAL,
           monto_pagado REAL DEFAULT 0.00,
+          mora_automatica INTEGER DEFAULT 0,
           fecha_vencimiento TEXT,
           estado TEXT DEFAULT 'pendiente'
         )
@@ -221,6 +223,8 @@ void main() {
           leida INTEGER DEFAULT 0,
           objeto_relacionado_tipo TEXT,
           objeto_relacionado_id INTEGER,
+          is_resolved INTEGER DEFAULT 0,
+          fecha_resolucion TEXT,
           fecha_creacion TEXT
         )
       ''');

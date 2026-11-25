@@ -170,8 +170,8 @@ void main() {
       await tester.pump(const Duration(milliseconds: 300));
       await tester.pump(const Duration(milliseconds: 300));
 
-      // 1. Región mostrada completa sin "Talara / Pi..."
-      expect(find.text("Talara / Piura"), findsWidgets);
+      // 1. Región normalizada mostrada completa sin truncar ("Talara, Piura")
+      expect(find.text("Talara, Piura"), findsWidgets);
       expect(find.textContaining("Talara / Pi..."), findsNothing);
 
       // 2. Semáforo de Pulso Operativo presente en la cabecera

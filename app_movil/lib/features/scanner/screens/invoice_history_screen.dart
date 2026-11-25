@@ -77,25 +77,35 @@ class _InvoiceHistoryScreenState extends State<InvoiceHistoryScreen> {
     return Scaffold(
       backgroundColor: bgColor,
       appBar: AppBar(
-        title: const Text("Historial de Facturas", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+        titleSpacing: 0,
+        title: const FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Text(
+            "Historial de Facturas",
+            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+          ),
+        ),
         centerTitle: true,
         backgroundColor: isDark ? const Color(0xFF1A1A24) : Colors.teal[800],
         foregroundColor: Colors.white,
         elevation: 0,
         actions: [
-          InfoTooltipButton(
+          const InfoTooltipButton(
             iconColor: Colors.white70,
+            constraints: BoxConstraints(minWidth: 32, minHeight: 32),
+            padding: EdgeInsets.all(6),
             title: 'Historial de Facturas',
-            description: 'Aquí se almacenan todas las facturas de proveedores que han sido procesadas por la IA o creadas manualmente. Cada factura contiene los productos y presentaciones que registraste.',
-            tips: const [
-              InfoTip(icon: Icons.camera_alt, text: 'Las facturas con 📷 fueron escaneadas con IA. Las con ✍️ fueron creadas manualmente.'),
-              InfoTip(icon: Icons.touch_app, text: 'Toca una factura para ver su detalle completo con todos los productos vinculados.'),
-              InfoTip(icon: Icons.warning_amber, text: 'Las facturas en "Revisión" tienen ítems pendientes de verificar o vincular.'),
-              InfoTip(icon: Icons.refresh, text: 'Usa el botón de actualizar para recargar el historial.'),
+            description: 'Centraliza todas las facturas y comprobantes de compra procesados con IA o ingresados manualmente con su proveedor y costos.',
+            tips: [
+              InfoTip(icon: Icons.auto_awesome_rounded, text: 'Las facturas con insignia Escaneada IA incluyen trazabilidad automática de la foto original.'),
+              InfoTip(icon: Icons.edit_note_rounded, text: 'Las facturas marcadas como Manual reflejan compras o cargas creadas directamente sin escaneo.'),
+              InfoTip(icon: Icons.touch_app_rounded, text: 'Toca cualquier comprobante para inspeccionar su visor dividido y presentaciones vinculadas.'),
+              InfoTip(icon: Icons.refresh_rounded, text: 'Usa el botón de actualizar si acabas de confirmar una clasificación en inventario.'),
             ],
           ),
           IconButton(
             icon: const Icon(Icons.refresh),
+            visualDensity: VisualDensity.compact,
             onPressed: () => invcProv.fetchInvoices(reset: true),
           )
         ],

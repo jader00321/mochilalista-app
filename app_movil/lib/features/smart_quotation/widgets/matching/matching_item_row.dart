@@ -872,23 +872,28 @@ class _MatchingItemRowState extends State<MatchingItemRow> {
                     ),
                   )
                 else
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 6,
-                    ),
-                    decoration: BoxDecoration(
-                      color: isDark
-                          ? Colors.blue.withValues(alpha: 0.1)
-                          : Colors.blue[50],
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Text(
-                      "${widget.pair.selectedQuantity} uds.",
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 13,
-                        color: isDark ? Colors.blue[300] : Colors.blue[800],
+                  Flexible(
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 6,
+                      ),
+                      decoration: BoxDecoration(
+                        color: isDark
+                            ? Colors.blue.withValues(alpha: 0.1)
+                            : Colors.blue[50],
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text(
+                          "${widget.pair.selectedQuantity} uds.",
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 13,
+                            color: isDark ? Colors.blue[300] : Colors.blue[800],
+                          ),
+                        ),
                       ),
                     ),
                   ),

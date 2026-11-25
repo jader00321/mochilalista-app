@@ -46,20 +46,30 @@ class _LedgerTimelineTabState extends State<LedgerTimelineTab> {
 
     if (rawLedger.isEmpty) {
       return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.history_toggle_off, size: 80, color: isDark ? Colors.white10 : Colors.grey[300]),
-            const SizedBox(height: 16),
-            Text(
-              "No hay movimientos registrados",
-              style: TextStyle(
-                color: isDark ? Colors.grey[500] : Colors.grey,
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
+        child: SingleChildScrollView(
+          physics: const ClampingScrollPhysics(),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                Icons.history_toggle_off,
+                size: 56,
+                color: isDark ? Colors.white10 : Colors.grey[300],
               ),
-            ),
-          ],
+              const SizedBox(height: 12),
+              Text(
+                "No hay movimientos registrados",
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: isDark ? Colors.grey[500] : Colors.grey,
+                  fontSize: 15,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
         ),
       );
     }

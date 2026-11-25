@@ -79,8 +79,8 @@ void main() {
 
       await tester.pumpAndSettle();
 
-      // Cambiamos a la pestaña Préstamo (donde están los motivos)
-      await tester.tap(find.text("Préstamo"));
+      // Cambiamos a la pestaña Otorgar Préstamo (donde están los motivos)
+      await tester.tap(find.text("Otorgar Préstamo"));
       await tester.pumpAndSettle();
 
       // Buscamos SingleChildScrollView horizontal
@@ -130,8 +130,8 @@ void main() {
 
       await tester.pumpAndSettle();
 
-      // Cambiamos a la pestaña Préstamo
-      await tester.tap(find.text("Préstamo"));
+      // Cambiamos a la pestaña Otorgar Préstamo
+      await tester.tap(find.text("Otorgar Préstamo"));
       await tester.pumpAndSettle();
 
       // Aseguramos visibilidad del chip
@@ -190,8 +190,8 @@ void main() {
 
       await tester.pumpAndSettle();
 
-      // Cambiamos a la pestaña Préstamo
-      await tester.tap(find.text("Préstamo"));
+      // Cambiamos a la pestaña Otorgar Préstamo
+      await tester.tap(find.text("Otorgar Préstamo"));
       await tester.pumpAndSettle();
 
       // Activar división en cuotas

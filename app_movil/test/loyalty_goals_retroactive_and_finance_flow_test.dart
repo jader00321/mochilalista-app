@@ -392,8 +392,10 @@ void main() {
       );
       await tester.pump();
 
-      // Debe detectar la cuota vencida y mostrar el límite congelado en S/ 0.00
+      // Debe detectar la cuota vencida, mostrar título resumido y detalle al expandir
       expect(find.textContaining('Límite Congelado: S/ 0.00 (Mora Activa)'), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('loan_credit_limit_card_toggle')));
+      await tester.pumpAndSettle();
       expect(find.textContaining('cuota vencida'), findsOneWidget);
       // Cero emojis Unicode en la tarjeta de mora (usa Icons.warning_amber_rounded)
       expect(find.byIcon(Icons.warning_amber_rounded), findsWidgets);
@@ -425,6 +427,8 @@ void main() {
       await tester.pump();
 
       expect(find.textContaining('Retiro Válido: S/ 50.00'), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('withdraw_balance_card_toggle')));
+      await tester.pumpAndSettle();
       expect(find.textContaining('nuevo saldo a favor de Jj será de S/ 100.00'), findsOneWidget);
 
       // Escribir monto que supera el saldo (S/ 200.00)
@@ -485,7 +489,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 100));
 
       // Scroll hacia abajo para ubicar el cronograma
-      await tester.drag(find.text('Registrar Préstamo o Venta al Fiado'), const Offset(0, -600));
+      await tester.drag(find.byType(ListView).first, const Offset(0, -600));
       await tester.pump(const Duration(milliseconds: 100));
       await tester.drag(find.byType(ListView).first, const Offset(0, -600));
       await tester.pump(const Duration(milliseconds: 100));

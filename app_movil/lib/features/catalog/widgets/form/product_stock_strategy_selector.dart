@@ -1,11 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-enum StockAdvisorState {
-  hidden,
-  recommendation,
-  mandatory,
-}
+enum StockAdvisorState { hidden, recommendation, mandatory }
 
 class ProductStockStrategySelector extends StatefulWidget {
   final String selectedStrategy; // 'INDEPENDIENTE', 'COMPARTIDO', 'MIXTO'
@@ -18,6 +14,7 @@ class ProductStockStrategySelector extends StatefulWidget {
   final int? originalBaseStock;
   final List<Map<String, dynamic>>? controllers;
   final VoidCallback? onAutoCreateUnitVariant;
+  final Key? baseCostKey;
 
   const ProductStockStrategySelector({
     super.key,
@@ -31,6 +28,7 @@ class ProductStockStrategySelector extends StatefulWidget {
     this.originalBaseStock,
     this.controllers,
     this.onAutoCreateUnitVariant,
+    this.baseCostKey,
   });
 
   @override
@@ -57,7 +55,9 @@ class _ProductStockStrategySelectorState
       widget.sharedStockController.addListener(_onSharedStockChanged);
     }
     if (oldWidget.sharedIngresoController != widget.sharedIngresoController) {
-      oldWidget.sharedIngresoController?.removeListener(_onSharedIngresoChanged);
+      oldWidget.sharedIngresoController?.removeListener(
+        _onSharedIngresoChanged,
+      );
       widget.sharedIngresoController?.addListener(_onSharedIngresoChanged);
     }
   }
@@ -80,14 +80,21 @@ class _ProductStockStrategySelectorState
 
   void _syncSharedVariantsAfterBaseStockChange() {
     if (widget.controllers == null || widget.controllers!.isEmpty) return;
-    final int newBaseStock = int.tryParse(widget.sharedStockController.text.trim()) ?? 0;
+    final int newBaseStock =
+        int.tryParse(widget.sharedStockController.text.trim()) ?? 0;
 
     for (final c in widget.controllers!) {
-      final bool isShared = widget.selectedStrategy == 'COMPARTIDO' ||
-          (widget.selectedStrategy == 'MIXTO' && c['usaStockCompartido'] == true);
+      final bool isShared =
+          widget.selectedStrategy == 'COMPARTIDO' ||
+          (widget.selectedStrategy == 'MIXTO' &&
+              c['usaStockCompartido'] == true);
       if (!isShared) continue;
 
-      final factor = int.tryParse((c['unidadesVenta'] as TextEditingController?)?.text ?? '1') ?? 1;
+      final factor =
+          int.tryParse(
+            (c['unidadesVenta'] as TextEditingController?)?.text ?? '1',
+          ) ??
+          1;
       final safeFactor = factor <= 0 ? 1 : factor;
       final maxFisico = newBaseStock ~/ safeFactor;
 
@@ -110,7 +117,8 @@ class _ProductStockStrategySelectorState
   }
 
   StockAdvisorState _evaluateStockAdvisor() {
-    if (widget.selectedStrategy != 'COMPARTIDO' && widget.selectedStrategy != 'MIXTO') {
+    if (widget.selectedStrategy != 'COMPARTIDO' &&
+        widget.selectedStrategy != 'MIXTO') {
       return StockAdvisorState.hidden;
     }
     if (widget.controllers == null || widget.controllers!.isEmpty) {
@@ -118,21 +126,30 @@ class _ProductStockStrategySelectorState
     }
 
     final sharedItems = widget.controllers!.where((c) {
-      if (widget.selectedStrategy == 'COMPARTIDO') return true;
-      if (widget.selectedStrategy == 'MIXTO') return c['usaStockCompartido'] == true;
+      if (widget.selectedStrategy == 'COMPARTIDO') {
+        return true;
+      }
+      if (widget.selectedStrategy == 'MIXTO') {
+        return c['usaStockCompartido'] == true;
+      }
       return false;
     }).toList();
 
     if (sharedItems.isEmpty) return StockAdvisorState.hidden;
 
-    final int stockBaseTotal = int.tryParse(widget.sharedStockController.text.trim()) ?? 0;
+    final int stockBaseTotal =
+        int.tryParse(widget.sharedStockController.text.trim()) ?? 0;
     if (stockBaseTotal <= 0) return StockAdvisorState.hidden;
 
     // Regla 1: Caso A (Oculto)
     // Si al menos una variante compartida activa divide exactamente las unidades base
     // (stockBaseTotal >= factor && stockBaseTotal % factor == 0)
     final hasExactDivisor = sharedItems.any((c) {
-      final factor = int.tryParse((c['unidadesVenta'] as TextEditingController?)?.text ?? '1') ?? 1;
+      final factor =
+          int.tryParse(
+            (c['unidadesVenta'] as TextEditingController?)?.text ?? '1',
+          ) ??
+          1;
       final safeFactor = factor <= 0 ? 1 : factor;
       return stockBaseTotal >= safeFactor && (stockBaseTotal % safeFactor == 0);
     });
@@ -144,7 +161,11 @@ class _ProductStockStrategySelectorState
     // Regla 3: Caso C (Obligatorio)
     // Si en TODAS las variantes compartidas stockBaseTotal < factor (0 paquetes vendibles en todas)
     final allZeroFormable = sharedItems.every((c) {
-      final factor = int.tryParse((c['unidadesVenta'] as TextEditingController?)?.text ?? '1') ?? 1;
+      final factor =
+          int.tryParse(
+            (c['unidadesVenta'] as TextEditingController?)?.text ?? '1',
+          ) ??
+          1;
       final safeFactor = factor <= 0 ? 1 : factor;
       return stockBaseTotal < safeFactor;
     });
@@ -220,17 +241,26 @@ class _ProductStockStrategySelectorState
                   ],
                 ),
               ),
-              if (showAdvisor && _isAdvisorDismissed && advisorState != StockAdvisorState.mandatory)
+              if (showAdvisor &&
+                  _isAdvisorDismissed &&
+                  advisorState != StockAdvisorState.mandatory)
                 InkWell(
                   onTap: () => setState(() => _isAdvisorDismissed = false),
                   borderRadius: BorderRadius.circular(8),
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
                     decoration: BoxDecoration(
-                      color: isDark ? Colors.purple.withValues(alpha: 0.25) : const Color(0xFFF3E8FF),
+                      color: isDark
+                          ? Colors.purple.withValues(alpha: 0.25)
+                          : const Color(0xFFF3E8FF),
                       borderRadius: BorderRadius.circular(8),
                       border: Border.all(
-                        color: isDark ? Colors.purple.withValues(alpha: 0.5) : const Color(0xFFD8B4FE),
+                        color: isDark
+                            ? Colors.purple.withValues(alpha: 0.5)
+                            : const Color(0xFFD8B4FE),
                       ),
                     ),
                     child: Row(
@@ -239,7 +269,9 @@ class _ProductStockStrategySelectorState
                         Icon(
                           Icons.lightbulb_outline_rounded,
                           size: 13,
-                          color: isDark ? Colors.purple[300] : Colors.purple[800],
+                          color: isDark
+                              ? Colors.purple[300]
+                              : Colors.purple[800],
                         ),
                         const SizedBox(width: 4),
                         Text(
@@ -247,7 +279,9 @@ class _ProductStockStrategySelectorState
                           style: TextStyle(
                             fontSize: 11,
                             fontWeight: FontWeight.bold,
-                            color: isDark ? Colors.purple[200] : Colors.purple[900],
+                            color: isDark
+                                ? Colors.purple[200]
+                                : Colors.purple[900],
                           ),
                         ),
                       ],
@@ -263,7 +297,9 @@ class _ProductStockStrategySelectorState
             decoration: BoxDecoration(
               color: isDark ? Colors.black26 : Colors.grey.shade100,
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: isDark ? Colors.white10 : Colors.grey.shade200),
+              border: Border.all(
+                color: isDark ? Colors.white10 : Colors.grey.shade200,
+              ),
             ),
             padding: const EdgeInsets.all(4),
             child: Row(
@@ -293,14 +329,19 @@ class _ProductStockStrategySelectorState
           const SizedBox(height: 12),
 
           // Panel contextual según la estrategia seleccionada
-          if (widget.selectedStrategy == 'COMPARTIDO' || widget.selectedStrategy == 'MIXTO') ...[
+          if (widget.selectedStrategy == 'COMPARTIDO' ||
+              widget.selectedStrategy == 'MIXTO') ...[
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: isDark ? const Color(0xFF262C3A) : const Color(0xFFF0F7FF),
+                color: isDark
+                    ? const Color(0xFF262C3A)
+                    : const Color(0xFFF0F7FF),
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(
-                  color: isDark ? Colors.blue.withValues(alpha: 0.3) : const Color(0xFFBFDBFE),
+                  color: isDark
+                      ? Colors.blue.withValues(alpha: 0.3)
+                      : const Color(0xFFBFDBFE),
                 ),
               ),
               child: Column(
@@ -311,7 +352,9 @@ class _ProductStockStrategySelectorState
                       Icon(
                         Icons.info_outline_rounded,
                         size: 16,
-                        color: isDark ? Colors.blue[300] : const Color(0xFF2563EB),
+                        color: isDark
+                            ? Colors.blue[300]
+                            : const Color(0xFF2563EB),
                       ),
                       const SizedBox(width: 6),
                       Expanded(
@@ -322,7 +365,9 @@ class _ProductStockStrategySelectorState
                           style: TextStyle(
                             fontSize: 12,
                             fontWeight: FontWeight.w600,
-                            color: isDark ? Colors.blue[200] : const Color(0xFF1E40AF),
+                            color: isDark
+                                ? Colors.blue[200]
+                                : const Color(0xFF1E40AF),
                           ),
                         ),
                       ),
@@ -346,21 +391,33 @@ class _ProductStockStrategySelectorState
                                 style: TextStyle(
                                   fontSize: 12,
                                   fontWeight: FontWeight.bold,
-                                  color: isDark ? Colors.grey[300] : Colors.grey[700],
+                                  color: isDark
+                                      ? Colors.grey[300]
+                                      : Colors.grey[700],
                                 ),
                               ),
                               const SizedBox(height: 4),
                               TextFormField(
                                 controller: widget.sharedStockController,
                                 keyboardType: TextInputType.number,
-                                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                                inputFormatters: [
+                                  FilteringTextInputFormatter.digitsOnly,
+                                ],
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 15,
+                                ),
                                 decoration: InputDecoration(
                                   hintText: "0",
                                   suffixText: "und",
                                   isDense: true,
-                                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                                  contentPadding: const EdgeInsets.symmetric(
+                                    horizontal: 12,
+                                    vertical: 10,
+                                  ),
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
                                 ),
                               ),
                             ],
@@ -369,34 +426,52 @@ class _ProductStockStrategySelectorState
                         const SizedBox(width: 10),
                         Expanded(
                           flex: 3,
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                "Costo Base Unitario",
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.bold,
-                                  color: isDark ? Colors.grey[300] : Colors.grey[700],
+                          child: KeyedSubtree(
+                            key: widget.baseCostKey,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  "Costo Base Unitario",
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.bold,
+                                    color: isDark
+                                        ? Colors.grey[300]
+                                        : Colors.grey[700],
+                                  ),
                                 ),
-                              ),
-                              const SizedBox(height: 4),
-                              TextFormField(
-                                controller: widget.baseCostController,
-                                keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                                inputFormatters: [
-                                  FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,4}')),
-                                ],
-                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
-                                decoration: InputDecoration(
-                                  prefixText: "S/ ",
-                                  hintText: "0.00",
-                                  isDense: true,
-                                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                                const SizedBox(height: 4),
+                                TextFormField(
+                                  controller: widget.baseCostController,
+                                  keyboardType:
+                                      const TextInputType.numberWithOptions(
+                                        decimal: true,
+                                      ),
+                                  inputFormatters: [
+                                    FilteringTextInputFormatter.allow(
+                                      RegExp(r'^\d*\.?\d{0,4}'),
+                                    ),
+                                  ],
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 15,
+                                  ),
+                                  decoration: InputDecoration(
+                                    prefixText: "S/ ",
+                                    hintText: "0.00",
+                                    isDense: true,
+                                    contentPadding: const EdgeInsets.symmetric(
+                                      horizontal: 12,
+                                      vertical: 10,
+                                    ),
+                                    border: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                  ),
                                 ),
-                              ),
-                            ],
+                              ],
+                            ),
                           ),
                         ),
                       ],
@@ -420,24 +495,37 @@ class _ProductStockStrategySelectorState
                                 style: TextStyle(
                                   fontSize: 11.5,
                                   fontWeight: FontWeight.bold,
-                                  color: isDark ? Colors.grey[400] : Colors.grey[600],
+                                  color: isDark
+                                      ? Colors.grey[400]
+                                      : Colors.grey[600],
                                 ),
                               ),
                               const SizedBox(height: 4),
                               Container(
                                 width: double.infinity,
-                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 10,
+                                  vertical: 10,
+                                ),
                                 decoration: BoxDecoration(
-                                  color: isDark ? Colors.black26 : Colors.grey.shade200,
+                                  color: isDark
+                                      ? Colors.black26
+                                      : Colors.grey.shade200,
                                   borderRadius: BorderRadius.circular(8),
-                                  border: Border.all(color: isDark ? Colors.white12 : Colors.grey.shade300),
+                                  border: Border.all(
+                                    color: isDark
+                                        ? Colors.white12
+                                        : Colors.grey.shade300,
+                                  ),
                                 ),
                                 child: Text(
                                   "${widget.originalBaseStock ?? 0} und",
                                   style: TextStyle(
                                     fontWeight: FontWeight.bold,
                                     fontSize: 14,
-                                    color: isDark ? Colors.grey[300] : Colors.grey[800],
+                                    color: isDark
+                                        ? Colors.grey[300]
+                                        : Colors.grey[800],
                                   ),
                                 ),
                               ),
@@ -456,15 +544,22 @@ class _ProductStockStrategySelectorState
                                 style: TextStyle(
                                   fontSize: 11.5,
                                   fontWeight: FontWeight.bold,
-                                  color: isDark ? Colors.blue[300] : const Color(0xFF1E40AF),
+                                  color: isDark
+                                      ? Colors.blue[300]
+                                      : const Color(0xFF1E40AF),
                                 ),
                               ),
                               const SizedBox(height: 4),
                               TextFormField(
                                 controller: widget.sharedIngresoController,
                                 keyboardType: TextInputType.number,
-                                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                                inputFormatters: [
+                                  FilteringTextInputFormatter.digitsOnly,
+                                ],
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 14,
+                                ),
                                 onChanged: (val) {
                                   _updateSharedStockFromIngreso();
                                 },
@@ -472,8 +567,13 @@ class _ProductStockStrategySelectorState
                                   hintText: "0",
                                   suffixText: "und",
                                   isDense: true,
-                                  contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-                                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                                  contentPadding: const EdgeInsets.symmetric(
+                                    horizontal: 10,
+                                    vertical: 10,
+                                  ),
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
                                 ),
                               ),
                             ],
@@ -491,24 +591,39 @@ class _ProductStockStrategySelectorState
                                 style: TextStyle(
                                   fontSize: 11.5,
                                   fontWeight: FontWeight.bold,
-                                  color: isDark ? Colors.teal[300] : const Color(0xFF0F766E),
+                                  color: isDark
+                                      ? Colors.teal[300]
+                                      : const Color(0xFF0F766E),
                                 ),
                               ),
                               const SizedBox(height: 4),
                               Container(
                                 width: double.infinity,
-                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 10,
+                                  vertical: 10,
+                                ),
                                 decoration: BoxDecoration(
-                                  color: isDark ? const Color(0xFF134E4A).withValues(alpha: 0.5) : const Color(0xFFCCFBF1),
+                                  color: isDark
+                                      ? const Color(
+                                          0xFF134E4A,
+                                        ).withValues(alpha: 0.5)
+                                      : const Color(0xFFCCFBF1),
                                   borderRadius: BorderRadius.circular(8),
-                                  border: Border.all(color: isDark ? Colors.teal.shade700 : const Color(0xFF5EEAD4)),
+                                  border: Border.all(
+                                    color: isDark
+                                        ? Colors.teal.shade700
+                                        : const Color(0xFF5EEAD4),
+                                  ),
                                 ),
                                 child: Text(
                                   "${widget.sharedStockController.text.trim().isEmpty ? '0' : widget.sharedStockController.text} und",
                                   style: TextStyle(
                                     fontWeight: FontWeight.bold,
                                     fontSize: 14,
-                                    color: isDark ? Colors.teal[200] : const Color(0xFF0F766E),
+                                    color: isDark
+                                        ? Colors.teal[200]
+                                        : const Color(0xFF0F766E),
                                   ),
                                 ),
                               ),
@@ -523,6 +638,7 @@ class _ProductStockStrategySelectorState
                     const SizedBox(height: 10),
                     // Costo Base Unitario en Edición
                     Column(
+                      key: widget.baseCostKey,
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
@@ -536,17 +652,29 @@ class _ProductStockStrategySelectorState
                         const SizedBox(height: 4),
                         TextFormField(
                           controller: widget.baseCostController,
-                          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                          keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true,
+                          ),
                           inputFormatters: [
-                            FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,4}')),
+                            FilteringTextInputFormatter.allow(
+                              RegExp(r'^\d*\.?\d{0,4}'),
+                            ),
                           ],
-                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 15,
+                          ),
                           decoration: InputDecoration(
                             prefixText: "S/ ",
                             hintText: "0.00",
                             isDense: true,
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 10,
+                            ),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
                           ),
                         ),
                       ],
@@ -557,13 +685,16 @@ class _ProductStockStrategySelectorState
                   _buildSharedVariantsSummary(isDark),
 
                   // Asesor Inteligente de Unidades Sobrantes
-                  if (showAdvisor && (!_isAdvisorDismissed || advisorState == StockAdvisorState.mandatory))
+                  if (showAdvisor &&
+                      (!_isAdvisorDismissed ||
+                          advisorState == StockAdvisorState.mandatory))
                     _buildAdvisorBanner(isDark, advisorState),
                 ],
               ),
             ),
           ] else ...[
             Container(
+              key: widget.baseCostKey,
               padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
                 color: isDark ? Colors.grey[850] : Colors.grey[100],
@@ -571,7 +702,11 @@ class _ProductStockStrategySelectorState
               ),
               child: Row(
                 children: [
-                  Icon(Icons.layers_clear_outlined, size: 16, color: isDark ? Colors.grey[400] : Colors.grey[600]),
+                  Icon(
+                    Icons.layers_clear_outlined,
+                    size: 16,
+                    color: isDark ? Colors.grey[400] : Colors.grey[600],
+                  ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
@@ -593,7 +728,8 @@ class _ProductStockStrategySelectorState
 
   void _updateSharedStockFromIngreso() {
     final orig = widget.originalBaseStock ?? 0;
-    final ingreso = int.tryParse(widget.sharedIngresoController?.text.trim() ?? "0") ?? 0;
+    final ingreso =
+        int.tryParse(widget.sharedIngresoController?.text.trim() ?? "0") ?? 0;
     widget.sharedStockController.text = (orig + ingreso).toString();
     _syncSharedVariantsAfterBaseStockChange();
     setState(() {});
@@ -625,7 +761,9 @@ class _ProductStockStrategySelectorState
             boxShadow: isSelected
                 ? [
                     BoxShadow(
-                      color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.08),
+                      color: Colors.black.withValues(
+                        alpha: isDark ? 0.3 : 0.08,
+                      ),
                       blurRadius: 4,
                       offset: const Offset(0, 1),
                     ),
@@ -688,11 +826,13 @@ class _ProductStockStrategySelectorState
       onTap: () {
         HapticFeedback.lightImpact();
         if (widget.isEditMode && widget.sharedIngresoController != null) {
-          int current = int.tryParse(widget.sharedIngresoController!.text.trim()) ?? 0;
+          int current =
+              int.tryParse(widget.sharedIngresoController!.text.trim()) ?? 0;
           widget.sharedIngresoController!.text = (current + amount).toString();
           _updateSharedStockFromIngreso();
         } else {
-          int current = int.tryParse(widget.sharedStockController.text.trim()) ?? 0;
+          int current =
+              int.tryParse(widget.sharedStockController.text.trim()) ?? 0;
           widget.sharedStockController.text = (current + amount).toString();
           _syncSharedVariantsAfterBaseStockChange();
           setState(() {});
@@ -704,7 +844,9 @@ class _ProductStockStrategySelectorState
         decoration: BoxDecoration(
           color: widget.isDark ? Colors.white12 : Colors.white,
           borderRadius: BorderRadius.circular(6),
-          border: Border.all(color: widget.isDark ? Colors.white24 : Colors.grey.shade300),
+          border: Border.all(
+            color: widget.isDark ? Colors.white24 : Colors.grey.shade300,
+          ),
         ),
         alignment: Alignment.center,
         child: FittedBox(
@@ -728,11 +870,16 @@ class _ProductStockStrategySelectorState
       return const SizedBox.shrink();
     }
 
-    final int sharedBase = int.tryParse(widget.sharedStockController.text.trim()) ?? 0;
+    final int sharedBase =
+        int.tryParse(widget.sharedStockController.text.trim()) ?? 0;
 
     final sharedItems = widget.controllers!.where((c) {
-      if (widget.selectedStrategy == 'COMPARTIDO') return true;
-      if (widget.selectedStrategy == 'MIXTO') return c['usaStockCompartido'] == true;
+      if (widget.selectedStrategy == 'COMPARTIDO') {
+        return true;
+      }
+      if (widget.selectedStrategy == 'MIXTO') {
+        return c['usaStockCompartido'] == true;
+      }
       return false;
     }).toList();
 
@@ -741,10 +888,17 @@ class _ProductStockStrategySelectorState
     final pillWidgets = <Widget>[];
     for (int i = 0; i < sharedItems.length; i++) {
       final c = sharedItems[i];
-      final rawName = (c['specific'] as TextEditingController?)?.text.trim() ?? '';
+      final rawName =
+          (c['specific'] as TextEditingController?)?.text.trim() ?? '';
       final uVenta = (c['unidadVenta'] as TextEditingController?)?.text.trim();
-      final name = rawName.isNotEmpty ? rawName : (uVenta != null && uVenta.isNotEmpty ? uVenta : 'Var #${i + 1}');
-      final factor = int.tryParse((c['unidadesVenta'] as TextEditingController?)?.text ?? '1') ?? 1;
+      final name = rawName.isNotEmpty
+          ? rawName
+          : (uVenta != null && uVenta.isNotEmpty ? uVenta : 'Var #${i + 1}');
+      final factor =
+          int.tryParse(
+            (c['unidadesVenta'] as TextEditingController?)?.text ?? '1',
+          ) ??
+          1;
       final safeFactor = factor <= 0 ? 1 : factor;
       final maxFisico = sharedBase ~/ safeFactor;
 
@@ -752,7 +906,11 @@ class _ProductStockStrategySelectorState
       if (c['cupoMaximoVariante'] != null) {
         cupo = (c['cupoMaximoVariante'] as num).toInt();
       } else {
-        final visual = int.tryParse((c['stockFinal'] as TextEditingController?)?.text ?? '') ?? maxFisico;
+        final visual =
+            int.tryParse(
+              (c['stockFinal'] as TextEditingController?)?.text ?? '',
+            ) ??
+            maxFisico;
         if (visual > 0 && visual < maxFisico) cupo = visual;
       }
 
@@ -770,7 +928,9 @@ class _ProductStockStrategySelectorState
             color: isDark ? const Color(0xFF1E293B) : Colors.white,
             borderRadius: BorderRadius.circular(6),
             border: Border.all(
-              color: isDark ? Colors.blue.withValues(alpha: 0.3) : const Color(0xFFCBD5E1),
+              color: isDark
+                  ? Colors.blue.withValues(alpha: 0.3)
+                  : const Color(0xFFCBD5E1),
             ),
           ),
           child: Text(
@@ -789,10 +949,14 @@ class _ProductStockStrategySelectorState
       margin: const EdgeInsets.only(top: 10),
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
       decoration: BoxDecoration(
-        color: isDark ? Colors.blue.withValues(alpha: 0.12) : Colors.blue.shade50.withValues(alpha: 0.6),
+        color: isDark
+            ? Colors.blue.withValues(alpha: 0.12)
+            : Colors.blue.shade50.withValues(alpha: 0.6),
         borderRadius: BorderRadius.circular(8),
         border: Border.all(
-          color: isDark ? Colors.blue.withValues(alpha: 0.25) : Colors.blue.shade200,
+          color: isDark
+              ? Colors.blue.withValues(alpha: 0.25)
+              : Colors.blue.shade200,
         ),
       ),
       child: Column(
@@ -800,24 +964,26 @@ class _ProductStockStrategySelectorState
         children: [
           Row(
             children: [
-              Icon(Icons.layers_outlined, size: 13, color: isDark ? Colors.blue[300] : const Color(0xFF1E40AF)),
+              Icon(
+                Icons.layers_outlined,
+                size: 13,
+                color: isDark ? Colors.blue[300] : const Color(0xFF1E40AF),
+              ),
               const SizedBox(width: 5),
-              Text(
-                "Stock Final Calculado por Variante:",
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.bold,
-                  color: isDark ? Colors.blue[200] : const Color(0xFF1E40AF),
+              Expanded(
+                child: Text(
+                  "Stock Final Calculado por Variante:",
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                    color: isDark ? Colors.blue[200] : const Color(0xFF1E40AF),
+                  ),
                 ),
               ),
             ],
           ),
           const SizedBox(height: 6),
-          Wrap(
-            spacing: 6,
-            runSpacing: 4,
-            children: pillWidgets,
-          ),
+          Wrap(spacing: 6, runSpacing: 4, children: pillWidgets),
         ],
       ),
     );
@@ -825,15 +991,22 @@ class _ProductStockStrategySelectorState
 
   Widget _buildAdvisorBanner(bool isDark, StockAdvisorState state) {
     final bool isMandatory = state == StockAdvisorState.mandatory;
-    final int stockBaseTotal = int.tryParse(widget.sharedStockController.text.trim()) ?? 0;
+    final int stockBaseTotal =
+        int.tryParse(widget.sharedStockController.text.trim()) ?? 0;
 
     int minFactor = 999999;
     if (widget.controllers != null) {
       for (final c in widget.controllers!) {
-        final bool isShared = widget.selectedStrategy == 'COMPARTIDO' ||
-            (widget.selectedStrategy == 'MIXTO' && c['usaStockCompartido'] == true);
+        final bool isShared =
+            widget.selectedStrategy == 'COMPARTIDO' ||
+            (widget.selectedStrategy == 'MIXTO' &&
+                c['usaStockCompartido'] == true);
         if (isShared) {
-          final factor = int.tryParse((c['unidadesVenta'] as TextEditingController?)?.text ?? '1') ?? 1;
+          final factor =
+              int.tryParse(
+                (c['unidadesVenta'] as TextEditingController?)?.text ?? '1',
+              ) ??
+              1;
           final safeFactor = factor <= 0 ? 1 : factor;
           if (safeFactor < minFactor) minFactor = safeFactor;
         }
@@ -847,7 +1020,9 @@ class _ProductStockStrategySelectorState
 
     final borderColor = isMandatory
         ? (isDark ? Colors.red.withValues(alpha: 0.5) : const Color(0xFFFECACA))
-        : (isDark ? Colors.purple.withValues(alpha: 0.4) : const Color(0xFFD8B4FE));
+        : (isDark
+              ? Colors.purple.withValues(alpha: 0.4)
+              : const Color(0xFFD8B4FE));
 
     final iconColor = isMandatory
         ? (isDark ? Colors.red[300]! : const Color(0xFFDC2626))
@@ -879,7 +1054,9 @@ class _ProductStockStrategySelectorState
           Row(
             children: [
               Icon(
-                isMandatory ? Icons.warning_amber_rounded : Icons.auto_awesome_rounded,
+                isMandatory
+                    ? Icons.warning_amber_rounded
+                    : Icons.auto_awesome_rounded,
                 size: 16,
                 color: iconColor,
               ),
@@ -902,7 +1079,11 @@ class _ProductStockStrategySelectorState
                   borderRadius: BorderRadius.circular(12),
                   child: Padding(
                     padding: const EdgeInsets.all(4),
-                    child: Icon(Icons.close_rounded, size: 16, color: isDark ? Colors.grey[400] : Colors.grey[600]),
+                    child: Icon(
+                      Icons.close_rounded,
+                      size: 16,
+                      color: isDark ? Colors.grey[400] : Colors.grey[600],
+                    ),
                   ),
                 ),
             ],
@@ -912,10 +1093,7 @@ class _ProductStockStrategySelectorState
             isMandatory
                 ? "Tienes $stockBaseTotal und. base, pero tu paquete más pequeño requiere $minFactor und. Con este inventario no se puede vender ningún paquete. Crea la variante por Unidad para venderlas o aumenta el stock base."
                 : "Tienes $stockBaseTotal und. base. Al vender por paquetes o pares, sobrarán unidades sueltas que no podrás liquidar. Agrega una variante por Unidad para venderlas individualmente.",
-            style: TextStyle(
-              fontSize: 11.5,
-              color: descColor,
-            ),
+            style: TextStyle(fontSize: 11.5, color: descColor),
           ),
           const SizedBox(height: 10),
           SizedBox(
@@ -933,8 +1111,13 @@ class _ProductStockStrategySelectorState
               style: ElevatedButton.styleFrom(
                 backgroundColor: btnColor,
                 foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                padding: const EdgeInsets.symmetric(
+                  vertical: 8,
+                  horizontal: 12,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
               ),
             ),
           ),
@@ -943,4 +1126,3 @@ class _ProductStockStrategySelectorState
     );
   }
 }
-

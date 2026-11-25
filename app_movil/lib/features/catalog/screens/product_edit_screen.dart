@@ -23,12 +23,23 @@ import 'package:app_movil/core/widgets/product_optional_info.dart';
 import 'package:app_movil/core/widgets/info_tooltip_button.dart';
 import 'package:app_movil/features/catalog/widgets/form/product_stock_strategy_selector.dart';
 import 'package:app_movil/core/widgets/presentation_card/presentation_math_engine.dart';
+import 'package:app_movil/core/services/tour/interactive_tour_service.dart';
+import 'package:app_movil/core/widgets/tour/configs/product_edit_tour.dart';
+import 'package:app_movil/core/widgets/tour/tour_step_model.dart';
 
 class ProductEditScreen extends StatefulWidget {
   final Product productToEdit;
   final int? initialPresentationId;
+  final bool autoTriggerTour;
+  final ProductEditTourKeys? tourKeys;
 
-  const ProductEditScreen({super.key, required this.productToEdit, this.initialPresentationId});
+  const ProductEditScreen({
+    super.key,
+    required this.productToEdit,
+    this.initialPresentationId,
+    this.autoTriggerTour = true,
+    this.tourKeys,
+  });
 
   @override
   State<ProductEditScreen> createState() => _ProductEditScreenState();
@@ -40,6 +51,10 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
   final TextEditingController _descCtrl = TextEditingController();
   final TextEditingController _imgUrlCtrl = TextEditingController();
   final TextEditingController _parentBarcodeCtrl = TextEditingController();
+  late final ProductEditTourKeys _tourKeys;
+  bool? _prevAllExpandedForTour;
+  List<bool>? _prevPresentationExpandedForTour;
+  bool _didAttemptAutoTour = false;
 
   late String _modoStock;
   late final TextEditingController _sharedStockCtrl;
@@ -66,6 +81,7 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
   @override
   void initState() {
     super.initState();
+    _tourKeys = widget.tourKeys ?? ProductEditTourKeys();
     _modoStock = widget.productToEdit.modoStock;
     _sharedStockCtrl = TextEditingController(text: widget.productToEdit.stockCompartido.toString());
     _sharedIngresoCtrl = TextEditingController(text: "0");
@@ -122,9 +138,59 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
               Scrollable.ensureVisible(key!.currentContext!, duration: const Duration(milliseconds: 400), curve: Curves.easeInOut);
             }
           }
+          if (widget.autoTriggerTour && !_didAttemptAutoTour) {
+            _didAttemptAutoTour = true;
+            InteractiveTourService.maybeStartAutomaticTour(
+              context,
+              _buildTourConfig(),
+            );
+          }
         });
       });
     });
+  }
+
+  Future<void> _expandPresentationsForTour() async {
+    if (!mounted || _presentationControllers.isEmpty) return;
+    _prevAllExpandedForTour ??= _allExpanded;
+    _prevPresentationExpandedForTour ??= _presentationControllers
+        .map((c) => (c['isExpanded'] as bool?) ?? true)
+        .toList();
+    setState(() {
+      _allExpanded = true;
+      for (final c in _presentationControllers) {
+        c['isExpanded'] = true;
+      }
+    });
+    await Future.delayed(const Duration(milliseconds: 120));
+  }
+
+  Future<void> _restorePresentationsAfterTour() async {
+    final prevAll = _prevAllExpandedForTour;
+    final prevList = _prevPresentationExpandedForTour;
+    _prevAllExpandedForTour = null;
+    _prevPresentationExpandedForTour = null;
+    if (!mounted || (prevAll == null && prevList == null)) return;
+    setState(() {
+      if (prevAll != null) _allExpanded = prevAll;
+      if (prevList != null) {
+        for (int i = 0; i < _presentationControllers.length && i < prevList.length; i++) {
+          _presentationControllers[i]['isExpanded'] = prevList[i];
+        }
+      }
+    });
+  }
+
+  ScreenTourConfig _buildTourConfig() {
+    return ProductEditTour.buildConfig(
+      keys: _tourKeys,
+      onExpandPresentationsForTour: _expandPresentationsForTour,
+      onRestorePresentationsAfterTour: _restorePresentationsAfterTour,
+    );
+  }
+
+  void _startTour(BuildContext context) {
+    InteractiveTourService.startManualTour(context, _buildTourConfig());
   }
 
   void _attachPresentationListeners(Map<String, dynamic> map) {
@@ -882,11 +948,20 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
       },
       child: Scaffold(
         appBar: AppBar(
+          leadingWidth: 38,
           titleSpacing: 0,
-          title: const FittedBox(
-            fit: BoxFit.scaleDown,
+          actionsPadding: EdgeInsets.zero,
+          title: const Align(
             alignment: Alignment.centerLeft,
-            child: Text("Editar Producto", style: TextStyle(fontWeight: FontWeight.bold)),
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerLeft,
+              child: Text(
+                "Editar Producto",
+                maxLines: 1,
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+            ),
           ),
           elevation: 0,
           actions: [
@@ -904,8 +979,13 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
                         IconButton(
                           icon: Icon(
                             Icons.undo_rounded,
-                            size: 21,
+                            size: 20,
                             color: isDark ? Colors.amber[300] : Colors.amber[800],
+                          ),
+                          padding: const EdgeInsets.all(5),
+                          constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                          style: IconButton.styleFrom(
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                           ),
                           tooltip: "Deshacer último cambio",
                           onPressed: _undoStack.length > 1 ? _undoLastChange : null,
@@ -913,8 +993,13 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
                         IconButton(
                           icon: Icon(
                             Icons.restore_rounded,
-                            size: 21,
+                            size: 20,
                             color: isDark ? Colors.tealAccent[200] : Colors.teal[700],
+                          ),
+                          padding: const EdgeInsets.all(5),
+                          constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                          style: IconButton.styleFrom(
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                           ),
                           tooltip: "Restaurar original",
                           onPressed: () => _restoreOriginalSavedState(isDark),
@@ -923,11 +1008,15 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
                     )
                   : const SizedBox.shrink(key: ValueKey("no_reversion")),
             ),
-            const InfoTooltipButton(
+            InfoTooltipButton(
+              iconSize: 20,
+              padding: const EdgeInsets.all(5),
+              constraints: const BoxConstraints(minWidth: 34, minHeight: 34),
+              onStartInteractiveTour: () => _startTour(context),
               title: "Edición de Productos",
               description: "Modifica información básica, proveedores y presentaciones de tus productos. Puedes reordenar variantes o designar una nueva principal.",
-              tips: [
-                InfoTip(icon: Icons.undo_rounded, text: "Usa ↶ Deshacer para revertir paso a paso la última modificación y ↺ Restaurar para regresar al producto guardado original."),
+              tips: const [
+                InfoTip(icon: Icons.undo_rounded, text: "Usa Deshacer para revertir paso a paso la última modificación y Restaurar para regresar al producto guardado original."),
                 InfoTip(icon: Icons.calculate_rounded, text: "Chips de redondeo (.50, .90, .00): conmutables. Tócalos para redondear o vuélvelos a pulsar para recuperar el precio previo."),
                 InfoTip(icon: Icons.star_rounded, text: "La variante principal se mostrará por defecto en el catálogo."),
                 InfoTip(icon: Icons.swap_vert_rounded, text: "Reordena tus presentaciones usando las flechas o el modal."),
@@ -935,7 +1024,7 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
             ),
             AnimatedContainer(
               duration: const Duration(milliseconds: 200),
-              margin: const EdgeInsets.only(right: 8),
+              margin: const EdgeInsets.only(right: 6),
               decoration: BoxDecoration(
                 color: isDark
                     ? (_hasUnsavedChanges
@@ -959,13 +1048,13 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
               child: IconButton(
                 icon: Icon(
                   Icons.check_rounded,
-                  size: 22,
+                  size: 20,
                   color: isDark ? const Color(0xFF00E676) : const Color(0xFF00796B),
                 ),
                 tooltip: "Guardar Cambios",
                 style: IconButton.styleFrom(
-                  padding: const EdgeInsets.all(8),
-                  minimumSize: const Size(38, 38),
+                  padding: const EdgeInsets.all(6),
+                  minimumSize: const Size(34, 34),
                   tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                 ),
                 onPressed: _saveChanges,
@@ -983,110 +1072,126 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                ProductGeneralInfo(
-                  nameCtrl: _nameCtrl,
-                  brandDisplay: ProductEntityPickers.getBrandDisplay(
-                    provider: provider,
-                    selectedBrandId: _selectedBrandId,
-                    selectedBrandName: _selectedBrandName,
-                  ),
-                  isBrandDeferred: _selectedBrandId != null && _selectedBrandId! < 0,
-                  onSelectBrand: _pickBrand,
-                  categoryDisplay: ProductEntityPickers.getCategoryDisplay(
-                    provider: provider,
-                    selectedCategoryId: _selectedCategoryId,
-                    selectedCategoryName: _selectedCategoryName,
-                  ),
-                  isCategoryDeferred: _selectedCategoryId != null && _selectedCategoryId! < 0,
-                  onSelectCategory: _pickCategory,
-                  generalProviderDisplay: ProductEntityPickers.getProviderDisplay(
-                    provider: provider,
-                    providerId: _generalProviderId,
-                    deferredProviderNames: _deferredProviderNames,
-                  ),
-                  isGeneralProviderDeferred: _generalProviderId != null && _generalProviderId! < 0,
-                  onSelectGeneralProvider: () => _pickGeneralProvider(isDark),
-                  generalState: _generalState,
-                  isDark: isDark,
-                  onStateChanged: _setGeneralState,
+                Column(
+                  key: _tourKeys.generalInfoKey,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    ProductGeneralInfo(
+                      nameCtrl: _nameCtrl,
+                      brandDisplay: ProductEntityPickers.getBrandDisplay(
+                        provider: provider,
+                        selectedBrandId: _selectedBrandId,
+                        selectedBrandName: _selectedBrandName,
+                      ),
+                      isBrandDeferred: _selectedBrandId != null && _selectedBrandId! < 0,
+                      onSelectBrand: _pickBrand,
+                      categoryDisplay: ProductEntityPickers.getCategoryDisplay(
+                        provider: provider,
+                        selectedCategoryId: _selectedCategoryId,
+                        selectedCategoryName: _selectedCategoryName,
+                      ),
+                      isCategoryDeferred: _selectedCategoryId != null && _selectedCategoryId! < 0,
+                      onSelectCategory: _pickCategory,
+                      generalProviderDisplay: ProductEntityPickers.getProviderDisplay(
+                        provider: provider,
+                        providerId: _generalProviderId,
+                        deferredProviderNames: _deferredProviderNames,
+                      ),
+                      isGeneralProviderDeferred: _generalProviderId != null && _generalProviderId! < 0,
+                      onSelectGeneralProvider: () => _pickGeneralProvider(isDark),
+                      generalState: _generalState,
+                      isDark: isDark,
+                      onStateChanged: _setGeneralState,
+                    ),
+                    const SizedBox(height: 16),
+                    ProductOptionalInfo(
+                      descCtrl: _descCtrl,
+                      imgCtrl: _imgUrlCtrl,
+                      barcodeCtrl: _parentBarcodeCtrl,
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 16),
-                ProductOptionalInfo(
-                  descCtrl: _descCtrl,
-                  imgCtrl: _imgUrlCtrl,
-                  barcodeCtrl: _parentBarcodeCtrl,
-                ),
-                const SizedBox(height: 16),
-                ProductStockStrategySelector(
-                  selectedStrategy: _modoStock,
-                  onStrategyChanged: _onStrategyChanged,
-                  sharedStockController: _sharedStockCtrl,
-                  baseCostController: _baseCostCtrl,
-                  controllers: _presentationControllers,
-                  isDark: isDark,
-                  isEditMode: true,
-                  originalBaseStock: widget.productToEdit.stockCompartido,
-                  sharedIngresoController: _sharedIngresoCtrl,
-                  onAutoCreateUnitVariant: _createUnitVariantAutomatically,
+                KeyedSubtree(
+                  key: _tourKeys.stockStrategyKey,
+                  child: ProductStockStrategySelector(
+                    selectedStrategy: _modoStock,
+                    onStrategyChanged: _onStrategyChanged,
+                    sharedStockController: _sharedStockCtrl,
+                    baseCostController: _baseCostCtrl,
+                    controllers: _presentationControllers,
+                    isDark: isDark,
+                    isEditMode: true,
+                    originalBaseStock: widget.productToEdit.stockCompartido,
+                    sharedIngresoController: _sharedIngresoCtrl,
+                    onAutoCreateUnitVariant: _createUnitVariantAutomatically,
+                    baseCostKey: _tourKeys.baseCostKey,
+                  ),
                 ),
                 const SizedBox(height: 20),
-                VariantSectionHeader(
-                  isDark: isDark,
-                  allExpanded: _allExpanded,
-                  canReorder: _presentationControllers.length > 1,
-                  onToggleExpandCollapse: () => setState(() {
-                    _allExpanded = !_allExpanded;
-                    for (var c in _presentationControllers) {
-                      c['isExpanded'] = _allExpanded;
-                    }
-                  }),
-                  onReorder: () {
-                    FocusManager.instance.primaryFocus?.unfocus();
-                    _recordUndoSnapshot();
-                    VariantReorderModal.show(
-                      context: context,
+                Column(
+                  key: _tourKeys.presentationsKey,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    VariantSectionHeader(
                       isDark: isDark,
-                      controllers: _presentationControllers,
-                      onReorder: (oldIdx, newIdx) {
+                      allExpanded: _allExpanded,
+                      canReorder: _presentationControllers.length > 1,
+                      onToggleExpandCollapse: () => setState(() {
+                        _allExpanded = !_allExpanded;
+                        for (var c in _presentationControllers) {
+                          c['isExpanded'] = _allExpanded;
+                        }
+                      }),
+                      onReorder: () {
+                        FocusManager.instance.primaryFocus?.unfocus();
                         _recordUndoSnapshot();
+                        VariantReorderModal.show(
+                          context: context,
+                          isDark: isDark,
+                          controllers: _presentationControllers,
+                          onReorder: (oldIdx, newIdx) {
+                            _recordUndoSnapshot();
+                            setState(() {});
+                          },
+                        ).whenComplete(() {
+                          FocusManager.instance.primaryFocus?.unfocus();
+                        });
+                      },
+                    ),
+                    const SizedBox(height: 8),
+                    VariantJumpBar(
+                      controllers: _presentationControllers,
+                      presentationKeys: _presentationKeys,
+                      isDark: isDark,
+                      onVariantSelected: (ctrl) => setState(() => ctrl['isExpanded'] = true),
+                    ),
+                    const SizedBox(height: 16),
+                    ProductPresentationList(
+                      presentationControllers: _presentationControllers,
+                      presentationKeys: _presentationKeys,
+                      isDark: isDark,
+                      providerListForDropdown: provider.providers,
+                      deferredProviderNames: _deferredProviderNames,
+                      modoStock: _modoStock,
+                      sharedStockCtrl: _sharedStockCtrl,
+                      baseCostCtrl: _baseCostCtrl,
+                      deletePresentation: (idx, dark) => _deletePresentation(idx, dark),
+                      handleCreateLeftover: _handleCreateLeftover,
+                      invalidateLeftover: _invalidateLeftover,
+                      onStateChange: () {
+                        _onFormChangedWithDebounce();
                         setState(() {});
                       },
-                    ).whenComplete(() {
-                      FocusManager.instance.primaryFocus?.unfocus();
-                    });
-                  },
-                ),
-                const SizedBox(height: 8),
-                VariantJumpBar(
-                  controllers: _presentationControllers,
-                  presentationKeys: _presentationKeys,
-                  isDark: isDark,
-                  onVariantSelected: (ctrl) => setState(() => ctrl['isExpanded'] = true),
-                ),
-                const SizedBox(height: 16),
-                ProductPresentationList(
-                  presentationControllers: _presentationControllers,
-                  presentationKeys: _presentationKeys,
-                  isDark: isDark,
-                  providerListForDropdown: provider.providers,
-                  deferredProviderNames: _deferredProviderNames,
-                  modoStock: _modoStock,
-                  sharedStockCtrl: _sharedStockCtrl,
-                  baseCostCtrl: _baseCostCtrl,
-                  deletePresentation: (idx, dark) => _deletePresentation(idx, dark),
-                  handleCreateLeftover: _handleCreateLeftover,
-                  invalidateLeftover: _invalidateLeftover,
-                  onStateChange: () {
-                    _onFormChangedWithDebounce();
-                    setState(() {});
-                  },
-                  onSetDefault: _handleSetDefault,
-                  onMoveUp: _handleMoveUp,
-                  onMoveDown: _handleMoveDown,
-                  onClone: _clonePresentation,
-                  onConvertToProduct: (idx) => _handleConvertToProduct(idx, isDark),
-                  onBeforeDiscreteMutation: _handleBeforeDiscreteMutation,
-                  onDiscreteMutationCompleted: _handleDiscreteMutationCompleted,
+                      onSetDefault: _handleSetDefault,
+                      onMoveUp: _handleMoveUp,
+                      onMoveDown: _handleMoveDown,
+                      onClone: _clonePresentation,
+                      onConvertToProduct: (idx) => _handleConvertToProduct(idx, isDark),
+                      onBeforeDiscreteMutation: _handleBeforeDiscreteMutation,
+                      onDiscreteMutationCompleted: _handleDiscreteMutationCompleted,
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 8),
                 SizedBox(
@@ -1109,12 +1214,15 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
           ),
         ),
       ),
-      bottomNavigationBar: ProductFormBottomBar(
+      bottomNavigationBar: KeyedSubtree(
+        key: _tourKeys.saveBarKey,
+        child: ProductFormBottomBar(
           title: "GUARDAR CAMBIOS",
           isLoading: false,
           isDark: isDark,
           onSave: _saveChanges,
         ),
+      ),
       ),
     );
   }

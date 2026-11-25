@@ -185,16 +185,17 @@ class QuotationActionButtons extends StatelessWidget {
                         boxShadow: isDark ? [] : [const BoxShadow(color: Colors.black12, blurRadius: 4, offset: Offset(0, 2))]
                       ),
                       alignment: Alignment.center,
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(buttonIcon, color: Colors.white, size: 22),
-                          const SizedBox(width: 6),
-                          FittedBox(
-                            fit: BoxFit.scaleDown,
-                            child: Text(buttonLabel, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.white, letterSpacing: 0.5)),
-                          ),
-                        ],
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(buttonIcon, color: Colors.white, size: 22),
+                            const SizedBox(width: 6),
+                            Text(buttonLabel, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.white, letterSpacing: 0.5)),
+                          ],
+                        ),
                       ),
                     ),
                   ),

@@ -37,16 +37,21 @@ void main() {
               providers: [
                 ChangeNotifierProvider(create: (_) => TrackingProvider()),
               ],
-              child: ClientFinanceActionsModal(client: clientSinSaldo, isDark: true),
+              child: ClientFinanceActionsModal(
+                client: clientSinSaldo,
+                isDark: true,
+                initialTab: 1,
+              ),
             ),
           ),
         ),
       );
+      await tester.pumpAndSettle();
 
       // Verificamos que se muestre el estado educativo claro
       expect(find.text('Sin Saldo a Favor Disponible'), findsOneWidget);
       expect(find.text('Saldo Disponible: S/ 0.00'), findsOneWidget);
-      expect(find.byIcon(Icons.savings_outlined), findsOneWidget);
+      expect(find.byIcon(Icons.savings_outlined), findsWidgets);
       expect(
         find.textContaining('El saldo a favor se genera automáticamente'),
         findsOneWidget,
@@ -84,14 +89,19 @@ void main() {
               providers: [
                 ChangeNotifierProvider(create: (_) => TrackingProvider()),
               ],
-              child: ClientFinanceActionsModal(client: clientConSaldo, isDark: true),
+              child: ClientFinanceActionsModal(
+                client: clientConSaldo,
+                isDark: true,
+                initialTab: 1,
+              ),
             ),
           ),
         ),
       );
+      await tester.pumpAndSettle();
 
-      // Verificamos el saldo visible con AppCurrency
-      expect(find.text('S/ 120.00'), findsOneWidget);
+      // Verificamos el saldo visible con AppCurrency y acción rápida
+      expect(find.text('Saldo a Favor Disponible: S/ 120.00'), findsOneWidget);
       expect(find.text('Retirar Todo (S/ 120.00)'), findsOneWidget);
       expect(find.text('Retirar 50%'), findsOneWidget);
 
@@ -135,8 +145,8 @@ void main() {
         ),
       );
 
-      // Cambiamos a la pestaña Préstamo
-      await tester.tap(find.text('Préstamo'));
+      // Verificamos / seleccionamos la tarjeta Otorgar Préstamo (Tab 0)
+      await tester.tap(find.text('Otorgar Préstamo'));
       await tester.pumpAndSettle();
 
       // Verificamos que todos los chips de sugerencia estén presentes y sin truncar

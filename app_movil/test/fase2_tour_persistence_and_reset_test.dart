@@ -347,7 +347,7 @@ void main() {
       expect(InteractiveTourService.automaticToursEnabledNotifier.value, isTrue);
 
       // 3. Modal de bienvenida de Perfil y Configuración se despliega de inmediato
-      expect(find.text('Bienvenido a Perfil y Configuración'), findsOneWidget);
+      expect(find.text('Bienvenido a Perfil y Centro de Control'), findsOneWidget);
       expect(find.text('Guíame'), findsOneWidget);
 
       // Drenar el timer de CustomSnackBar para evitar advertencia de pending timers

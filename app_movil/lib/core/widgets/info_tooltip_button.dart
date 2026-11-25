@@ -77,6 +77,9 @@ class InfoTooltipButton extends StatelessWidget {
     return IconButton(
       padding: padding ?? const EdgeInsets.all(8.0),
       constraints: constraints,
+      style: constraints != null
+          ? IconButton.styleFrom(tapTargetSize: MaterialTapTargetSize.shrinkWrap)
+          : null,
       icon: Icon(
         Icons.info_outline_rounded,
         size: iconSize,

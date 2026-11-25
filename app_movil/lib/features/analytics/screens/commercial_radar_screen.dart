@@ -1,10 +1,10 @@
 import 'dart:async';
-import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:share_plus/share_plus.dart';
 
+import 'package:app_movil/core/providers/auth_provider.dart';
 import 'package:app_movil/features/analytics/models/commercial_radar_model.dart';
 import 'package:app_movil/features/analytics/services/commercial_radar_service.dart';
 import 'package:app_movil/features/analytics/data/peru_ubigeo_catalog.dart';
@@ -14,24 +14,39 @@ import 'package:app_movil/features/catalog/screens/inventory_screen.dart';
 import 'package:app_movil/features/smart_quotation/screens/quick_sale_screen.dart';
 import 'package:app_movil/core/widgets/interactive_sheet_wrapper.dart';
 import 'package:app_movil/core/widgets/custom_snackbar.dart';
+import 'package:app_movil/core/services/tour/interactive_tour_service.dart';
+import 'package:app_movil/core/widgets/info_tooltip_button.dart';
+import 'package:app_movil/core/widgets/tour/configs/commercial_radar_tour.dart';
+import 'package:app_movil/core/widgets/tour/tour_step_model.dart';
 
 enum RadarTab { noticiasDelDia, guardadas }
 
 class CommercialRadarScreen extends StatefulWidget {
   final String initialRegion;
+  final bool autoTriggerTour;
+  final CommercialRadarTourKeys? tourKeys;
+  final int? profileId;
 
   const CommercialRadarScreen({
     super.key,
     this.initialRegion = 'Talara / Piura',
+    this.autoTriggerTour = true,
+    this.tourKeys,
+    this.profileId,
   });
 
   @override
   State<CommercialRadarScreen> createState() => _CommercialRadarScreenState();
 }
 
-class _CommercialRadarScreenState extends State<CommercialRadarScreen> with SingleTickerProviderStateMixin {
+class _CommercialRadarScreenState extends State<CommercialRadarScreen>
+    with SingleTickerProviderStateMixin {
   late RadarLocation _selectedLocation;
   String get _selectedRegion => _selectedLocation.displayName;
+  late final CommercialRadarTourKeys _tourKeys;
+  bool _didAttemptAutoTour = false;
+  int? _resolvedProfileId;
+  bool _didInitProfileDependencies = false;
 
   RadarTab _activeTab = RadarTab.noticiasDelDia;
   String _selectedCategory = 'Todas';
@@ -43,9 +58,6 @@ class _CommercialRadarScreenState extends State<CommercialRadarScreen> with Sing
   int _visibleCount = 6;
   StreamSubscription<CommercialNewsItem>? _streamSubscription;
   late AnimationController _pulseController;
-
-  static const String _prefRegionKey = 'commercial_radar_selected_region';
-  static const String _prefLocationJsonKey = 'commercial_radar_selected_location_json';
 
   final List<String> _categories = [
     'Todas',
@@ -59,48 +71,110 @@ class _CommercialRadarScreenState extends State<CommercialRadarScreen> with Sing
   @override
   void initState() {
     super.initState();
+    _tourKeys = widget.tourKeys ?? CommercialRadarTourKeys();
     _selectedLocation = RadarLocation.fromLegacyString(widget.initialRegion);
     _pulseController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1400),
     )..repeat(reverse: true);
-    _loadSavedData();
   }
 
-  Future<void> _loadSavedData() async {
+  int? _resolveActiveProfileId(BuildContext context) {
+    if (widget.profileId != null) return widget.profileId;
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final savedLocJson = prefs.getString(_prefLocationJsonKey);
-      if (savedLocJson != null && savedLocJson.isNotEmpty && mounted) {
-        try {
-          final decoded = jsonDecode(savedLocJson) as Map<String, dynamic>;
-          setState(() {
-            _selectedLocation = RadarLocation.fromJson(decoded);
-          });
-        } catch (_) {}
-      } else {
-        final savedReg = prefs.getString(_prefRegionKey);
-        if (savedReg != null && savedReg.isNotEmpty && mounted) {
-          setState(() {
-            _selectedLocation = RadarLocation.fromLegacyString(savedReg);
-          });
-        }
-      }
+      return Provider.of<AuthProvider?>(context)?.activeUserId;
+    } catch (_) {
+      return null;
+    }
+  }
 
-      final savedList = await CommercialRadarService.getSavedNews();
-      if (mounted) {
-        setState(() {
-          _savedNewsMap.clear();
-          for (var item in savedList) {
-            _savedNewsMap[item.id] = item;
-          }
-        });
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final nextProfileId = _resolveActiveProfileId(context);
+    if (!_didInitProfileDependencies) {
+      _didInitProfileDependencies = true;
+      _resolvedProfileId = nextProfileId;
+      _loadSavedData(profileId: _resolvedProfileId);
+    } else if (nextProfileId != _resolvedProfileId) {
+      _switchActiveProfile(nextProfileId);
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant CommercialRadarScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.profileId != oldWidget.profileId) {
+      final nextProfileId = _resolveActiveProfileId(context);
+      if (nextProfileId != _resolvedProfileId) {
+        _switchActiveProfile(nextProfileId);
       }
+    }
+  }
+
+  void _switchActiveProfile(int? nextProfileId) {
+    _streamSubscription?.cancel();
+    setState(() {
+      _resolvedProfileId = nextProfileId;
+      _selectedLocation = RadarLocation.fromLegacyString(widget.initialRegion);
+      _allNewsItems.clear();
+      _savedNewsMap.clear();
+      _visibleCount = 6;
+      _isLoading = true;
+    });
+    _loadSavedData(profileId: nextProfileId);
+  }
+
+  ScreenTourConfig _buildTourConfig() {
+    return CommercialRadarTour.buildConfig(keys: _tourKeys);
+  }
+
+  void _startTour(BuildContext context) {
+    InteractiveTourService.startManualTour(context, _buildTourConfig());
+  }
+
+  void _maybeScheduleAutoTour() {
+    if (!widget.autoTriggerTour || _didAttemptAutoTour) return;
+    _didAttemptAutoTour = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+      await InteractiveTourService.maybeStartAutomaticTour(
+        context,
+        _buildTourConfig(),
+      );
+    });
+  }
+
+  Future<void> _loadSavedData({int? profileId}) async {
+    final loadProfileId = profileId;
+    final fallbackLocation = RadarLocation.fromLegacyString(widget.initialRegion);
+    try {
+      final resolvedLocation = await CommercialRadarService.loadLocationForProfile(
+        profileId: loadProfileId,
+        fallback: fallbackLocation,
+      );
+      if (!mounted || loadProfileId != _resolvedProfileId) return;
+
+      final savedList = await CommercialRadarService.getSavedNews(
+        profileId: loadProfileId,
+      );
+      if (!mounted || loadProfileId != _resolvedProfileId) return;
+
+      setState(() {
+        _selectedLocation = resolvedLocation;
+        _savedNewsMap.clear();
+        for (var item in savedList) {
+          _savedNewsMap[item.id] = item;
+        }
+      });
     } catch (_) {}
+    if (!mounted || loadProfileId != _resolvedProfileId) return;
     _fetchNews(forceRefresh: false);
+    _maybeScheduleAutoTour();
   }
 
   Future<void> _toggleBookmark(CommercialNewsItem item) async {
+    final activeProfileId = _resolvedProfileId;
     final wasSaved = _savedNewsMap.containsKey(item.id);
     setState(() {
       if (wasSaved) {
@@ -111,12 +185,18 @@ class _CommercialRadarScreenState extends State<CommercialRadarScreen> with Sing
     });
 
     if (wasSaved) {
-      await CommercialRadarService.removeSavedNews(item.id);
+      await CommercialRadarService.removeSavedNews(
+        item.id,
+        profileId: activeProfileId,
+      );
       if (mounted) {
         CustomSnackBar.show(context, message: "Noticia retirada de Guardadas");
       }
     } else {
-      await CommercialRadarService.saveNewsItem(item);
+      await CommercialRadarService.saveNewsItem(
+        item,
+        profileId: activeProfileId,
+      );
       if (mounted) {
         CustomSnackBar.show(context, message: "Noticia guardada en favoritos");
       }
@@ -141,51 +221,55 @@ class _CommercialRadarScreenState extends State<CommercialRadarScreen> with Sing
     });
 
     // Cargar caché si existe para evitar pantalla vacía
-    final cached = CommercialRadarService.getCachedNews(_selectedLocation.displayName);
+    final cached = CommercialRadarService.getCachedNewsForLocation(
+      _selectedLocation,
+    );
     if (cached != null && cached.isNotEmpty && _allNewsItems.isEmpty) {
       _allNewsItems.addAll(cached);
     }
 
-    _streamSubscription = CommercialRadarService.streamCuratedNews(
-      location: _selectedLocation,
-      forceRefresh: forceRefresh,
-    ).listen(
-      (item) {
-        if (mounted) {
-          setState(() {
-            final idx = _allNewsItems.indexWhere((n) => n.id == item.id);
-            if (idx == -1) {
-              _allNewsItems.add(item);
-            } else {
-              _allNewsItems[idx] = item;
+    _streamSubscription =
+        CommercialRadarService.streamCuratedNews(
+          location: _selectedLocation,
+          forceRefresh: forceRefresh,
+        ).listen(
+          (item) {
+            if (mounted) {
+              setState(() {
+                final idx = _allNewsItems.indexWhere((n) => n.id == item.id);
+                if (idx == -1) {
+                  _allNewsItems.add(item);
+                } else {
+                  _allNewsItems[idx] = item;
+                }
+                _isLoading = false;
+              });
             }
-            _isLoading = false;
-          });
-        }
-      },
-      onError: (_) {
-        if (mounted) setState(() => _isLoading = false);
-      },
-      onDone: () {
-        if (mounted) {
-          setState(() => _isLoading = false);
-          if (forceRefresh) {
-            final newCount = CommercialRadarService.lastNewSignalsCount;
-            if (newCount > 0) {
-              CustomSnackBar.show(
-                context,
-                message: "$newCount nuevas señales agregadas al radar",
-              );
-            } else {
-              CustomSnackBar.show(
-                context,
-                message: "Radar actualizado con las últimas señales del día",
-              );
+          },
+          onError: (_) {
+            if (mounted) setState(() => _isLoading = false);
+          },
+          onDone: () {
+            if (mounted) {
+              setState(() => _isLoading = false);
+              if (forceRefresh) {
+                final newCount = CommercialRadarService.lastNewSignalsCount;
+                if (newCount > 0) {
+                  CustomSnackBar.show(
+                    context,
+                    message: "$newCount nuevas señales agregadas al radar",
+                  );
+                } else {
+                  CustomSnackBar.show(
+                    context,
+                    message:
+                        "Radar actualizado con las últimas señales del día",
+                  );
+                }
+              }
             }
-          }
-        }
-      },
-    );
+          },
+        );
   }
 
   Future<void> _launchUrl(String url) async {
@@ -197,13 +281,18 @@ class _CommercialRadarScreenState extends State<CommercialRadarScreen> with Sing
       }
     } catch (e) {
       if (mounted) {
-        CustomSnackBar.show(context, message: "No se pudo abrir el enlace: $e", isError: true);
+        CustomSnackBar.show(
+          context,
+          message: "No se pudo abrir el enlace: $e",
+          isError: true,
+        );
       }
     }
   }
 
   void _shareAlert(CommercialNewsItem item) {
-    final text = '''
+    final text =
+        '''
 ALERTA RADAR COMERCIAL - MOCHILALISTA
 Zona: ${_selectedLocation.displayName} (${item.scopeLabel})
 ${item.cleanTitle}
@@ -222,17 +311,18 @@ Fuente: ${item.sourceName} (${item.sourceUrl})
 
   void _changeLocation(RadarLocation newLocation) {
     if (newLocation == _selectedLocation) return;
+    final activeProfileId = _resolvedProfileId;
     setState(() {
       _selectedLocation = newLocation;
       _visibleCount = 6;
       _allNewsItems.clear();
     });
-    try {
-      SharedPreferences.getInstance().then((prefs) {
-        prefs.setString(_prefLocationJsonKey, jsonEncode(newLocation.toJson()));
-        prefs.setString(_prefRegionKey, newLocation.displayName);
-      });
-    } catch (_) {}
+    unawaited(
+      CommercialRadarService.saveLocationForProfile(
+        newLocation,
+        profileId: activeProfileId,
+      ),
+    );
     _fetchNews(forceRefresh: true);
   }
 
@@ -272,8 +362,12 @@ Fuente: ${item.sourceName} (${item.sourceUrl})
               itemCat.contains('region') ||
               item.scope == RadarNewsScope.local ||
               item.scope == RadarNewsScope.regional ||
-              item.region.toLowerCase().contains(_selectedLocation.province.toLowerCase()) ||
-              item.region.toLowerCase().contains(_selectedLocation.department.toLowerCase());
+              item.region.toLowerCase().contains(
+                _selectedLocation.province.toLowerCase(),
+              ) ||
+              item.region.toLowerCase().contains(
+                _selectedLocation.department.toLowerCase(),
+              );
         }
         if (targetCat.contains('clima') || targetCat.contains('ruta')) {
           return itemCat.contains('clima') || itemCat.contains('ruta');
@@ -281,11 +375,17 @@ Fuente: ${item.sourceName} (${item.sourceUrl})
         if (targetCat.contains('sunat') || targetCat.contains('ley')) {
           return itemCat.contains('sunat') || itemCat.contains('ley');
         }
-        if (targetCat.contains('proveedor') || targetCat.contains('abastecimiento')) {
-          return itemCat.contains('proveedor') || itemCat.contains('abastecimiento');
+        if (targetCat.contains('proveedor') ||
+            targetCat.contains('abastecimiento')) {
+          return itemCat.contains('proveedor') ||
+              itemCat.contains('abastecimiento');
         }
-        if (targetCat.contains('campaña') || targetCat.contains('campana') || targetCat.contains('fecha')) {
-          return itemCat.contains('campaña') || itemCat.contains('campana') || itemCat.contains('fecha');
+        if (targetCat.contains('campaña') ||
+            targetCat.contains('campana') ||
+            targetCat.contains('fecha')) {
+          return itemCat.contains('campaña') ||
+              itemCat.contains('campana') ||
+              itemCat.contains('fecha');
         }
         return itemCat.contains(targetCat);
       }).toList();
@@ -316,11 +416,16 @@ Fuente: ${item.sourceName} (${item.sourceUrl})
 
     for (var n in rutaItems) {
       final t = '${n.title} ${n.impactAnalysis}'.toLowerCase();
-      if (t.contains('quebrada') || t.contains('cierre') || t.contains('bloqueo') || t.contains('aislamiento')) {
+      if (t.contains('quebrada') ||
+          t.contains('cierre') ||
+          t.contains('bloqueo') ||
+          t.contains('aislamiento')) {
         rutasStatus = "Alerta";
         rutasColor = Colors.redAccent;
         break;
-      } else if (t.contains('lluvia') || t.contains('precaución') || t.contains('demora')) {
+      } else if (t.contains('lluvia') ||
+          t.contains('precaución') ||
+          t.contains('demora')) {
         rutasStatus = "Precaución";
         rutasColor = Colors.amber;
       }
@@ -331,16 +436,24 @@ Fuente: ${item.sourceName} (${item.sourceUrl})
     Color abastColor = Colors.greenAccent;
     final abastItems = _allNewsItems.where((n) {
       final c = n.category.toLowerCase();
-      return c.contains('proveedor') || c.contains('abastecimiento') || c.contains('precio');
+      return c.contains('proveedor') ||
+          c.contains('abastecimiento') ||
+          c.contains('precio');
     }).toList();
 
     for (var n in abastItems) {
       final t = '${n.title} ${n.impactAnalysis}'.toLowerCase();
-      if (t.contains('desabastecimiento') || t.contains('quiebre') || t.contains('paro') || t.contains('crítico')) {
+      if (t.contains('desabastecimiento') ||
+          t.contains('quiebre') ||
+          t.contains('paro') ||
+          t.contains('crítico')) {
         abastStatus = "Crítico";
         abastColor = Colors.redAccent;
         break;
-      } else if (t.contains('demora') || t.contains('alza') || t.contains('ajuste') || t.contains('parcial')) {
+      } else if (t.contains('demora') ||
+          t.contains('alza') ||
+          t.contains('ajuste') ||
+          t.contains('parcial')) {
         abastStatus = "Demoras";
         abastColor = Colors.amber;
       }
@@ -382,12 +495,26 @@ Fuente: ${item.sourceName} (${item.sourceUrl})
 
   IconData _getCategoryChipIcon(String category) {
     final cat = category.toLowerCase();
-    if (cat == 'todas') return Icons.public_rounded;
-    if (cat.contains('región') || cat.contains('region')) return Icons.location_on_outlined;
-    if (cat.contains('clima') || cat.contains('ruta')) return Icons.wb_cloudy_outlined;
-    if (cat.contains('ley') || cat.contains('sunat')) return Icons.gavel_rounded;
-    if (cat.contains('proveedor') || cat.contains('abastecimiento')) return Icons.local_shipping_outlined;
-    if (cat.contains('campaña') || cat.contains('campana') || cat.contains('fecha')) return Icons.event_available_outlined;
+    if (cat == 'todas') {
+      return Icons.public_rounded;
+    }
+    if (cat.contains('región') || cat.contains('region')) {
+      return Icons.location_on_outlined;
+    }
+    if (cat.contains('clima') || cat.contains('ruta')) {
+      return Icons.wb_cloudy_outlined;
+    }
+    if (cat.contains('ley') || cat.contains('sunat')) {
+      return Icons.gavel_rounded;
+    }
+    if (cat.contains('proveedor') || cat.contains('abastecimiento')) {
+      return Icons.local_shipping_outlined;
+    }
+    if (cat.contains('campaña') ||
+        cat.contains('campana') ||
+        cat.contains('fecha')) {
+      return Icons.event_available_outlined;
+    }
     return Icons.label_outline_rounded;
   }
 
@@ -406,16 +533,29 @@ Fuente: ${item.sourceName} (${item.sourceUrl})
         backgroundColor: Colors.transparent,
         elevation: 0,
         titleSpacing: 0,
-        leadingWidth: 40,
+        leadingWidth: 38,
+        actionsPadding: EdgeInsets.zero,
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
           children: [
-            const Text(
-              "Radar Comercial IA",
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, letterSpacing: -0.3),
+            const FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerLeft,
+              child: Text(
+                "Radar Comercial IA",
+                maxLines: 1,
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: -0.3,
+                ),
+              ),
             ),
             Text(
               "Señales de mercado • $_selectedRegion",
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
               style: TextStyle(
                 fontSize: 11,
                 color: isDark ? Colors.blueAccent[100] : Colors.blueAccent[700],
@@ -425,24 +565,63 @@ Fuente: ${item.sourceName} (${item.sourceUrl})
           ],
         ),
         actions: [
+          InfoTooltipButton(
+            iconColor: isDark ? Colors.white70 : Colors.black54,
+            iconSize: 20,
+            padding: const EdgeInsets.all(6),
+            constraints: const BoxConstraints(minWidth: 34, minHeight: 34),
+            onStartInteractiveTour: () => _startTour(context),
+            title: "Radar Comercial IA",
+            description:
+                "Monitorea alertas reales sobre clima y rutas logísticas, abastecimiento, leyes SUNAT y campañas comerciales según tu ubicación geográfica.",
+            tips: const [
+              InfoTip(
+                icon: Icons.location_on_outlined,
+                text:
+                    "Selecciona Departamento, Provincia y Distrito/Localidad para priorizar fuentes locales y regionales.",
+              ),
+              InfoTip(
+                icon: Icons.traffic_outlined,
+                text:
+                    "El Semáforo Operativo evalúa Rutas/Fletes, Abastecimiento y los días para la próxima campaña.",
+              ),
+              InfoTip(
+                icon: Icons.bookmarks_outlined,
+                text:
+                    "Guarda cualquier señal relevante para consultarla después sin conexión en la pestaña Guardadas.",
+              ),
+            ],
+          ),
           IconButton(
-            icon: const Icon(Icons.refresh, size: 22),
+            icon: const Icon(Icons.refresh, size: 20),
+            padding: const EdgeInsets.all(6),
+            constraints: const BoxConstraints(minWidth: 34, minHeight: 34),
+            style: IconButton.styleFrom(
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
             tooltip: "Actualizar noticias",
             onPressed: () => _fetchNews(forceRefresh: true),
           ),
-          const SizedBox(width: 8),
+          const SizedBox(width: 4),
         ],
       ),
       body: RefreshIndicator(
         onRefresh: () async => _fetchNews(forceRefresh: true),
         color: Colors.blueAccent,
         child: CustomScrollView(
-          physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
+          physics: const BouncingScrollPhysics(
+            parent: AlwaysScrollableScrollPhysics(),
+          ),
           slivers: [
             // Sliver 1: Panel Superior de Monitoreo + Semáforo de Pulso Operativo
             SliverToBoxAdapter(
               child: Padding(
-                padding: const EdgeInsets.only(left: 16, right: 16, top: 8, bottom: 8),
+                padding: const EdgeInsets.only(
+                  left: 16,
+                  right: 16,
+                  top: 8,
+                  bottom: 8,
+                ),
                 child: Container(
                   padding: const EdgeInsets.all(14),
                   decoration: BoxDecoration(
@@ -454,7 +633,9 @@ Fuente: ${item.sourceName} (${item.sourceUrl})
                       end: Alignment.bottomRight,
                     ),
                     borderRadius: BorderRadius.circular(18),
-                    border: Border.all(color: isDark ? Colors.white12 : Colors.grey[300]!),
+                    border: Border.all(
+                      color: isDark ? Colors.white12 : Colors.grey[300]!,
+                    ),
                   ),
                   child: Column(
                     children: [
@@ -466,99 +647,143 @@ Fuente: ${item.sourceName} (${item.sourceUrl})
                               padding: const EdgeInsets.all(10),
                               decoration: BoxDecoration(
                                 shape: BoxShape.circle,
-                                color: Colors.redAccent.withValues(alpha: 0.15 + (_pulseController.value * 0.1)),
+                                color: Colors.redAccent.withValues(
+                                  alpha: 0.15 + (_pulseController.value * 0.1),
+                                ),
                                 boxShadow: [
                                   BoxShadow(
-                                    color: Colors.redAccent.withValues(alpha: 0.3 * _pulseController.value),
+                                    color: Colors.redAccent.withValues(
+                                      alpha: 0.3 * _pulseController.value,
+                                    ),
                                     blurRadius: 10 * _pulseController.value,
                                     spreadRadius: 2,
-                                  )
+                                  ),
                                 ],
                               ),
-                              child: const Icon(Icons.radar_rounded, color: Colors.redAccent, size: 24),
+                              child: const Icon(
+                                Icons.radar_rounded,
+                                color: Colors.redAccent,
+                                size: 24,
+                              ),
                             ),
                           ),
                           const SizedBox(width: 12),
                           Expanded(
                             child: Column(
+                              key: _tourKeys.sourceStatusKey,
                               crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisSize: MainAxisSize.min,
                               children: [
-                                FittedBox(
-                                  fit: BoxFit.scaleDown,
-                                  alignment: Alignment.centerLeft,
-                                  child: Row(
-                                    children: [
-                                      Icon(
-                                        CommercialRadarService.lastSourceMode.icon,
-                                        size: 11,
-                                        color: CommercialRadarService.lastSourceMode.color,
-                                      ),
-                                      const SizedBox(width: 4),
-                                      Text(
-                                        CommercialRadarService.lastSourceMode.label,
+                                Row(
+                                  children: [
+                                    Icon(
+                                      CommercialRadarService
+                                          .lastSourceMode
+                                          .icon,
+                                      size: 11,
+                                      color: CommercialRadarService
+                                          .lastSourceMode
+                                          .color,
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Flexible(
+                                      child: Text(
+                                        CommercialRadarService
+                                            .lastSourceMode
+                                            .label,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
                                         style: TextStyle(
                                           fontSize: 10.5,
                                           fontWeight: FontWeight.bold,
-                                          color: CommercialRadarService.lastSourceMode.color,
+                                          color: CommercialRadarService
+                                              .lastSourceMode
+                                              .color,
                                         ),
                                       ),
-                                      const SizedBox(width: 6),
-                                      Container(
-                                        width: 6,
-                                        height: 6,
-                                        decoration: BoxDecoration(
-                                          shape: BoxShape.circle,
-                                          color: CommercialRadarService.lastSourceMode.color,
-                                        ),
-                                      ),
-                                      const SizedBox(width: 6),
-                                      Text(
-                                        "${filtered.length} alertas detectadas",
-                                        style: TextStyle(fontSize: 11, color: isDark ? Colors.grey[400] : Colors.grey[600]),
-                                      ),
-                                    ],
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 1),
+                                Text(
+                                  "${filtered.length} alertas detectadas",
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    fontSize: 10.5,
+                                    color: isDark
+                                        ? Colors.grey[400]
+                                        : Colors.grey[600],
                                   ),
                                 ),
                                 const SizedBox(height: 2),
-                                const FittedBox(
-                                  fit: BoxFit.scaleDown,
-                                  alignment: Alignment.centerLeft,
-                                  child: Text(
-                                    "Monitoreo Logístico y Comercial",
-                                    style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.bold),
+                                const Text(
+                                  "Monitoreo Logístico y Comercial",
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.bold,
+                                    height: 1.15,
                                   ),
                                 ),
                               ],
                             ),
                           ),
-                          // Píldora de Región
-                          InkWell(
-                            onTap: () => _openRegionPicker(isDark),
-                            borderRadius: BorderRadius.circular(20),
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                              decoration: BoxDecoration(
-                                color: Colors.blueAccent.withValues(alpha: 0.15),
-                                borderRadius: BorderRadius.circular(20),
-                                border: Border.all(color: Colors.blueAccent.withValues(alpha: 0.35)),
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  const Icon(Icons.location_on, size: 13, color: Colors.blueAccent),
-                                  const SizedBox(width: 4),
-                                  ConstrainedBox(
-                                    constraints: const BoxConstraints(maxWidth: 90),
-                                    child: Text(
-                                      _selectedRegion,
-                                      style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold, color: Colors.blueAccent),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
+                          // Píldora de Región (con Key externa sin romper selector descendiente InkWell->Container)
+                          KeyedSubtree(
+                            key: _tourKeys.locationPickerKey,
+                            child: InkWell(
+                              onTap: () => _openRegionPicker(isDark),
+                              borderRadius: BorderRadius.circular(20),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 10,
+                                  vertical: 5,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: Colors.blueAccent.withValues(
+                                    alpha: 0.15,
+                                  ),
+                                  borderRadius: BorderRadius.circular(20),
+                                  border: Border.all(
+                                    color: Colors.blueAccent.withValues(
+                                      alpha: 0.35,
                                     ),
                                   ),
-                                  const SizedBox(width: 2),
-                                  const Icon(Icons.keyboard_arrow_down, size: 14, color: Colors.blueAccent),
-                                ],
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const Icon(
+                                      Icons.location_on,
+                                      size: 13,
+                                      color: Colors.blueAccent,
+                                    ),
+                                    const SizedBox(width: 4),
+                                    ConstrainedBox(
+                                      constraints: const BoxConstraints(
+                                        maxWidth: 90,
+                                      ),
+                                      child: Text(
+                                        _selectedRegion,
+                                        style: const TextStyle(
+                                          fontSize: 11.5,
+                                          fontWeight: FontWeight.bold,
+                                          color: Colors.blueAccent,
+                                        ),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 2),
+                                    const Icon(
+                                      Icons.keyboard_arrow_down,
+                                      size: 14,
+                                      color: Colors.blueAccent,
+                                    ),
+                                  ],
+                                ),
                               ),
                             ),
                           ),
@@ -568,11 +793,19 @@ Fuente: ${item.sourceName} (${item.sourceUrl})
 
                       // Semáforo de Pulso Operativo (con FittedBox para cero desborde)
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                        key: _tourKeys.operationalPulseKey,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 8,
+                        ),
                         decoration: BoxDecoration(
-                          color: isDark ? Colors.black.withValues(alpha: 0.25) : Colors.grey[100],
+                          color: isDark
+                              ? Colors.black.withValues(alpha: 0.25)
+                              : Colors.grey[100],
                           borderRadius: BorderRadius.circular(14),
-                          border: Border.all(color: isDark ? Colors.white10 : Colors.grey[300]!),
+                          border: Border.all(
+                            color: isDark ? Colors.white10 : Colors.grey[300]!,
+                          ),
                         ),
                         child: Row(
                           children: [
@@ -585,7 +818,11 @@ Fuente: ${item.sourceName} (${item.sourceUrl})
                                 isDark: isDark,
                               ),
                             ),
-                            Container(width: 1, height: 26, color: isDark ? Colors.white12 : Colors.grey[300]),
+                            Container(
+                              width: 1,
+                              height: 26,
+                              color: isDark ? Colors.white12 : Colors.grey[300],
+                            ),
                             Expanded(
                               child: _buildPulseItem(
                                 icon: Icons.inventory_2_outlined,
@@ -595,7 +832,11 @@ Fuente: ${item.sourceName} (${item.sourceUrl})
                                 isDark: isDark,
                               ),
                             ),
-                            Container(width: 1, height: 26, color: isDark ? Colors.white12 : Colors.grey[300]),
+                            Container(
+                              width: 1,
+                              height: 26,
+                              color: isDark ? Colors.white12 : Colors.grey[300],
+                            ),
                             Expanded(
                               child: _buildPulseItem(
                                 icon: Icons.celebration_outlined,
@@ -623,6 +864,7 @@ Fuente: ${item.sourceName} (${item.sourceUrl})
                   color: bgColor,
                   padding: const EdgeInsets.symmetric(vertical: 6),
                   child: Column(
+                    key: _tourKeys.searchFiltersKey,
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       // Pestaña Segmentada Superior: Noticias del Día vs Guardadas (X)
@@ -631,9 +873,13 @@ Fuente: ${item.sourceName} (${item.sourceUrl})
                         margin: const EdgeInsets.symmetric(horizontal: 16),
                         padding: const EdgeInsets.all(3),
                         decoration: BoxDecoration(
-                          color: isDark ? const Color(0xFF1E293B) : Colors.black.withValues(alpha: 0.05),
+                          color: isDark
+                              ? const Color(0xFF1E293B)
+                              : Colors.black.withValues(alpha: 0.05),
                           borderRadius: BorderRadius.circular(20),
-                          border: Border.all(color: isDark ? Colors.white10 : Colors.grey[300]!),
+                          border: Border.all(
+                            color: isDark ? Colors.white10 : Colors.grey[300]!,
+                          ),
                         ),
                         child: Row(
                           children: [
@@ -654,26 +900,37 @@ Fuente: ${item.sourceName} (${item.sourceUrl})
                                   child: FittedBox(
                                     fit: BoxFit.scaleDown,
                                     child: Row(
-                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.center,
                                       children: [
                                         Icon(
                                           Icons.radar_rounded,
                                           size: 15,
-                                          color: _activeTab == RadarTab.noticiasDelDia
+                                          color:
+                                              _activeTab ==
+                                                  RadarTab.noticiasDelDia
                                               ? Colors.white
-                                              : (isDark ? Colors.grey[400] : Colors.grey[700]),
+                                              : (isDark
+                                                    ? Colors.grey[400]
+                                                    : Colors.grey[700]),
                                         ),
                                         const SizedBox(width: 6),
                                         Text(
                                           "Noticias del Día",
                                           style: TextStyle(
                                             fontSize: 12,
-                                            fontWeight: _activeTab == RadarTab.noticiasDelDia
+                                            fontWeight:
+                                                _activeTab ==
+                                                    RadarTab.noticiasDelDia
                                                 ? FontWeight.bold
                                                 : FontWeight.w500,
-                                            color: _activeTab == RadarTab.noticiasDelDia
+                                            color:
+                                                _activeTab ==
+                                                    RadarTab.noticiasDelDia
                                                 ? Colors.white
-                                                : (isDark ? Colors.grey[400] : Colors.grey[700]),
+                                                : (isDark
+                                                      ? Colors.grey[400]
+                                                      : Colors.grey[700]),
                                           ),
                                         ),
                                       ],
@@ -699,26 +956,34 @@ Fuente: ${item.sourceName} (${item.sourceUrl})
                                   child: FittedBox(
                                     fit: BoxFit.scaleDown,
                                     child: Row(
-                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.center,
                                       children: [
                                         Icon(
                                           Icons.bookmarks_rounded,
                                           size: 15,
-                                          color: _activeTab == RadarTab.guardadas
+                                          color:
+                                              _activeTab == RadarTab.guardadas
                                               ? Colors.white
-                                              : (isDark ? Colors.grey[400] : Colors.grey[700]),
+                                              : (isDark
+                                                    ? Colors.grey[400]
+                                                    : Colors.grey[700]),
                                         ),
                                         const SizedBox(width: 6),
                                         Text(
                                           "Guardadas (${_savedNewsMap.length})",
                                           style: TextStyle(
                                             fontSize: 12,
-                                            fontWeight: _activeTab == RadarTab.guardadas
+                                            fontWeight:
+                                                _activeTab == RadarTab.guardadas
                                                 ? FontWeight.bold
                                                 : FontWeight.w500,
-                                            color: _activeTab == RadarTab.guardadas
+                                            color:
+                                                _activeTab == RadarTab.guardadas
                                                 ? Colors.white
-                                                : (isDark ? Colors.grey[400] : Colors.grey[700]),
+                                                : (isDark
+                                                      ? Colors.grey[400]
+                                                      : Colors.grey[700]),
                                           ),
                                         ),
                                       ],
@@ -737,29 +1002,56 @@ Fuente: ${item.sourceName} (${item.sourceUrl})
                         height: 36,
                         margin: const EdgeInsets.symmetric(horizontal: 16),
                         decoration: BoxDecoration(
-                          color: isDark ? const Color(0xFF1E293B) : Colors.white,
+                          color: isDark
+                              ? const Color(0xFF1E293B)
+                              : Colors.white,
                           borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: isDark ? Colors.white12 : Colors.grey[300]!),
+                          border: Border.all(
+                            color: isDark ? Colors.white12 : Colors.grey[300]!,
+                          ),
                         ),
                         child: TextField(
                           controller: _searchController,
-                          onChanged: (val) => setState(() => _searchQuery = val),
-                          style: TextStyle(fontSize: 12, color: isDark ? Colors.white : Colors.black87),
+                          onChanged: (val) =>
+                              setState(() => _searchQuery = val),
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: isDark ? Colors.white : Colors.black87,
+                          ),
                           decoration: InputDecoration(
                             isDense: true,
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 6,
+                              vertical: 8,
+                            ),
                             border: InputBorder.none,
                             hintText: "Buscar noticias, rutas, SUNAT...",
-                            hintStyle: TextStyle(fontSize: 11.5, color: isDark ? Colors.grey[500] : Colors.grey[400]),
-                            prefixIconConstraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-                            prefixIcon: const Icon(Icons.search, size: 17, color: Colors.blueAccent),
+                            hintStyle: TextStyle(
+                              fontSize: 11.5,
+                              color: isDark
+                                  ? Colors.grey[500]
+                                  : Colors.grey[400],
+                            ),
+                            prefixIconConstraints: const BoxConstraints(
+                              minWidth: 32,
+                              minHeight: 32,
+                            ),
+                            prefixIcon: const Icon(
+                              Icons.search,
+                              size: 17,
+                              color: Colors.blueAccent,
+                            ),
                             suffixIcon: _searchQuery.isNotEmpty
                                 ? GestureDetector(
                                     onTap: () {
                                       _searchController.clear();
                                       setState(() => _searchQuery = '');
                                     },
-                                    child: const Icon(Icons.close, size: 16, color: Colors.grey),
+                                    child: const Icon(
+                                      Icons.close,
+                                      size: 16,
+                                      color: Colors.grey,
+                                    ),
                                   )
                                 : null,
                           ),
@@ -783,19 +1075,31 @@ Fuente: ${item.sourceName} (${item.sourceUrl})
                                   padding: const EdgeInsets.only(right: 8),
                                   child: ChoiceChip(
                                     visualDensity: VisualDensity.compact,
-                                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                    materialTapTargetSize:
+                                        MaterialTapTargetSize.shrinkWrap,
                                     avatar: Icon(
                                       iconData,
                                       size: 13,
-                                      color: isSelected ? Colors.white : Colors.blueAccent,
+                                      color: isSelected
+                                          ? Colors.white
+                                          : Colors.blueAccent,
                                     ),
-                                    labelPadding: const EdgeInsets.only(left: 2, right: 4),
+                                    labelPadding: const EdgeInsets.only(
+                                      left: 2,
+                                      right: 4,
+                                    ),
                                     label: Text(
                                       cat,
                                       style: TextStyle(
                                         fontSize: 11.5,
-                                        fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                                        color: isSelected ? Colors.white : (isDark ? Colors.grey[300] : Colors.grey[800]),
+                                        fontWeight: isSelected
+                                            ? FontWeight.bold
+                                            : FontWeight.normal,
+                                        color: isSelected
+                                            ? Colors.white
+                                            : (isDark
+                                                  ? Colors.grey[300]
+                                                  : Colors.grey[800]),
                                       ),
                                     ),
                                     selected: isSelected,
@@ -804,11 +1108,17 @@ Fuente: ${item.sourceName} (${item.sourceUrl})
                                       _visibleCount = 6;
                                     }),
                                     selectedColor: Colors.blueAccent,
-                                    backgroundColor: isDark ? const Color(0xFF1E293B) : Colors.grey[200],
+                                    backgroundColor: isDark
+                                        ? const Color(0xFF1E293B)
+                                        : Colors.grey[200],
                                     shape: RoundedRectangleBorder(
                                       borderRadius: BorderRadius.circular(20),
                                       side: BorderSide(
-                                        color: isSelected ? Colors.blueAccent : (isDark ? Colors.white10 : Colors.grey[300]!),
+                                        color: isSelected
+                                            ? Colors.blueAccent
+                                            : (isDark
+                                                  ? Colors.white10
+                                                  : Colors.grey[300]!),
                                       ),
                                     ),
                                     showCheckmark: false,
@@ -827,48 +1137,80 @@ Fuente: ${item.sourceName} (${item.sourceUrl})
 
             // Sliver 3: Feed de Alertas con Staggered Streaming
             if (_isLoading && _allNewsItems.isEmpty)
-              const SliverFillRemaining(
+              SliverFillRemaining(
+                hasScrollBody: false,
                 child: Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      CircularProgressIndicator(color: Colors.blueAccent),
-                      SizedBox(height: 16),
-                      Text("Sintonizando radar con inteligencia artificial...", style: TextStyle(fontSize: 13, color: Colors.grey)),
-                    ],
+                  child: Padding(
+                    key: _tourKeys.signalCardKey,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 20,
+                      vertical: 16,
+                    ),
+                    child: const Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        CircularProgressIndicator(color: Colors.blueAccent),
+                        SizedBox(height: 16),
+                        Text(
+                          "Sintonizando radar con inteligencia artificial...",
+                          textAlign: TextAlign.center,
+                          style: TextStyle(fontSize: 13, color: Colors.grey),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               )
             else if (filtered.isEmpty)
               SliverFillRemaining(
+                hasScrollBody: false,
                 child: Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        _activeTab == RadarTab.guardadas ? Icons.bookmarks_outlined : Icons.radar_outlined,
-                        size: 48,
-                        color: Colors.grey,
-                      ),
-                      const SizedBox(height: 12),
-                      Text(
-                        _activeTab == RadarTab.guardadas
-                            ? "No tienes noticias guardadas aún"
-                            : "No se encontraron noticias con los filtros actuales",
-                        style: const TextStyle(fontSize: 14, color: Colors.grey),
-                      ),
-                    ],
+                  child: Padding(
+                    key: _tourKeys.signalCardKey,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 20,
+                      vertical: 16,
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          _activeTab == RadarTab.guardadas
+                              ? Icons.bookmarks_outlined
+                              : Icons.radar_outlined,
+                          size: 48,
+                          color: Colors.grey,
+                        ),
+                        const SizedBox(height: 12),
+                        Text(
+                          _activeTab == RadarTab.guardadas
+                              ? "No tienes noticias guardadas aún"
+                              : "No se encontraron noticias con los filtros actuales",
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            fontSize: 14,
+                            color: Colors.grey,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               )
             else
               SliverPadding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 8,
+                ),
                 sliver: SliverList(
                   delegate: SliverChildBuilderDelegate(
                     (context, index) {
                       if (index < paged.length) {
-                        return _buildNewsCard(paged[index], isDark);
+                        return KeyedSubtree(
+                          key: index == 0 ? _tourKeys.signalCardKey : null,
+                          child: _buildNewsCard(paged[index], isDark),
+                        );
                       } else if (paged.length < filtered.length) {
                         return Padding(
                           padding: const EdgeInsets.symmetric(vertical: 16),
@@ -880,11 +1222,17 @@ Fuente: ${item.sourceName} (${item.sourceUrl})
                                 });
                               },
                               icon: const Icon(Icons.add, size: 16),
-                              label: Text("Cargar más señales (${filtered.length - paged.length} restantes)"),
+                              label: Text(
+                                "Cargar más señales (${filtered.length - paged.length} restantes)",
+                              ),
                               style: OutlinedButton.styleFrom(
                                 foregroundColor: Colors.blueAccent,
-                                side: const BorderSide(color: Colors.blueAccent),
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                                side: const BorderSide(
+                                  color: Colors.blueAccent,
+                                ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(20),
+                                ),
                               ),
                             ),
                           ),
@@ -892,7 +1240,9 @@ Fuente: ${item.sourceName} (${item.sourceUrl})
                       }
                       return null;
                     },
-                    childCount: paged.length < filtered.length ? paged.length + 1 : paged.length,
+                    childCount: paged.length < filtered.length
+                        ? paged.length + 1
+                        : paged.length,
                   ),
                 ),
               ),
@@ -926,12 +1276,16 @@ Fuente: ${item.sourceName} (${item.sourceUrl})
               mainAxisSize: MainAxisSize.min,
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(icon, size: 13, color: isDark ? Colors.grey[400] : Colors.grey[600]),
+                Icon(
+                  icon,
+                  size: 13,
+                  color: isDark ? Colors.grey[400] : Colors.grey[600],
+                ),
                 const SizedBox(width: 4),
                 Text(
                   title,
                   style: TextStyle(
-                    fontSize: 11, 
+                    fontSize: 11,
                     fontWeight: FontWeight.w600,
                     color: isDark ? Colors.grey[300] : Colors.grey[700],
                   ),
@@ -954,7 +1308,10 @@ Fuente: ${item.sourceName} (${item.sourceUrl})
                 Container(
                   width: 7,
                   height: 7,
-                  decoration: BoxDecoration(shape: BoxShape.circle, color: statusColor),
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: statusColor,
+                  ),
                 ),
                 const SizedBox(width: 5),
                 Text(
@@ -1006,7 +1363,10 @@ Fuente: ${item.sourceName} (${item.sourceUrl})
             padding: const EdgeInsets.symmetric(horizontal: 14),
             decoration: BoxDecoration(
               gradient: LinearGradient(
-                colors: [catColor.withValues(alpha: 0.85), catColor.withValues(alpha: 0.6)],
+                colors: [
+                  catColor.withValues(alpha: 0.85),
+                  catColor.withValues(alpha: 0.6),
+                ],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               ),
@@ -1033,19 +1393,31 @@ Fuente: ${item.sourceName} (${item.sourceUrl})
                 ),
                 IconButton(
                   padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                  constraints: const BoxConstraints(
+                    minWidth: 28,
+                    minHeight: 28,
+                  ),
                   icon: Icon(
                     isBookmarked ? Icons.bookmark : Icons.bookmark_border,
                     color: Colors.white,
                     size: 19,
                   ),
-                  tooltip: isBookmarked ? "Quitar de Guardadas" : "Guardar en Favoritos",
+                  tooltip: isBookmarked
+                      ? "Quitar de Guardadas"
+                      : "Guardar en Favoritos",
                   onPressed: () => _toggleBookmark(item),
                 ),
                 IconButton(
                   padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
-                  icon: const Icon(Icons.open_in_new, color: Colors.white70, size: 17),
+                  constraints: const BoxConstraints(
+                    minWidth: 28,
+                    minHeight: 28,
+                  ),
+                  icon: const Icon(
+                    Icons.open_in_new,
+                    color: Colors.white70,
+                    size: 17,
+                  ),
                   tooltip: "Abrir enlace original",
                   onPressed: () => _launchUrl(item.sourceUrl),
                 ),
@@ -1065,9 +1437,13 @@ Fuente: ${item.sourceName} (${item.sourceUrl})
                   crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 3,
+                      ),
                       decoration: BoxDecoration(
-                        color: (isDark ? Colors.blue[400]! : Colors.blue[700]!).withValues(alpha: 0.15),
+                        color: (isDark ? Colors.blue[400]! : Colors.blue[700]!)
+                            .withValues(alpha: 0.15),
                         borderRadius: BorderRadius.circular(6),
                       ),
                       child: Text(
@@ -1080,15 +1456,18 @@ Fuente: ${item.sourceName} (${item.sourceUrl})
                       ),
                     ),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 7,
+                        vertical: 3,
+                      ),
                       decoration: BoxDecoration(
-                        color: item.isLive 
-                            ? const Color(0xFF059669).withValues(alpha: 0.15) 
+                        color: item.isLive
+                            ? const Color(0xFF059669).withValues(alpha: 0.15)
                             : Colors.indigo.withValues(alpha: 0.15),
                         borderRadius: BorderRadius.circular(6),
                         border: Border.all(
-                          color: item.isLive 
-                              ? const Color(0xFF059669).withValues(alpha: 0.4) 
+                          color: item.isLive
+                              ? const Color(0xFF059669).withValues(alpha: 0.4)
                               : Colors.indigo.withValues(alpha: 0.35),
                           width: 0.8,
                         ),
@@ -1101,19 +1480,29 @@ Fuente: ${item.sourceName} (${item.sourceUrl})
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               Icon(
-                                item.isLive ? Icons.sensors_rounded : Icons.verified_user_outlined,
+                                item.isLive
+                                    ? Icons.sensors_rounded
+                                    : Icons.verified_user_outlined,
                                 size: 11,
-                                color: item.isLive ? const Color(0xFF059669) : Colors.indigoAccent,
+                                color: item.isLive
+                                    ? const Color(0xFF059669)
+                                    : Colors.indigoAccent,
                               ),
                               const SizedBox(width: 4),
                               Text(
-                                item.isLive ? "En Vivo Verificada" : "Guía Verificada",
+                                item.isLive
+                                    ? "En Vivo Verificada"
+                                    : "Guía Verificada",
                                 style: TextStyle(
                                   fontSize: 10,
                                   fontWeight: FontWeight.bold,
-                                  color: item.isLive 
-                                      ? (isDark ? const Color(0xFF34D399) : const Color(0xFF065F46))
-                                      : (isDark ? Colors.indigo[200] : Colors.indigo[800]),
+                                  color: item.isLive
+                                      ? (isDark
+                                            ? const Color(0xFF34D399)
+                                            : const Color(0xFF065F46))
+                                      : (isDark
+                                            ? Colors.indigo[200]
+                                            : Colors.indigo[800]),
                                 ),
                               ),
                             ],
@@ -1123,14 +1512,18 @@ Fuente: ${item.sourceName} (${item.sourceUrl})
                     ),
                     // Badge Territorial (Local / Regional / Nacional)
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 7,
+                        vertical: 3,
+                      ),
                       decoration: BoxDecoration(
-                        color: (item.scope == RadarNewsScope.local
-                                ? Colors.teal
-                                : item.scope == RadarNewsScope.regional
+                        color:
+                            (item.scope == RadarNewsScope.local
+                                    ? Colors.teal
+                                    : item.scope == RadarNewsScope.regional
                                     ? Colors.cyan
                                     : Colors.blueGrey)
-                            .withValues(alpha: 0.15),
+                                .withValues(alpha: 0.15),
                         borderRadius: BorderRadius.circular(6),
                       ),
                       child: ConstrainedBox(
@@ -1144,14 +1537,14 @@ Fuente: ${item.sourceName} (${item.sourceUrl})
                                 item.scope == RadarNewsScope.local
                                     ? Icons.near_me_outlined
                                     : item.scope == RadarNewsScope.regional
-                                        ? Icons.map_outlined
-                                        : Icons.public_outlined,
+                                    ? Icons.map_outlined
+                                    : Icons.public_outlined,
                                 size: 11,
                                 color: item.scope == RadarNewsScope.local
                                     ? Colors.tealAccent
                                     : item.scope == RadarNewsScope.regional
-                                        ? Colors.cyanAccent
-                                        : Colors.blueGrey[200],
+                                    ? Colors.cyanAccent
+                                    : Colors.blueGrey[200],
                               ),
                               const SizedBox(width: 4),
                               Text(
@@ -1160,10 +1553,16 @@ Fuente: ${item.sourceName} (${item.sourceUrl})
                                   fontSize: 10,
                                   fontWeight: FontWeight.bold,
                                   color: item.scope == RadarNewsScope.local
-                                      ? (isDark ? Colors.tealAccent : Colors.teal[800])
+                                      ? (isDark
+                                            ? Colors.tealAccent
+                                            : Colors.teal[800])
                                       : item.scope == RadarNewsScope.regional
-                                          ? (isDark ? Colors.cyanAccent : Colors.cyan[800])
-                                          : (isDark ? Colors.blueGrey[200] : Colors.blueGrey[800]),
+                                      ? (isDark
+                                            ? Colors.cyanAccent
+                                            : Colors.cyan[800])
+                                      : (isDark
+                                            ? Colors.blueGrey[200]
+                                            : Colors.blueGrey[800]),
                                 ),
                               ),
                             ],
@@ -1215,14 +1614,22 @@ Fuente: ${item.sourceName} (${item.sourceUrl})
                     margin: const EdgeInsets.only(bottom: 8),
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: isDark ? Colors.orange.withValues(alpha: 0.1) : const Color(0xFFFFF7ED),
+                      color: isDark
+                          ? Colors.orange.withValues(alpha: 0.1)
+                          : const Color(0xFFFFF7ED),
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: Colors.orange.withValues(alpha: 0.35)),
+                      border: Border.all(
+                        color: Colors.orange.withValues(alpha: 0.35),
+                      ),
                     ),
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Icon(Icons.local_shipping_outlined, color: Colors.orange, size: 18),
+                        const Icon(
+                          Icons.local_shipping_outlined,
+                          color: Colors.orange,
+                          size: 18,
+                        ),
                         const SizedBox(width: 8),
                         Expanded(
                           child: Column(
@@ -1242,7 +1649,9 @@ Fuente: ${item.sourceName} (${item.sourceUrl})
                                 style: TextStyle(
                                   fontSize: 12,
                                   height: 1.35,
-                                  color: isDark ? Colors.orange[100] : const Color(0xFF9A3412),
+                                  color: isDark
+                                      ? Colors.orange[100]
+                                      : const Color(0xFF9A3412),
                                 ),
                               ),
                             ],
@@ -1256,14 +1665,22 @@ Fuente: ${item.sourceName} (${item.sourceUrl})
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: isDark ? Colors.green.withValues(alpha: 0.1) : const Color(0xFFECFDF5),
+                    color: isDark
+                        ? Colors.green.withValues(alpha: 0.1)
+                        : const Color(0xFFECFDF5),
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Colors.green.withValues(alpha: 0.35)),
+                    border: Border.all(
+                      color: Colors.green.withValues(alpha: 0.35),
+                    ),
                   ),
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Icon(Icons.lightbulb_outline, color: Colors.green, size: 18),
+                      const Icon(
+                        Icons.lightbulb_outline,
+                        color: Colors.green,
+                        size: 18,
+                      ),
                       const SizedBox(width: 8),
                       Expanded(
                         child: Column(
@@ -1283,7 +1700,9 @@ Fuente: ${item.sourceName} (${item.sourceUrl})
                               style: TextStyle(
                                 fontSize: 12,
                                 height: 1.35,
-                                color: isDark ? Colors.green[100] : const Color(0xFF065F46),
+                                color: isDark
+                                    ? Colors.green[100]
+                                    : const Color(0xFF065F46),
                               ),
                             ),
                           ],
@@ -1305,9 +1724,14 @@ Fuente: ${item.sourceName} (${item.sourceUrl})
                             style: ElevatedButton.styleFrom(
                               backgroundColor: action.color,
                               foregroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 8,
+                              ),
                               visualDensity: VisualDensity.compact,
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
                               elevation: 0,
                             ),
                             icon: Icon(action.icon, size: 15),
@@ -1315,19 +1739,31 @@ Fuente: ${item.sourceName} (${item.sourceUrl})
                               fit: BoxFit.scaleDown,
                               child: Text(
                                 action.label,
-                                style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold),
+                                style: const TextStyle(
+                                  fontSize: 11.5,
+                                  fontWeight: FontWeight.bold,
+                                ),
                               ),
                             ),
-                            onPressed: () => _executeRadarAction(context, action.type),
+                            onPressed: () =>
+                                _executeRadarAction(context, action.type),
                           ),
                         ),
                         const SizedBox(width: 8),
                         IconButton(
                           style: IconButton.styleFrom(
-                            backgroundColor: Colors.green.withValues(alpha: 0.15),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            backgroundColor: Colors.green.withValues(
+                              alpha: 0.15,
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
                           ),
-                          icon: const Icon(Icons.share_outlined, color: Colors.green, size: 18),
+                          icon: const Icon(
+                            Icons.share_outlined,
+                            color: Colors.green,
+                            size: 18,
+                          ),
                           tooltip: "Compartir Alerta por WhatsApp",
                           onPressed: () => _shareAlert(item),
                         ),
@@ -1343,7 +1779,10 @@ Fuente: ${item.sourceName} (${item.sourceUrl})
                   child: TextButton.icon(
                     style: TextButton.styleFrom(
                       visualDensity: VisualDensity.compact,
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 4,
+                      ),
                     ),
                     onPressed: () => _launchUrl(item.sourceUrl),
                     icon: const Icon(Icons.link, size: 16),
@@ -1391,19 +1830,39 @@ Fuente: ${item.sourceName} (${item.sourceUrl})
 
   Color _getCategoryColor(String category) {
     final lower = category.toLowerCase();
-    if (lower.contains('clima') || lower.contains('ruta')) return const Color(0xFF0284C7);
-    if (lower.contains('ley') || lower.contains('sunat')) return const Color(0xFF7C3AED);
-    if (lower.contains('proveedor') || lower.contains('abastecimiento')) return const Color(0xFFD97706);
-    if (lower.contains('campaña') || lower.contains('campana') || lower.contains('fecha')) return const Color(0xFFE11D48);
+    if (lower.contains('clima') || lower.contains('ruta')) {
+      return const Color(0xFF0284C7);
+    }
+    if (lower.contains('ley') || lower.contains('sunat')) {
+      return const Color(0xFF7C3AED);
+    }
+    if (lower.contains('proveedor') || lower.contains('abastecimiento')) {
+      return const Color(0xFFD97706);
+    }
+    if (lower.contains('campaña') ||
+        lower.contains('campana') ||
+        lower.contains('fecha')) {
+      return const Color(0xFFE11D48);
+    }
     return const Color(0xFF059669);
   }
 
   IconData _getCategoryIcon(String category) {
     final lower = category.toLowerCase();
-    if (lower.contains('clima') || lower.contains('ruta')) return Icons.wb_cloudy_outlined;
-    if (lower.contains('ley') || lower.contains('sunat')) return Icons.gavel_rounded;
-    if (lower.contains('proveedor') || lower.contains('abastecimiento')) return Icons.local_shipping_outlined;
-    if (lower.contains('campaña') || lower.contains('campana') || lower.contains('fecha')) return Icons.event_available_outlined;
+    if (lower.contains('clima') || lower.contains('ruta')) {
+      return Icons.wb_cloudy_outlined;
+    }
+    if (lower.contains('ley') || lower.contains('sunat')) {
+      return Icons.gavel_rounded;
+    }
+    if (lower.contains('proveedor') || lower.contains('abastecimiento')) {
+      return Icons.local_shipping_outlined;
+    }
+    if (lower.contains('campaña') ||
+        lower.contains('campana') ||
+        lower.contains('fecha')) {
+      return Icons.event_available_outlined;
+    }
     return Icons.location_on_outlined;
   }
 }
@@ -1422,7 +1881,11 @@ class _RadarStickyHeaderDelegate extends SliverPersistentHeaderDelegate {
   double get maxExtent => height;
 
   @override
-  Widget build(BuildContext context, double shrinkOffset, bool overlapsContent) {
+  Widget build(
+    BuildContext context,
+    double shrinkOffset,
+    bool overlapsContent,
+  ) {
     return child;
   }
 
@@ -1469,21 +1932,58 @@ class _LocationPickerSheetState extends State<LocationPickerSheet> {
     super.initState();
     _stagedProv = widget.initialStagedProvince;
     _stagedDept = widget.initialStagedDepartment;
-    if (_stagedProv != null && widget.currentLocation.province == _stagedProv!.name) {
+    if (_stagedProv != null &&
+        widget.currentLocation.province == _stagedProv!.name) {
       _districtController.text = widget.currentLocation.district ?? '';
     }
   }
 
   static const List<RadarLocation> _quickLocations = [
-    RadarLocation(department: 'Todo el Perú', province: 'Nacional', corridor: 'Red Vial Nacional'),
-    RadarLocation(department: 'Lima', province: 'Lima', corridor: 'Panamericana / Eje Central'),
-    RadarLocation(department: 'La Libertad', province: 'Trujillo', corridor: 'Panamericana Norte'),
-    RadarLocation(department: 'Arequipa', province: 'Arequipa', corridor: 'Panamericana Sur'),
-    RadarLocation(department: 'Lambayeque', province: 'Chiclayo', corridor: 'Panamericana Norte'),
-    RadarLocation(department: 'Piura', province: 'Talara', corridor: 'Panamericana Norte'),
-    RadarLocation(department: 'Cusco', province: 'Cusco', corridor: 'Corredor Sur / Eje Andino'),
-    RadarLocation(department: 'Junín', province: 'Huancayo', corridor: 'Carretera Central'),
-    RadarLocation(department: 'Loreto', province: 'Maynas', corridor: 'Eje Fluvial Amazónico'),
+    RadarLocation(
+      department: 'Todo el Perú',
+      province: 'Nacional',
+      corridor: 'Red Vial Nacional',
+    ),
+    RadarLocation(
+      department: 'Lima',
+      province: 'Lima',
+      corridor: 'Panamericana / Eje Central',
+    ),
+    RadarLocation(
+      department: 'La Libertad',
+      province: 'Trujillo',
+      corridor: 'Panamericana Norte',
+    ),
+    RadarLocation(
+      department: 'Arequipa',
+      province: 'Arequipa',
+      corridor: 'Panamericana Sur',
+    ),
+    RadarLocation(
+      department: 'Lambayeque',
+      province: 'Chiclayo',
+      corridor: 'Panamericana Norte',
+    ),
+    RadarLocation(
+      department: 'Piura',
+      province: 'Talara',
+      corridor: 'Panamericana Norte',
+    ),
+    RadarLocation(
+      department: 'Cusco',
+      province: 'Cusco',
+      corridor: 'Corredor Sur / Eje Andino',
+    ),
+    RadarLocation(
+      department: 'Junín',
+      province: 'Huancayo',
+      corridor: 'Carretera Central',
+    ),
+    RadarLocation(
+      department: 'Loreto',
+      province: 'Maynas',
+      corridor: 'Eje Fluvial Amazónico',
+    ),
   ];
 
   @override
@@ -1500,10 +2000,18 @@ class _LocationPickerSheetState extends State<LocationPickerSheet> {
     final secondaryTextColor = isDark ? Colors.grey[400]! : Colors.grey[600]!;
 
     if (_stagedProv != null && _stagedDept != null) {
-      return _buildDistrictPrecisionView(isDark, primaryTextColor, secondaryTextColor);
+      return _buildDistrictPrecisionView(
+        isDark,
+        primaryTextColor,
+        secondaryTextColor,
+      );
     }
 
-    return _buildProvinceSelectionView(isDark, primaryTextColor, secondaryTextColor);
+    return _buildProvinceSelectionView(
+      isDark,
+      primaryTextColor,
+      secondaryTextColor,
+    );
   }
 
   Widget _buildDistrictPrecisionView(
@@ -1514,7 +2022,10 @@ class _LocationPickerSheetState extends State<LocationPickerSheet> {
     final deptName = _stagedDept!.name;
     final provName = _stagedProv!.name;
     final corridor = _stagedDept!.mainCorridor;
-    final suggested = PeruUbigeoCatalog.getSuggestedDistricts(deptName, provName);
+    final suggested = PeruUbigeoCatalog.getSuggestedDistricts(
+      deptName,
+      provName,
+    );
 
     return InteractiveSheetWrapper(
       backgroundColor: widget.sheetBg,
@@ -1565,7 +2076,10 @@ class _LocationPickerSheetState extends State<LocationPickerSheet> {
                         ),
                         Text(
                           "Paso 3 de 3 • Precisa distrito o caserío (opcional)",
-                          style: TextStyle(fontSize: 11.5, color: secondaryTextColor),
+                          style: TextStyle(
+                            fontSize: 11.5,
+                            color: secondaryTextColor,
+                          ),
                         ),
                       ],
                     ),
@@ -1590,7 +2104,9 @@ class _LocationPickerSheetState extends State<LocationPickerSheet> {
                   spacing: 8,
                   runSpacing: 8,
                   children: suggested.map((dist) {
-                    final isChosen = _districtController.text.trim().toLowerCase() == dist.toLowerCase();
+                    final isChosen =
+                        _districtController.text.trim().toLowerCase() ==
+                        dist.toLowerCase();
                     return ActionChip(
                       avatar: Icon(
                         Icons.pin_drop,
@@ -1600,13 +2116,19 @@ class _LocationPickerSheetState extends State<LocationPickerSheet> {
                       label: Text(dist),
                       labelStyle: TextStyle(
                         fontSize: 12,
-                        fontWeight: isChosen ? FontWeight.bold : FontWeight.w500,
+                        fontWeight: isChosen
+                            ? FontWeight.bold
+                            : FontWeight.w500,
                         color: isChosen ? Colors.white : primaryTextColor,
                       ),
                       backgroundColor: isChosen
                           ? Colors.blueAccent
-                          : (isDark ? const Color(0xFF0F172A) : const Color(0xFFE2E8F0)),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                          : (isDark
+                                ? const Color(0xFF0F172A)
+                                : const Color(0xFFE2E8F0)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
                       onPressed: () {
                         setState(() {
                           _districtController.text = dist;
@@ -1637,8 +2159,15 @@ class _LocationPickerSheetState extends State<LocationPickerSheet> {
                   hintText: suggested.isNotEmpty
                       ? "Ej. ${suggested.first}, o tu caserío..."
                       : "Ej. Distrito, caserío o centro poblado...",
-                  hintStyle: TextStyle(fontSize: 12.5, color: secondaryTextColor),
-                  prefixIcon: const Icon(Icons.edit_location_alt_outlined, size: 20, color: Colors.blueAccent),
+                  hintStyle: TextStyle(
+                    fontSize: 12.5,
+                    color: secondaryTextColor,
+                  ),
+                  prefixIcon: const Icon(
+                    Icons.edit_location_alt_outlined,
+                    size: 20,
+                    color: Colors.blueAccent,
+                  ),
                   suffixIcon: _districtController.text.isNotEmpty
                       ? IconButton(
                           icon: const Icon(Icons.clear, size: 18),
@@ -1648,9 +2177,14 @@ class _LocationPickerSheetState extends State<LocationPickerSheet> {
                           },
                         )
                       : null,
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 10,
+                  ),
                   filled: true,
-                  fillColor: isDark ? const Color(0xFF0F172A) : const Color(0xFFF1F5F9),
+                  fillColor: isDark
+                      ? const Color(0xFF0F172A)
+                      : const Color(0xFFF1F5F9),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(14),
                     borderSide: BorderSide.none,
@@ -1665,17 +2199,27 @@ class _LocationPickerSheetState extends State<LocationPickerSheet> {
                 decoration: BoxDecoration(
                   color: Colors.blueAccent.withValues(alpha: 0.08),
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.blueAccent.withValues(alpha: 0.2)),
+                  border: Border.all(
+                    color: Colors.blueAccent.withValues(alpha: 0.2),
+                  ),
                 ),
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Icon(Icons.info_outline, size: 16, color: Colors.blueAccent),
+                    const Icon(
+                      Icons.info_outline,
+                      size: 16,
+                      color: Colors.blueAccent,
+                    ),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
                         "El Radar priorizará noticias de tu localidad y las complementará con $provName y la región de $deptName.",
-                        style: TextStyle(fontSize: 11, color: secondaryTextColor, height: 1.3),
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: secondaryTextColor,
+                          height: 1.3,
+                        ),
                       ),
                     ),
                   ],
@@ -1706,14 +2250,19 @@ class _LocationPickerSheetState extends State<LocationPickerSheet> {
                       _districtController.text.trim().isNotEmpty
                           ? "Aplicar con '${_districtController.text.trim()}'"
                           : "Aplicar con Distrito / Localidad",
-                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5),
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 13.5,
+                      ),
                     ),
                   ),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.blueAccent,
                     foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(vertical: 12),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
                     elevation: 0,
                   ),
                 ),
@@ -1740,14 +2289,23 @@ class _LocationPickerSheetState extends State<LocationPickerSheet> {
                     fit: BoxFit.scaleDown,
                     child: Text(
                       "Usar toda la provincia ($provName)",
-                      style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 13,
+                      ),
                     ),
                   ),
                   style: OutlinedButton.styleFrom(
-                    foregroundColor: isDark ? Colors.grey[300] : const Color(0xFF334155),
-                    side: BorderSide(color: isDark ? Colors.white24 : Colors.grey[400]!),
+                    foregroundColor: isDark
+                        ? Colors.grey[300]
+                        : const Color(0xFF334155),
+                    side: BorderSide(
+                      color: isDark ? Colors.white24 : Colors.grey[400]!,
+                    ),
                     padding: const EdgeInsets.symmetric(vertical: 11),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
                   ),
                 ),
               ),
@@ -1770,7 +2328,9 @@ class _LocationPickerSheetState extends State<LocationPickerSheet> {
     } else {
       filteredDepts = PeruUbigeoCatalog.departments.where((d) {
         final matchDept = d.name.toLowerCase().contains(query);
-        final matchProv = d.provinces.any((p) => p.name.toLowerCase().contains(query));
+        final matchProv = d.provinces.any(
+          (p) => p.name.toLowerCase().contains(query),
+        );
         return matchDept || matchProv;
       }).toList();
     }
@@ -1795,7 +2355,11 @@ class _LocationPickerSheetState extends State<LocationPickerSheet> {
                     color: Colors.blueAccent.withValues(alpha: 0.15),
                     shape: BoxShape.circle,
                   ),
-                  child: const Icon(Icons.travel_explore_rounded, color: Colors.blueAccent, size: 22),
+                  child: const Icon(
+                    Icons.travel_explore_rounded,
+                    color: Colors.blueAccent,
+                    size: 22,
+                  ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -1812,7 +2376,10 @@ class _LocationPickerSheetState extends State<LocationPickerSheet> {
                       ),
                       Text(
                         "Sintoniza noticias, rutas y fletes de tu provincia o región",
-                        style: TextStyle(fontSize: 12, color: secondaryTextColor),
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: secondaryTextColor,
+                        ),
                       ),
                     ],
                   ),
@@ -1833,7 +2400,11 @@ class _LocationPickerSheetState extends State<LocationPickerSheet> {
               decoration: InputDecoration(
                 hintText: "Buscar departamento, provincia o ciudad...",
                 hintStyle: TextStyle(fontSize: 12.5, color: secondaryTextColor),
-                prefixIcon: const Icon(Icons.search, size: 20, color: Colors.blueAccent),
+                prefixIcon: const Icon(
+                  Icons.search,
+                  size: 20,
+                  color: Colors.blueAccent,
+                ),
                 suffixIcon: _filter.isNotEmpty
                     ? IconButton(
                         icon: const Icon(Icons.clear, size: 18),
@@ -1845,9 +2416,14 @@ class _LocationPickerSheetState extends State<LocationPickerSheet> {
                         },
                       )
                     : null,
-                contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 10,
+                ),
                 filled: true,
-                fillColor: isDark ? const Color(0xFF0F172A) : const Color(0xFFF1F5F9),
+                fillColor: isDark
+                    ? const Color(0xFF0F172A)
+                    : const Color(0xFFF1F5F9),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(14),
                   borderSide: BorderSide.none,
@@ -1885,13 +2461,19 @@ class _LocationPickerSheetState extends State<LocationPickerSheet> {
                         label: Text(loc.displayName),
                         labelStyle: TextStyle(
                           fontSize: 11.5,
-                          fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                          fontWeight: isSelected
+                              ? FontWeight.bold
+                              : FontWeight.w500,
                           color: isSelected ? Colors.white : primaryTextColor,
                         ),
                         backgroundColor: isSelected
                             ? Colors.blueAccent
-                            : (isDark ? const Color(0xFF0F172A) : const Color(0xFFE2E8F0)),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                            : (isDark
+                                  ? const Color(0xFF0F172A)
+                                  : const Color(0xFFE2E8F0)),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
                         onPressed: () => widget.onLocationSelected(loc),
                       ),
                     );
@@ -1919,61 +2501,93 @@ class _LocationPickerSheetState extends State<LocationPickerSheet> {
                     provincesToShow = dept.provinces;
                   } else {
                     provincesToShow = dept.provinces
-                        .where((p) => p.name.toLowerCase().contains(query) || dept.name.toLowerCase().contains(query))
+                        .where(
+                          (p) =>
+                              p.name.toLowerCase().contains(query) ||
+                              dept.name.toLowerCase().contains(query),
+                        )
                         .toList();
                   }
 
                   return Theme(
-                    data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+                    data: Theme.of(
+                      context,
+                    ).copyWith(dividerColor: Colors.transparent),
                     child: ExpansionTile(
                       key: PageStorageKey<String>('dept_${dept.name}'),
                       initiallyExpanded: query.isNotEmpty,
                       leading: Icon(
                         Icons.map_rounded,
                         size: 20,
-                        color: widget.currentLocation.department == dept.name ? Colors.blueAccent : Colors.grey,
+                        color: widget.currentLocation.department == dept.name
+                            ? Colors.blueAccent
+                            : Colors.grey,
                       ),
                       title: Text(
                         dept.name,
                         style: TextStyle(
                           fontSize: 14,
                           fontWeight: FontWeight.bold,
-                          color: widget.currentLocation.department == dept.name ? Colors.blueAccent : primaryTextColor,
+                          color: widget.currentLocation.department == dept.name
+                              ? Colors.blueAccent
+                              : primaryTextColor,
                         ),
                       ),
                       subtitle: Text(
                         dept.mainCorridor,
-                        style: TextStyle(fontSize: 11, color: secondaryTextColor),
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: secondaryTextColor,
+                        ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
                       children: provincesToShow.map((prov) {
-                        final isProvSelected = widget.currentLocation.department == dept.name &&
+                        final isProvSelected =
+                            widget.currentLocation.department == dept.name &&
                             widget.currentLocation.province == prov.name;
                         return ListTile(
                           dense: true,
-                          contentPadding: const EdgeInsets.only(left: 36, right: 16),
+                          contentPadding: const EdgeInsets.only(
+                            left: 36,
+                            right: 16,
+                          ),
                           leading: Icon(
                             Icons.location_city_rounded,
                             size: 16,
-                            color: isProvSelected ? Colors.blueAccent : Colors.grey,
+                            color: isProvSelected
+                                ? Colors.blueAccent
+                                : Colors.grey,
                           ),
                           title: Text(
                             prov.name,
                             style: TextStyle(
                               fontSize: 13,
-                              fontWeight: isProvSelected ? FontWeight.bold : FontWeight.normal,
-                              color: isProvSelected ? Colors.blueAccent : primaryTextColor,
+                              fontWeight: isProvSelected
+                                  ? FontWeight.bold
+                                  : FontWeight.normal,
+                              color: isProvSelected
+                                  ? Colors.blueAccent
+                                  : primaryTextColor,
                             ),
                           ),
                           trailing: isProvSelected
-                              ? const Icon(Icons.check_circle, color: Colors.blueAccent, size: 18)
-                              : const Icon(Icons.chevron_right, size: 18, color: Colors.grey),
+                              ? const Icon(
+                                  Icons.check_circle,
+                                  color: Colors.blueAccent,
+                                  size: 18,
+                                )
+                              : const Icon(
+                                  Icons.chevron_right,
+                                  size: 18,
+                                  color: Colors.grey,
+                                ),
                           onTap: () {
                             setState(() {
                               _stagedDept = dept;
                               _stagedProv = prov;
-                              _districtController.text = (widget.currentLocation.province == prov.name
+                              _districtController.text =
+                                  (widget.currentLocation.province == prov.name
                                   ? widget.currentLocation.district ?? ''
                                   : '');
                             });

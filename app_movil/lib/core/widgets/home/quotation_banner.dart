@@ -112,7 +112,14 @@ class QuotationBanner extends StatelessWidget {
               const SizedBox(height: 20),
               Row(
                 children: [
-                  Text(buttonText, style: TextStyle(color: isDark ? Colors.blue[300] : Colors.blue[700], fontWeight: FontWeight.w800, fontSize: 15)),
+                  Flexible(
+                    child: Text(
+                      buttonText,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(color: isDark ? Colors.blue[300] : Colors.blue[700], fontWeight: FontWeight.w800, fontSize: 15),
+                    ),
+                  ),
                   const SizedBox(width: 8),
                   Icon(Icons.arrow_forward_rounded, color: isDark ? Colors.blue[300] : Colors.blue[700], size: 20),
                 ],

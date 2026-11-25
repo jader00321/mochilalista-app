@@ -1,9 +1,9 @@
-import 'dart:io'; 
+import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart'; 
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
-import 'package:gal/gal.dart'; 
+import 'package:gal/gal.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:app_movil/core/widgets/marquee_text.dart';
 import 'package:app_movil/core/widgets/interactive_sheet_wrapper.dart';
@@ -11,7 +11,7 @@ import 'package:app_movil/core/widgets/interactive_sheet_wrapper.dart';
 import 'package:app_movil/features/smart_quotation/providers/workbench_provider.dart';
 import 'package:app_movil/features/smart_quotation/providers/smart_quotation_provider.dart';
 import 'package:app_movil/features/smart_quotation/providers/quick_sale_provider.dart';
-import 'package:app_movil/core/providers/auth_provider.dart'; 
+import 'package:app_movil/core/providers/auth_provider.dart';
 import 'package:app_movil/features/smart_quotation/models/smart_quotation_model.dart';
 import 'package:app_movil/features/smart_quotation/models/crm_models.dart';
 
@@ -20,18 +20,29 @@ import 'package:app_movil/core/widgets/full_screen_image_viewer.dart';
 
 import 'package:app_movil/features/smart_quotation/widgets/smart_update_modal.dart';
 import 'package:app_movil/features/smart_quotation/screens/manual_quotation_screen.dart';
-import 'package:app_movil/features/smart_quotation/widgets/detalle/quote_detail_header.dart';        
-import 'package:app_movil/features/smart_quotation/widgets/detalle/quote_evidence_panel.dart';       
-import 'package:app_movil/features/smart_quotation/widgets/detalle/quote_item_list_row.dart';        
+import 'package:app_movil/features/smart_quotation/widgets/detalle/quote_detail_header.dart';
+import 'package:app_movil/features/smart_quotation/widgets/detalle/quote_evidence_panel.dart';
+import 'package:app_movil/features/smart_quotation/widgets/detalle/quote_item_list_row.dart';
 import 'package:app_movil/features/smart_quotation/widgets/detalle/quotation_action_buttons.dart';
 import 'package:app_movil/features/smart_quotation/services/quotation_naming_engine.dart';
-
+import 'package:app_movil/core/services/tour/interactive_tour_service.dart';
+import 'package:app_movil/core/widgets/info_tooltip_button.dart';
+import 'package:app_movil/core/widgets/tour/configs/quotation_detail_tour.dart';
+import 'package:app_movil/core/widgets/tour/tour_step_model.dart';
 
 class QuotationDetailScreen extends StatefulWidget {
   final int quotationId;
   final String? clientName;
+  final bool autoTriggerTour;
+  final QuotationDetailTourKeys? tourKeys;
 
-  const QuotationDetailScreen({super.key, required this.quotationId, this.clientName});
+  const QuotationDetailScreen({
+    super.key,
+    required this.quotationId,
+    this.clientName,
+    this.autoTriggerTour = true,
+    this.tourKeys,
+  });
 
   @override
   State<QuotationDetailScreen> createState() => _QuotationDetailScreenState();
@@ -40,39 +51,80 @@ class QuotationDetailScreen extends StatefulWidget {
 class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
   bool _isLoading = true;
   SmartQuotationModel? _fullQuotation;
+  late final QuotationDetailTourKeys _tourKeys;
+  bool _didAttemptAutoTour = false;
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) { _loadData(); });
+    _tourKeys = widget.tourKeys ?? QuotationDetailTourKeys();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadData();
+    });
+  }
+
+  ScreenTourConfig _buildTourConfig() {
+    return QuotationDetailTour.buildConfig(keys: _tourKeys);
+  }
+
+  void _startTour(BuildContext context) {
+    InteractiveTourService.startManualTour(context, _buildTourConfig());
   }
 
   Future<void> _loadData() async {
     if (!mounted) return;
     setState(() => _isLoading = true);
-    
-    final workbenchProv = Provider.of<WorkbenchProvider>(context, listen: false);
-    final quotationProv = Provider.of<SmartQuotationProvider>(context, listen: false);
+
+    final workbenchProv = Provider.of<WorkbenchProvider>(
+      context,
+      listen: false,
+    );
+    final quotationProv = Provider.of<SmartQuotationProvider>(
+      context,
+      listen: false,
+    );
     final auth = Provider.of<AuthProvider>(context, listen: false);
 
     try {
-      _fullQuotation = await quotationProv.getQuotationById(widget.quotationId); 
-      
+      _fullQuotation = await quotationProv.getQuotationById(widget.quotationId);
+
       // Solo el equipo del negocio valida el semáforo de inventario
       if (!auth.isCommunityClient) {
-         await workbenchProv.checkTrafficLight(widget.quotationId);
-         
-         if (mounted && _fullQuotation != null && _fullQuotation!.status == 'READY') {
-           final validation = workbenchProv.getValidationFor(widget.quotationId);
-           if (validation != null && !validation.canSell) {
-              await _changeStatus('PENDING', isAutoRevert: true);
-           }
-         }
+        await workbenchProv.checkTrafficLight(widget.quotationId);
+
+        if (mounted &&
+            _fullQuotation != null &&
+            _fullQuotation!.status == 'READY') {
+          final validation = workbenchProv.getValidationFor(widget.quotationId);
+          if (validation != null && !validation.canSell) {
+            await _changeStatus('PENDING', isAutoRevert: true);
+          }
+        }
       }
     } catch (e) {
-      if (mounted) CustomSnackBar.show(context, message: "Error al cargar: $e", isError: true);
+      if (mounted) {
+        CustomSnackBar.show(
+          context,
+          message: "Error al cargar: $e",
+          isError: true,
+        );
+      }
     } finally {
-      if (mounted) setState(() => _isLoading = false);
+      if (mounted) {
+        setState(() => _isLoading = false);
+        if (widget.autoTriggerTour &&
+            !_didAttemptAutoTour &&
+            _fullQuotation != null) {
+          _didAttemptAutoTour = true;
+          WidgetsBinding.instance.addPostFrameCallback((_) async {
+            if (!mounted) return;
+            await InteractiveTourService.maybeStartAutomaticTour(
+              context,
+              _buildTourConfig(),
+            );
+          });
+        }
+      }
     }
   }
 
@@ -87,27 +139,59 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
           hasAccess = true;
         }
       } else {
-        if (await Permission.photosAddOnly.request().isGranted || await Permission.photos.request().isGranted) hasAccess = true;
+        if (await Permission.photosAddOnly.request().isGranted ||
+            await Permission.photos.request().isGranted) {
+          hasAccess = true;
+        }
       }
-      
+
       if (!hasAccess && await Permission.storage.isPermanentlyDenied) {
-          if (mounted) CustomSnackBar.show(context, message: "Habilita el permiso de almacenamiento en Configuración", isError: true);
-          return;
+        if (mounted) {
+          CustomSnackBar.show(
+            context,
+            message: "Habilita el permiso de almacenamiento en Configuración",
+            isError: true,
+          );
+        }
+        return;
       }
-      if (mounted) CustomSnackBar.show(context, message: "Descargando...", isError: false);
+      if (mounted) {
+        CustomSnackBar.show(context, message: "Descargando...", isError: false);
+      }
 
       final url = Uri.parse(_fullQuotation!.sourceImageUrl!);
       final httpClient = HttpClient();
       final request = await httpClient.getUrl(url);
       final httpResponse = await request.close();
       final bytes = await consolidateHttpClientResponseBytes(httpResponse);
-      await Gal.putImageBytes(Uint8List.fromList(bytes), name: "cotizacion_${_fullQuotation!.id}");
+      await Gal.putImageBytes(
+        Uint8List.fromList(bytes),
+        name: "cotizacion_${_fullQuotation!.id}",
+      );
 
-      if (mounted) CustomSnackBar.show(context, message: "✅ Imagen guardada en Galería", isError: false);
+      if (mounted) {
+        CustomSnackBar.show(
+          context,
+          message: "Imagen guardada en Galería",
+          isError: false,
+        );
+      }
     } on GalException catch (e) {
-      if (mounted) CustomSnackBar.show(context, message: "Permiso denegado por el sistema: ${e.type.message}", isError: true);
+      if (mounted) {
+        CustomSnackBar.show(
+          context,
+          message: "Permiso denegado por el sistema: ${e.type.message}",
+          isError: true,
+        );
+      }
     } catch (e) {
-      if (mounted) CustomSnackBar.show(context, message: "Error al descargar imagen", isError: true);
+      if (mounted) {
+        CustomSnackBar.show(
+          context,
+          message: "Error al descargar imagen",
+          isError: true,
+        );
+      }
     }
   }
 
@@ -119,28 +203,64 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
       backgroundColor: Colors.transparent,
       builder: (ctx) => SmartUpdateModal(
         validation: validation,
-        onUpdatePrices: () => _executeRefresh(prices: true, stock: false, names: false, bundles: false),
+        onUpdatePrices: () => _executeRefresh(
+          prices: true,
+          stock: false,
+          names: false,
+          bundles: false,
+        ),
         onFixStock: () => _fixAllStock(validation),
         onFixAll: () async {
           await _fixAllStock(validation);
           if (mounted) {
-            await _executeRefresh(prices: true, stock: false, names: true, bundles: false);
+            await _executeRefresh(
+              prices: true,
+              stock: false,
+              names: true,
+              bundles: false,
+            );
           }
         },
         onOpenManualEdit: () async {
           final result = await Navigator.push(
             context,
-            MaterialPageRoute(builder: (_) => ManualQuotationScreen(quotationId: widget.quotationId)),
+            MaterialPageRoute(
+              builder: (_) =>
+                  ManualQuotationScreen(quotationId: widget.quotationId),
+            ),
           );
           if (result == true && mounted) _loadData();
         },
-        onUpdateNames: () => _executeRefresh(prices: false, stock: false, names: true, bundles: false),
-        onSyncBundles: () => _executeRefresh(prices: false, stock: false, names: false, bundles: true),
-        onSyncUnits: () => _executeRefresh(prices: false, stock: false, names: true, bundles: false),
-        onFixSingleStock: (itemId, newQty) => _handleIndividualFix(itemId: itemId, newQty: newQty),
-        onRemoveSingleItem: (itemId) => _handleIndividualFix(itemId: itemId, remove: true),
-        onAcceptSinglePrice: (itemId, newPrice, newBase) => _handleIndividualFix(itemId: itemId, newAppliedPrice: newPrice, newOriginalPrice: newBase),
-        onAcceptSingleName: (itemId, newName) => _handleIndividualFix(itemId: itemId, newName: newName),
+        onUpdateNames: () => _executeRefresh(
+          prices: false,
+          stock: false,
+          names: true,
+          bundles: false,
+        ),
+        onSyncBundles: () => _executeRefresh(
+          prices: false,
+          stock: false,
+          names: false,
+          bundles: true,
+        ),
+        onSyncUnits: () => _executeRefresh(
+          prices: false,
+          stock: false,
+          names: true,
+          bundles: false,
+        ),
+        onFixSingleStock: (itemId, newQty) =>
+            _handleIndividualFix(itemId: itemId, newQty: newQty),
+        onRemoveSingleItem: (itemId) =>
+            _handleIndividualFix(itemId: itemId, remove: true),
+        onAcceptSinglePrice: (itemId, newPrice, newBase) =>
+            _handleIndividualFix(
+              itemId: itemId,
+              newAppliedPrice: newPrice,
+              newOriginalPrice: newBase,
+            ),
+        onAcceptSingleName: (itemId, newName) =>
+            _handleIndividualFix(itemId: itemId, newName: newName),
       ),
     );
   }
@@ -159,12 +279,18 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
       for (var conflict in validation.sharedStockConflicts) {
         int remainingBase = conflict.totalSharedPool;
         for (var cItem in conflict.conflictingItems) {
-          final factor = cItem.conversionFactor > 0 ? cItem.conversionFactor : 1;
+          final factor = cItem.conversionFactor > 0
+              ? cItem.conversionFactor
+              : 1;
           final maxUnitsFromBase = remainingBase ~/ factor;
           final maxAllowed = cItem.cupoMaximo != null
-              ? (maxUnitsFromBase < cItem.cupoMaximo! ? maxUnitsFromBase : cItem.cupoMaximo!)
+              ? (maxUnitsFromBase < cItem.cupoMaximo!
+                    ? maxUnitsFromBase
+                    : cItem.cupoMaximo!)
               : maxUnitsFromBase;
-          final allocatedQty = cItem.requestedQty <= maxAllowed ? cItem.requestedQty : maxAllowed;
+          final allocatedQty = cItem.requestedQty <= maxAllowed
+              ? cItem.requestedQty
+              : maxAllowed;
 
           if (allocatedQty > 0) {
             sharedAdjustedQuantities[cItem.itemId] = allocatedQty;
@@ -175,7 +301,9 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
         }
       }
 
-      final stockWarningsMap = {for (var w in validation.stockWarnings) w.itemId: w};
+      final stockWarningsMap = {
+        for (var w in validation.stockWarnings) w.itemId: w,
+      };
 
       for (var qItem in _fullQuotation!.items) {
         if (sharedRemovedItemIds.contains(qItem.id)) {
@@ -199,23 +327,24 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
         }
 
         newTotalAmount += qItem.unitPriceApplied * qty;
-        double savings = (qItem.originalUnitPrice - qItem.unitPriceApplied) * qty;
+        double savings =
+            (qItem.originalUnitPrice - qItem.unitPriceApplied) * qty;
         if (savings > 0) newTotalSavings += savings;
 
         itemsPayload.add({
-          "product_id": qItem.productId, 
-          "presentation_id": qItem.presentationId, 
+          "product_id": qItem.productId,
+          "presentation_id": qItem.presentationId,
           "bundle_id": qItem.bundleId,
           "quantity": qty,
-          "unit_price_applied": qItem.unitPriceApplied, 
-          "original_unit_price": qItem.originalUnitPrice, 
+          "unit_price_applied": qItem.unitPriceApplied,
+          "original_unit_price": qItem.originalUnitPrice,
           "product_name": qItem.productName,
           "brand_name": qItem.brandName,
           "specific_name": qItem.specificName,
           "sales_unit": qItem.salesUnit,
-          "is_manual_price": qItem.isManualPrice, 
+          "is_manual_price": qItem.isManualPrice,
           "image_url": qItem.imageUrl,
-          "original_text": qItem.originalText
+          "original_text": qItem.originalText,
         });
       }
 
@@ -235,25 +364,35 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
       );
 
       if (mounted) {
-        CustomSnackBar.show(context, message: "Productos agotados y stock corregidos exitosamente", isError: false);
+        CustomSnackBar.show(
+          context,
+          message: "Productos agotados y stock corregidos exitosamente",
+          isError: false,
+        );
       }
       await _loadData();
     } catch (e) {
-      if (mounted) CustomSnackBar.show(context, message: "Error al corregir stock: $e", isError: true);
+      if (mounted) {
+        CustomSnackBar.show(
+          context,
+          message: "Error al corregir stock: $e",
+          isError: true,
+        );
+      }
       setState(() => _isLoading = false);
     }
   }
 
   Future<void> _handleIndividualFix({
-    required int itemId, 
-    bool remove = false, 
-    int? newQty, 
-    double? newAppliedPrice, 
+    required int itemId,
+    bool remove = false,
+    int? newQty,
+    double? newAppliedPrice,
     double? newOriginalPrice,
     String? newName,
   }) async {
     setState(() => _isLoading = true);
-    
+
     try {
       final List<Map<String, dynamic>> itemsPayload = [];
       double newTotalAmount = 0.0;
@@ -261,8 +400,8 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
 
       for (var qItem in _fullQuotation!.items) {
         if (qItem.id == itemId) {
-          if (remove) continue; 
-          
+          if (remove) continue;
+
           final qty = newQty ?? qItem.quantity;
           final appliedPrice = newAppliedPrice ?? qItem.unitPriceApplied;
           final originalPrice = newOriginalPrice ?? qItem.originalUnitPrice;
@@ -272,39 +411,41 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
           if (savings > 0) newTotalSavings += savings;
 
           itemsPayload.add({
-            "product_id": qItem.productId, 
-            "presentation_id": qItem.presentationId, 
+            "product_id": qItem.productId,
+            "presentation_id": qItem.presentationId,
             "bundle_id": qItem.bundleId,
             "quantity": qty,
-            "unit_price_applied": appliedPrice, 
-            "original_unit_price": originalPrice, 
+            "unit_price_applied": appliedPrice,
+            "original_unit_price": originalPrice,
             "product_name": newName ?? qItem.productName,
             "brand_name": qItem.brandName,
             "specific_name": qItem.specificName,
             "sales_unit": qItem.salesUnit,
-            "is_manual_price": false, 
+            "is_manual_price": false,
             "image_url": qItem.imageUrl,
-            "original_text": qItem.originalText
+            "original_text": qItem.originalText,
           });
         } else {
           newTotalAmount += qItem.unitPriceApplied * qItem.quantity;
-          double savings = (qItem.originalUnitPrice - qItem.unitPriceApplied) * qItem.quantity;
+          double savings =
+              (qItem.originalUnitPrice - qItem.unitPriceApplied) *
+              qItem.quantity;
           if (savings > 0) newTotalSavings += savings;
 
           itemsPayload.add({
-            "product_id": qItem.productId, 
-            "presentation_id": qItem.presentationId, 
+            "product_id": qItem.productId,
+            "presentation_id": qItem.presentationId,
             "bundle_id": qItem.bundleId,
             "quantity": qItem.quantity,
-            "unit_price_applied": qItem.unitPriceApplied, 
-            "original_unit_price": qItem.originalUnitPrice, 
+            "unit_price_applied": qItem.unitPriceApplied,
+            "original_unit_price": qItem.originalUnitPrice,
             "product_name": qItem.productName,
             "brand_name": qItem.brandName,
             "specific_name": qItem.specificName,
             "sales_unit": qItem.salesUnit,
-            "is_manual_price": qItem.isManualPrice, 
+            "is_manual_price": qItem.isManualPrice,
             "image_url": qItem.imageUrl,
-            "original_text": qItem.originalText
+            "original_text": qItem.originalText,
           });
         }
       }
@@ -324,30 +465,66 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
         type: _fullQuotation!.type,
       );
 
-      if (mounted) CustomSnackBar.show(context, message: "Ítem ajustado correctamente", isError: false);
-      await _loadData(); 
-
+      if (mounted) {
+        CustomSnackBar.show(
+          context,
+          message: "Ítem ajustado correctamente",
+          isError: false,
+        );
+      }
+      await _loadData();
     } catch (e) {
-      if (mounted) CustomSnackBar.show(context, message: "Error al actualizar el ítem", isError: true);
+      if (mounted) {
+        CustomSnackBar.show(
+          context,
+          message: "Error al actualizar el ítem",
+          isError: true,
+        );
+      }
       setState(() => _isLoading = false);
     }
   }
 
-  Future<void> _executeRefresh({required bool prices, required bool stock, required bool names, required bool bundles}) async {
+  Future<void> _executeRefresh({
+    required bool prices,
+    required bool stock,
+    required bool names,
+    required bool bundles,
+  }) async {
     final wp = Provider.of<WorkbenchProvider>(context, listen: false);
     setState(() => _isLoading = true);
-    final success = await wp.refreshQuotation(widget.quotationId, fixPrices: prices, fixStock: stock, fixNames: names, fixBundles: bundles);
+    final success = await wp.refreshQuotation(
+      widget.quotationId,
+      fixPrices: prices,
+      fixStock: stock,
+      fixNames: names,
+      fixBundles: bundles,
+    );
     if (success && mounted) {
-      CustomSnackBar.show(context, message: "Cotización actualizada correctamente.", isError: false);
+      CustomSnackBar.show(
+        context,
+        message: "Cotización actualizada correctamente.",
+        isError: false,
+      );
       _loadData();
     } else if (mounted) {
-      CustomSnackBar.show(context, message: "Error al actualizar la cotización.", isError: true);
+      CustomSnackBar.show(
+        context,
+        message: "Error al actualizar la cotización.",
+        isError: true,
+      );
       setState(() => _isLoading = false);
     }
   }
 
-  Future<void> _changeStatus(String newStatus, {bool isAutoRevert = false}) async {
-    final workbenchProv = Provider.of<WorkbenchProvider>(context, listen: false);
+  Future<void> _changeStatus(
+    String newStatus, {
+    bool isAutoRevert = false,
+  }) async {
+    final workbenchProv = Provider.of<WorkbenchProvider>(
+      context,
+      listen: false,
+    );
     final validation = workbenchProv.getValidationFor(widget.quotationId);
 
     if (newStatus == 'READY' && validation != null) {
@@ -356,37 +533,61 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
           context: context,
           builder: (ctx) => AlertDialog(
             backgroundColor: Theme.of(context).cardTheme.color,
-            title: Row(children: [Icon(Icons.warning_amber, color: Colors.orange[400]), const SizedBox(width: 10), const Text("Atención")]),
+            title: Row(
+              children: [
+                Icon(Icons.warning_amber, color: Colors.orange[400]),
+                const SizedBox(width: 10),
+                const Text("Atención"),
+              ],
+            ),
             content: Text(
               validation.sharedStockConflicts.isNotEmpty
                   ? "No puedes marcar como 'Listo para Vender' porque hay un conflicto de stock compartido entre variantes de un mismo producto.\n\nPor favor usa el botón 'CORREGIR' primero."
                   : "No puedes marcar como 'Listo para Vender' porque hay productos agotados o con stock insuficiente.\n\nPor favor usa el botón 'CORREGIR' primero.",
-              style: TextStyle(color: Theme.of(context).brightness == Brightness.dark ? Colors.white70 : Colors.black87, fontSize: 16),
+              style: TextStyle(
+                color: Theme.of(context).brightness == Brightness.dark
+                    ? Colors.white70
+                    : Colors.black87,
+                fontSize: 16,
+              ),
             ),
-            actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Entendido", style: TextStyle(fontSize: 16)))],
-          )
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text("Entendido", style: TextStyle(fontSize: 16)),
+              ),
+            ],
+          ),
         );
         return;
       }
     }
 
     if (newStatus == 'CONVERT_PACK') {
-        _confirmConvertToPack(workbenchProv);
-        return;
+      _confirmConvertToPack(workbenchProv);
+      return;
     }
 
-    bool success = await workbenchProv.changeQuotationStatus(widget.quotationId, newStatus);
-    
+    bool success = await workbenchProv.changeQuotationStatus(
+      widget.quotationId,
+      newStatus,
+    );
+
     if (success && mounted) {
       if (isAutoRevert) {
-         CustomSnackBar.show(context, message: "Estado cambiado a Pendiente por cambios en inventario.", backgroundColor: Colors.orange[800]!, icon: Icons.info_outline);
+        CustomSnackBar.show(
+          context,
+          message: "Estado cambiado a Pendiente por cambios en inventario.",
+          backgroundColor: Colors.orange[800]!,
+          icon: Icons.info_outline,
+        );
       } else {
-         String msg = "Estado actualizado";
-         if (newStatus == 'READY') msg = "Lista marcada como LISTA para vender";
-         if (newStatus == 'ARCHIVED') msg = "Lista archivada";
-         CustomSnackBar.show(context, message: msg, isError: false);
+        String msg = "Estado actualizado";
+        if (newStatus == 'READY') msg = "Lista marcada como LISTA para vender";
+        if (newStatus == 'ARCHIVED') msg = "Lista archivada";
+        CustomSnackBar.show(context, message: msg, isError: false);
       }
-      _loadData(); 
+      _loadData();
     }
   }
 
@@ -396,43 +597,83 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: isDark ? const Color(0xFF23232F) : Colors.white,
-        title: const Text("Crear Pack Escolar", style: TextStyle(fontWeight: FontWeight.bold)),
-        content: Text("Se creará una copia de esta lista como plantilla 'Pack Escolar'.\n\n¿Deseas continuar?", style: TextStyle(color: isDark ? Colors.grey[300] : Colors.grey[700], fontSize: 16)),
+        title: const Text(
+          "Crear Pack Escolar",
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
+        content: Text(
+          "Se creará una copia de esta lista como plantilla 'Pack Escolar'.\n\n¿Deseas continuar?",
+          style: TextStyle(
+            color: isDark ? Colors.grey[300] : Colors.grey[700],
+            fontSize: 16,
+          ),
+        ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Cancelar", style: TextStyle(fontSize: 16))),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text("Cancelar", style: TextStyle(fontSize: 16)),
+          ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: isDark ? Colors.blue[300] : Colors.blue[800], foregroundColor: isDark ? Colors.black87 : Colors.white),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: isDark ? Colors.blue[300] : Colors.blue[800],
+              foregroundColor: isDark ? Colors.black87 : Colors.white,
+            ),
             onPressed: () async {
               Navigator.pop(ctx);
               int? newPackId = await provider.convertToPack(widget.quotationId);
               if (newPackId != null && mounted) {
-                Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => QuotationDetailScreen(quotationId: newPackId)));
-                CustomSnackBar.show(context, message: "Pack creado exitosamente", isError: false);
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) =>
+                        QuotationDetailScreen(quotationId: newPackId),
+                  ),
+                );
+                CustomSnackBar.show(
+                  context,
+                  message: "Pack creado exitosamente",
+                  isError: false,
+                );
               } else if (mounted) {
-                CustomSnackBar.show(context, message: "Error al crear el pack", isError: true);
+                CustomSnackBar.show(
+                  context,
+                  message: "Error al crear el pack",
+                  isError: true,
+                );
               }
-            }, 
-            child: const Text("Crear Pack", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15))
-          )
+            },
+            child: const Text(
+              "Crear Pack",
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+            ),
+          ),
         ],
-      )
+      ),
     );
   }
 
   void _handleDeleteRequest() {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final status = _fullQuotation?.status;
-    
+
     if (status == 'SOLD') {
       showDialog(
         context: context,
         builder: (ctx) => AlertDialog(
           backgroundColor: isDark ? const Color(0xFF23232F) : Colors.white,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: const Text("Acción no permitida", style: TextStyle(fontWeight: FontWeight.bold)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          title: const Text(
+            "Acción no permitida",
+            style: TextStyle(fontWeight: FontWeight.bold),
+          ),
           content: Text(
             "Una cotización vendida forma parte del historial contable y no se puede eliminar.",
-            style: TextStyle(color: isDark ? Colors.grey[300] : Colors.grey[700], fontSize: 15),
+            style: TextStyle(
+              color: isDark ? Colors.grey[300] : Colors.grey[700],
+              fontSize: 15,
+            ),
           ),
           actions: [
             TextButton(
@@ -458,40 +699,73 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Row(
           children: [
-            Icon(Icons.warning_amber_rounded, color: isDark ? Colors.red[300] : Colors.red[700], size: 26),
+            Icon(
+              Icons.warning_amber_rounded,
+              color: isDark ? Colors.red[300] : Colors.red[700],
+              size: 26,
+            ),
             const SizedBox(width: 8),
             Expanded(
-              child: Text(titleText, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 17)),
+              child: Text(
+                titleText,
+                style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 17,
+                ),
+              ),
             ),
           ],
         ),
         content: Text(
           messageText,
-          style: TextStyle(color: isDark ? Colors.grey[300] : Colors.grey[700], fontSize: 15, height: 1.4),
+          style: TextStyle(
+            color: isDark ? Colors.grey[300] : Colors.grey[700],
+            fontSize: 15,
+            height: 1.4,
+          ),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text("Cancelar", style: TextStyle(color: Colors.grey, fontSize: 15)),
+            child: const Text(
+              "Cancelar",
+              style: TextStyle(color: Colors.grey, fontSize: 15),
+            ),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
               backgroundColor: isDark ? Colors.red[800] : Colors.red,
               foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
             ),
             onPressed: () async {
               Navigator.pop(ctx);
-              final prov = Provider.of<WorkbenchProvider>(context, listen: false);
+              final prov = Provider.of<WorkbenchProvider>(
+                context,
+                listen: false,
+              );
               bool success = await prov.deleteQuotation(widget.quotationId);
               if (success && mounted) {
-                Navigator.pop(context); 
-                CustomSnackBar.show(context, message: "Cotización eliminada exitosamente", isError: false);
+                Navigator.pop(context);
+                CustomSnackBar.show(
+                  context,
+                  message: "Cotización eliminada exitosamente",
+                  isError: false,
+                );
               } else if (mounted) {
-                CustomSnackBar.show(context, message: "Error al eliminar la cotización", isError: true);
+                CustomSnackBar.show(
+                  context,
+                  message: "Error al eliminar la cotización",
+                  isError: true,
+                );
               }
             },
-            child: const Text("Sí, Eliminar", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+            child: const Text(
+              "Sí, Eliminar",
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+            ),
           ),
         ],
       ),
@@ -506,9 +780,15 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
         backgroundColor: isDark ? const Color(0xFF23232F) : Colors.white,
         title: Row(
           children: [
-            Icon(Icons.description_outlined, color: isDark ? Colors.blue[300] : Colors.blue[800]),
+            Icon(
+              Icons.description_outlined,
+              color: isDark ? Colors.blue[300] : Colors.blue[800],
+            ),
             const SizedBox(width: 8),
-            const Text("Nombre de la Lista", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+            const Text(
+              "Nombre de la Lista",
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+            ),
           ],
         ),
         content: SelectableText(
@@ -526,10 +806,18 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
             onPressed: () {
               Clipboard.setData(ClipboardData(text: title));
               Navigator.pop(ctx);
-              CustomSnackBar.show(context, message: "Nombre copiado", isError: false);
+              CustomSnackBar.show(
+                context,
+                message: "Nombre copiado",
+                isError: false,
+              );
             },
           ),
-          if (_fullQuotation?.status != 'SOLD' && !Provider.of<AuthProvider>(context, listen: false).isCommunityClient)
+          if (_fullQuotation?.status != 'SOLD' &&
+              !Provider.of<AuthProvider>(
+                context,
+                listen: false,
+              ).isCommunityClient)
             ElevatedButton.icon(
               icon: const Icon(Icons.edit, size: 18),
               label: const Text("Editar"),
@@ -548,12 +836,17 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
   }
 
   void _showRenameDialog(bool isDark) {
-    final controller = TextEditingController(text: _fullQuotation?.clientName ?? "");
+    final controller = TextEditingController(
+      text: _fullQuotation?.clientName ?? "",
+    );
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: isDark ? const Color(0xFF23232F) : Colors.white,
-        title: const Text("Cambiar Nombre", style: TextStyle(fontWeight: FontWeight.bold)),
+        title: const Text(
+          "Cambiar Nombre",
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
         content: TextField(
           controller: controller,
           autofocus: true,
@@ -575,7 +868,10 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
           ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Cancelar")),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text("Cancelar"),
+          ),
           ElevatedButton(
             onPressed: () async {
               String newName = controller.text.trim();
@@ -589,11 +885,23 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
               }
               if (newName.isNotEmpty) {
                 Navigator.pop(ctx);
-                final workbenchProv = Provider.of<WorkbenchProvider>(context, listen: false);
-                final ok = await workbenchProv.renameQuotation(widget.quotationId, newName);
+                final workbenchProv = Provider.of<WorkbenchProvider>(
+                  context,
+                  listen: false,
+                );
+                final ok = await workbenchProv.renameQuotation(
+                  widget.quotationId,
+                  newName,
+                );
                 if (ok) {
                   _loadData();
-                  if (mounted) CustomSnackBar.show(context, message: "Nombre actualizado", isError: false);
+                  if (mounted) {
+                    CustomSnackBar.show(
+                      context,
+                      message: "Nombre actualizado",
+                      isError: false,
+                    );
+                  }
                 }
               }
             },
@@ -607,8 +915,14 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
   void _showTextEvidenceDialog(bool isDark) {
     String fullText = _fullQuotation?.originalTextDump ?? "";
     if (fullText.isEmpty && _fullQuotation != null) {
-        final itemsText = _fullQuotation!.items.where((i) => i.originalText != null && i.originalText!.isNotEmpty).map((i) => "- ${i.originalText}").join("\n");
-        if (itemsText.isNotEmpty) fullText = "$itemsText\n\n(Nota: Mostrando texto parcial de items vinculados)";
+      final itemsText = _fullQuotation!.items
+          .where((i) => i.originalText != null && i.originalText!.isNotEmpty)
+          .map((i) => "- ${i.originalText}")
+          .join("\n");
+      if (itemsText.isNotEmpty) {
+        fullText =
+            "$itemsText\n\n(Nota: Mostrando texto parcial de items vinculados)";
+      }
     }
     if (fullText.isEmpty) fullText = "No hay texto registrado.";
 
@@ -616,21 +930,63 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: isDark ? const Color(0xFF23232F) : Colors.white,
-        title: Text("Texto Extraído", style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontWeight: FontWeight.bold)),
-        content: SizedBox(width: double.maxFinite, child: SingleChildScrollView(child: SelectableText(fullText, style: TextStyle(fontSize: 16, color: isDark ? Colors.grey[300] : Colors.black87)))),
+        title: Text(
+          "Texto Extraído",
+          style: TextStyle(
+            color: isDark ? Colors.white : Colors.black87,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: SingleChildScrollView(
+            child: SelectableText(
+              fullText,
+              style: TextStyle(
+                fontSize: 16,
+                color: isDark ? Colors.grey[300] : Colors.black87,
+              ),
+            ),
+          ),
+        ),
         actions: [
           TextButton.icon(
-            icon: Icon(Icons.copy, color: isDark ? Colors.blue[300] : Colors.blue), label: Text("Copiar", style: TextStyle(color: isDark ? Colors.blue[300] : Colors.blue, fontSize: 16)),
-            onPressed: () { Clipboard.setData(ClipboardData(text: fullText)); Navigator.pop(ctx); CustomSnackBar.show(context, message: "Texto copiado", isError: false); },
+            icon: Icon(
+              Icons.copy,
+              color: isDark ? Colors.blue[300] : Colors.blue,
+            ),
+            label: Text(
+              "Copiar",
+              style: TextStyle(
+                color: isDark ? Colors.blue[300] : Colors.blue,
+                fontSize: 16,
+              ),
+            ),
+            onPressed: () {
+              Clipboard.setData(ClipboardData(text: fullText));
+              Navigator.pop(ctx);
+              CustomSnackBar.show(
+                context,
+                message: "Texto copiado",
+                isError: false,
+              );
+            },
           ),
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Cerrar", style: TextStyle(color: Colors.grey, fontSize: 16))),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text(
+              "Cerrar",
+              style: TextStyle(color: Colors.grey, fontSize: 16),
+            ),
+          ),
         ],
-      )
+      ),
     );
   }
 
   Widget _buildSmartAlertBanner(ValidationResult validation, bool isDark) {
-    bool isCritical = !validation.canSell || validation.sharedStockConflicts.isNotEmpty; 
+    bool isCritical =
+        !validation.canSell || validation.sharedStockConflicts.isNotEmpty;
 
     if (isCritical) {
       // ═══════════════════════════════════════════════════════════════
@@ -645,31 +1001,65 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         child: Row(
           children: [
-            Icon(hasShared ? Icons.hub_rounded : Icons.error, color: Colors.white, size: 32),
+            Icon(
+              hasShared ? Icons.hub_rounded : Icons.error,
+              color: Colors.white,
+              size: 32,
+            ),
             const SizedBox(width: 12),
             Expanded(
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start, 
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    hasShared ? "¡Atención! Conflicto de Stock Compartido" : "¡Atención! Stock Insuficiente",
-                    style: const TextStyle(fontWeight: FontWeight.w900, color: Colors.white, fontSize: 16),
-                  ), 
+                    hasShared
+                        ? "¡Atención! Conflicto de Stock Compartido"
+                        : "¡Atención! Stock Insuficiente",
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w900,
+                      color: Colors.white,
+                      fontSize: 16,
+                    ),
+                  ),
                   const SizedBox(height: 4),
                   Text(
                     hasShared
                         ? "Variantes compiten por el mismo inventario base en almacén."
                         : "Productos agotados detectados.",
-                    style: TextStyle(fontSize: 13, color: Colors.white.withValues(alpha: 0.9)),
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: Colors.white.withValues(alpha: 0.9),
+                    ),
                   ),
                 ],
               ),
             ),
-            ElevatedButton(
-              onPressed: () => _handleUpdateAnalysis(validation), 
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.white, foregroundColor: bgColor, elevation: 4, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))), 
-              child: const Text("VER SOLUCIONES", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13))
-            )
+            const SizedBox(width: 8),
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 116),
+              child: ElevatedButton(
+                onPressed: () => _handleUpdateAnalysis(validation),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.white,
+                  foregroundColor: bgColor,
+                  elevation: 4,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 8,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+                child: const FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    "VER SOLUCIONES",
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                  ),
+                ),
+              ),
+            ),
           ],
         ),
       );
@@ -678,7 +1068,9 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
       // 🟡 BANNER INFORMATIVO: Precios desactualizados
       // Más compacto, discreto, no impide la venta.
       // ═══════════════════════════════════════════════════════════════
-      Color bgColor = isDark ? Colors.amber[900]!.withValues(alpha: 0.6) : Colors.amber[100]!;
+      Color bgColor = isDark
+          ? Colors.amber[900]!.withValues(alpha: 0.6)
+          : Colors.amber[100]!;
       Color textColor = isDark ? Colors.amber[200]! : Colors.amber[900]!;
       return Container(
         width: double.infinity,
@@ -689,79 +1081,120 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
             Icon(Icons.info_outline, color: textColor, size: 22),
             const SizedBox(width: 10),
             Expanded(
-              child: Text("Hay cambios de precio en algunos productos.", style: TextStyle(fontWeight: FontWeight.w600, color: textColor, fontSize: 13)),
+              child: Text(
+                "Hay cambios de precio en algunos productos.",
+                style: TextStyle(
+                  fontWeight: FontWeight.w600,
+                  color: textColor,
+                  fontSize: 13,
+                ),
+              ),
             ),
             TextButton(
-              onPressed: () => _handleUpdateAnalysis(validation), 
-              style: TextButton.styleFrom(foregroundColor: textColor, padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6)),
-              child: const Text("REVISAR", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))
-            )
+              onPressed: () => _handleUpdateAnalysis(validation),
+              style: TextButton.styleFrom(
+                foregroundColor: textColor,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 6,
+                ),
+              ),
+              child: const Text(
+                "REVISAR",
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+              ),
+            ),
           ],
         ),
       );
     }
   }
-  
-
 
   // 🔥 LÓGICA DUAL DE ESTADOS Y COLORES
   Color _getStatusColor(String status, bool isDark, bool isClient) {
     if (isClient) {
-        switch (status) {
-          case 'PENDING_APPROVAL':
-          case 'PENDING': return isDark ? Colors.orange[400]! : Colors.orange;
-          case 'READY': return isDark ? Colors.blue[400]! : Colors.blue;
-          case 'SOLD': return isDark ? Colors.green[400]! : Colors.green;
-          case 'DRAFT':
-          case 'ARCHIVED': return isDark ? Colors.red[400]! : Colors.red;
-          default: return Colors.grey;
-        }
+      switch (status) {
+        case 'PENDING_APPROVAL':
+        case 'PENDING':
+          return isDark ? Colors.orange[400]! : Colors.orange;
+        case 'READY':
+          return isDark ? Colors.blue[400]! : Colors.blue;
+        case 'SOLD':
+          return isDark ? Colors.green[400]! : Colors.green;
+        case 'DRAFT':
+        case 'ARCHIVED':
+          return isDark ? Colors.red[400]! : Colors.red;
+        default:
+          return Colors.grey;
+      }
     } else {
-        switch (status) {
-          case 'PENDING_APPROVAL': return isDark ? Colors.deepOrange[400]! : Colors.deepOrange;
-          case 'PENDING': return isDark ? Colors.orange[400]! : Colors.orange;
-          case 'READY': return isDark ? Colors.blue[400]! : Colors.blue;
-          case 'SOLD': return isDark ? Colors.green[400]! : Colors.green;
-          case 'ARCHIVED': return Colors.grey;
-          default: return Colors.grey;
-        }
+      switch (status) {
+        case 'PENDING_APPROVAL':
+          return isDark ? Colors.deepOrange[400]! : Colors.deepOrange;
+        case 'PENDING':
+          return isDark ? Colors.orange[400]! : Colors.orange;
+        case 'READY':
+          return isDark ? Colors.blue[400]! : Colors.blue;
+        case 'SOLD':
+          return isDark ? Colors.green[400]! : Colors.green;
+        case 'ARCHIVED':
+          return Colors.grey;
+        default:
+          return Colors.grey;
+      }
     }
   }
 
   String _getStatusText(String status, bool isClient) {
     if (isClient) {
-        switch (status) {
-          case 'PENDING_APPROVAL':
-          case 'PENDING': return 'En Revisión';
-          case 'READY': return 'Revisado / Aceptado';
-          case 'SOLD': return 'Compra Confirmada';
-          case 'DRAFT':
-          case 'ARCHIVED': return 'Rechazado / Cancelado';
-          default: return 'Desconocido';
-        }
+      switch (status) {
+        case 'PENDING_APPROVAL':
+        case 'PENDING':
+          return 'En Revisión';
+        case 'READY':
+          return 'Revisado / Aceptado';
+        case 'SOLD':
+          return 'Compra Confirmada';
+        case 'DRAFT':
+        case 'ARCHIVED':
+          return 'Rechazado / Cancelado';
+        default:
+          return 'Desconocido';
+      }
     } else {
-        switch (status) {
-          case 'PENDING_APPROVAL': return 'Nuevo Pedido Web';
-          case 'PENDING': return 'Pendiente';
-          case 'READY': return 'Listo para Vender';
-          case 'SOLD': return 'Vendido';
-          case 'ARCHIVED': return 'Archivado';
-          default: return 'Borrador';
-        }
+      switch (status) {
+        case 'PENDING_APPROVAL':
+          return 'Nuevo Pedido Web';
+        case 'PENDING':
+          return 'Pendiente';
+        case 'READY':
+          return 'Listo para Vender';
+        case 'SOLD':
+          return 'Vendido';
+        case 'ARCHIVED':
+          return 'Archivado';
+        default:
+          return 'Borrador';
+      }
     }
   }
 
   void _showStateSelectorModal(bool isDark) {
     final currentStatus = _fullQuotation?.status ?? 'DRAFT';
     final bool isSold = currentStatus == 'SOLD';
-    final workbenchProv = Provider.of<WorkbenchProvider>(context, listen: false);
+    final workbenchProv = Provider.of<WorkbenchProvider>(
+      context,
+      listen: false,
+    );
 
     InteractiveSheetWrapper.show(
       context: context,
       builder: (sheetCtx) => InteractiveSheetWrapper(
         title: isSold ? "Cotización Vendida" : "Opciones de Cotización",
         icon: isSold ? Icons.verified : Icons.tune,
-        iconColor: isSold ? (isDark ? Colors.green[400]! : Colors.green[800]!) : (isDark ? Colors.blue[300] : Colors.blue[700]),
+        iconColor: isSold
+            ? (isDark ? Colors.green[400]! : Colors.green[800]!)
+            : (isDark ? Colors.blue[300] : Colors.blue[700]),
         maxHeightFactor: 0.85,
         applyEffectiveBottomPadding: true,
         child: Column(
@@ -770,15 +1203,24 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
             if (isSold) ...[
               Container(
                 margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 10,
+                ),
                 decoration: BoxDecoration(
                   color: Colors.green.withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: Colors.green.withValues(alpha: 0.3)),
+                  border: Border.all(
+                    color: Colors.green.withValues(alpha: 0.3),
+                  ),
                 ),
                 child: Row(
                   children: [
-                    Icon(Icons.lock, size: 18, color: isDark ? Colors.green[300] : Colors.green[800]),
+                    Icon(
+                      Icons.lock,
+                      size: 18,
+                      color: isDark ? Colors.green[300] : Colors.green[800],
+                    ),
                     const SizedBox(width: 10),
                     Expanded(
                       child: Text(
@@ -795,17 +1237,39 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
               ),
               ListTile(
                 leading: CircleAvatar(
-                  backgroundColor: isDark ? Colors.blue.withValues(alpha: 0.2) : Colors.blue[50],
-                  child: Icon(Icons.copy_all, color: isDark ? Colors.blue[300] : Colors.blue[700]),
+                  backgroundColor: isDark
+                      ? Colors.blue.withValues(alpha: 0.2)
+                      : Colors.blue[50],
+                  child: Icon(
+                    Icons.copy_all,
+                    color: isDark ? Colors.blue[300] : Colors.blue[700],
+                  ),
                 ),
-                title: const Text("Duplicar Cotización", style: TextStyle(fontWeight: FontWeight.bold)),
-                subtitle: const Text("Crea un nuevo borrador editable basado en esta cotización"),
+                title: const Text(
+                  "Duplicar Cotización",
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+                subtitle: const Text(
+                  "Crea un nuevo borrador editable basado en esta cotización",
+                ),
                 onTap: () async {
                   Navigator.pop(sheetCtx);
-                  final newId = await workbenchProv.cloneQuotation(widget.quotationId);
+                  final newId = await workbenchProv.cloneQuotation(
+                    widget.quotationId,
+                  );
                   if (newId != null && mounted) {
-                    Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => QuotationDetailScreen(quotationId: newId)));
-                    CustomSnackBar.show(context, message: "Cotización duplicada como nuevo borrador", isError: false);
+                    Navigator.pushReplacement(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) =>
+                            QuotationDetailScreen(quotationId: newId),
+                      ),
+                    );
+                    CustomSnackBar.show(
+                      context,
+                      message: "Cotización duplicada como nuevo borrador",
+                      isError: false,
+                    );
                   }
                 },
               ),
@@ -813,10 +1277,18 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
             ] else ...[
               ListTile(
                 leading: CircleAvatar(
-                  backgroundColor: isDark ? Colors.blue.withValues(alpha: 0.2) : Colors.blue[50],
-                  child: Icon(Icons.edit, color: isDark ? Colors.blue[300] : Colors.blue[700]),
+                  backgroundColor: isDark
+                      ? Colors.blue.withValues(alpha: 0.2)
+                      : Colors.blue[50],
+                  child: Icon(
+                    Icons.edit,
+                    color: isDark ? Colors.blue[300] : Colors.blue[700],
+                  ),
                 ),
-                title: const Text("Cambiar Nombre / Cliente", style: TextStyle(fontWeight: FontWeight.bold)),
+                title: const Text(
+                  "Cambiar Nombre / Cliente",
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
                 subtitle: const Text("Actualiza el título de esta lista"),
                 onTap: () {
                   Navigator.pop(sheetCtx);
@@ -825,12 +1297,20 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
               ),
               const Divider(),
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 20,
+                  vertical: 8,
+                ),
                 child: Align(
                   alignment: Alignment.centerLeft,
                   child: Text(
                     "ESTADO DE LA COTIZACIÓN",
-                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: isDark ? Colors.grey[400] : Colors.grey[600], letterSpacing: 0.5),
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      color: isDark ? Colors.grey[400] : Colors.grey[600],
+                      letterSpacing: 0.5,
+                    ),
                   ),
                 ),
               ),
@@ -840,7 +1320,10 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
                     backgroundColor: Colors.grey.withValues(alpha: 0.2),
                     child: const Icon(Icons.edit_note, color: Colors.grey),
                   ),
-                  title: const Text("Borrador", style: TextStyle(fontWeight: FontWeight.w600)),
+                  title: const Text(
+                    "Borrador",
+                    style: TextStyle(fontWeight: FontWeight.w600),
+                  ),
                   subtitle: const Text("Mover a preparación inicial"),
                   onTap: () {
                     Navigator.pop(sheetCtx);
@@ -853,7 +1336,10 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
                     backgroundColor: Colors.orange.withValues(alpha: 0.2),
                     child: const Icon(Icons.access_time, color: Colors.orange),
                   ),
-                  title: const Text("Pendiente (Revisar)", style: TextStyle(fontWeight: FontWeight.w600)),
+                  title: const Text(
+                    "Pendiente (Revisar)",
+                    style: TextStyle(fontWeight: FontWeight.w600),
+                  ),
                   subtitle: const Text("Lista en proceso de armado o revisión"),
                   onTap: () {
                     Navigator.pop(sheetCtx);
@@ -864,9 +1350,15 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
                 ListTile(
                   leading: CircleAvatar(
                     backgroundColor: Colors.blue.withValues(alpha: 0.2),
-                    child: const Icon(Icons.check_circle_outline, color: Colors.blue),
+                    child: const Icon(
+                      Icons.check_circle_outline,
+                      color: Colors.blue,
+                    ),
                   ),
-                  title: const Text("Listo para Vender", style: TextStyle(fontWeight: FontWeight.w600)),
+                  title: const Text(
+                    "Listo para Vender",
+                    style: TextStyle(fontWeight: FontWeight.w600),
+                  ),
                   subtitle: const Text("Lista armada y validada para despacho"),
                   onTap: () {
                     Navigator.pop(sheetCtx);
@@ -879,7 +1371,10 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
                   backgroundColor: Colors.teal.withValues(alpha: 0.2),
                   child: const Icon(Icons.inventory_2, color: Colors.teal),
                 ),
-                title: const Text("Convertir en Pack Escolar", style: TextStyle(fontWeight: FontWeight.w600)),
+                title: const Text(
+                  "Convertir en Pack Escolar",
+                  style: TextStyle(fontWeight: FontWeight.w600),
+                ),
                 subtitle: const Text("Guardar como plantilla reutilizable"),
                 onTap: () {
                   Navigator.pop(sheetCtx);
@@ -890,9 +1385,15 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
                 ListTile(
                   leading: CircleAvatar(
                     backgroundColor: Colors.purple.withValues(alpha: 0.2),
-                    child: const Icon(Icons.archive_outlined, color: Colors.purple),
+                    child: const Icon(
+                      Icons.archive_outlined,
+                      color: Colors.purple,
+                    ),
                   ),
-                  title: const Text("Archivar", style: TextStyle(fontWeight: FontWeight.w600)),
+                  title: const Text(
+                    "Archivar",
+                    style: TextStyle(fontWeight: FontWeight.w600),
+                  ),
                   subtitle: const Text("Ocultar de la Mesa de Trabajo activa"),
                   onTap: () {
                     Navigator.pop(sheetCtx);
@@ -905,8 +1406,16 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
                   backgroundColor: Colors.red.withValues(alpha: 0.15),
                   child: const Icon(Icons.delete_outline, color: Colors.red),
                 ),
-                title: const Text("Eliminar cotización / borrador", style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
-                subtitle: const Text("Eliminar definitivamente esta cotización"),
+                title: const Text(
+                  "Eliminar cotización / borrador",
+                  style: TextStyle(
+                    color: Colors.red,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                subtitle: const Text(
+                  "Eliminar definitivamente esta cotización",
+                ),
                 onTap: () {
                   Navigator.pop(sheetCtx);
                   _handleDeleteRequest();
@@ -923,109 +1432,222 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
   @override
   Widget build(BuildContext context) {
     final workbenchProv = Provider.of<WorkbenchProvider>(context);
-    final auth = Provider.of<AuthProvider>(context); 
-    final isClient = auth.isCommunityClient; 
+    final auth = Provider.of<AuthProvider>(context);
+    final isClient = auth.isCommunityClient;
 
     final validation = workbenchProv.getValidationFor(widget.quotationId);
-    final items = _fullQuotation?.items ?? []; 
-    
+    final items = _fullQuotation?.items ?? [];
+
     // 🔥 CORRECCIÓN: Ocultar evidencia IA si el pedido fue manual
     final bool isAiScan = _fullQuotation?.type == 'ai_scan';
-    final bool hasImage = _fullQuotation?.sourceImageUrl != null && _fullQuotation!.sourceImageUrl!.isNotEmpty;
-    final bool hasTextEvidence = (_fullQuotation?.originalTextDump != null && _fullQuotation!.originalTextDump!.isNotEmpty) || items.any((i) => i.originalText != null && i.originalText!.isNotEmpty);
-    
+    final bool hasImage =
+        _fullQuotation?.sourceImageUrl != null &&
+        _fullQuotation!.sourceImageUrl!.isNotEmpty;
+    final bool hasTextEvidence =
+        (_fullQuotation?.originalTextDump != null &&
+            _fullQuotation!.originalTextDump!.isNotEmpty) ||
+        items.any((i) => i.originalText != null && i.originalText!.isNotEmpty);
+
     // Solo mostramos evidencia si genuinamente hubo un escaneo con IA o se adjuntó una imagen.
     final bool showEvidence = isAiScan || hasImage;
 
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final bgColor = Theme.of(context).scaffoldBackgroundColor;
 
+    final bool hasAlertBanner =
+        !isClient &&
+        validation != null &&
+        (validation.hasIssues || !validation.canSell) &&
+        _fullQuotation?.status != 'SOLD';
+
     return Scaffold(
       backgroundColor: bgColor,
       appBar: AppBar(
+        leadingWidth: 36,
+        titleSpacing: 0,
+        actionsPadding: EdgeInsets.zero,
         title: Column(
+          key: _tourKeys.titleStatusKey,
           crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
           children: [
             SizedBox(
               width: double.infinity,
               height: 24,
               child: MarqueeText(
-                text: _fullQuotation?.clientName ?? widget.clientName ?? "Detalle",
-                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                text:
+                    _fullQuotation?.clientName ??
+                    widget.clientName ??
+                    "Detalle",
+                style: const TextStyle(
+                  fontSize: 17,
+                  fontWeight: FontWeight.bold,
+                ),
                 onTap: () => _showQuotationNameDialog(isDark),
               ),
             ),
             const SizedBox(height: 2),
             Row(
               children: [
-                Container(width: 8, height: 8, decoration: BoxDecoration(color: _getStatusColor(_fullQuotation?.status ?? 'DRAFT', isDark, isClient), shape: BoxShape.circle)),
+                Container(
+                  width: 8,
+                  height: 8,
+                  decoration: BoxDecoration(
+                    color: _getStatusColor(
+                      _fullQuotation?.status ?? 'DRAFT',
+                      isDark,
+                      isClient,
+                    ),
+                    shape: BoxShape.circle,
+                  ),
+                ),
                 const SizedBox(width: 6),
-                Text(
-                  _getStatusText(_fullQuotation?.status ?? 'DRAFT', isClient), 
-                  style: const TextStyle(fontSize: 13, color: Colors.white70)
+                Expanded(
+                  child: Text(
+                    _getStatusText(_fullQuotation?.status ?? 'DRAFT', isClient),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 12.5,
+                      color: Colors.white70,
+                    ),
+                  ),
                 ),
               ],
-            )
+            ),
           ],
         ),
-        backgroundColor: isDark ? const Color(0xFF1A1A24) : const Color(0xFF1565C0),
+        backgroundColor: isDark
+            ? const Color(0xFF1A1A24)
+            : const Color(0xFF1565C0),
         foregroundColor: Colors.white,
         elevation: 0,
         actions: [
-          Consumer<QuickSaleProvider>(
-            builder: (ctx, quickProv, _) => IconButton(
-              icon: Icon(
-                quickProv.hideProfits ? Icons.visibility_off_outlined : Icons.visibility_outlined,
-                size: 24,
-                color: Colors.white70,
+          InfoTooltipButton(
+            iconColor: Colors.white70,
+            iconSize: 19,
+            padding: const EdgeInsets.all(4),
+            constraints: const BoxConstraints(minWidth: 30, minHeight: 30),
+            onStartInteractiveTour: () => _startTour(context),
+            title: "Detalle de Cotización",
+            description:
+                "Revisa los ítems cotizados, valida el inventario antes de vender, oculta tus costos en Modo Privacidad y exporta en PDF o WhatsApp.",
+            tips: const [
+              InfoTip(
+                icon: Icons.edit_note_rounded,
+                text:
+                    "Toca el título en la barra superior si deseas renombrar la lista para tu cliente.",
               ),
-              tooltip: quickProv.hideProfits ? "Modo Cliente (Privacidad activa)" : "Modo Vendedor",
-              onPressed: () => quickProv.toggleHideProfits(),
+              InfoTip(
+                icon: Icons.visibility_off_outlined,
+                text:
+                    "El botón de ojo oculta precios de costo y utilidades cuando enseñas la pantalla en mostrador.",
+              ),
+              InfoTip(
+                icon: Icons.point_of_sale_rounded,
+                text:
+                    "Usa los botones inferiores para editar la lista, enviar PDF/WhatsApp o convertirla en venta.",
+              ),
+            ],
+          ),
+          Consumer<QuickSaleProvider>(
+            builder: (ctx, quickProv, _) => KeyedSubtree(
+              key: _tourKeys.privacyAndEditKey,
+              child: IconButton(
+                icon: Icon(
+                  quickProv.hideProfits
+                      ? Icons.visibility_off_outlined
+                      : Icons.visibility_outlined,
+                  size: 20,
+                  color: Colors.white70,
+                ),
+                padding: const EdgeInsets.all(4),
+                constraints: const BoxConstraints(minWidth: 30, minHeight: 30),
+                style: IconButton.styleFrom(
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+                tooltip: quickProv.hideProfits
+                    ? "Modo Cliente (Privacidad activa)"
+                    : "Modo Vendedor",
+                onPressed: () => quickProv.toggleHideProfits(),
+              ),
             ),
           ),
           if (_fullQuotation?.status != 'SOLD')
-            IconButton(icon: const Icon(Icons.refresh, size: 26), tooltip: "Sincronizar", onPressed: _loadData),
-          
+            IconButton(
+              icon: const Icon(Icons.refresh, size: 20),
+              padding: const EdgeInsets.all(4),
+              constraints: const BoxConstraints(minWidth: 30, minHeight: 30),
+              style: IconButton.styleFrom(
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+              tooltip: "Sincronizar",
+              onPressed: _loadData,
+            ),
+
           if (!isClient)
             IconButton(
-              icon: const Icon(Icons.more_vert, size: 26),
+              icon: const Icon(Icons.more_vert, size: 20),
+              padding: const EdgeInsets.all(4),
+              constraints: const BoxConstraints(minWidth: 30, minHeight: 30),
+              style: IconButton.styleFrom(
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
               tooltip: "Opciones y Estado",
               onPressed: () => _showStateSelectorModal(isDark),
             ),
+          const SizedBox(width: 2),
         ],
       ),
-      body: _isLoading 
+      body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : CustomScrollView(
               slivers: [
-                if (!isClient && validation != null && (validation.hasIssues || !validation.canSell) && _fullQuotation?.status != 'SOLD') 
+                if (hasAlertBanner)
                   SliverToBoxAdapter(
-                    child: _buildSmartAlertBanner(validation, isDark)
+                    child: KeyedSubtree(
+                      key: _tourKeys.stockAlertOrItemsKey,
+                      child: _buildSmartAlertBanner(validation, isDark),
+                    ),
                   ),
-                
+
                 if (_fullQuotation?.status == 'SOLD')
                   SliverToBoxAdapter(
                     child: Container(
                       width: double.infinity,
                       color: Colors.green[700],
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 14,
+                      ),
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          const Icon(Icons.verified, color: Colors.white, size: 28),
+                          const Icon(
+                            Icons.verified,
+                            color: Colors.white,
+                            size: 28,
+                          ),
                           const SizedBox(width: 12),
                           Expanded(
                             child: Text(
-                              isClient ? "¡COMPRA CONFIRMADA Y PROCESADA!" : "LISTA VENDIDA Y CERRADA",
-                              style: const TextStyle(fontWeight: FontWeight.w900, color: Colors.white, fontSize: 15, letterSpacing: 0.5),
+                              isClient
+                                  ? "¡COMPRA CONFIRMADA Y PROCESADA!"
+                                  : "LISTA VENDIDA Y CERRADA",
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w900,
+                                color: Colors.white,
+                                fontSize: 15,
+                                letterSpacing: 0.5,
+                              ),
                               textAlign: TextAlign.center,
                             ),
-                          )
+                          ),
                         ],
                       ),
                     ),
                   ),
-                
+
                 SliverPersistentHeader(
                   pinned: false,
                   floating: true,
@@ -1033,117 +1655,190 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
                     quotation: _fullQuotation,
                     fallbackClientName: widget.clientName,
                     isDark: isDark,
+                    summaryKey: _tourKeys.totalsSummaryKey,
+                    textScale: MediaQuery.textScalerOf(
+                      context,
+                    ).scale(1.0).clamp(1.0, 2.0),
                   ),
                 ),
-                
+
                 if (showEvidence)
                   SliverToBoxAdapter(
                     child: QuoteEvidencePanel(
-                      hasImage: hasImage, hasText: hasTextEvidence, imageUrl: _fullQuotation?.sourceImageUrl, isDark: isDark,
+                      hasImage: hasImage,
+                      hasText: hasTextEvidence,
+                      imageUrl: _fullQuotation?.sourceImageUrl,
+                      isDark: isDark,
                       onImageTap: () {
-                         if (_fullQuotation?.sourceImageUrl != null) {
-                            Navigator.push(context, MaterialPageRoute(builder: (_) => FullScreenImageViewer(imageUrl: _fullQuotation!.sourceImageUrl!, tag: "${_fullQuotation!.id}_evidence")));
-                         }
+                        if (_fullQuotation?.sourceImageUrl != null) {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => FullScreenImageViewer(
+                                imageUrl: _fullQuotation!.sourceImageUrl!,
+                                tag: "${_fullQuotation!.id}_evidence",
+                              ),
+                            ),
+                          );
+                        }
                       },
-                      onDownloadTap: _downloadImage, onTextEvidenceTap: () => _showTextEvidenceDialog(isDark),
+                      onDownloadTap: _downloadImage,
+                      onTextEvidenceTap: () => _showTextEvidenceDialog(isDark),
                     ),
                   ),
-                
+
                 if (items.isEmpty)
                   SliverFillRemaining(
                     hasScrollBody: false,
-                    child: Center(child: Text("No hay productos en esta cotización", style: TextStyle(color: isDark ? Colors.grey[500] : Colors.grey, fontSize: 16)))
+                    child: Center(
+                      child: Container(
+                        key: !hasAlertBanner
+                            ? _tourKeys.stockAlertOrItemsKey
+                            : null,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 20,
+                          vertical: 12,
+                        ),
+                        child: Text(
+                          "No hay productos en esta cotización",
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: isDark ? Colors.grey[500] : Colors.grey,
+                            fontSize: 16,
+                          ),
+                        ),
+                      ),
+                    ),
                   )
                 else
                   SliverPadding(
                     padding: EdgeInsets.only(
-                      top: 8, 
+                      top: 8,
                       bottom: 120 + MediaQuery.of(context).padding.bottom,
                     ),
                     sliver: SliverList(
-                      delegate: SliverChildBuilderDelegate(
-                        (ctx, i) {
-                          final item = items[i];
-                          final stockWarning = isClient ? null : validation?.stockWarnings.firstWhere((w) => w.itemId == item.id, orElse: () => StockWarning(itemId: -1, productName: "", requested: 0, available: 0));
-                          final priceChange = isClient ? null : validation?.priceChanges.firstWhere((p) => p.itemId == item.id, orElse: () => PriceChange(itemId: -1, productName: "", oldPrice: 0, newPrice: 0));
-                          
-                          SharedStockConflict? sharedConflict;
-                          QuoteItemConflictDetail? sharedConflictDetail;
-                          if (!isClient && validation != null) {
-                            for (final conflict in validation.sharedStockConflicts) {
-                              final match = conflict.conflictingItems.where((c) => c.itemId == item.id).firstOrNull;
-                              if (match != null) {
-                                sharedConflict = conflict;
-                                sharedConflictDetail = match;
-                                break;
-                              }
+                      delegate: SliverChildBuilderDelegate((ctx, i) {
+                        final item = items[i];
+                        final stockWarning = isClient
+                            ? null
+                            : validation?.stockWarnings.firstWhere(
+                                (w) => w.itemId == item.id,
+                                orElse: () => StockWarning(
+                                  itemId: -1,
+                                  productName: "",
+                                  requested: 0,
+                                  available: 0,
+                                ),
+                              );
+                        final priceChange = isClient
+                            ? null
+                            : validation?.priceChanges.firstWhere(
+                                (p) => p.itemId == item.id,
+                                orElse: () => PriceChange(
+                                  itemId: -1,
+                                  productName: "",
+                                  oldPrice: 0,
+                                  newPrice: 0,
+                                ),
+                              );
+
+                        SharedStockConflict? sharedConflict;
+                        QuoteItemConflictDetail? sharedConflictDetail;
+                        if (!isClient && validation != null) {
+                          for (final conflict
+                              in validation.sharedStockConflicts) {
+                            final match = conflict.conflictingItems
+                                .where((c) => c.itemId == item.id)
+                                .firstOrNull;
+                            if (match != null) {
+                              sharedConflict = conflict;
+                              sharedConflictDetail = match;
+                              break;
                             }
                           }
+                        }
 
-                          return QuoteItemListRow(
+                        return KeyedSubtree(
+                          key: (!hasAlertBanner && i == 0)
+                              ? _tourKeys.stockAlertOrItemsKey
+                              : null,
+                          child: QuoteItemListRow(
                             item: item,
                             stockError: stockWarning,
                             priceError: priceChange,
                             sharedConflict: sharedConflict,
                             sharedConflictDetail: sharedConflictDetail,
                             isDark: isDark,
-                          );
-                        },
-                        childCount: items.length,
-                      ),
+                          ),
+                        );
+                      }, childCount: items.length),
                     ),
                   ),
               ],
             ),
-      bottomNavigationBar: QuotationActionButtons(
-        quotationId: widget.quotationId,
-        status: _fullQuotation?.status ?? 'DRAFT',
-        validation: validation,
-        isDark: isDark,
-        isClient: isClient,
-        onReloadData: _loadData,
-        onHandleUpdateAnalysis: _handleUpdateAnalysis,
+      bottomNavigationBar: KeyedSubtree(
+        key: _tourKeys.outputActionsKey,
+        child: QuotationActionButtons(
+          quotationId: widget.quotationId,
+          status: _fullQuotation?.status ?? 'DRAFT',
+          validation: validation,
+          isDark: isDark,
+          isClient: isClient,
+          onReloadData: _loadData,
+          onHandleUpdateAnalysis: _handleUpdateAnalysis,
+        ),
       ),
     );
   }
 }
 
-
 class _QuoteHeaderDelegate extends SliverPersistentHeaderDelegate {
   final SmartQuotationModel? quotation;
   final String? fallbackClientName;
   final bool isDark;
+  final Key? summaryKey;
+  final double textScale;
 
   _QuoteHeaderDelegate({
     required this.quotation,
     this.fallbackClientName,
     required this.isDark,
+    this.summaryKey,
+    this.textScale = 1.0,
   });
 
   @override
-  double get minExtent => 85.0;
+  double get minExtent => 85.0 * textScale.clamp(1.0, 1.4);
 
   @override
   double get maxExtent {
-    double baseHeight = 125.0; 
-    if (quotation?.institutionName != null && quotation!.institutionName!.isNotEmpty) {
-      baseHeight += 45.0; 
+    double baseHeight = 148.0 * textScale;
+    if (quotation?.institutionName != null &&
+        quotation!.institutionName!.isNotEmpty) {
+      baseHeight += 52.0 * textScale;
     }
     if (quotation?.gradeLevel != null && quotation!.gradeLevel!.isNotEmpty) {
-      baseHeight += 25.0;
+      baseHeight += 32.0 * textScale;
     }
-    
+
     if (quotation?.notas != null && quotation!.notas!.isNotEmpty) {
-      baseHeight += 60.0;
+      baseHeight += 68.0 * textScale;
     }
-    
-    return baseHeight < 135.0 ? 135.0 : baseHeight;
+
+    return baseHeight < (155.0 * textScale) ? (155.0 * textScale) : baseHeight;
   }
 
   @override
-  Widget build(BuildContext context, double shrinkOffset, bool overlapsContent) {
+  Widget build(
+    BuildContext context,
+    double shrinkOffset,
+    bool overlapsContent,
+  ) {
     double currentExtent = maxExtent - shrinkOffset;
-    double shrinkFactor = (shrinkOffset / (maxExtent - minExtent)).clamp(0.0, 1.0);
+    double shrinkFactor = (shrinkOffset / (maxExtent - minExtent)).clamp(
+      0.0,
+      1.0,
+    );
 
     return SizedBox(
       height: currentExtent.clamp(minExtent, maxExtent),
@@ -1157,6 +1852,7 @@ class _QuoteHeaderDelegate extends SliverPersistentHeaderDelegate {
             fallbackClientName: fallbackClientName,
             isDark: isDark,
             shrinkFactor: shrinkFactor,
+            summaryKey: summaryKey,
           ),
         ),
       ),
@@ -1166,7 +1862,9 @@ class _QuoteHeaderDelegate extends SliverPersistentHeaderDelegate {
   @override
   bool shouldRebuild(covariant _QuoteHeaderDelegate oldDelegate) {
     return quotation != oldDelegate.quotation ||
-           fallbackClientName != oldDelegate.fallbackClientName ||
-           isDark != oldDelegate.isDark;
+        fallbackClientName != oldDelegate.fallbackClientName ||
+        isDark != oldDelegate.isDark ||
+        summaryKey != oldDelegate.summaryKey ||
+        textScale != oldDelegate.textScale;
   }
 }

@@ -266,7 +266,7 @@ class MockWorkbenchProviderForPhase3Test extends ChangeNotifier implements Workb
   int get inProcessCount => 0;
 
   @override
-  Future<void> loadDashboard() async {}
+  Future<void> loadDashboard({bool silent = false}) async {}
 
   @override
   dynamic noSuchMethod(Invocation invocation) => null;
@@ -286,7 +286,7 @@ class MockSaleProviderForPhase3Test extends ChangeNotifier implements SaleProvid
   List<SaleModel> get salesHistory => const [];
 
   @override
-  Future<void> loadSalesHistory() async {}
+  Future<void> loadSalesHistory({bool silent = false}) async {}
 
   @override
   Future<void> silentRefresh() async {}

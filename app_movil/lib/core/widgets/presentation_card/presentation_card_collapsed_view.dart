@@ -90,30 +90,36 @@ class PresentationCardCollapsedView extends StatelessWidget {
             // Fila 1: Chip de Unidad + Nombre de Presentación + Precio destacado + Flecha
             Row(
               children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 4,
-                  ),
-                  decoration: BoxDecoration(
-                    color: (isDark ? Colors.purple[900] : Colors.purple[50])
-                        ?.withValues(alpha: 0.5),
-                    borderRadius: BorderRadius.circular(6),
-                    border: Border.all(
-                      color: (isDark
-                              ? Colors.purple[400]
-                              : Colors.purple[300])!
-                          .withValues(alpha: 0.5),
+                Flexible(
+                  fit: FlexFit.loose,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
                     ),
-                  ),
-                  child: Text(
-                    "$displayUnit (x$displayFactor)",
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w700,
-                      color: isDark
-                          ? Colors.purple[200]
-                          : Colors.purple[800],
+                    decoration: BoxDecoration(
+                      color: (isDark ? Colors.purple[900] : Colors.purple[50])
+                          ?.withValues(alpha: 0.5),
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(
+                        color: (isDark
+                                ? Colors.purple[400]
+                                : Colors.purple[300])!
+                            .withValues(alpha: 0.5),
+                      ),
+                    ),
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text(
+                        "$displayUnit (x$displayFactor)",
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          color: isDark
+                              ? Colors.purple[200]
+                              : Colors.purple[800],
+                        ),
+                      ),
                     ),
                   ),
                 ),
@@ -131,12 +137,19 @@ class PresentationCardCollapsedView extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: 8),
-                Text(
-                  "S/ $displayPrice",
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w900,
-                    color: isDark ? Colors.teal[300] : Colors.teal[800],
+                Flexible(
+                  fit: FlexFit.loose,
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerRight,
+                    child: Text(
+                      "S/ $displayPrice",
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w900,
+                        color: isDark ? Colors.teal[300] : Colors.teal[800],
+                      ),
+                    ),
                   ),
                 ),
               ],

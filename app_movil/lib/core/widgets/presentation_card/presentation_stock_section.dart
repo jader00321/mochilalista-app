@@ -364,19 +364,25 @@ class _PresentationStockSectionState extends State<PresentationStockSection> {
                           ),
                         ),
                       ),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                        decoration: BoxDecoration(
-                          color: isDark ? Colors.blue.withValues(alpha: 0.2) : Colors.blue.shade50,
-                          borderRadius: BorderRadius.circular(6),
-                          border: Border.all(color: isDark ? Colors.blue.withValues(alpha: 0.4) : const Color(0xFF93C5FD)),
-                        ),
-                        child: Text(
-                          "= $effectiveCupo $unidadLabel disp.",
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold,
-                            color: isDark ? Colors.blue[200] : const Color(0xFF1E40AF),
+                      Flexible(
+                        fit: FlexFit.loose,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: isDark ? Colors.blue.withValues(alpha: 0.2) : Colors.blue.shade50,
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(color: isDark ? Colors.blue.withValues(alpha: 0.4) : const Color(0xFF93C5FD)),
+                          ),
+                          child: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: Text(
+                              "= $effectiveCupo $unidadLabel disp.",
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                                color: isDark ? Colors.blue[200] : const Color(0xFF1E40AF),
+                              ),
+                            ),
                           ),
                         ),
                       ),

@@ -22,26 +22,26 @@ class AppChangelogRegistry {
   static const String currentVersion = OwnerLegalIdentity.currentAppVersionWithBuild;
 
   // =========================================================================
-  // NOVEDADES ACTIVAS DE LA VERSIÓN ACTUAL (v9.39.0+83)
+  // NOVEDADES ACTIVAS DE LA VERSIÓN ACTUAL (v9.40.0+84)
   // =========================================================================
   static const List<AppChangelogItem> activeChangelog = [
     AppChangelogItem(
-      icon: Icons.workspace_premium_rounded,
-      title: "Planes comerciales con detalle y orden claro",
+      icon: Icons.dashboard_customize_rounded,
+      title: "Inicio más amplio y fluido",
       description:
-          "Nueva vista plegable de Planes Comerciales con ficha detallada de beneficios y mensajes de solicitud mejor ordenados.",
+          "Encabezado superior optimizado para ver tus herramientas clave de inmediato y navegación sin parpadeos al volver desde tu Perfil.",
     ),
     AppChangelogItem(
-      icon: Icons.account_balance_wallet_rounded,
-      title: "Operaciones Financieras con mayor comodidad",
+      icon: Icons.explore_rounded,
+      title: "Guías interactivas ampliadas y respetuosas",
       description:
-          "Modal de Operaciones Financieras optimizado con mayor área de trabajo y tarjetas contextuales retraíbles.",
+          "Nuevas guías paso a paso por cada pestaña de Gestión de Negocio, Cotización Manual, Detalle Financiero de Ventas y pantallas secundarias, sin reactivarse automáticamente al actualizar la app.",
     ),
     AppChangelogItem(
       icon: Icons.radar_rounded,
-      title: "Radar Comercial IA con noticias reales del Perú",
+      title: "Radar Comercial IA independiente por perfil de negocio",
       description:
-          "Radar Comercial IA renovado con noticias reales de Perú, enlaces oficiales verificados y selección por departamento, provincia y distrito/localidad.",
+          "Cada sucursal o perfil en tu celular conserva su propia ubicación y noticias guardadas.",
     ),
   ];
 
@@ -63,6 +63,26 @@ class AppChangelogRegistry {
   // En cada nueva compilación de release, mover aquí el bloque anterior.
   // =========================================================================
   static final Map<String, List<AppChangelogItem>> _historicalChangelogs = {
+    '9.39.0+83': const [
+      AppChangelogItem(
+        icon: Icons.workspace_premium_rounded,
+        title: "Planes comerciales con detalle y orden claro",
+        description:
+            "Nueva vista plegable de Planes Comerciales con ficha detallada de beneficios y mensajes de solicitud mejor ordenados.",
+      ),
+      AppChangelogItem(
+        icon: Icons.account_balance_wallet_rounded,
+        title: "Operaciones Financieras con mayor comodidad",
+        description:
+            "Modal de Operaciones Financieras optimizado con mayor área de trabajo y tarjetas contextuales retraíbles.",
+      ),
+      AppChangelogItem(
+        icon: Icons.radar_rounded,
+        title: "Radar Comercial IA con noticias reales del Perú",
+        description:
+            "Radar Comercial IA renovado con noticias reales de Perú, enlaces oficiales verificados y selección por departamento, provincia y distrito/localidad.",
+      ),
+    ],
     '9.38.0+82': const [
       AppChangelogItem(
         icon: Icons.sync_rounded,

@@ -27,11 +27,12 @@ void main() {
     CommercialRadarService.clearMemoryCache();
   });
 
-  group('FASE 1: Tolerancia Cero a Enlaces Rotos y Verificación de 28+ Señales', () {
-    test('1.1. Catálogo curado contiene al menos 28 señales con URLs válidas y activas', () {
+  group('FASE 1: Tolerancia Cero a Enlaces Rotos y Catálogo Canónico Oficial (12+ Señales)', () {
+    test('1.1. Catálogo curado contiene 12+ señales oficiales gob.pe sin enlaces rotos', () {
       final signals = CommercialRadarService.getOfflineFallbackSignals(region: 'Talara / Piura');
-      expect(signals.length, greaterThanOrEqualTo(28),
-          reason: 'El catálogo offline debe contener al menos 28 señales curadas');
+      expect(signals.length, greaterThanOrEqualTo(12),
+          reason: 'El catálogo offline debe contener las 12 señales canónicas curadas');
+      expect(signals.every((s) => s.sourceUrl.contains('gob.pe')), isTrue);
 
       for (final signal in signals) {
         expect(signal.sourceUrl.isNotEmpty, isTrue,
@@ -113,8 +114,8 @@ void main() {
         region: 'Talara / Piura',
       );
       final upgradedSunat = CommercialRadarService.sanitizeAndUpgradeNewsItem(sunatItem);
-      expect(upgradedSunat.sourceUrl, 'https://cpe.sunat.gob.pe/sistema-emision/guia-remision-electronica');
-      expect(upgradedSunat.sourceName, 'SUNAT Portal Oficial GRE');
+      expect(upgradedSunat.sourceUrl, 'https://www.gob.pe/sunat');
+      expect(upgradedSunat.sourceName, 'SUNAT Portal Oficial');
 
       // 2. Noticia 976451.aspx desconectada
       final proviasItem = CommercialNewsItem(
@@ -129,7 +130,7 @@ void main() {
         region: 'Talara / Piura',
       );
       final upgradedProvias = CommercialRadarService.sanitizeAndUpgradeNewsItem(proviasItem);
-      expect(upgradedProvias.sourceUrl, 'https://emergenciasviales.proviasnac.gob.pe/');
+      expect(upgradedProvias.sourceUrl, 'https://www.gob.pe/sutran');
       expect(upgradedProvias.sourceName, 'Provías Nacional / SUTRAN');
 
       // 3. Portada genérica de PRODUCE
@@ -161,7 +162,7 @@ void main() {
         region: 'Talara / Piura',
       );
       final upgradedCatalog = CommercialRadarService.sanitizeAndUpgradeNewsItem(catalogItem);
-      expect(upgradedCatalog.sourceUrl, 'https://emergenciasviales.proviasnac.gob.pe/');
+      expect(upgradedCatalog.sourceUrl, 'https://www.gob.pe/sutran');
       expect(upgradedCatalog.isLive, isFalse);
     });
   });

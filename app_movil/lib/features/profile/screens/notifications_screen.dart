@@ -17,6 +17,9 @@ import 'package:app_movil/features/smart_quotation/screens/crm/client_detail_scr
 import 'package:app_movil/features/smart_quotation/services/sales_service.dart';
 import 'package:app_movil/features/smart_quotation/services/client_service.dart';
 import 'package:app_movil/core/widgets/info_tooltip_button.dart';
+import 'package:app_movil/core/services/tour/interactive_tour_service.dart';
+import 'package:app_movil/core/widgets/tour/configs/notifications_tour.dart';
+import 'package:app_movil/core/widgets/tour/tour_step_model.dart';
 
 import 'package:app_movil/features/profile/widgets/notifications/notification_filter_bar.dart';
 import 'package:app_movil/features/profile/widgets/notifications/notification_item_card.dart';
@@ -33,7 +36,14 @@ import 'package:app_movil/features/smart_quotation/widgets/crm/payment_entry_mod
 import 'package:app_movil/features/smart_quotation/widgets/crm/reward_review_modal.dart';
 
 class NotificationsScreen extends StatefulWidget {
-  const NotificationsScreen({super.key});
+  final bool autoTriggerTour;
+  final NotificationsTourKeys? tourKeys;
+
+  const NotificationsScreen({
+    super.key,
+    this.autoTriggerTour = true,
+    this.tourKeys,
+  });
 
   @override
   State<NotificationsScreen> createState() => _NotificationsScreenState();
@@ -41,6 +51,8 @@ class NotificationsScreen extends StatefulWidget {
 
 class _NotificationsScreenState extends State<NotificationsScreen> with SingleTickerProviderStateMixin {
   late TabController _tabController;
+  late final NotificationsTourKeys _tourKeys;
+  bool _didAttemptAutoTour = false;
   
   String _categoryFilter = 'Todas'; // Todas, Cobranzas, Inventario, Cotizaciones
   String _timeFilter = 'Todo'; // Todo, Hoy, 7 Días, Específico
@@ -57,6 +69,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> with SingleTi
   @override
   void initState() {
     super.initState();
+    _tourKeys = widget.tourKeys ?? NotificationsTourKeys();
     _tabController = TabController(length: 3, vsync: this);
     _tabController.addListener(() {
       if (_tabController.index != 2 && _isSelectionMode) {
@@ -67,10 +80,32 @@ class _NotificationsScreenState extends State<NotificationsScreen> with SingleTi
       }
       setState(() {});
     });
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      Provider.of<NotificationProvider>(context, listen: false).fetchNotifications();
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
       _inventoryProvider = Provider.of<InventoryProvider>(context, listen: false);
       _inventoryProvider?.addListener(_onInventoryChanged);
+      await Provider.of<NotificationProvider>(context, listen: false).fetchNotifications();
+      if (mounted) _maybeStartAutoTour();
+    });
+  }
+
+  ScreenTourConfig _buildTourConfig() {
+    return NotificationsTour.buildConfig(keys: _tourKeys);
+  }
+
+  void _startTour(BuildContext context) {
+    InteractiveTourService.startManualTour(context, _buildTourConfig());
+  }
+
+  void _maybeStartAutoTour() {
+    if (!widget.autoTriggerTour || _didAttemptAutoTour || !mounted) return;
+    _didAttemptAutoTour = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+      await InteractiveTourService.maybeStartAutomaticTour(
+        context,
+        _buildTourConfig(),
+      );
     });
   }
 
@@ -1365,61 +1400,81 @@ class _NotificationsScreenState extends State<NotificationsScreen> with SingleTi
         centerTitle: false,
         actions: [
           InfoTooltipButton(
+            constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+            padding: const EdgeInsets.all(6),
+            onStartInteractiveTour: () => _startTour(context),
             title: 'Notificaciones',
             description: 'Centro de control inteligente de tu negocio: cobranzas en mora, vencimientos preventivos, inventario bajo y cotizaciones.',
             tips: const [
               InfoTip(icon: Icons.swipe_rounded, text: 'Desliza horizontalmente para navegar entre pestañas con total seguridad.'),
-              InfoTip(icon: Icons.more_vert_rounded, text: 'Toca los tres puntos (•••) en cualquier tarjeta para archivar, silenciar o resolver con opción Deshacer.'),
+              InfoTip(icon: Icons.more_vert_rounded, text: 'Toca los tres puntos en cualquier tarjeta para archivar, silenciar o resolver con opción Deshacer.'),
               InfoTip(icon: Icons.chat_bubble_outline, text: 'Envía recordatorios instantáneos por WhatsApp con mensaje pre-armado.'),
               InfoTip(icon: Icons.payments_outlined, text: 'Cobra y registra abonos directamente desde la notificación.'),
               InfoTip(icon: Icons.settings_suggest_outlined, text: 'Personaliza canales, umbrales y alertas desde el botón de configuración.'),
             ],
           ),
-          Stack(
-            alignment: Alignment.center,
-            children: [
-              IconButton(
-                icon: const Icon(Icons.inventory_2_outlined),
-                tooltip: "Notificaciones Archivadas",
-                visualDensity: VisualDensity.compact,
-                onPressed: () => ArchivedNotificationsModal.show(context, isDark: isDark),
-              ),
-              if (notifProv.archivedCount > 0)
-                Positioned(
-                  top: 8,
-                  right: 8,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-                    decoration: BoxDecoration(
-                      color: Colors.amber[700],
-                      borderRadius: BorderRadius.circular(8),
+          KeyedSubtree(
+            key: _tourKeys.archiveActionsKey,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.inventory_2_outlined),
+                      tooltip: "Notificaciones Archivadas",
+                      visualDensity: VisualDensity.compact,
+                      constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                      padding: const EdgeInsets.all(6),
+                      onPressed: () => ArchivedNotificationsModal.show(context, isDark: isDark),
                     ),
-                    constraints: const BoxConstraints(minWidth: 14, minHeight: 14),
-                    child: Text(
-                      "${notifProv.archivedCount}",
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 9,
-                        fontWeight: FontWeight.bold,
+                    if (notifProv.archivedCount > 0)
+                      Positioned(
+                        top: 6,
+                        right: 6,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                          decoration: BoxDecoration(
+                            color: Colors.amber[700],
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          constraints: const BoxConstraints(minWidth: 14, minHeight: 14),
+                          child: Text(
+                            "${notifProv.archivedCount}",
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 9,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
                       ),
-                    ),
-                  ),
+                  ],
                 ),
-            ],
-          ),
-          if (notifProv.unreadCount > 0)
-            IconButton(
-              icon: Icon(Icons.done_all_rounded, color: isDark ? Colors.blue[300] : Colors.blue[700]),
-              tooltip: "Marcar todas como leídas",
-              visualDensity: VisualDensity.compact,
-              onPressed: () => notifProv.markAllAsRead(),
+                if (notifProv.unreadCount > 0)
+                  IconButton(
+                    icon: Icon(Icons.done_all_rounded, color: isDark ? Colors.blue[300] : Colors.blue[700]),
+                    tooltip: "Marcar todas como leídas",
+                    visualDensity: VisualDensity.compact,
+                    constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                    padding: const EdgeInsets.all(6),
+                    onPressed: () => notifProv.markAllAsRead(),
+                  ),
+              ],
             ),
-          IconButton(
-            icon: Icon(Icons.settings_outlined, color: textColor),
-            tooltip: "Configuración de Notificaciones",
-            visualDensity: VisualDensity.compact,
-            onPressed: () => NotificationSettingsModal.show(context, isDark: isDark),
+          ),
+          KeyedSubtree(
+            key: _tourKeys.settingsButtonKey,
+            child: IconButton(
+              icon: Icon(Icons.settings_outlined, color: textColor),
+              tooltip: "Configuración de Notificaciones",
+              visualDensity: VisualDensity.compact,
+              constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+              padding: const EdgeInsets.all(6),
+              onPressed: () => NotificationSettingsModal.show(context, isDark: isDark),
+            ),
           ),
           const SizedBox(width: 4),
         ],
@@ -1520,31 +1575,34 @@ class _NotificationsScreenState extends State<NotificationsScreen> with SingleTi
       ),
       body: Column(
         children: [
-          NotificationFilterBar(
-            isDark: isDark,
-            categoryFilter: _categoryFilter,
-            timeFilter: _timeFilter,
-            totalCount: totalCount,
-            cobranzasCount: cobranzasCount,
-            inventarioCount: inventarioCount,
-            cotizacionesCount: cotizacionesCount,
-            specificDate: _specificDate,
-            onCategoryFilterChanged: (v) => setState(() => _categoryFilter = v),
-            onTimeFilterChanged: (f) => setState(() => _timeFilter = f),
-            onSpecificDateTapped: () async {
-              DateTime? picked = await showDatePicker(
-                context: context,
-                initialDate: DateTime.now(),
-                firstDate: DateTime(2020),
-                lastDate: DateTime.now(),
-              );
-              if (picked != null) {
-                setState(() {
-                  _timeFilter = 'Específico';
-                  _specificDate = picked;
-                });
-              }
-            },
+          KeyedSubtree(
+            key: _tourKeys.filtersBarKey,
+            child: NotificationFilterBar(
+              isDark: isDark,
+              categoryFilter: _categoryFilter,
+              timeFilter: _timeFilter,
+              totalCount: totalCount,
+              cobranzasCount: cobranzasCount,
+              inventarioCount: inventarioCount,
+              cotizacionesCount: cotizacionesCount,
+              specificDate: _specificDate,
+              onCategoryFilterChanged: (v) => setState(() => _categoryFilter = v),
+              onTimeFilterChanged: (f) => setState(() => _timeFilter = f),
+              onSpecificDateTapped: () async {
+                DateTime? picked = await showDatePicker(
+                  context: context,
+                  initialDate: DateTime.now(),
+                  firstDate: DateTime(2020),
+                  lastDate: DateTime.now(),
+                );
+                if (picked != null) {
+                  setState(() {
+                    _timeFilter = 'Específico';
+                    _specificDate = picked;
+                  });
+                }
+              },
+            ),
           ),
           if (_tabController.index == 2 && _isSelectionMode)
             NotificationSelectionBar(
@@ -1554,16 +1612,19 @@ class _NotificationsScreenState extends State<NotificationsScreen> with SingleTi
               onDelete: () => _confirmDelete(notifProv),
             ),
           Expanded(
-            child: TabBarView(
-              controller: _tabController,
-              physics: notifProv.preferences.comportamientoSwipe == 'card_actions'
-                  ? const NeverScrollableScrollPhysics()
-                  : null,
-              children: [
-                _buildTabContent(pendientes, notifProv, isDark, tabIndex: 0),
-                _buildTabContent(resueltas, notifProv, isDark, tabIndex: 1),
-                _buildTabContent(historial, notifProv, isDark, tabIndex: 2),
-              ],
+            child: KeyedSubtree(
+              key: _tourKeys.cardsFeedKey,
+              child: TabBarView(
+                controller: _tabController,
+                physics: notifProv.preferences.comportamientoSwipe == 'card_actions'
+                    ? const NeverScrollableScrollPhysics()
+                    : null,
+                children: [
+                  _buildTabContent(pendientes, notifProv, isDark, tabIndex: 0),
+                  _buildTabContent(resueltas, notifProv, isDark, tabIndex: 1),
+                  _buildTabContent(historial, notifProv, isDark, tabIndex: 2),
+                ],
+              ),
             ),
           )
         ],

@@ -282,8 +282,8 @@ void main() {
       final sheet = tester.widget<InteractiveSheetWrapper>(sheetFinder);
       expect(sheet.enableDragToDismiss, isFalse);
 
-      // 2. Cambiar a la pestaña Préstamo (Tab 1)
-      await tester.tap(find.text('Préstamo'));
+      // 2. Asegurar selección de la pestaña Otorgar Préstamo (Tab 0)
+      await tester.tap(find.text('Otorgar Préstamo'));
       await tester.pumpAndSettle();
 
       // 3. Ingresar un monto

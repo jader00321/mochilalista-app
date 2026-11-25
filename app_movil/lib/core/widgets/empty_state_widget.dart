@@ -23,8 +23,9 @@ class EmptyStateWidget extends StatelessWidget {
     final color = isDark ? Colors.white54 : Colors.black45;
 
     return Center(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 32.0, vertical: 24.0),
+      child: SingleChildScrollView(
+        physics: const ClampingScrollPhysics(),
+        padding: const EdgeInsets.symmetric(horizontal: 32.0, vertical: 20.0),
         child: TweenAnimationBuilder<double>(
           duration: const Duration(milliseconds: 400),
           curve: Curves.easeOutCubic,
@@ -39,6 +40,7 @@ class EmptyStateWidget extends StatelessWidget {
             );
           },
           child: Column(
+            mainAxisSize: MainAxisSize.min,
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Container(

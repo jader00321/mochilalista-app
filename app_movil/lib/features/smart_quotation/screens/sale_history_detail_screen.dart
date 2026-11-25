@@ -24,12 +24,24 @@ import 'package:app_movil/features/smart_quotation/widgets/crm/payment_entry_mod
 import 'package:app_movil/features/smart_quotation/screens/quick_sale_screen.dart';
 import 'package:app_movil/features/smart_quotation/screens/quotation_detail_screen.dart'; 
 import 'package:app_movil/features/smart_quotation/screens/manual_quotation_screen.dart'; 
+import 'package:app_movil/core/services/tour/interactive_tour_service.dart';
+import 'package:app_movil/core/widgets/info_tooltip_button.dart';
+import 'package:app_movil/core/widgets/tour/configs/sale_history_detail_tour.dart';
+import 'package:app_movil/core/widgets/tour/tour_step_model.dart';
 
 class SaleHistoryDetailScreen extends StatefulWidget {
   final int? saleId;
   final int? quotationId; 
+  final bool autoTriggerTour;
+  final SaleHistoryDetailTourKeys? tourKeys;
 
-  const SaleHistoryDetailScreen({super.key, this.saleId, this.quotationId});
+  const SaleHistoryDetailScreen({
+    super.key,
+    this.saleId,
+    this.quotationId,
+    this.autoTriggerTour = true,
+    this.tourKeys,
+  });
 
   @override
   State<SaleHistoryDetailScreen> createState() => _SaleHistoryDetailScreenState();
@@ -39,13 +51,24 @@ class _SaleHistoryDetailScreenState extends State<SaleHistoryDetailScreen> {
   bool _isLoading = true;
   bool _isProcessingAction = false;
   Map<String, dynamic>? _saleData;
+  late final SaleHistoryDetailTourKeys _tourKeys;
+  bool _didAttemptAutoTour = false;
 
   @override
   void initState() {
     super.initState();
+    _tourKeys = widget.tourKeys ?? SaleHistoryDetailTourKeys();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadSaleDetail();
     });
+  }
+
+  ScreenTourConfig _buildTourConfig() {
+    return SaleHistoryDetailTour.buildConfig(keys: _tourKeys);
+  }
+
+  void _startTour(BuildContext context) {
+    InteractiveTourService.startManualTour(context, _buildTourConfig());
   }
 
   void _showSnack(String message, {bool isError = false}) {
@@ -85,6 +108,15 @@ class _SaleHistoryDetailScreenState extends State<SaleHistoryDetailScreen> {
 
       if (data == null) {
         _showSnack("Error al cargar el detalle de la venta", isError: true);
+      } else if (widget.autoTriggerTour && !_didAttemptAutoTour) {
+        _didAttemptAutoTour = true;
+        WidgetsBinding.instance.addPostFrameCallback((_) async {
+          if (!mounted) return;
+          await InteractiveTourService.maybeStartAutomaticTour(
+            context,
+            _buildTourConfig(),
+          );
+        });
       }
     }
   }
@@ -675,19 +707,62 @@ class _SaleHistoryDetailScreenState extends State<SaleHistoryDetailScreen> {
           Scaffold(
           backgroundColor: bgColor,
           appBar: AppBar(
-            title: Text(
-              isLoan
-                  ? "Préstamo #${_saleData!['numero_secuencial'] ?? _saleData!['id']}"
-                  : "Recibo #${_saleData!['numero_secuencial'] ?? _saleData!['id']}",
-              style: TextStyle(fontWeight: FontWeight.bold, color: textColor, fontSize: 20),
+            leadingWidth: 38,
+            titleSpacing: 0,
+            actionsPadding: EdgeInsets.zero,
+            title: Align(
+              alignment: Alignment.centerLeft,
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  isLoan
+                      ? "Préstamo #${_saleData!['numero_secuencial'] ?? _saleData!['id']}"
+                      : "Recibo #${_saleData!['numero_secuencial'] ?? _saleData!['id']}",
+                  maxLines: 1,
+                  style: TextStyle(fontWeight: FontWeight.bold, color: textColor, fontSize: 19),
+                ),
+              ),
             ),
             backgroundColor: bgColor,
             surfaceTintColor: Colors.transparent,
             elevation: 0,
             iconTheme: IconThemeData(color: textColor),
             actions: [
+              InfoTooltipButton(
+                iconColor: isDark ? Colors.grey[400] : Colors.grey[700],
+                iconSize: 20,
+                padding: const EdgeInsets.all(5),
+                constraints: const BoxConstraints(minWidth: 34, minHeight: 34),
+                onStartInteractiveTour: () => _startTour(context),
+                title: "Detalle de Comprobante",
+                description:
+                    "Consulta el resumen completo de la venta o préstamo, los artículos entregados, notas internas y opciones de impresión, WhatsApp o anulación segura.",
+                tips: const [
+                  InfoTip(
+                    icon: Icons.note_add_outlined,
+                    text:
+                        "Añade o edita notas rápidas sin alterar montos ni cantidades entregadas.",
+                  ),
+                  InfoTip(
+                    icon: Icons.print_outlined,
+                    text:
+                        "Desde PDF o WhatsApp en la barra inferior puedes reimprimir ticket Bluetooth o enviar el comprobante.",
+                  ),
+                  InfoTip(
+                    icon: Icons.security_outlined,
+                    text:
+                        "Usa el menú superior para anular con reversión automática de stock si corresponde.",
+                  ),
+                ],
+              ),
               IconButton(
-                icon: const Icon(Icons.note_add),
+                icon: const Icon(Icons.note_add, size: 21),
+                padding: const EdgeInsets.all(5),
+                constraints: const BoxConstraints(minWidth: 34, minHeight: 34),
+                style: IconButton.styleFrom(
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
                 tooltip: "Añadir o Editar Notas",
                 onPressed: () => _showAddNoteMenu(
                   cotizacionId: cotizacionId,
@@ -699,32 +774,40 @@ class _SaleHistoryDetailScreenState extends State<SaleHistoryDetailScreen> {
                   saleId: effectiveSaleId,
                 ),
               ),
-              PopupMenuButton<String>(
-                color: isDark ? const Color(0xFF23232F) : Colors.white,
-                icon: Icon(Icons.more_vert, color: textColor),
-                onSelected: (val) { if (val == 'archive') _handleArchive(isDark); },
-                itemBuilder: (ctx) => [
-                  PopupMenuItem(
-                    value: 'archive', 
-                    child: Row(children: [
-                      Icon(_saleData!['is_archived'] == 1 ? Icons.unarchive : Icons.auto_delete, color: _saleData!['is_archived'] == 1 ? (isDark ? Colors.green[400] : Colors.green) : (isDark ? Colors.red[400] : Colors.red), size: 24), 
-                      const SizedBox(width: 12), 
-                      Text(_saleData!['is_archived'] == 1 ? (isLoan ? "Restaurar Préstamo" : "Restaurar Venta") : (isLoan ? "Anular Préstamo" : "Anular Venta"), style: TextStyle(color: textColor, fontWeight: FontWeight.bold, fontSize: 16))
-                    ])
-                  )
-                ],
-              )
+              KeyedSubtree(
+                key: _tourKeys.cancelMenuKey,
+                child: PopupMenuButton<String>(
+                  color: isDark ? const Color(0xFF23232F) : Colors.white,
+                  padding: const EdgeInsets.all(5),
+                  icon: Icon(Icons.more_vert, color: textColor, size: 22),
+                  onSelected: (val) { if (val == 'archive') _handleArchive(isDark); },
+                  itemBuilder: (ctx) => [
+                    PopupMenuItem(
+                      value: 'archive', 
+                      child: Row(children: [
+                        Icon(_saleData!['is_archived'] == 1 ? Icons.unarchive : Icons.auto_delete, color: _saleData!['is_archived'] == 1 ? (isDark ? Colors.green[400] : Colors.green) : (isDark ? Colors.red[400] : Colors.red), size: 24), 
+                        const SizedBox(width: 12), 
+                        Text(_saleData!['is_archived'] == 1 ? (isLoan ? "Restaurar Préstamo" : "Restaurar Venta") : (isLoan ? "Anular Préstamo" : "Anular Venta"), style: TextStyle(color: textColor, fontWeight: FontWeight.bold, fontSize: 16))
+                      ])
+                    )
+                  ],
+                ),
+              ),
+              const SizedBox(width: 2),
             ],
           ),
           body: SingleChildScrollView(
             child: Column(
               children: [
-                DetailHeaderCard(
-                  saleData: _saleData!,
-                  styles: styles,
-                  totalAmount: totalAmount,
-                  dateString: dateString,
-                  isDark: isDark,
+                KeyedSubtree(
+                  key: _tourKeys.headerSummaryKey,
+                  child: DetailHeaderCard(
+                    saleData: _saleData!,
+                    styles: styles,
+                    totalAmount: totalAmount,
+                    dateString: dateString,
+                    isDark: isDark,
+                  ),
                 ),
 
                 const SizedBox(height: 16),
@@ -753,14 +836,17 @@ class _SaleHistoryDetailScreenState extends State<SaleHistoryDetailScreen> {
                   ),
                 ),
 
-                DetailStatusCard(
-                  saleData: _saleData!,
-                  totalAmount: totalAmount,
-                  paidAmount: paidAmount,
-                  pendingDebt: pendingDebt,
-                  cuotasRaw: cuotasRaw,
-                  isDark: isDark,
-                  onPaymentSuccess: _loadSaleDetail,
+                KeyedSubtree(
+                  key: isLoan ? _tourKeys.itemsDetailKey : null,
+                  child: DetailStatusCard(
+                    saleData: _saleData!,
+                    totalAmount: totalAmount,
+                    paidAmount: paidAmount,
+                    pendingDebt: pendingDebt,
+                    cuotasRaw: cuotasRaw,
+                    isDark: isDark,
+                    onPaymentSuccess: _loadSaleDetail,
+                  ),
                 ),
 
                 if (imageUrl.isNotEmpty)
@@ -779,28 +865,34 @@ class _SaleHistoryDetailScreenState extends State<SaleHistoryDetailScreen> {
                   ),
 
                 if (!isLoan)
-                  SaleItemsList(
-                    items: items,
-                    isDark: isDark,
-                    cardColor: cardColor,
-                    textColor: textColor,
+                  KeyedSubtree(
+                    key: _tourKeys.itemsDetailKey,
+                    child: SaleItemsList(
+                      items: items,
+                      isDark: isDark,
+                      cardColor: cardColor,
+                      textColor: textColor,
+                    ),
                   ),
                 SizedBox(height: kBottomNavigationBarHeight + MediaQuery.of(context).padding.bottom + 60),
               ],
             ),
           ),
 
-          bottomNavigationBar: SaleActionFooter(
-            isDark: isDark,
-            cardColor: cardColor,
-            cotizacionId: cotizacionId,
-            saleId: widget.saleId,
-            isQuickSale: isQuickSale,
-            isLoan: isLoan,
-            pendingDebt: pendingDebt,
-            onSellAgainQuickSale: () => _handleSellAgainQuickSale(isDark),
-            onDuplicateOptions: () => _showDuplicateOptionsModal(cotizacionId, isDark),
-            onRegisterPayment: _handleRegisterPayment,
+          bottomNavigationBar: KeyedSubtree(
+            key: _tourKeys.footerEmitKey,
+            child: SaleActionFooter(
+              isDark: isDark,
+              cardColor: cardColor,
+              cotizacionId: cotizacionId,
+              saleId: widget.saleId,
+              isQuickSale: isQuickSale,
+              isLoan: isLoan,
+              pendingDebt: pendingDebt,
+              onSellAgainQuickSale: () => _handleSellAgainQuickSale(isDark),
+              onDuplicateOptions: () => _showDuplicateOptionsModal(cotizacionId, isDark),
+              onRegisterPayment: _handleRegisterPayment,
+            ),
           ),
         ),
 

@@ -80,29 +80,39 @@ class _PredictiveAnalyticsScreenState extends State<PredictiveAnalyticsScreen> {
     return Scaffold(
       backgroundColor: isDark ? const Color(0xFF0F172A) : const Color(0xFFF1F5F9),
       appBar: AppBar(
-        title: const Text("Proyecciones y Crecimiento", style: TextStyle(fontWeight: FontWeight.bold)),
+        titleSpacing: 0,
+        title: const FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: Alignment.centerLeft,
+          child: Text(
+            "Proyecciones y Crecimiento",
+            style: TextStyle(fontWeight: FontWeight.bold),
+          ),
+        ),
         backgroundColor: Colors.transparent,
         elevation: 0,
         actions: const [
           InfoTooltipButton(
+            constraints: BoxConstraints(minWidth: 32, minHeight: 32),
+            padding: EdgeInsets.all(6),
             title: "Proyecciones y Crecimiento",
             description:
-                "Simulador financiero y algoritmos de proyección que anticipan la evolución de tu patrimonio, ventas e inventario a futuro.",
+                "Simulador financiero y curva de tendencia basados en el histórico real de snapshots diarios de tu negocio.",
             tips: [
               InfoTip(
                 icon: Icons.trending_up_rounded,
                 text:
-                    "Curva de Tendencia: Proyección matemática basada en el histórico de snapshots diarios de tu negocio.",
+                    "Curva de Tendencia: Estima ingresos y utilidades futuras a partir de tu evolución reciente de ventas.",
               ),
               InfoTip(
                 icon: Icons.tune_rounded,
                 text:
-                    "Simulador de Escenarios: Mueve los sliders de incremento de ventas o reducción de costos para ver el impacto financiero proyectado.",
+                    "Simulador de Escenarios: Ajusta los controles de crecimiento en ventas o ahorro de costos para evaluar impacto financiero.",
               ),
               InfoTip(
                 icon: Icons.account_balance_outlined,
                 text:
-                    "Patrimonio Total: Valuación combinada del inventario físico en stock y el flujo de caja.",
+                    "Patrimonio Neto Real: Combina valuación exacta de inventario físico, cuentas por cobrar y flujo acumulado.",
               ),
             ],
           ),

@@ -375,8 +375,8 @@ void main() {
         ),
       );
 
-      // Cambiar a pestaña Préstamo
-      await tester.tap(find.text('Préstamo'));
+      // Asegurar selección de pestaña Otorgar Préstamo
+      await tester.tap(find.text('Otorgar Préstamo'));
       await tester.pumpAndSettle();
 
       // Verificar existencia del selector de Fecha de Emisión / Entrega
