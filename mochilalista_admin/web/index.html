@@ -2752,35 +2752,88 @@
 
         <!-- ZONA DRAG & DROP DE APK DIRECTO -->
         <div class="apk-drop-zone" id="apkDropZone">
-          <div class="drop-icon">
-            <svg style="width:38px; height:38px; color:var(--primary);" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          <div class="drop-icon" id="apkDropZoneIcon">
+            <svg width="38" height="38" style="width:38px; height:38px; color:var(--primary);" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
           </div>
-          <div class="drop-title">Arrastra tu archivo .APK aquí o haz clic para seleccionarlo</div>
-          <div class="drop-subtitle">Compatible con APK Universal (~110 MB) y APK Ligero ARM64 (~30 MB)</div>
+          <div class="drop-title" id="apkDropZoneTitle">Arrastra tu archivo .APK aquí o haz clic para seleccionarlo</div>
+          <div class="drop-subtitle" id="apkDropZoneSubtitle">Compatible con APK Universal (~110 MB) y APK Ligero ARM64 (~30 MB)</div>
           <input type="file" id="apkFileInput" accept=".apk" style="display:none;">
           <div id="apkUploadProgress" style="display:none; width:100%; margin-top:0.5rem;">
-            <div style="background:rgba(255,255,255,0.1); border-radius:4px; height:8px; overflow:hidden;">
+            <div style="background:rgba(148,163,184,0.2); border-radius:4px; height:8px; overflow:hidden;">
               <div id="apkProgressBar" style="width:0%; background:var(--primary); height:100%; transition:width 0.2s;"></div>
             </div>
             <span id="apkUploadStatusText" style="font-size:0.75rem; color:var(--text-secondary); margin-top:0.25rem; display:block;">Procesando archivo e inspeccionando metadatos...</span>
           </div>
         </div>
 
+        <!-- TARJETA UNÍVOCA DE APK ACTIVO LISTO PARA PUBLICAR (PLAN 22.5 FASE 2) -->
+        <div id="activeCreateApkCard" class="active-apk-card" style="display:none;" aria-live="polite"></div>
+
         <!-- ESCUDO ANTI-DEBUG.APK BANNER DINÁMICO -->
         <div id="apkSignatureBanner" style="display:none;" class="apk-signature-banner"></div>
 
-        <!-- SECCIÓN DE AUTODETECCIÓN TRANSPARENTE DESDE BIBLIOTECA Y APP_MOVIL -->
-        <div style="margin: 0.85rem 0; background:rgba(37,99,235,0.06); border:1px solid rgba(37,99,235,0.22); border-radius:10px; padding:0.85rem 1rem;">
+        <!-- SECCIÓN DE AUTODETECCIÓN TRANSPARENTE DESDE RUTAS CONFIGURABLES -->
+        <div class="autodetect-container">
           <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.5rem;">
-            <div>
+            <div style="flex:1; min-width:220px;">
               <strong style="color:var(--primary); font-size:0.88rem;">Autodetección Transparente de APKs Locales:</strong>
-              <p style="font-size:0.78rem; color:var(--text-secondary); margin:0;" id="detectApkStatus">Escanea la biblioteca oficial y compilaciones de app_movil/build con fecha, SHA-256 y firma real.</p>
+              <p style="font-size:0.78rem; color:var(--text-secondary); margin:0;" id="detectApkStatus">Escanea tus rutas configuradas (Biblioteca Oficial, compilaciones locales o carpetas personalizadas) con fecha, SHA-256 y firma real.</p>
             </div>
-            <button type="button" class="btn btn-outline btn-sm" id="btnDetectLocalBuild">
-              <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-              Autodetectar APKs Locales
-            </button>
+            <div style="display:flex; align-items:center; gap:0.45rem; flex-wrap:wrap;">
+              <button type="button" class="btn btn-outline btn-sm" id="btnToggleSearchDirsPanel" title="Configurar carpetas donde buscar archivos .APK">
+                <svg class="btn-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="2"/></svg>
+                Rutas de búsqueda
+              </button>
+              <button type="button" class="btn btn-outline btn-sm" id="btnDetectLocalBuild">
+                <svg class="btn-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+                Autodetectar APKs Locales
+              </button>
+            </div>
           </div>
+
+          <!-- MINI-PANEL COLAPSABLE: CONFIGURAR RUTAS DE BÚSQUEDA -->
+          <div id="createSearchDirsPanel" class="search-dirs-panel" style="display:none;">
+            <div class="search-dirs-header">
+              <div>
+                <strong style="font-size:0.82rem; color:var(--text-primary);">Rutas de búsqueda configuradas</strong>
+                <div style="font-size:0.72rem; color:var(--text-muted);">Escaneo recursivo inteligente (máx. 3 subniveles) con protección de rutas sensibles.</div>
+              </div>
+              <button type="button" class="btn btn-outline btn-xs" id="btnResetApkSearchDirs" title="Restablecer rutas por defecto">
+                <svg class="btn-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
+                Restablecer rutas por defecto
+              </button>
+            </div>
+            <div id="createSearchDirsList" class="search-dirs-list"></div>
+            <div class="search-dir-add-row">
+              <input type="text" id="inputNewApkSearchDir" placeholder="Ej: D:\Compilaciones\MochilaLista (carpeta con archivos .APK)">
+              <button type="button" class="btn btn-outline btn-sm" id="btnBrowseApkSearchDir" title="Seleccionar carpeta en el Explorador de Windows">
+                <svg class="btn-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+                Examinar carpeta...
+              </button>
+              <button type="button" class="btn btn-primary btn-sm" id="btnAddApkSearchDir">
+                <svg class="btn-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                Agregar ruta
+              </button>
+            </div>
+          </div>
+
+          <!-- BARRA DE FILTROS RÁPIDOS DE AUTODETECCIÓN -->
+          <div id="localBuildsToolbar" class="local-builds-toolbar" style="display:none;">
+            <div class="local-abi-chips" id="localBuildsAbiChips">
+              <button type="button" class="local-abi-chip active" data-abi="ALL">Todos</button>
+              <button type="button" class="local-abi-chip" data-abi="UNIVERSAL">Universal</button>
+              <button type="button" class="local-abi-chip" data-abi="ARM64">ARM64</button>
+            </div>
+            <div class="local-builds-toolbar-right">
+              <input type="text" id="inputLocalBuildsFilter" class="local-builds-filter-input" placeholder="Filtrar versión, archivo o ruta...">
+              <select id="selectLocalBuildsLimit" class="local-builds-limit-select" title="Cantidad máxima de APKs a mostrar">
+                <option value="6" selected>6 APKs</option>
+                <option value="12">12 APKs</option>
+                <option value="24">24 APKs</option>
+              </select>
+            </div>
+          </div>
+
           <div id="localBuildsGrid" class="local-builds-grid" style="display:none;"></div>
         </div>
 
@@ -2840,22 +2893,36 @@
           <div class="form-group" style="grid-column: 1 / -1;">
             <div class="field-label-row">
               <label for="relChangelog" style="margin:0;">Novedades y Mejoras Comerciales (Changelog para Clientes):</label>
-              <button type="button" class="btn btn-outline btn-xs btn-load-companion" id="btnCreateLoadCambiosTxt" title="Cargar texto comercial desde *_cambios.txt">
-                <svg class="btn-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-                Cargar *_cambios.txt
-              </button>
+              <div class="field-label-actions">
+                <span id="relChangelogCounter" class="textarea-meta-counter" aria-live="polite">0 lín. · 0 car.</span>
+                <button type="button" class="btn btn-outline btn-xs btn-load-companion" id="btnCreateLoadCambiosTxt" title="Cargar texto comercial desde *_cambios.txt">
+                  <svg class="btn-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                  Cargar *_cambios.txt
+                </button>
+                <button type="button" class="btn btn-outline btn-xs btn-toggle-textarea" data-target="relChangelog" aria-expanded="false" aria-controls="relChangelog" title="Expandir o contraer campo de changelog">
+                  <svg class="btn-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
+                  <span class="btn-toggle-textarea-label">Expandir</span>
+                </button>
+              </div>
             </div>
-            <textarea id="relChangelog" rows="3" placeholder="Detalla los puntos nuevos que recibirá el usuario por WhatsApp..."></textarea>
+            <textarea id="relChangelog" class="expandable-textarea" rows="3" placeholder="Detalla los puntos nuevos que recibirá el usuario por WhatsApp..."></textarea>
           </div>
           <div class="form-group" style="grid-column: 1 / -1;">
             <div class="field-label-row">
               <label for="relInternalNotes" style="margin:0;">Notas Internas de Ingeniería (Privadas — no se envían al cliente):</label>
-              <button type="button" class="btn btn-outline btn-xs btn-load-companion" id="btnCreateLoadAtpTxt" title="Cargar ficha técnica desde *_atp.txt">
-                <svg class="btn-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/></svg>
-                Cargar *_atp.txt
-              </button>
+              <div class="field-label-actions">
+                <span id="relInternalNotesCounter" class="textarea-meta-counter" aria-live="polite">0 lín. · 0 car.</span>
+                <button type="button" class="btn btn-outline btn-xs btn-load-companion" id="btnCreateLoadAtpTxt" title="Cargar ficha técnica desde *_atp.txt">
+                  <svg class="btn-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/></svg>
+                  Cargar *_atp.txt
+                </button>
+                <button type="button" class="btn btn-outline btn-xs btn-toggle-textarea" data-target="relInternalNotes" aria-expanded="false" aria-controls="relInternalNotes" title="Expandir o contraer notas internas">
+                  <svg class="btn-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
+                  <span class="btn-toggle-textarea-label">Expandir</span>
+                </button>
+              </div>
             </div>
-            <textarea id="relInternalNotes" rows="2" placeholder="Detalles de commits, branches, flags de compilación o notas técnicas..."></textarea>
+            <textarea id="relInternalNotes" class="expandable-textarea" rows="2" placeholder="Detalles de commits, branches, flags de compilación o notas técnicas..."></textarea>
           </div>
         </form>
       </div>
@@ -2915,27 +2982,66 @@
           <div class="form-group" style="grid-column: 1 / -1;">
             <div class="field-label-row">
               <label for="editRelChangelog" style="margin:0;">Changelog Comercial para Clientes:</label>
-              <button type="button" class="btn btn-outline btn-xs btn-load-companion" id="btnEditLoadCambiosTxt" title="Importar changelog comercial desde archivo *_cambios.txt local">
-                <svg class="btn-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-                Cargar *_cambios.txt
-              </button>
+              <div class="field-label-actions">
+                <span id="editRelChangelogCounter" class="textarea-meta-counter" aria-live="polite">0 lín. · 0 car.</span>
+                <button type="button" class="btn btn-outline btn-xs btn-load-companion" id="btnEditLoadCambiosTxt" title="Importar changelog comercial desde archivo *_cambios.txt local">
+                  <svg class="btn-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                  Cargar *_cambios.txt
+                </button>
+                <button type="button" class="btn btn-outline btn-xs btn-toggle-textarea" data-target="editRelChangelog" aria-expanded="false" aria-controls="editRelChangelog" title="Expandir o contraer changelog comercial">
+                  <svg class="btn-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
+                  <span class="btn-toggle-textarea-label">Expandir</span>
+                </button>
+              </div>
             </div>
-            <textarea id="editRelChangelog" rows="4" placeholder="Novedades que se enviarán por WhatsApp..."></textarea>
+            <textarea id="editRelChangelog" class="expandable-textarea" rows="4" placeholder="Novedades que se enviarán por WhatsApp..."></textarea>
           </div>
           <div class="form-group" style="grid-column: 1 / -1;">
             <div class="field-label-row">
               <label for="editRelInternalNotes" style="margin:0;">Notas Internas de Ingeniería (Privadas):</label>
-              <button type="button" class="btn btn-outline btn-xs btn-load-companion" id="btnEditLoadAtpTxt" title="Importar ficha técnica desde archivo *_atp.txt local">
-                <svg class="btn-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/></svg>
-                Cargar *_atp.txt
-              </button>
+              <div class="field-label-actions">
+                <span id="editRelInternalNotesCounter" class="textarea-meta-counter" aria-live="polite">0 lín. · 0 car.</span>
+                <button type="button" class="btn btn-outline btn-xs btn-load-companion" id="btnEditLoadAtpTxt" title="Importar ficha técnica desde archivo *_atp.txt local">
+                  <svg class="btn-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/></svg>
+                  Cargar *_atp.txt
+                </button>
+                <button type="button" class="btn btn-outline btn-xs btn-toggle-textarea" data-target="editRelInternalNotes" aria-expanded="false" aria-controls="editRelInternalNotes" title="Expandir o contraer notas internas">
+                  <svg class="btn-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
+                  <span class="btn-toggle-textarea-label">Expandir</span>
+                </button>
+              </div>
             </div>
-            <textarea id="editRelInternalNotes" rows="2" placeholder="Notas de build, branches o incidencias resueltas..."></textarea>
+            <textarea id="editRelInternalNotes" class="expandable-textarea" rows="2" placeholder="Notas de build, branches o incidencias resueltas..."></textarea>
           </div>
           <div class="form-group" style="grid-column: 1 / -1;">
             <label>Archivos APK Físicos en Disco (Variantes Universal & ARM64):</label>
             <input type="file" id="editRelUniversalInput" accept=".apk" style="display:none;">
             <input type="file" id="editRelArm64Input" accept=".apk" style="display:none;">
+            <div id="editSearchDirsPanel" class="search-dirs-panel" style="display:none; margin-bottom:0.65rem;">
+              <div class="field-label-row">
+                <strong style="font-size:0.78rem; color:var(--text-primary);">Rutas Activas de Autodetección APK:</strong>
+                <div style="display:flex; gap:0.35rem; flex-wrap:wrap;">
+                  <button type="button" class="btn btn-outline btn-xs" id="btnEditResetApkSearchDirs" title="Restablecer rutas predeterminadas">
+                    Restablecer predeterminadas
+                  </button>
+                  <button type="button" class="btn btn-outline btn-xs" id="btnCloseEditSearchDirsPanel" title="Cerrar panel de rutas">
+                    <svg class="btn-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                    Cerrar
+                  </button>
+                </div>
+              </div>
+              <div id="editSearchDirsList" style="display:flex; flex-direction:column; gap:0.4rem;"></div>
+              <div style="display:flex; gap:0.4rem; flex-wrap:wrap; align-items:center;">
+                <input type="text" id="inputEditNewApkSearchDir" placeholder="Ej: C:\Users\vjuli\Downloads\APKs o selecciona una carpeta..." style="flex:1; min-width:200px; font-size:0.78rem; padding:0.42rem 0.6rem; border-radius:6px; border:1px solid var(--border-color); background:var(--bg-primary); color:var(--text-primary);">
+                <button type="button" class="btn btn-outline btn-xs" id="btnEditBrowseApkSearchDir" title="Examinar carpeta en Windows">
+                  <svg class="btn-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+                  Examinar...
+                </button>
+                <button type="button" class="btn btn-primary btn-xs" id="btnEditAddApkSearchDir">
+                  Agregar ruta
+                </button>
+              </div>
+            </div>
             <div id="editRelVariantsContainer" style="background:var(--bg-secondary); border:1px solid var(--border-color); border-radius:8px; padding:0.75rem; font-size:0.8rem;">
               Cargando estado de archivos...
             </div>

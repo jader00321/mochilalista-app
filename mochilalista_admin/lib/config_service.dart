@@ -1,10 +1,25 @@
 import 'dart:convert';
 import 'dart:io';
+import 'apk_inspector_service.dart';
+
+/// Excepción lanzada cuando el propietario intenta registrar una ruta prohibida o inválida
+class InvalidApkSearchDirException implements Exception {
+  final String message;
+  const InvalidApkSearchDirException(this.message);
+
+  @override
+  String toString() => message;
+}
 
 /// Servicio de Configuración Desacoplada del Propietario (Plan 09 - Pilar 3)
 /// Administra `data/owner_config.json`, plantillas oficiales de WhatsApp,
-/// tarifario de licencias, cuentas de pago y generación de respaldos automáticos.
+/// tarifario de licencias, cuentas de pago, rutas de búsqueda APK y respaldos automáticos.
 class ConfigService {
+  static const String defaultFlutterBuildDir =
+      '../app_movil/build/app/outputs/flutter-apk';
+  static const String defaultWindowsApkLibraryDir =
+      r'C:\Users\vjuli\Documents\v-app-offline apks';
+
   final Directory dataDirectory;
   final Directory backupsDirectory;
   final int maxAutoSnapshots;
@@ -33,13 +48,259 @@ class ConfigService {
 
   /// Directorio de la biblioteca oficial local de APKs
   String get apkLibraryDir {
-    final configured = system['apk_library_dir'] as String?;
+    final configured = (system['apk_library_dir'] as String?) ??
+        (_config['apk_library_dir'] as String?);
     if (configured != null && configured.trim().isNotEmpty) {
       return configured.trim();
     }
     return Platform.isWindows
-        ? r'C:\Users\vjuli\Documents\v-app-offline apks'
+        ? defaultWindowsApkLibraryDir
         : 'releases_apks';
+  }
+
+  /// Verifica si una ruta es insegura o prohibida para búsqueda de APKs
+  /// (bloquea unidades raíz completas C:\ / D:\ / /, carpetas sensibles y rutas del sistema OS)
+  bool isForbiddenApkSearchDir(String rawPath) {
+    final trimmed = rawPath.trim();
+    if (trimmed.isEmpty) return true;
+
+    // 1. Salvaguarda Paso 0: bloquear unidades raíz completas (ej: C:\, D:\, /) o UNC sin subcarpeta
+    final slashNorm = trimmed.replaceAll('\\', '/').trim();
+    if (RegExp(r'^[A-Za-z]:/?$').hasMatch(slashNorm)) return true;
+    if (slashNorm == '/' || RegExp(r'^//[^/]+/?$').hasMatch(slashNorm)) return true;
+
+    final canon = ApkInspectorService.canonicalizePath(trimmed);
+    if (canon.isEmpty) return true;
+    final canonSlash = canon.replaceAll('\\', '/').trim();
+    if (RegExp(r'^[A-Za-z]:/?$').hasMatch(canonSlash)) return true;
+    if (canonSlash == '/' || RegExp(r'^//[^/]+/?$').hasMatch(canonSlash)) return true;
+
+    final cmp = Platform.isWindows ? canonSlash.toLowerCase() : canonSlash;
+    final segments = cmp.split('/').where((s) => s.isNotEmpty).toList();
+
+    // 2. Segmentos intrínsecamente prohibidos en cualquier ubicación
+    if (segments.contains('private_keys') || segments.contains('.git')) {
+      return true;
+    }
+
+    bool isSameOrChild(String target, String rootRaw) {
+      final rootCanon =
+          ApkInspectorService.canonicalizePath(rootRaw).replaceAll('\\', '/');
+      if (rootCanon.isEmpty) return false;
+      final rootCmp = Platform.isWindows ? rootCanon.toLowerCase() : rootCanon;
+      return target == rootCmp || target.startsWith('$rootCmp/');
+    }
+
+    // 3. Carpetas sensibles de producción / proyecto
+    final forbiddenProjectRoots = <String>[
+      dataDirectory.path,
+      backupsDirectory.path,
+      'data',
+      'backups',
+      'private_keys',
+      '../app_movil/android',
+      'app_movil/android',
+    ];
+    for (final root in forbiddenProjectRoots) {
+      if (isSameOrChild(cmp, root)) return true;
+    }
+
+    // 4. Rutas críticas del sistema operativo
+    if (Platform.isWindows) {
+      final sysRoot =
+          (Platform.environment['SystemRoot'] ?? r'C:\Windows').replaceAll('\\', '/').toLowerCase();
+      if (cmp == sysRoot || cmp.startsWith('$sysRoot/')) return true;
+      if (cmp == 'c:/windows' || cmp.startsWith('c:/windows/')) return true;
+    } else {
+      const posixSystemRoots = ['/etc', '/usr', '/bin', '/sbin', '/var', '/proc', '/sys', '/dev', '/system'];
+      for (final pRoot in posixSystemRoots) {
+        if (cmp == pRoot || cmp.startsWith('$pRoot/')) return true;
+      }
+    }
+
+    return false;
+  }
+
+  /// Construye la lista por defecto de rutas de búsqueda a partir de [apkLibraryDir]
+  List<ApkSearchDirConfig> buildDefaultApkSearchDirs({String? defaultBuildOutputDir}) {
+    final flutterPath = (defaultBuildOutputDir != null && defaultBuildOutputDir.trim().isNotEmpty)
+        ? defaultBuildOutputDir.trim()
+        : defaultFlutterBuildDir;
+    return [
+      ApkSearchDirConfig(
+        path: apkLibraryDir,
+        label: 'Biblioteca Oficial (v-app-offline apks)',
+        enabled: true,
+        isDefault: true,
+        kind: 'official_library',
+      ),
+      ApkSearchDirConfig(
+        path: flutterPath,
+        label: 'Compilación Local (app_movil/build)',
+        enabled: true,
+        isDefault: true,
+        kind: 'flutter_build',
+      ),
+    ];
+  }
+
+  /// Devuelve la lista efectiva y deduplicada de rutas de búsqueda configuradas.
+  /// Mantiene 100% retrocompatibilidad cuando `apk_search_dirs` aún no existe en JSON.
+  List<ApkSearchDirConfig> getEffectiveApkSearchDirs({String? defaultBuildOutputDir}) {
+    final rawList = system['apk_search_dirs'];
+    if (rawList is! List || rawList.isEmpty) {
+      return buildDefaultApkSearchDirs(defaultBuildOutputDir: defaultBuildOutputDir);
+    }
+
+    final parsed = <ApkSearchDirConfig>[];
+    final seen = <String>{};
+
+    for (final item in rawList) {
+      ApkSearchDirConfig? cfg;
+      if (item is Map) {
+        cfg = ApkSearchDirConfig.fromJson(Map<String, dynamic>.from(item));
+      } else if (item is String && item.trim().isNotEmpty) {
+        cfg = ApkSearchDirConfig(
+          path: item.trim(),
+          label: 'Carpeta Personalizada',
+          enabled: true,
+          isDefault: false,
+          kind: 'custom',
+        );
+      }
+      if (cfg == null || cfg.path.isEmpty) continue;
+
+      if (cfg.kind == 'flutter_build' &&
+          cfg.isDefault &&
+          defaultBuildOutputDir != null &&
+          defaultBuildOutputDir.trim().isNotEmpty) {
+        cfg = cfg.copyWith(path: defaultBuildOutputDir.trim());
+      }
+
+      if (isForbiddenApkSearchDir(cfg.path)) continue;
+
+      final canon = ApkInspectorService.canonicalizePath(cfg.path);
+      final key = Platform.isWindows ? canon.toLowerCase() : canon;
+      if (seen.add(key)) {
+        parsed.add(cfg);
+      }
+    }
+
+    if (parsed.isEmpty) {
+      return buildDefaultApkSearchDirs(defaultBuildOutputDir: defaultBuildOutputDir);
+    }
+
+    return parsed;
+  }
+
+  /// Devuelve las rutas activas (habilitadas) como cadenas listas para `extraSearchDirs`
+  List<String> getEffectiveApkSearchDirPaths({String? defaultBuildOutputDir}) {
+    return getEffectiveApkSearchDirs(defaultBuildOutputDir: defaultBuildOutputDir)
+        .where((d) => d.enabled && d.path.trim().isNotEmpty)
+        .map((d) => d.path)
+        .toList();
+  }
+
+  /// Valida, normaliza, deduplica y persiste la lista de rutas de búsqueda APK
+  Future<List<ApkSearchDirConfig>> saveApkSearchDirs(
+    List<dynamic> rawDirs, {
+    String? defaultBuildOutputDir,
+  }) async {
+    final cleanList = <Map<String, dynamic>>[];
+    final seen = <String>{};
+    String? syncedOfficialPath;
+
+    for (final item in rawDirs) {
+      ApkSearchDirConfig cfg;
+      if (item is ApkSearchDirConfig) {
+        cfg = item;
+      } else if (item is Map) {
+        cfg = ApkSearchDirConfig.fromJson(Map<String, dynamic>.from(item));
+      } else if (item is String) {
+        cfg = ApkSearchDirConfig(
+          path: item.trim(),
+          label: 'Carpeta Personalizada',
+          enabled: true,
+          isDefault: false,
+          kind: 'custom',
+        );
+      } else {
+        continue;
+      }
+
+      final trimmedPath = cfg.path.trim();
+      if (trimmedPath.isEmpty) {
+        throw const InvalidApkSearchDirException(
+            'La ruta de búsqueda no puede estar vacía.');
+      }
+      if (isForbiddenApkSearchDir(trimmedPath)) {
+        throw InvalidApkSearchDirException(
+            'Ruta prohibida por seguridad o demasiado amplia: "$trimmedPath".');
+      }
+
+      final storedPath = (cfg.kind == 'flutter_build' && cfg.isDefault)
+          ? trimmedPath
+          : ApkInspectorService.canonicalizePath(trimmedPath);
+      final canonKeyRaw = ApkInspectorService.canonicalizePath(storedPath);
+      final key = Platform.isWindows ? canonKeyRaw.toLowerCase() : canonKeyRaw;
+      if (!seen.add(key)) continue;
+
+      final normalizedCfg = cfg.copyWith(path: storedPath);
+      if (normalizedCfg.kind == 'official_library' && syncedOfficialPath == null) {
+        syncedOfficialPath = normalizedCfg.path;
+      }
+      cleanList.add(normalizedCfg.toJson());
+    }
+
+    if (cleanList.isEmpty) {
+      throw const InvalidApkSearchDirException(
+          'Debe permanecer al menos una ruta de búsqueda válida.');
+    }
+
+    final newConfig = Map<String, dynamic>.from(_config);
+    final sysMap = Map<String, dynamic>.from(system);
+    sysMap['apk_search_dirs'] = cleanList;
+    if (syncedOfficialPath != null && syncedOfficialPath.isNotEmpty) {
+      sysMap['apk_library_dir'] = syncedOfficialPath;
+    }
+    newConfig['system'] = sysMap;
+    await saveConfig(newConfig);
+
+    return getEffectiveApkSearchDirs(defaultBuildOutputDir: defaultBuildOutputDir);
+  }
+
+  /// Restablece las rutas de búsqueda APK a sus valores de fábrica oficiales
+  Future<List<ApkSearchDirConfig>> resetApkSearchDirsToDefaults({
+    String? defaultBuildOutputDir,
+  }) async {
+    final defaultLib = Platform.isWindows
+        ? defaultWindowsApkLibraryDir
+        : 'releases_apks';
+    final defaultEntries = [
+      ApkSearchDirConfig(
+        path: defaultLib,
+        label: 'Biblioteca Oficial (v-app-offline apks)',
+        enabled: true,
+        isDefault: true,
+        kind: 'official_library',
+      ).toJson(),
+      const ApkSearchDirConfig(
+        path: defaultFlutterBuildDir,
+        label: 'Compilación Local (app_movil/build)',
+        enabled: true,
+        isDefault: true,
+        kind: 'flutter_build',
+      ).toJson(),
+    ];
+
+    final newConfig = Map<String, dynamic>.from(_config);
+    final sysMap = Map<String, dynamic>.from(system);
+    sysMap['apk_library_dir'] = defaultLib;
+    sysMap['apk_search_dirs'] = defaultEntries;
+    newConfig['system'] = sysMap;
+    await saveConfig(newConfig);
+
+    return getEffectiveApkSearchDirs(defaultBuildOutputDir: defaultBuildOutputDir);
   }
 
   /// Tarifa técnica oficial de migración de hardware
@@ -524,6 +785,69 @@ class ConfigService {
   /// Sanitiza y valida la configuración entrante
   Map<String, dynamic> _sanitizeConfig(Map<String, dynamic> raw) {
     final merged = _deepMerge(getDefaultConfig(), raw);
+
+    // Sincronizar ruta de biblioteca si vino en raíz por retrocompatibilidad
+    final rawSystem = raw['system'];
+    final hasRawSystemLib =
+        rawSystem is Map && rawSystem.containsKey('apk_library_dir');
+    final hasRawSearchDirs =
+        rawSystem is Map && rawSystem.containsKey('apk_search_dirs');
+
+    final sysMap = merged['system'] is Map
+        ? Map<String, dynamic>.from(merged['system'] as Map)
+        : <String, dynamic>{};
+
+    if (!hasRawSystemLib &&
+        raw['apk_library_dir'] is String &&
+        (raw['apk_library_dir'] as String).trim().isNotEmpty) {
+      sysMap['apk_library_dir'] = (raw['apk_library_dir'] as String).trim();
+      merged.remove('apk_library_dir');
+    }
+
+    // Si se actualizó apk_library_dir sin enviar apk_search_dirs explícitos,
+    // sincronizar la entrada official_library en lugar de arrastrar rutas previas
+    if (!hasRawSearchDirs && sysMap['apk_search_dirs'] is List) {
+      final newLib = (sysMap['apk_library_dir'] as String? ?? '').trim();
+      final updatedList = <Map<String, dynamic>>[];
+      for (final item in (sysMap['apk_search_dirs'] as List)) {
+        if (item is Map) {
+          final m = Map<String, dynamic>.from(item);
+          if (m['kind'] == 'official_library' && newLib.isNotEmpty) {
+            m['path'] = newLib;
+          }
+          updatedList.add(m);
+        }
+      }
+      sysMap['apk_search_dirs'] = updatedList;
+    }
+
+    if (sysMap['apk_search_dirs'] is List) {
+      final rawList = sysMap['apk_search_dirs'] as List;
+      final cleanDirs = <Map<String, dynamic>>[];
+      final seen = <String>{};
+      for (final item in rawList) {
+        ApkSearchDirConfig? cfg;
+        if (item is Map) {
+          cfg = ApkSearchDirConfig.fromJson(Map<String, dynamic>.from(item));
+        } else if (item is String && item.trim().isNotEmpty) {
+          cfg = ApkSearchDirConfig(path: item.trim(), label: 'Carpeta Personalizada');
+        }
+        if (cfg == null || cfg.path.isEmpty || isForbiddenApkSearchDir(cfg.path)) {
+          continue;
+        }
+        final canon = ApkInspectorService.canonicalizePath(cfg.path);
+        final key = Platform.isWindows ? canon.toLowerCase() : canon;
+        if (seen.add(key)) {
+          cleanDirs.add(cfg.toJson());
+          if (cfg.kind == 'official_library' && !hasRawSystemLib) {
+            sysMap['apk_library_dir'] = cfg.path;
+          }
+        }
+      }
+      sysMap['apk_search_dirs'] = cleanDirs;
+    }
+
+    merged['system'] = sysMap;
 
     // Sanitizar catálogo
     final rawCatalog = merged['catalog'];

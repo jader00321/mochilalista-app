@@ -1430,19 +1430,26 @@ class DatabaseService {
     final releases = list.cast<Map<String, dynamic>>();
 
     for (final r in releases) {
-      final p = r['apk_file_path'] as String?;
+      final p = (r['apk_file_path'] as String?)?.trim();
       final u = r['universal_apk'] as Map<String, dynamic>?;
       final a = r['arm64_apk'] as Map<String, dynamic>?;
 
-      bool exists = false;
-      if (p != null && p.isNotEmpty && File(p).existsSync()) {
-        exists = true;
-      } else if (u != null && (u['file_path'] as String? ?? '').isNotEmpty && File(u['file_path'] as String).existsSync()) {
-        exists = true;
-      } else if (a != null && (a['file_path'] as String? ?? '').isNotEmpty && File(a['file_path'] as String).existsSync()) {
-        exists = true;
+      final mainExists = p != null && p.isNotEmpty && File(p).existsSync();
+      bool univExists = false;
+      bool armExists = false;
+
+      if (u != null) {
+        final up = (u['file_path'] as String? ?? '').trim();
+        univExists = up.isNotEmpty && File(up).existsSync();
+        u['file_exists'] = univExists;
       }
-      r['file_exists'] = exists;
+      if (a != null) {
+        final ap = (a['file_path'] as String? ?? '').trim();
+        armExists = ap.isNotEmpty && File(ap).existsSync();
+        a['file_exists'] = armExists;
+      }
+
+      r['file_exists'] = mainExists || univExists || armExists;
     }
 
     return releases;
@@ -1476,27 +1483,62 @@ class DatabaseService {
     // Eliminar duplicado si ya existía para actualizar
     releases.removeWhere((r) => r['version_name'] == versionName);
 
+    final apkFilePath = (releaseData['apk_file_path'] ?? '').toString().trim();
+    final rawAbi = (releaseData['abi_variant'] as String? ?? '').trim().toUpperCase();
+    final abiVariant = rawAbi == 'ARM64' ? 'ARM64' : 'UNIVERSAL';
+    final sha256Str = (releaseData['apk_sha256'] ?? '').toString().toLowerCase();
+    final sizeMbStr = (releaseData['file_size_mb'] ?? '').toString();
+    final sigStatus = releaseData['signature_status'] ?? 'UNVERIFIED';
+    final sigVerified = releaseData['signature_verified'];
+
+    Map<String, dynamic>? universalApk = releaseData['universal_apk'] is Map
+        ? Map<String, dynamic>.from(releaseData['universal_apk'] as Map)
+        : null;
+    Map<String, dynamic>? arm64Apk = releaseData['arm64_apk'] is Map
+        ? Map<String, dynamic>.from(releaseData['arm64_apk'] as Map)
+        : null;
+
+    if (apkFilePath.isNotEmpty) {
+      final fileExistsNow = File(apkFilePath).existsSync();
+      final initialVariantMap = <String, dynamic>{
+        'file_path': apkFilePath,
+        'file_size_mb': sizeMbStr,
+        'sha256': sha256Str,
+        'signature_status': sigStatus,
+        'signature_verified': sigVerified,
+        if (releaseData['signer_sha256'] != null)
+          'signer_sha256': releaseData['signer_sha256'],
+        if (releaseData['signer_dn'] != null)
+          'signer_dn': releaseData['signer_dn'],
+        'file_exists': fileExistsNow,
+      };
+      if (abiVariant == 'ARM64') {
+        arm64Apk ??= initialVariantMap;
+      } else {
+        universalApk ??= initialVariantMap;
+      }
+    }
+
     final newRelease = {
       'version_name': versionName,
       'version_code': (releaseData['version_code'] as num?)?.toInt() ?? 82,
       'db_schema_version': (releaseData['db_schema_version'] as num?)?.toInt() ?? 36,
       'release_date': releaseData['release_date'] ?? DateTime.now().toUtc().toIso8601String(),
       'type': releaseData['type'] == 'HOTFIX' ? 'HOTFIX' : 'FEATURE_RELEASE',
-      'apk_file_path': releaseData['apk_file_path'] ?? '',
+      'abi_variant': abiVariant,
+      'apk_file_path': apkFilePath,
       'apk_download_url': releaseData['apk_download_url'] ?? '',
-      'apk_sha256': (releaseData['apk_sha256'] ?? '').toString().toLowerCase(),
-      'file_size_mb': releaseData['file_size_mb'] ?? '',
+      'apk_sha256': sha256Str,
+      'file_size_mb': sizeMbStr,
       'changelog': releaseData['changelog'] ?? '',
       'internal_notes': releaseData['internal_notes'] ?? '',
       'min_required_version': releaseData['min_required_version'] ?? '9.0.0',
-      'signature_verified': releaseData['signature_verified'],
-      'signature_status': releaseData['signature_status'] ?? 'TOOL_UNAVAILABLE',
+      'signature_verified': sigVerified,
+      'signature_status': sigStatus,
       'signer_sha256': releaseData['signer_sha256'],
       'signer_dn': releaseData['signer_dn'],
-      if (releaseData['universal_apk'] != null)
-        'universal_apk': releaseData['universal_apk'],
-      if (releaseData['arm64_apk'] != null)
-        'arm64_apk': releaseData['arm64_apk'],
+      if (universalApk != null) 'universal_apk': universalApk,
+      if (arm64Apk != null) 'arm64_apk': arm64Apk,
     };
 
     releases.insert(0, newRelease); // Más recientes primero
@@ -1511,20 +1553,54 @@ class DatabaseService {
 
     final release = releases[index];
     updates.forEach((key, value) {
-      if (key != 'version_name') {
-        if (key == 'version_code' || key == 'db_schema_version') {
-          if (value is num) {
-            release[key] = value.toInt();
-          } else if (value is String) {
-            release[key] = int.tryParse(value) ?? release[key];
-          } else {
-            release[key] = value;
-          }
+      if (key == 'version_name') return;
+      if ((key == 'arm64_apk' || key == 'universal_apk') && value == null) {
+        release.remove(key);
+        return;
+      }
+      if (key == 'version_code' || key == 'db_schema_version') {
+        if (value is num) {
+          release[key] = value.toInt();
+        } else if (value is String) {
+          release[key] = int.tryParse(value) ?? release[key];
         } else {
           release[key] = value;
         }
+      } else {
+        release[key] = value;
       }
     });
+
+    // Reconciliar campos raíz al desvincular variantes opcionales
+    final unlinkedUniv = updates.containsKey('universal_apk') && updates['universal_apk'] == null;
+    final unlinkedArm = updates.containsKey('arm64_apk') && updates['arm64_apk'] == null;
+    if (unlinkedUniv || unlinkedArm) {
+      final remainingUniv = release['universal_apk'] as Map<String, dynamic>?;
+      final remainingArm = release['arm64_apk'] as Map<String, dynamic>?;
+      final promoted = remainingUniv ?? remainingArm;
+
+      if (promoted != null) {
+        final promotedPath = (promoted['file_path'] as String? ?? '').trim();
+        release['abi_variant'] = remainingUniv != null ? 'UNIVERSAL' : 'ARM64';
+        release['apk_file_path'] = promotedPath;
+        release['file_size_mb'] = promoted['file_size_mb'] ?? '';
+        release['apk_sha256'] = (promoted['sha256'] ?? '').toString().toLowerCase();
+        release['signature_status'] = promoted['signature_status'] ?? 'UNVERIFIED';
+        release['signature_verified'] = promoted['signature_verified'];
+        release['signer_sha256'] = promoted['signer_sha256'];
+        release['signer_dn'] = promoted['signer_dn'];
+        release['file_exists'] = promotedPath.isNotEmpty && File(promotedPath).existsSync();
+      } else {
+        release['apk_file_path'] = '';
+        release['file_size_mb'] = '';
+        release['apk_sha256'] = '';
+        release['signature_status'] = 'UNVERIFIED';
+        release['signature_verified'] = null;
+        release['signer_sha256'] = null;
+        release['signer_dn'] = null;
+        release['file_exists'] = false;
+      }
+    }
 
     releases[index] = release;
     await saveReleases(releases, reason: 'update_release_$versionName');

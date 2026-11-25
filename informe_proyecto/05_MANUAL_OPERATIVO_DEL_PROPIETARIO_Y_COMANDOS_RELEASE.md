@@ -38,10 +38,10 @@ Aquí se detallan todos los procedimientos paso a paso, comandos de terminal, pr
    - 2.4. Compilación del APK Release Ligero ARM64 para WhatsApp (`compilar_apk_arm64.bat`)
    - 2.5. Compilación del App Bundle para Google Play Store (`flutter build appbundle`)
    - 2.6. Auditoría Forense y Verificación de Firma con `apksigner`
-3. [GUÍA 3: Publicación y Notificación de Actualizaciones (Release Manager — Planes 19 y 22)](#guía-3-publicación-y-notificación-de-actualizaciones-release-manager--planes-19-y-22)
+3. [GUÍA 3: Publicación y Notificación de Actualizaciones (Release Manager — Planes 19, 22 y 22.5)](#guía-3-publicación-y-notificación-de-actualizaciones-release-manager--planes-19-22-y-225)
    - 3.1. Diferenciación Estricta: `HOTFIX` vs. `FEATURE_RELEASE`
-   - 3.2. Carga Inteligente de APKs, Escudo de Firma 3 Estados (SDK `37+`) y Autodetección Deduplicada
-   - 3.3. Catálogo de Versiones Publicadas y Edición Total (`#modalEditRelease`)
+   - 3.2. Alta Determinista (`#modalCreateRelease`), Escudo de Firma 3 Estados y Autodetección con Rutas Configurables
+   - 3.3. Catálogo, Campos Expandibles y Gestión Segura de Variantes ABI en `#modalEditRelease`
    - 3.4. Matriz Inteligente SemVer, Corrección Segura y Reenvío en 1 Clic
    - 3.5. Despacho Asistido de APK por WhatsApp (`#modalWaComposer`) y Portapapeles Windows Endurecido
    - 3.6. Protocolo Dual de Sincronización Offline (`.mlsync` / `MLS1-...`) y Rescate 1-Clic
@@ -432,7 +432,7 @@ Certifica que las firmas v1, v2 y v3 corresponden exclusivamente al certificado 
 
 ---
 
-## GUÍA 3: PUBLICACIÓN Y NOTIFICACIÓN DE ACTUALIZACIONES (RELEASE MANAGER — PLANES 19 y 22)
+## GUÍA 3: PUBLICACIÓN Y NOTIFICACIÓN DE ACTUALIZACIONES (RELEASE MANAGER — PLANES 19, 22 y 22.5)
 
 ### 3.1. Diferenciación Estricta: `HOTFIX` vs. `FEATURE_RELEASE`
 
@@ -443,30 +443,32 @@ Certifica que las firmas v1, v2 y v3 corresponden exclusivamente al certificado 
 
 ---
 
-### 3.2. Carga Inteligente de APKs, Escudo de Firma 3 Estados (SDK `37+`) y Autodetección Deduplicada
-En la pestaña **Versiones APK (`#tabReleaseManager`)**:
-1. **Inspección Forense al Subir o Autodetectar (`ApkInspectorService`):**
-   * **Nombre de Versión (`version_name`), Código de Build (`version_code`) y Esquema SQLite:** Parseo real vía `aapt2` y ZIP.
-   * **Auto-Selección SemVer de Tipo:** `patch > 0` sugiere `HOTFIX`; `patch == 0` sugiere `FEATURE_RELEASE`.
-   * **Lectura Dual de Notas Compañeras:** Lee automáticamente `*_cambios.txt` para el **Changelog Comercial** y `*_atp.txt` para las **Notas Técnicas Internas**, con botones rápidos para recargar ambos archivos en el modal.
-   * **Arquitectura, Tamaño y SHA-256:** Detección `ARM64` vs `Universal`, tamaño formateado con sufijo `MB` y huella SHA-256 en minúsculas.
-2. **Escudo de Firma Criptográfica con 3 Estados Honestos (SDK `37.0.0+` y `<= 36.x`):**
-   * Compatible con la salida multi-esquema de Android SDK Build-Tools `37.0.0+` (`V2 Signer:`, excluyendo `SourceStamp Signer:`) y versiones anteriores (`Signer #1`).
-   * **Estado 1 — `Oficial RSA-4096` (`OFFICIAL_RELEASE`):** Firma verificada coincidente con la huella oficial (`7c43addc34776f3974eac23fdacc47599efd5393a4dbb28672d06899833ffd20`).
-   * **Estado 2 — `No Oficial / posible debug.apk` (`UNOFFICIAL_SIGNATURE`):** Firma válida distinta a la oficial; activa bloqueo preventivo para impedir publicar APKs debug en producción.
-   * **Estado 3 — `Sin Verificar` (`UNVERIFIED`):** Si `apksigner` no está disponible o no emite digest legible, informa honestamente con detalle diagnóstico sin etiquetarlo falsamente como `debug.apk`.
-3. **Autodetección Multi-Directorio Deduplicada por SHA-256 (`GET /api/releases/detect-local-build`):**
-   * Escanea `C:\Users\vjuli\Documents\v-app-offline apks\` (`Biblioteca Oficial`) y `app_movil/build/app/outputs/flutter-apk/`, normalizando rutas de Windows y deduplicando binarios idénticos por SHA-256 (priorizando la Biblioteca Oficial e informando rutas duplicadas mediante insignias de origen).
+### 3.2. Alta Determinista (`#modalCreateRelease`), Escudo de Firma 3 Estados y Autodetección con Rutas Configurables
+En la pestaña **Versiones APK (`#tabReleaseManager`)**, el modal **Subir y Registrar Nueva Versión del APK (`#modalCreateRelease`)** garantiza control inequívoco del binario a publicar (Plan Maestro 22.5):
+1. **Limpieza Determinista & Tarjeta Unívoca de APK Activo (`#activeCreateApkCard`):**
+   * Al abrir, cancelar/cerrar (`X`, `Cancelar`, fondo o `Escape`) o publicar una versión, `resetCreateReleaseModalState()` limpia barra de progreso, dropzone manual, selección de tarjeta, campos ocultos, contadores y rutas abiertas para que el siguiente alta arranque 100% limpio.
+   * **Exclusión Mutua Manual vs Autodetección:** Tras subir un binario por `#apkDropZone` (`has-manual-apk`) o seleccionar un build en `#localBuildsGrid` (`.is-selected` animado / `.is-dimmed` en no seleccionados), se renderiza **`#activeCreateApkCard`** identificando inequívocamente el origen (**`Subido manualmente desde PC`** vs **`Seleccionado desde Autodetección`**) con botón **`Cambiar / Quitar APK`** (`clearSelectedCreateApk`).
+2. **Inspección Forense y Escudo Anti-debug.apk (`ApkInspectorService`):**
+   * **Metadatos Deterministas:** Lee `version_name`, `version_code`, esquema SQLite, tamaño normalizado en `MB`, `ARM64` vs `Universal` y huella SHA-256 en minúsculas; sugiere `HOTFIX` (`patch > 0`) vs `FEATURE_RELEASE` (`patch == 0`) y precarga por separado `*_cambios.txt` (Changelog Comercial) y `*_atp.txt` (Notas Internas de Ingeniería).
+   * **Escudo de Firma Criptográfica con 3 Estados Honestos (SDK `37.0.0+` y `<= 36.x`):** Compatible con `V2 Signer:` y `Signer #1` (excluyendo `SourceStamp Signer:`): **`Oficial RSA-4096`** (`7c43addc34776f3974eac23fdacc47599efd5393a4dbb28672d06899833ffd20`), **`No Oficial / posible debug.apk`** (`UNOFFICIAL_SIGNATURE`, con bloqueo preventivo) o **`Sin Verificar`** (`UNVERIFIED`, si `apksigner` no está disponible).
+3. **Autodetección Recursiva Inteligente con Rutas Configurables y Caché en Vivo:**
+   * **Escaneo Acotado, Ranking Híbrido y Deduplicación:** `GET /api/releases/detect-local-build` recorre hasta `maxDepth = 3` (excluyendo `.git`, `intermediates`, `backups`, `data`, `private_keys`, etc.), aplica caché en memoria **`_liveInspectionCache`** (invalidada por tamaño y `mtime` exacto en microsegundos), ordena por **SemVer descendente + `versionCode` + fecha** y deduplica por SHA-256 priorizando `Biblioteca Oficial` > carpetas personalizadas > `app_movil/build`.
+   * **Barra Rápida & Mini-Panel `Rutas de búsqueda` (`#createSearchDirsPanel`):** Permite filtrar en caliente en `#localBuildsToolbar` (**`Todos`** / **`Universal`** / **`ARM64`**, búsqueda por texto/SHA y límite **`6` / `12` / `24`**) y gestionar rutas múltiples persistidas en `system.apk_search_dirs` (`GET/PUT /api/releases/search-dirs`, **`Examinar carpeta...`** nativo en Windows vía PowerShell `-STA`, habilitar/deshabilitar con conteo por carpeta, agregar/eliminar y **`Restablecer predeterminadas`** con bloqueo automático de carpetas de sistema/secretos y unidades raíz como `C:\` o `/`).
 
 ---
 
-### 3.3. Catálogo de Versiones Publicadas y Edición Total (`#modalEditRelease`)
-En la tabla del catálogo de versiones publicadas:
-- **Acciones en 1 Sola Línea Horizontal SVG:** Botones compactos para **`Verificar`** (auditoría en vivo en disco con `POST /api/releases/:version/verify`), **`APK`**, **`Copiar`**, **`Carpeta`**, **`Editar`** y **`Eliminar`**.
-- **Métricas Claras:** Unidades siempre normalizadas en `MB` (`formatApkSizeMb`) y píldora de adopción por versión (`N clientes`).
-- **Tarjetas Enriquecidas en `#modalEditRelease`:**
-  * Cada variante (`Universal` y `ARM64 Ligero`) muestra estado real en disco (`Verificado en disco` vs `No encontrado`), tamaño en `MB`, SHA-256 con botón **`Copiar SHA`**, insignia de 3 estados, botón **`Re-verificar`** y doble vía para adjuntar binario: **`Subir desde PC`** o **`Vincular desde Biblioteca Local`**.
-  * Junto a los campos de texto, botones directos para importar/recargar `*_cambios.txt` y `*_atp.txt` desde el endpoint `GET /api/releases/:version/companion-notes`.
+### 3.3. Catálogo, Campos Expandibles y Gestión Segura de Variantes ABI en `#modalEditRelease`
+En la tabla del catálogo y dentro del modal **Editar Versión Publicada & Changelog (`#modalEditRelease`)**:
+* **Acciones Compactas del Catálogo:** Fila única horizontal SVG con **`Verificar`** (`POST /api/releases/:version/verify`), **`APK`**, **`Copiar`**, **`Carpeta`**, **`Editar`** y **`Eliminar`**, métricas en `MB` y píldora de adopción (`N clientes`).
+* **Campos Expandibles con Contadores en Vivo:** Tanto en `#modalCreateRelease` (`#relChangelog`, `#relInternalNotes`) como en `#modalEditRelease` (`#editRelChangelog`, `#editRelInternalNotes`), los textareas mantienen altura compacta por defecto y disponen de botones independientes **`Expandir` / `Contraer`** más contador en vivo de líneas y caracteres (`0 lín. · 0 car.`) actualizado al escribir o cargar `*_cambios.txt` / `*_atp.txt` (`#btnEditLoadAtpTxt` corregido sobre `editRelVersionName`).
+* **Diferenciación Honesta de Variantes (`Universal` & `ARM64 Ligero`):**
+  * **No adjuntado (Opcional):** Cuando una variante opcional nunca tuvo ruta registrada (`!hasPath`), muestra **`Sin archivo adjunto`** y el badge neutro **`No adjuntado (Opcional)`**, ocultando falsas alertas `No encontrado`/`Sin Verificar` y el botón `Re-verificar`.
+  * **Archivo extraviado en disco:** Si existía ruta registrada y falta en disco (`file_exists === false`), muestra el badge rojo **`Archivo extraviado en disco`** con guía de recuperación (`Re-verificar`, `Subir desde PC`, `Vincular desde Biblioteca Local` o `Desvincular`).
+  * **Verificado en disco:** Muestra tamaño en `MB`, SHA-256 + `Copiar SHA`, firma 3 estados, ruta completa, **`Copiar`**, **`Carpeta`** y **`Desvincular`**.
+* **Filtro & Guardia Dura ABI, Selector Inline y Sincronización Inmediata:**
+  * `Vincular desde Biblioteca Local` consulta `?limit=24&abi=ARM64|UNIVERSAL` con guía específica (`compilar_apk_arm64.bat` / `compilar_apk_comercial.bat` si está vacío) y cabecera con **`Re-escanear rutas`**, **`Rutas...`** (`#editSearchDirsPanel`) y **`Cerrar`**.
+  * Tanto la vinculación local como **`Subir desde PC`** bloquean arquitecturas incompatibles (`UNIVERSAL` <-> `ARM64`) antes de modificar la base de datos.
+  * **`Desvincular`** confirma con modal seguro y envía `PUT /api/releases/:version` con `null` explícito (protegiendo el binario Universal si es el único APK sano en disco), sincronizando inmediatamente Catálogo, Matriz SemVer y **`#modalWaComposer`**.
 
 ---
 

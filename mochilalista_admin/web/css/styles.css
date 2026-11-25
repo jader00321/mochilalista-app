@@ -1440,6 +1440,110 @@ footer {
   background-color: rgba(37, 99, 235, 0.08);
 }
 
+.apk-drop-zone.has-manual-apk {
+  border-style: solid;
+  border-color: #0ea5e9;
+  background: linear-gradient(135deg, rgba(14, 165, 233, 0.12), rgba(37, 99, 235, 0.08));
+  box-shadow: 0 0 0 2px rgba(14, 165, 233, 0.18);
+}
+
+[data-theme="light"] .apk-drop-zone.has-manual-apk {
+  background: linear-gradient(135deg, rgba(14, 165, 233, 0.1), rgba(37, 99, 235, 0.06));
+  border-color: #0284c7;
+}
+
+/* Tarjeta Unívoca de APK Activo Listo para Publicar (Plan 22.5 Fase 2) */
+@keyframes activeApkCardReveal {
+  from {
+    opacity: 0;
+    transform: translateY(-6px) scale(0.99);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.active-apk-card {
+  margin-top: 0.75rem;
+  border-radius: 10px;
+  padding: 0.8rem 0.95rem;
+  border: 1px solid rgba(16, 185, 129, 0.4);
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.1), rgba(37, 99, 235, 0.06));
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  opacity: 0;
+  transition: opacity 0.22s ease, border-color 0.22s ease, box-shadow 0.22s ease;
+}
+
+.active-apk-card.source-manual {
+  border-color: rgba(14, 165, 233, 0.45);
+  background: linear-gradient(135deg, rgba(14, 165, 233, 0.12), rgba(37, 99, 235, 0.07));
+}
+
+.active-apk-card.visible {
+  opacity: 1;
+  animation: activeApkCardReveal 0.24s ease-out forwards;
+}
+
+.active-apk-card-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.active-apk-card-badges {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+.active-apk-card-details {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+
+.badge-source-manual {
+  background: rgba(14, 165, 233, 0.16);
+  color: #38bdf8;
+  border: 1px solid rgba(14, 165, 233, 0.38);
+}
+
+.badge-source-autodetect {
+  background: rgba(16, 185, 129, 0.16);
+  color: #34d399;
+  border: 1px solid rgba(16, 185, 129, 0.38);
+}
+
+[data-theme="light"] .badge-source-manual {
+  background: rgba(2, 132, 199, 0.12);
+  color: #0369a1;
+  border-color: rgba(2, 132, 199, 0.35);
+}
+
+[data-theme="light"] .badge-source-autodetect {
+  background: rgba(5, 150, 105, 0.12);
+  color: #047857;
+  border-color: rgba(5, 150, 105, 0.35);
+}
+
+[data-theme="light"] .active-apk-card {
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.08), rgba(37, 99, 235, 0.04));
+}
+
+[data-theme="light"] .active-apk-card.source-manual {
+  background: linear-gradient(135deg, rgba(14, 165, 233, 0.09), rgba(37, 99, 235, 0.04));
+}
+
 .drop-icon {
   font-size: 2.2rem;
   margin-bottom: 0.35rem;
@@ -1518,12 +1622,200 @@ footer {
   color: #f59e0b;
 }
 
-/* Autodetección Transparente de Builds Locales */
+/* Autodetección Transparente de Builds Locales & Rutas Configurables (Plan 22.5 Fase 2) */
+.autodetect-container {
+  margin: 0.85rem 0;
+  background: rgba(37, 99, 235, 0.06);
+  border: 1px solid rgba(37, 99, 235, 0.22);
+  border-radius: 10px;
+  padding: 0.85rem 1rem;
+}
+
+.search-dirs-panel {
+  margin-top: 0.75rem;
+  padding: 0.75rem;
+  border-radius: 8px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.search-dirs-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.search-dirs-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.search-dir-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.55rem;
+  flex-wrap: wrap;
+  padding: 0.5rem 0.65rem;
+  border-radius: 7px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  transition: opacity 0.18s ease, border-color 0.18s ease;
+}
+
+.search-dir-item.disabled {
+  opacity: 0.62;
+}
+
+.search-dir-info {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  flex: 1;
+  min-width: 220px;
+}
+
+.search-dir-path {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  word-break: break-all;
+}
+
+.search-dir-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+
+.badge-dir-exists {
+  background: rgba(16, 185, 129, 0.14);
+  color: #34d399;
+  border: 1px solid rgba(16, 185, 129, 0.32);
+}
+
+.badge-dir-missing {
+  background: rgba(245, 158, 11, 0.14);
+  color: #fbbf24;
+  border: 1px solid rgba(245, 158, 11, 0.35);
+}
+
+[data-theme="light"] .badge-dir-exists {
+  color: #047857;
+  background: rgba(16, 185, 129, 0.12);
+}
+
+[data-theme="light"] .badge-dir-missing {
+  color: #b45309;
+  background: rgba(245, 158, 11, 0.14);
+}
+
+.search-dir-add-row {
+  display: flex;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+  align-items: center;
+  padding-top: 0.25rem;
+  border-top: 1px dashed var(--border-color);
+}
+
+.search-dir-add-row input {
+  flex: 1;
+  min-width: 220px;
+  padding: 0.45rem 0.65rem;
+  border-radius: 7px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-size: 0.78rem;
+  font-family: var(--font-mono);
+}
+
+.local-builds-toolbar {
+  margin-top: 0.75rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  padding-top: 0.6rem;
+  border-top: 1px solid rgba(37, 99, 235, 0.16);
+}
+
+.local-abi-chips {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+
+.local-abi-chip {
+  padding: 0.25rem 0.65rem;
+  border-radius: 999px;
+  font-size: 0.74rem;
+  font-weight: 600;
+  border: 1px solid var(--border-color);
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.18s ease;
+}
+
+.local-abi-chip:hover {
+  border-color: var(--primary);
+  color: var(--text-primary);
+}
+
+.local-abi-chip.active {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: #ffffff;
+}
+
+.local-builds-toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+.local-builds-filter-input {
+  padding: 0.3rem 0.6rem;
+  border-radius: 7px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  font-size: 0.76rem;
+  min-width: 175px;
+}
+
+.local-builds-limit-select {
+  padding: 0.28rem 0.5rem;
+  border-radius: 7px;
+  font-size: 0.76rem;
+}
+
 .local-builds-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
   gap: 0.65rem;
   margin-top: 0.75rem;
+}
+
+@keyframes activeApkPulse {
+  0%, 100% {
+    box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.26), 0 6px 16px -6px rgba(16, 185, 129, 0.28);
+  }
+  50% {
+    box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.42), 0 8px 20px -6px rgba(16, 185, 129, 0.38);
+  }
 }
 
 .local-build-card {
@@ -1534,11 +1826,71 @@ footer {
   display: flex;
   flex-direction: column;
   gap: 0.4rem;
-  transition: border-color 0.2s, background 0.2s;
+  transition: border-color 0.22s ease, background 0.22s ease, opacity 0.22s ease, transform 0.22s ease, box-shadow 0.22s ease;
 }
 
 .local-build-card:hover {
   border-color: var(--primary);
+}
+
+.local-build-card.is-selected {
+  border-color: #10b981;
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.14), rgba(37, 99, 235, 0.06));
+  transform: translateY(-1px);
+  animation: activeApkPulse 2.4s ease-in-out infinite;
+}
+
+[data-theme="light"] .local-build-card.is-selected {
+  border-color: #059669;
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.1), rgba(37, 99, 235, 0.04));
+}
+
+.local-build-card.is-dimmed {
+  opacity: 0.62;
+}
+
+.local-build-card.is-dimmed:hover {
+  opacity: 0.95;
+}
+
+.local-build-selected-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.12rem 0.48rem;
+  border-radius: 999px;
+  font-size: 0.69rem;
+  font-weight: 700;
+  background: rgba(16, 185, 129, 0.18);
+  color: #34d399;
+  border: 1px solid rgba(16, 185, 129, 0.4);
+}
+
+[data-theme="light"] .local-build-selected-pill {
+  color: #047857;
+  background: rgba(16, 185, 129, 0.15);
+}
+
+.btn-selected-apk {
+  background: rgba(16, 185, 129, 0.18);
+  border-color: #10b981;
+  color: #34d399;
+  font-weight: 700;
+}
+
+.btn-selected-apk:hover {
+  background: rgba(16, 185, 129, 0.25);
+}
+
+[data-theme="light"] .btn-selected-apk {
+  color: #047857;
+  border-color: #059669;
+  background: rgba(16, 185, 129, 0.14);
+}
+
+.btn-import-local-build.is-loading {
+  opacity: 0.78;
+  cursor: wait;
 }
 
 .local-build-header {
@@ -1863,9 +2215,59 @@ footer {
   flex-wrap: wrap;
 }
 
-.btn-load-companion {
-  padding: 0.18rem 0.5rem;
+.field-label-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+.textarea-meta-counter {
+  font-family: var(--font-mono, monospace);
+  font-size: 0.71rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  background: rgba(148, 163, 184, 0.08);
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 999px;
+  padding: 0.1rem 0.48rem;
+  white-space: nowrap;
+}
+
+.btn-load-companion,
+.btn-toggle-textarea {
+  padding: 0.18rem 0.52rem;
   font-size: 0.72rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.btn-toggle-textarea {
+  transition: all 0.18s ease;
+}
+
+.btn-toggle-textarea[aria-expanded="true"] {
+  background: rgba(37, 99, 235, 0.14);
+  border-color: rgba(59, 130, 246, 0.45);
+  color: #60a5fa;
+}
+
+.expandable-textarea {
+  width: 100%;
+  min-height: 78px;
+  height: 86px;
+  resize: vertical;
+  overflow-y: auto;
+  transition: height 0.24s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.2s ease, box-shadow 0.2s ease;
+  line-height: 1.48;
+}
+
+.expandable-textarea.is-expanded {
+  height: 290px;
+  min-height: 240px;
+  border-color: rgba(59, 130, 246, 0.5);
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.12);
 }
 
 .edit-variant-card {
@@ -1888,13 +2290,70 @@ footer {
 
 .edit-variant-local-picker {
   margin-top: 0.35rem;
-  padding: 0.6rem;
+  padding: 0.65rem;
   border-radius: 6px;
   background: var(--bg-secondary);
   border: 1px dashed rgba(37, 99, 235, 0.35);
   display: flex;
   flex-direction: column;
   gap: 0.45rem;
+}
+
+.edit-variant-picker-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+}
+
+.edit-picker-header-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+
+.edit-variant-picker-empty {
+  font-size: 0.76rem;
+  color: var(--text-secondary);
+  background: rgba(148, 163, 184, 0.08);
+  border: 1px dashed rgba(148, 163, 184, 0.3);
+  border-radius: 6px;
+  padding: 0.55rem 0.65rem;
+  line-height: 1.45;
+}
+
+.edit-variant-optional-note {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  line-height: 1.45;
+}
+
+.edit-variant-missing-note {
+  font-size: 0.75rem;
+  color: #fca5a5;
+  background: rgba(239, 68, 68, 0.08);
+  border: 1px solid rgba(239, 68, 68, 0.28);
+  border-radius: 6px;
+  padding: 0.4rem 0.55rem;
+  line-height: 1.45;
+}
+
+.edit-variant-unlink-btn {
+  color: #ef4444;
+  border-color: rgba(239, 68, 68, 0.38);
+}
+
+.edit-variant-unlink-btn:hover {
+  background: rgba(239, 68, 68, 0.12);
+  border-color: #ef4444;
+}
+
+.badge-variant-optional {
+  background: rgba(148, 163, 184, 0.14);
+  color: var(--text-secondary);
+  border: 1px solid rgba(148, 163, 184, 0.32);
 }
 
 .badge-disk-ok {
@@ -1921,6 +2380,41 @@ footer {
 
 [data-theme="light"] .badge-unverified-sig {
   color: #b45309;
+}
+
+[data-theme="light"] .textarea-meta-counter {
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+  color: #475569;
+}
+
+[data-theme="light"] .btn-toggle-textarea[aria-expanded="true"] {
+  background: #dbeafe;
+  border-color: #3b82f6;
+  color: #1d4ed8;
+}
+
+[data-theme="light"] .badge-variant-optional {
+  background: #f1f5f9;
+  color: #475569;
+  border-color: #cbd5e1;
+}
+
+[data-theme="light"] .edit-variant-missing-note {
+  color: #b91c1c;
+  background: #fef2f2;
+  border-color: #fecaca;
+}
+
+[data-theme="light"] .edit-variant-picker-empty {
+  background: #f8fafc;
+  border-color: #cbd5e1;
+  color: #334155;
+}
+
+[data-theme="light"] .edit-variant-unlink-btn {
+  color: #dc2626;
+  border-color: rgba(220, 38, 38, 0.4);
 }
 
 [data-theme="light"] .badge-disk-missing {

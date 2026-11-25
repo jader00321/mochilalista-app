@@ -72,6 +72,39 @@ Future<String> _readRequestBody(HttpRequest request) async {
   return utf8.decode(bytes, allowMalformed: true);
 }
 
+/// Construye argumentos seguros de PowerShell `-NoProfile -STA` con UTF-8 y Dispose()
+/// para abrir el selector nativo de carpetas de Windows sin ocultar ni colgar el diálogo.
+List<String> buildWindowsFolderPickerPsArgs({String? initialPath}) {
+  final safeInitial = (initialPath ?? '').trim().replaceAll("'", "''");
+  final lines = <String>[
+    '[Console]::OutputEncoding = [System.Text.Encoding]::UTF8',
+    'Add-Type -AssemblyName System.Windows.Forms',
+    r'$topForm = New-Object System.Windows.Forms.Form',
+    r'$topForm.TopMost = $true',
+    r'$topForm.StartPosition = [System.Windows.Forms.FormStartPosition]::Manual',
+    r'$topForm.Location = New-Object System.Drawing.Point(-32000, -32000)',
+    r'$topForm.Size = New-Object System.Drawing.Size(1, 1)',
+    r'$topForm.ShowInTaskbar = $false',
+    r'$dialog = New-Object System.Windows.Forms.FolderBrowserDialog',
+    r"$dialog.Description = 'Selecciona una carpeta donde guardas tus archivos .APK de MochilaLista'",
+    r'$dialog.ShowNewFolderButton = $false',
+    if (safeInitial.isNotEmpty)
+      "if (Test-Path -LiteralPath '$safeInitial') { \$dialog.SelectedPath = '$safeInitial' }",
+    r'try {',
+    r'  $topForm.Show()',
+    r'  $topForm.Activate()',
+    r'  $result = $dialog.ShowDialog($topForm)',
+    r'  if ($result -eq [System.Windows.Forms.DialogResult]::OK -and $dialog.SelectedPath) {',
+    r'    [Console]::Out.WriteLine($dialog.SelectedPath)',
+    r'  }',
+    r'} finally {',
+    r'  if ($dialog) { $dialog.Dispose() }',
+    r'  if ($topForm) { $topForm.Dispose() }',
+    r'}',
+  ];
+  return ['-NoProfile', '-STA', '-Command', lines.join('\n')];
+}
+
 /// Construye argumentos seguros de PowerShell `-NoProfile -STA` para copiar
 /// un archivo real como `CF_HDROP` (`FileDrop` + `Preferred DropEffect` COPY)
 /// compatible con WhatsApp Desktop / Chromium / Explorador de Windows.
@@ -183,6 +216,7 @@ Future<void> handleRequest(
   Future<void> Function(String url)? onOpenBrowserOverride,
   ApkInspectorService? apkInspectorService,
   Future<bool> Function(String filePath)? onCopyFileOverride,
+  Future<String?> Function()? onBrowseFolderOverride,
   ClientSyncService? clientSyncService,
 }) async {
   final path = request.uri.path;
@@ -218,6 +252,7 @@ Future<void> handleRequest(
           onOpenBrowserOverride: onOpenBrowserOverride,
           apkInspectorService: apkInspectorService,
           onCopyFileOverride: onCopyFileOverride,
+          onBrowseFolderOverride: onBrowseFolderOverride,
           clientSyncService: clientSyncService);
       return;
     }
@@ -254,6 +289,7 @@ Future<void> _handleApiRoute(
   Future<void> Function(String url)? onOpenBrowserOverride,
   ApkInspectorService? apkInspectorService,
   Future<bool> Function(String filePath)? onCopyFileOverride,
+  Future<String?> Function()? onBrowseFolderOverride,
   ClientSyncService? clientSyncService,
 }) async {
   final inspector = apkInspectorService ?? ApkInspectorService();
@@ -1597,6 +1633,180 @@ Future<void> _handleApiRoute(
   }
 
   // =================== 6. LANZAMIENTOS (RELEASES) Y APKS ===================
+  // Gestión de rutas de búsqueda configurables para autodetección APK (Plan 22.5)
+  if (path == '/api/releases/search-dirs' && method == 'GET') {
+    final dirs = configService.getEffectiveApkSearchDirs(
+      defaultBuildOutputDir: inspector.defaultBuildOutputDir?.path,
+    );
+    final stats = dirs
+        .map((d) => ApkInspectorService.probeSearchDirStats(d))
+        .toList();
+    request.response.write(jsonEncode({
+      'ok': true,
+      'search_dirs': stats,
+      'apk_library_dir': configService.apkLibraryDir,
+    }));
+    await request.response.close();
+    return;
+  }
+
+  if (path == '/api/releases/search-dirs' && method == 'PUT') {
+    final bodyStr = await _readRequestBody(request);
+    final decoded = jsonDecode(bodyStr);
+    final List<dynamic> rawDirs;
+    if (decoded is Map<String, dynamic> && decoded['search_dirs'] is List) {
+      rawDirs = decoded['search_dirs'] as List<dynamic>;
+    } else if (decoded is List) {
+      rawDirs = decoded;
+    } else {
+      request.response.statusCode = HttpStatus.badRequest;
+      request.response.write(jsonEncode({
+        'ok': false,
+        'error': 'Se requiere una lista "search_dirs" válida.',
+      }));
+      await request.response.close();
+      return;
+    }
+
+    try {
+      final savedDirs = await configService.saveApkSearchDirs(
+        rawDirs,
+        defaultBuildOutputDir: inspector.defaultBuildOutputDir?.path,
+      );
+      final stats = savedDirs
+          .map((d) => ApkInspectorService.probeSearchDirStats(d))
+          .toList();
+      request.response.write(jsonEncode({
+        'ok': true,
+        'search_dirs': stats,
+        'apk_library_dir': configService.apkLibraryDir,
+      }));
+    } on InvalidApkSearchDirException catch (e) {
+      request.response.statusCode = HttpStatus.badRequest;
+      request.response.write(jsonEncode({
+        'ok': false,
+        'error': e.message,
+      }));
+    }
+    await request.response.close();
+    return;
+  }
+
+  if (path == '/api/releases/search-dirs/reset' && method == 'POST') {
+    final restoredDirs = await configService.resetApkSearchDirsToDefaults(
+      defaultBuildOutputDir: inspector.defaultBuildOutputDir?.path,
+    );
+    final stats = restoredDirs
+        .map((d) => ApkInspectorService.probeSearchDirStats(d))
+        .toList();
+    request.response.write(jsonEncode({
+      'ok': true,
+      'search_dirs': stats,
+      'apk_library_dir': configService.apkLibraryDir,
+    }));
+    await request.response.close();
+    return;
+  }
+
+  // Selector nativo Windows no bloqueante (PowerShell -STA con UTF-8 y Dispose)
+  if (path == '/api/releases/browse-search-dir' && method == 'POST') {
+    String? initialPath;
+    try {
+      final bodyStr = await _readRequestBody(request);
+      if (bodyStr.trim().isNotEmpty) {
+        final body = jsonDecode(bodyStr) as Map<String, dynamic>;
+        initialPath = body['initial_path'] as String?;
+      }
+    } catch (_) {}
+
+    String? pickedPath;
+    if (onBrowseFolderOverride != null) {
+      pickedPath = await onBrowseFolderOverride();
+    } else if (Platform.isWindows) {
+      try {
+        final psArgs = buildWindowsFolderPickerPsArgs(initialPath: initialPath);
+        final proc = await Process.run(
+          'powershell',
+          psArgs,
+          stdoutEncoding: utf8,
+          stderrEncoding: utf8,
+        ).timeout(const Duration(seconds: 90));
+        if (proc.exitCode == 0) {
+          final out = proc.stdout.toString().trim();
+          if (out.isNotEmpty) {
+            pickedPath = out.split(RegExp(r'\r?\n')).first.trim();
+          }
+        } else {
+          final err = proc.stderr.toString().trim();
+          request.response.statusCode = HttpStatus.internalServerError;
+          request.response.write(jsonEncode({
+            'ok': false,
+            'supported': true,
+            'error': err.isNotEmpty
+                ? err
+                : 'No se pudo abrir el selector de carpetas de Windows.',
+          }));
+          await request.response.close();
+          return;
+        }
+      } catch (e) {
+        request.response.statusCode = HttpStatus.internalServerError;
+        request.response.write(jsonEncode({
+          'ok': false,
+          'supported': true,
+          'error': 'Error al abrir selector de carpetas: $e',
+        }));
+        await request.response.close();
+        return;
+      }
+    } else {
+      request.response.write(jsonEncode({
+        'ok': false,
+        'supported': false,
+        'cancelled': false,
+        'error':
+            'El selector nativo solo está disponible en Windows. Ingresa la ruta manualmente.',
+      }));
+      await request.response.close();
+      return;
+    }
+
+    if (pickedPath == null || pickedPath.trim().isEmpty) {
+      request.response.write(jsonEncode({
+        'ok': true,
+        'supported': true,
+        'cancelled': true,
+        'path': null,
+      }));
+      await request.response.close();
+      return;
+    }
+
+    final cleanPicked = ApkInspectorService.canonicalizePath(pickedPath);
+    if (configService.isForbiddenApkSearchDir(cleanPicked)) {
+      request.response.statusCode = HttpStatus.badRequest;
+      request.response.write(jsonEncode({
+        'ok': false,
+        'supported': true,
+        'cancelled': false,
+        'path': cleanPicked,
+        'error':
+            'La carpeta seleccionada está restringida por seguridad o es una unidad raíz completa ($cleanPicked).',
+      }));
+      await request.response.close();
+      return;
+    }
+
+    request.response.write(jsonEncode({
+      'ok': true,
+      'supported': true,
+      'cancelled': false,
+      'path': cleanPicked,
+    }));
+    await request.response.close();
+    return;
+  }
+
   // Carga directa de APK desde PC (Binary stream) con inspección forense automática
   if (path == '/api/releases/upload-apk' && method == 'POST') {
     final queryName = request.uri.queryParameters['filename'] ??
@@ -1615,10 +1825,15 @@ Future<void> _handleApiRoute(
     final allBytes = bytesBuilder.takeBytes();
     await targetFile.writeAsBytes(allBytes);
 
+    final searchDirPaths = configService.getEffectiveApkSearchDirPaths(
+      defaultBuildOutputDir: inspector.defaultBuildOutputDir?.path,
+    );
+
     // Inspección forense multicapa automática
     final inspection = await inspector.inspectApk(
       targetFile,
       apkLibraryDir: configService.apkLibraryDir,
+      extraSearchDirs: searchDirPaths,
     );
 
     request.response.write(jsonEncode({
@@ -1629,11 +1844,35 @@ Future<void> _handleApiRoute(
     return;
   }
 
-  // Autodetectar e inspeccionar builds locales (Biblioteca Oficial + app_movil/build)
+  // Autodetectar e inspeccionar builds locales en rutas configurables (recursivo acotado)
   if (path == '/api/releases/detect-local-build' && method == 'GET') {
-    final libDir = Directory(configService.apkLibraryDir);
-    final candidates = await inspector.detectLocalApks(apkLibraryDir: libDir);
+    final limit =
+        (int.tryParse(request.uri.queryParameters['limit'] ?? '') ?? 6)
+            .clamp(1, 50);
+    final abiFilter =
+        (request.uri.queryParameters['abi'] ?? 'ALL').trim().toUpperCase();
+    final query = (request.uri.queryParameters['q'] ?? '').trim();
+    final maxDepth =
+        (int.tryParse(request.uri.queryParameters['max_depth'] ?? '') ?? 3)
+            .clamp(0, 4);
 
+    final searchDirs = configService.getEffectiveApkSearchDirs(
+      defaultBuildOutputDir: inspector.defaultBuildOutputDir?.path,
+    );
+    final libDir = Directory(configService.apkLibraryDir);
+
+    final report = await inspector.detectLocalApksWithStats(
+      apkLibraryDir: libDir,
+      buildOutputDir: inspector.defaultBuildOutputDir,
+      searchDirs: searchDirs,
+      maxCandidates: limit,
+      limit: limit,
+      maxDepth: maxDepth,
+      abiFilter: abiFilter,
+      query: query,
+    );
+
+    final candidates = report.results;
     final hasApk = candidates.isNotEmpty;
     final top = hasApk ? candidates.first : null;
 
@@ -1658,9 +1897,13 @@ Future<void> _handleApiRoute(
       'suggested_release_type': top?.suggestedReleaseType ?? 'FEATURE_RELEASE',
       'available_builds': candidates.map((c) => c.toJson()).toList(),
       'total_found': candidates.length,
+      'total_returned': report.totalReturned,
+      'total_unique_found': report.totalUniqueFound,
+      'total_all_unique': report.totalAllUnique,
+      'per_dir_stats': report.perDirStats,
       if (!hasApk)
         'message':
-            'No se encontraron archivos APK en la biblioteca oficial ni en build/app/outputs/flutter-apk/.',
+            'No se encontraron archivos APK en las rutas de búsqueda configuradas.',
     }));
     await request.response.close();
     return;
@@ -1695,29 +1938,35 @@ Future<void> _handleApiRoute(
       return;
     }
 
-    // Validación canónica de ruta (evitar path traversal y falsos 403 por segmentos ..)
+    // Validación canónica dinámica de ruta usando las rutas configuradas + protección sensible
     final canonicalSource = sourceFile.resolveSymbolicLinksSync();
     final sourceCmp =
         Platform.isWindows ? canonicalSource.toLowerCase() : canonicalSource;
-    final rawRoots = [
+    final configuredRoots = configService.getEffectiveApkSearchDirPaths(
+      defaultBuildOutputDir: inspector.defaultBuildOutputDir?.path,
+    );
+    final rawRoots = <String>[
+      ...configuredRoots,
       configService.apkLibraryDir,
       '../app_movil/build',
       'releases_apks',
       Directory.systemTemp.path,
     ];
     final sep = Platform.pathSeparator;
-    final isAllowed = rawRoots.any((r) {
+    final inAllowedRoot = rawRoots.any((r) {
       final canonRoot = ApkInspectorService.canonicalizePath(r);
       final rootCmp = Platform.isWindows ? canonRoot.toLowerCase() : canonRoot;
       if (rootCmp.isEmpty) return false;
       return sourceCmp == rootCmp || sourceCmp.startsWith('$rootCmp$sep');
     });
+    final isAllowed = inAllowedRoot &&
+        !configService.isForbiddenApkSearchDir(sourceFile.parent.path);
 
     if (!isAllowed) {
       request.response.statusCode = HttpStatus.forbidden;
       request.response.write(jsonEncode({
         'error':
-            'Acceso denegado: el archivo debe residir en la biblioteca de APKs o directorio de build.',
+            'Acceso denegado: el archivo debe residir en una ruta de búsqueda autorizada o directorio de build.',
       }));
       await request.response.close();
       return;
@@ -1731,11 +1980,14 @@ Future<void> _handleApiRoute(
     final destFile = File('${targetDir.path}/$safeFileName');
     await sourceFile.copy(destFile.path);
 
-    // Inspección forense del archivo importado preservando acceso a notas compañeras en origen y biblioteca
+    // Inspección forense del archivo importado preservando acceso a notas compañeras en origen y rutas configuradas
     final inspection = await inspector.inspectApk(
       destFile,
       apkLibraryDir: configService.apkLibraryDir,
-      extraSearchDirs: [sourceFile.parent],
+      extraSearchDirs: <String>[
+        sourceFile.parent.path,
+        ...configuredRoots,
+      ],
     );
 
     request.response.write(jsonEncode({
@@ -1921,18 +2173,33 @@ Future<void> _handleApiRoute(
     final verifiedVariants = <String>[];
     ApkInspectionResult? primaryInspection;
     bool anyFileExists = false;
+    final searchDirPaths = configService.getEffectiveApkSearchDirPaths(
+      defaultBuildOutputDir: inspector.defaultBuildOutputDir?.path,
+    );
 
     Future<Map<String, dynamic>?> verifyVariantPath(
-        String? rawPath, String label) async {
+      Map<String, dynamic>? existingVariant,
+      String? rawPath,
+      String label,
+    ) async {
       if (rawPath == null || rawPath.trim().isEmpty) return null;
       final canon = ApkInspectorService.canonicalizePath(rawPath);
       final f = File(canon);
-      if (!await f.exists()) return null;
+      if (!await f.exists()) {
+        if (existingVariant != null) {
+          final missingMap = Map<String, dynamic>.from(existingVariant);
+          missingMap['file_path'] = canon;
+          missingMap['file_exists'] = false;
+          return missingMap;
+        }
+        return null;
+      }
 
       anyFileExists = true;
       final res = await inspector.inspectApk(
         f,
         apkLibraryDir: configService.apkLibraryDir,
+        extraSearchDirs: searchDirPaths,
       );
       verifiedVariants.add(label);
       primaryInspection ??= res;
@@ -1950,18 +2217,20 @@ Future<void> _handleApiRoute(
       };
     }
 
-    final rawUnivPath = (release['universal_apk']
-        as Map<String, dynamic>?)?['file_path'] as String?;
-    final rawArmPath = (release['arm64_apk']
-        as Map<String, dynamic>?)?['file_path'] as String?;
+    final existingUniv = release['universal_apk'] as Map<String, dynamic>?;
+    final existingArm = release['arm64_apk'] as Map<String, dynamic>?;
+    final rawUnivPath = existingUniv?['file_path'] as String?;
+    final rawArmPath = existingArm?['file_path'] as String?;
     final rawMainPath = release['apk_file_path'] as String?;
 
-    final updatedUniv = await verifyVariantPath(rawUnivPath, 'universal');
+    final updatedUniv =
+        await verifyVariantPath(existingUniv, rawUnivPath, 'universal');
     if (updatedUniv != null) {
       updates['universal_apk'] = updatedUniv;
     }
 
-    final updatedArm = await verifyVariantPath(rawArmPath, 'arm64');
+    final updatedArm =
+        await verifyVariantPath(existingArm, rawArmPath, 'arm64');
     if (updatedArm != null) {
       updates['arm64_apk'] = updatedArm;
     }
@@ -1971,7 +2240,7 @@ Future<void> _handleApiRoute(
       final mainExists = await File(mainCanon).exists();
       if (mainExists) {
         if (primaryInspection == null) {
-          await verifyVariantPath(mainCanon, 'primary');
+          await verifyVariantPath(null, mainCanon, 'primary');
         } else {
           anyFileExists = true;
         }
@@ -1988,6 +2257,7 @@ Future<void> _handleApiRoute(
       updates['signature_detail'] = p.signatureDetail;
       updates['signer_sha256'] = p.signerSha256;
       updates['signer_dn'] = p.signerDn;
+      updates['file_exists'] = true;
       if (p.versionCode != null) updates['version_code'] = p.versionCode;
       updates['db_schema_version'] = p.dbSchemaVersion;
       if (p.abiVariant == 'UNIVERSAL' && updatedUniv == null) {
@@ -2016,6 +2286,7 @@ Future<void> _handleApiRoute(
         };
       }
     } else {
+      updates['file_exists'] = false;
       updates['signature_verified'] = null;
       updates['signature_status'] = 'UNVERIFIED';
       updates['signature_detail'] =
@@ -2030,6 +2301,7 @@ Future<void> _handleApiRoute(
           rawUnivPath ??
           rawArmPath,
       apkLibraryDir: configService.apkLibraryDir,
+      extraSearchDirs: searchDirPaths,
     );
 
     request.response.write(jsonEncode({
@@ -2048,7 +2320,7 @@ Future<void> _handleApiRoute(
     return;
   }
 
-  // Obtener notas compañeras (*_cambios.txt y *_atp.txt) desde biblioteca o carpeta del APK
+  // Obtener notas compañeras (*_cambios.txt y *_atp.txt) desde biblioteca o rutas configuradas
   final companionNotesMatch =
       RegExp(r'^/api/releases/([^/]+)/companion-notes$').firstMatch(path);
   if (companionNotesMatch != null && method == 'GET') {
@@ -2059,11 +2331,15 @@ Future<void> _handleApiRoute(
             as String?) ??
         ((release?['arm64_apk'] as Map<String, dynamic>?)?['file_path']
             as String?);
+    final searchDirPaths = configService.getEffectiveApkSearchDirPaths(
+      defaultBuildOutputDir: inspector.defaultBuildOutputDir?.path,
+    );
 
     final notes = await inspector.readCompanionNotesForVersion(
       versionName,
       apkPath: apkPath,
       apkLibraryDir: configService.apkLibraryDir,
+      extraSearchDirs: searchDirPaths,
     );
     request.response.write(jsonEncode(notes));
     await request.response.close();
@@ -2186,14 +2462,18 @@ Future<void> _handleApiRoute(
     }
   }
 
-  // Operaciones sobre versión individual: PUT (editar changelog/metadatos) y DELETE (eliminar)
+  // Operaciones sobre versión individual: PUT (editar changelog/metadatos/variantes) y DELETE (eliminar)
   final releaseSingleMatch =
       RegExp(r'^/api/releases/([^/]+)$').firstMatch(path);
   if (releaseSingleMatch != null) {
-    final ver = releaseSingleMatch.group(1)!;
+    final ver = Uri.decodeComponent(releaseSingleMatch.group(1)!);
     if (method == 'PUT') {
       final bodyStr = await utf8.decodeStream(request);
-      final body = jsonDecode(bodyStr) as Map<String, dynamic>;
+      final rawDecoded = jsonDecode(bodyStr) as Map<String, dynamic>;
+      // Salvaguarda Paso 0: propagar explícitamente claves null para desvincular variantes opcionales
+      final body = <String, dynamic>{
+        for (final entry in rawDecoded.entries) entry.key: entry.value,
+      };
       final updated = await dbService.updateRelease(ver, body);
       if (updated == null) {
         request.response.statusCode = HttpStatus.notFound;

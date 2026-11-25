@@ -6665,6 +6665,13 @@ let currentMatrixFilter = 'ALL';
 let currentMatrixSearch = '';
 let lastInspectedCreateData = null;
 let editModalLocalBuildsCache = [];
+let activeCreateApkSource = null; // null | 'manual' | 'autodetect'
+let selectedLocalBuildPath = null;
+let selectedLocalBuildIndex = -1;
+let pendingManualFileMeta = null;
+let createApkSearchDirs = [];
+let localBuildsFilterState = { abi: 'ALL', query: '', limit: 6 };
+let localBuildsFilterTimer = null;
 
 /**
  * Normaliza tamaños APK para evitar valores sin sufijo o "MB MB" duplicado
@@ -6905,6 +6912,180 @@ async function loadReleases() {
   }
 }
 
+const editModalLocalBuildsByVariant = { universal: [], arm64: [] };
+
+/**
+ * Valida estrictamente que la arquitectura ABI detectada del APK coincida con la ranura destino
+ */
+function validateApkAbiForVariantSlot(detectedAbi, targetSlot) {
+  const normalizedDetected = String(detectedAbi || '').trim().toUpperCase();
+  const normalizedTarget = String(targetSlot || '').trim().toUpperCase();
+  const isArm64Slot = normalizedTarget === 'ARM64';
+  const expectedAbi = isArm64Slot ? 'ARM64' : 'UNIVERSAL';
+
+  if (!normalizedDetected) {
+    return {
+      ok: false,
+      expectedAbi,
+      detectedAbi: 'DESCONOCIDA',
+      error: `No se pudo confirmar la arquitectura ABI del APK para la ranura ${expectedAbi}.`,
+    };
+  }
+
+  if (isArm64Slot && normalizedDetected !== 'ARM64') {
+    return {
+      ok: false,
+      expectedAbi: 'ARM64',
+      detectedAbi: normalizedDetected,
+      error: `Arquitectura incompatible: el archivo es ${normalizedDetected}, pero esta ranura exige un APK ARM64 Ligero (~30 MB). Selecciona un build compilado con compilar_apk_arm64.bat.`,
+    };
+  }
+
+  if (!isArm64Slot && normalizedDetected === 'ARM64') {
+    return {
+      ok: false,
+      expectedAbi: 'UNIVERSAL',
+      detectedAbi: normalizedDetected,
+      error: `Arquitectura incompatible: el archivo es ARM64 Ligero, pero esta ranura exige un APK Universal (~110 MB). Adjúntalo en ARM64 Ligero o usa compilar_apk_comercial.bat.`,
+    };
+  }
+
+  return {
+    ok: true,
+    expectedAbi,
+    detectedAbi: normalizedDetected,
+    error: null,
+  };
+}
+
+function getEditVariantData(rel, variantKey) {
+  if (!rel) return null;
+  if (variantKey === 'arm64') {
+    return rel.arm64_apk || (rel.apk_file_path && rel.abi_variant === 'ARM64' ? {
+      file_path: rel.apk_file_path,
+      file_size_mb: rel.file_size_mb,
+      sha256: rel.apk_sha256,
+      signature_status: rel.signature_status,
+      signature_verified: rel.signature_verified,
+      file_exists: rel.file_exists,
+    } : null);
+  }
+  return rel.universal_apk || (rel.apk_file_path && rel.abi_variant !== 'ARM64' ? {
+    file_path: rel.apk_file_path,
+    file_size_mb: rel.file_size_mb,
+    sha256: rel.apk_sha256,
+    signature_status: rel.signature_status,
+    signature_verified: rel.signature_verified,
+    file_exists: rel.file_exists,
+  } : null);
+}
+
+function canUnlinkEditVariantSlot(rel, variantKey) {
+  if (!rel) return { allowed: false, reason: 'Versión no cargada.' };
+  const slotData = getEditVariantData(rel, variantKey);
+  if (!slotData || !slotData.file_path) {
+    return { allowed: false, reason: 'Esta variante no tiene ningún archivo vinculado.' };
+  }
+  if (variantKey === 'arm64') {
+    return { allowed: true, reason: null };
+  }
+  const arm64Data = getEditVariantData(rel, 'arm64');
+  const hasHealthyArm64 = Boolean(arm64Data && arm64Data.file_path && arm64Data.file_exists !== false);
+  const isUniversalMissing = slotData.file_exists === false;
+  if (hasHealthyArm64 || isUniversalMissing) {
+    return { allowed: true, reason: null };
+  }
+  return {
+    allowed: false,
+    reason: 'No puedes desvincular Universal mientras sea el único APK válido en disco (adjunta primero ARM64 Ligero o reemplaza Universal).',
+  };
+}
+
+/**
+ * Sincroniza una versión actualizada hacia globalReleases, #modalEditRelease, Catálogo, Matriz y #modalWaComposer
+ */
+async function syncReleaseAcrossUiAndComposer(versionName, updatedRel, options = {}) {
+  if (updatedRel) {
+    const idx = globalReleases.findIndex(r => r.version_name === versionName);
+    if (idx !== -1) {
+      globalReleases[idx] = updatedRel;
+    } else {
+      globalReleases.unshift(updatedRel);
+    }
+
+    const editModalOpen = document.getElementById('modalEditRelease')?.classList.contains('open');
+    const currentEditVer = document.getElementById('editRelVersionName')?.value;
+    if ((editModalOpen || options.forceRenderEditModal) && currentEditVer === versionName) {
+      const vcInput = document.getElementById('editRelVersionCode');
+      const dbInput = document.getElementById('editRelDbSchema');
+      if (vcInput && updatedRel.version_code) vcInput.value = updatedRel.version_code;
+      if (dbInput && updatedRel.db_schema_version) dbInput.value = updatedRel.db_schema_version;
+      renderEditReleaseVariants(updatedRel);
+    }
+  }
+
+  await loadReleases();
+  await loadReleaseMatrix();
+
+  if (updatedRel) {
+    const idxAfter = globalReleases.findIndex(r => r.version_name === versionName);
+    if (idxAfter !== -1) globalReleases[idxAfter] = updatedRel;
+    if (typeof currentDispatchRelease !== 'undefined' && currentDispatchRelease?.version_name === versionName) {
+      currentDispatchRelease = updatedRel;
+      const waOpen = document.getElementById('modalWaComposer')?.classList.contains('open');
+      if ((waOpen && typeof isApkDispatchMode !== 'undefined' && isApkDispatchMode) || options.forceSyncWaComposer) {
+        syncWaApkDispatchPanel(updatedRel, { preserveCopyHint: true });
+      }
+    }
+  }
+}
+
+async function commitReleaseVariantUpdate(versionName, variantKey, inspectedData, filePath, originText = '') {
+  const normalizedSize = formatApkSizeMb(inspectedData.size_mb);
+  const variantData = {
+    file_path: filePath,
+    file_size_mb: normalizedSize,
+    sha256: inspectedData.sha256,
+    signature_status: inspectedData.signature_status,
+    signature_verified: inspectedData.signature_verified,
+    signature_detail: inspectedData.signature_detail,
+    signer_sha256: inspectedData.signer_sha256,
+    signer_dn: inspectedData.signer_dn,
+    file_exists: true,
+  };
+
+  const updates = {};
+  if (variantKey === 'arm64') {
+    updates.arm64_apk = variantData;
+  } else {
+    updates.universal_apk = variantData;
+    updates.apk_file_path = filePath;
+    updates.file_size_mb = normalizedSize;
+    updates.apk_sha256 = inspectedData.sha256;
+    updates.signature_status = inspectedData.signature_status;
+    updates.signature_verified = inspectedData.signature_verified;
+    updates.signature_detail = inspectedData.signature_detail;
+    updates.signer_sha256 = inspectedData.signer_sha256;
+    updates.signer_dn = inspectedData.signer_dn;
+  }
+
+  const putRes = await fetch(`/api/releases/${encodeURIComponent(versionName)}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(updates),
+  });
+  const updatedRel = await putRes.json().catch(() => ({}));
+  if (!putRes.ok) {
+    throw new Error(updatedRel.error || 'Error al vincular variante en la base de datos');
+  }
+  updatedRel.file_exists = true;
+
+  await syncReleaseAcrossUiAndComposer(versionName, updatedRel);
+  const suffix = originText ? ` ${originText}` : '';
+  showToast(`Variante ${variantKey.toUpperCase()} vinculada${suffix} (${normalizedSize}).`, 'success');
+  return updatedRel;
+}
+
 /**
  * Re-verifica en disco duro el archivo físico y firma RSA-4096 de una versión
  */
@@ -6922,24 +7103,9 @@ async function verifyReleaseIntegrity(versionName, fromEditModal = false) {
     }
 
     const updatedRel = data.release;
-    if (updatedRel) {
-      const idx = globalReleases.findIndex(r => r.version_name === versionName);
-      if (idx !== -1) globalReleases[idx] = updatedRel;
-
-      if (fromEditModal || document.getElementById('modalEditRelease')?.classList.contains('open')) {
-        const currentEditVer = document.getElementById('editRelVersionName')?.value;
-        if (currentEditVer === versionName) {
-          const vcInput = document.getElementById('editRelVersionCode');
-          const dbInput = document.getElementById('editRelDbSchema');
-          if (vcInput && updatedRel.version_code) vcInput.value = updatedRel.version_code;
-          if (dbInput && updatedRel.db_schema_version) dbInput.value = updatedRel.db_schema_version;
-          renderEditReleaseVariants(updatedRel);
-        }
-      }
-    }
-
-    await loadReleases();
-    await loadReleaseMatrix();
+    await syncReleaseAcrossUiAndComposer(versionName, updatedRel, {
+      forceRenderEditModal: Boolean(fromEditModal),
+    });
 
     if (!data.file_exists) {
       showToast(`No se encontró ningún APK físico en disco para v${versionName}.`, 'warning');
@@ -6993,6 +7159,9 @@ async function loadCompanionNoteIntoField(versionName, targetFieldId, noteKind, 
   }
 
   field.value = noteText;
+  if (typeof updateTextareaMetaCounter === 'function') {
+    updateTextareaMetaCounter(targetFieldId);
+  }
   showToast(
     noteKind === 'internal_notes'
       ? `Notas internas cargadas desde ${filePattern}.`
@@ -7041,86 +7210,135 @@ let currentUploadVariantVersion = null;
 let currentUploadVariantType = 'universal';
 
 /**
- * Construye una tarjeta enriquecida de variante APK dentro de #modalEditRelease
+ * Construye una tarjeta enriquecida de variante APK dentro de #modalEditRelease (Plan 22.5 Fase 3)
  */
-function buildEditVariantCardHtml(rel, variantKey, titleLabel, badgeClass, vData) {
+function buildEditVariantCardHtml(rel, variantKey, titleLabel, badgeClass, vData, options = {}) {
   const versionName = rel.version_name || '';
   const hasPath = !!(vData && vData.file_path);
-  const sizeFormatted = hasPath ? formatApkSizeMb(vData.file_size_mb) : 'Sin archivo físico';
+  const diskState = hasPath
+    ? (vData.file_exists !== undefined ? vData.file_exists : rel.file_exists)
+    : null;
+  const isMissingOnDisk = hasPath && diskState === false;
+  const isVerifiedOnDisk = hasPath && diskState === true;
+  const canUnlink = hasPath && options.canUnlink === true;
+
+  const sizeFormatted = hasPath ? formatApkSizeMb(vData.file_size_mb) : 'Sin archivo adjunto';
   const sha = (vData && vData.sha256) ? String(vData.sha256) : '';
   const shortSha = sha ? `${sha.substring(0, 14)}...` : '-';
 
-  // Estado real en disco
-  let diskBadge = '<span class="badge badge-disk-missing">No encontrado</span>';
+  // Estado honesto en 3 niveles: No adjuntado (Opcional) | Extraviado en disco | Verificado / Pendiente
+  let statusBadgeHtml = '<span class="badge badge-variant-optional">No adjuntado (Opcional)</span>';
+  let sigBadgeHtml = '';
   if (hasPath) {
-    const diskState = vData.file_exists !== undefined ? vData.file_exists : rel.file_exists;
-    if (diskState === false) {
-      diskBadge = '<span class="badge badge-disk-missing">No encontrado</span>';
-    } else if (diskState === true) {
-      diskBadge = '<span class="badge badge-disk-ok">Verificado en disco</span>';
+    if (isMissingOnDisk) {
+      statusBadgeHtml = '<span class="badge badge-disk-missing">Archivo extraviado en disco</span>';
+    } else if (isVerifiedOnDisk) {
+      statusBadgeHtml = '<span class="badge badge-disk-ok">Verificado en disco</span>';
     } else {
-      diskBadge = '<span class="badge badge-unverified-sig">Pendiente verificar</span>';
+      statusBadgeHtml = '<span class="badge badge-unverified-sig">Pendiente verificar</span>';
     }
+    const sigStatus = vData?.signature_status ?? rel.signature_status ?? 'UNVERIFIED';
+    const sigVerified = vData?.signature_verified !== undefined
+      ? vData.signature_verified
+      : rel.signature_verified;
+    sigBadgeHtml = renderSignatureStatusBadge(sigStatus, sigVerified, 'Oficial RSA-4096');
   }
 
-  // Firma de 3 estados honestos
-  const sigStatus = vData?.signature_status ?? (hasPath ? rel.signature_status : 'UNVERIFIED');
-  const sigVerified = vData?.signature_verified !== undefined
-    ? vData.signature_verified
-    : (hasPath ? rel.signature_verified : null);
-  const sigBadge = hasPath
-    ? renderSignatureStatusBadge(sigStatus, sigVerified, 'Oficial RSA-4096')
-    : '<span class="badge badge-unverified-sig">Sin Verificar</span>';
+  const sizeClass = hasPath ? 'color:var(--text-primary);' : 'color:var(--text-muted); font-weight:500;';
+
+  let detailHtml = '';
+  if (!hasPath) {
+    detailHtml = `<div class="edit-variant-optional-note">Variante opcional no adjuntada para esta versión. Usa "Subir desde PC" o "Vincular desde Biblioteca Local".</div>`;
+  } else {
+    const missingBannerHtml = isMissingOnDisk
+      ? `<div class="edit-variant-missing-note">No encontrado en la ruta registrada en disco — usa "Re-verificar", "Subir desde PC", "Vincular desde Biblioteca Local" o "Desvincular".</div>`
+      : '';
+    detailHtml = `
+      ${missingBannerHtml}
+      <div class="edit-variant-meta-row">
+        <span style="color:var(--text-muted);">SHA-256:</span>
+        <code style="font-family:var(--font-mono); color:var(--text-primary);" title="${escapeHtml(sha)}">${escapeHtml(shortSha)}</code>
+        ${sha ? `<button type="button" class="btn btn-outline btn-xs btn-copy-variant-sha" data-sha="${escapeHtml(sha)}">Copiar SHA</button>` : ''}
+      </div>
+      <div style="font-size:0.73rem; color:var(--text-secondary); font-family:var(--font-mono); word-break:break-all;">
+        ${escapeHtml(vData.file_path || '')}
+      </div>
+    `;
+  }
+
+  const verifyBtnHtml = hasPath
+    ? `<button type="button" class="btn btn-outline btn-xs" onclick="verifyReleaseIntegrity('${escapeHtml(versionName)}', true)" title="Re-verificar archivo en disco y firma RSA-4096">
+        <svg class="btn-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><polyline points="9 12 11 14 15 10"/></svg>
+        Re-verificar
+      </button>`
+    : '';
+
+  const copyRevealBtnsHtml = (hasPath && !isMissingOnDisk)
+    ? `<button type="button" class="btn btn-outline btn-xs" onclick="copyReleaseApkToClipboard('${escapeHtml(versionName)}', '${variantKey}')">Copiar</button>
+       <button type="button" class="btn btn-outline btn-xs" onclick="revealReleaseInExplorer('${escapeHtml(versionName)}', '${variantKey}')">Carpeta</button>`
+    : '';
+
+  const unlinkBtnHtml = canUnlink
+    ? `<button type="button" class="btn btn-outline btn-xs btn-unlink-variant edit-variant-unlink-btn" data-variant="${variantKey}" data-version="${escapeHtml(versionName)}" title="Desvincular esta variante de v${escapeHtml(versionName)}">
+        <svg class="btn-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18"/><path d="M6 6l12 12"/></svg>
+        Desvincular
+      </button>`
+    : '';
+
+  const abiExpectedLabel = variantKey === 'arm64' ? 'ARM64 Ligero' : 'Universal';
 
   return `
     <div class="edit-variant-card" data-variant="${variantKey}">
       <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.4rem;">
         <div style="display:flex; align-items:center; gap:0.4rem; flex-wrap:wrap;">
           <span class="badge ${badgeClass}">${escapeHtml(titleLabel)}</span>
-          <strong style="font-size:0.78rem; color:var(--text-primary);">${escapeHtml(sizeFormatted)}</strong>
-          ${diskBadge}
-          ${sigBadge}
+          <strong style="font-size:0.78rem; ${sizeClass}">${escapeHtml(sizeFormatted)}</strong>
+          ${statusBadgeHtml}
+          ${sigBadgeHtml}
         </div>
         <div style="display:flex; gap:0.3rem; flex-wrap:wrap; align-items:center;">
           <button type="button" class="btn btn-outline btn-xs" onclick="triggerVariantUpload('${variantKey}', '${escapeHtml(versionName)}')">
-            <svg class="btn-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+            <svg class="btn-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
             Subir desde PC
           </button>
           <button type="button" class="btn btn-outline btn-xs btn-toggle-local-picker" data-variant="${variantKey}" data-version="${escapeHtml(versionName)}">
-            <svg class="btn-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+            <svg class="btn-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
             Vincular desde Biblioteca Local
           </button>
-          <button type="button" class="btn btn-outline btn-xs" onclick="verifyReleaseIntegrity('${escapeHtml(versionName)}', true)" title="Re-verificar archivo en disco y firma RSA-4096">
-            <svg class="btn-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><polyline points="9 12 11 14 15 10"/></svg>
-            Re-verificar
-          </button>
-          ${hasPath ? `
-            <button type="button" class="btn btn-outline btn-xs" onclick="copyReleaseApkToClipboard('${escapeHtml(versionName)}', '${variantKey}')">Copiar</button>
-            <button type="button" class="btn btn-outline btn-xs" onclick="revealReleaseInExplorer('${escapeHtml(versionName)}', '${variantKey}')">Carpeta</button>
-          ` : ''}
+          ${verifyBtnHtml}
+          ${copyRevealBtnsHtml}
+          ${unlinkBtnHtml}
         </div>
       </div>
-      ${hasPath ? `
-        <div class="edit-variant-meta-row">
-          <span style="color:var(--text-muted);">SHA-256:</span>
-          <code style="font-family:var(--font-mono); color:var(--text-primary);" title="${escapeHtml(sha)}">${escapeHtml(shortSha)}</code>
-          ${sha ? `<button type="button" class="btn btn-outline btn-xs btn-copy-variant-sha" data-sha="${escapeHtml(sha)}">Copiar SHA</button>` : ''}
-        </div>
-        <div style="font-size:0.73rem; color:var(--text-secondary); font-family:var(--font-mono); word-break:break-all;">
-          ${escapeHtml(vData.file_path || '')}
-        </div>
-      ` : '<div style="font-size:0.73rem; color:var(--text-muted);">No registrado en disco para esta versión. Usa "Subir desde PC" o "Vincular desde Biblioteca Local".</div>'}
+      ${detailHtml}
       <div class="edit-variant-local-picker" id="editVariantLocalPicker_${variantKey}" style="display:none;">
-        <div style="display:flex; justify-content:space-between; align-items:center; gap:0.5rem;">
-          <strong style="font-size:0.75rem; color:var(--primary);">Seleccionar APK detectado en Biblioteca Local / Build:</strong>
-          <span style="font-size:0.71rem; color:var(--text-muted);" id="editVariantLocalStatus_${variantKey}">Cargando...</span>
+        <div class="edit-variant-picker-header">
+          <div style="display:flex; align-items:center; gap:0.45rem; flex-wrap:wrap;">
+            <strong style="font-size:0.75rem; color:var(--primary);">Seleccionar APK ${escapeHtml(abiExpectedLabel)} detectado:</strong>
+            <span style="font-size:0.71rem; color:var(--text-muted);" id="editVariantLocalStatus_${variantKey}">Cargando...</span>
+          </div>
+          <div class="edit-picker-header-actions">
+            <button type="button" class="btn btn-outline btn-xs btn-rescan-edit-local" data-variant="${variantKey}" data-version="${escapeHtml(versionName)}" title="Re-escanear rutas configuradas">
+              <svg class="btn-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+              Re-escanear rutas
+            </button>
+            <button type="button" class="btn btn-outline btn-xs btn-open-edit-search-dirs" data-variant="${variantKey}" data-version="${escapeHtml(versionName)}" title="Configurar carpetas de búsqueda APK">
+              <svg class="btn-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+              Rutas...
+            </button>
+            <button type="button" class="btn btn-outline btn-xs btn-close-edit-local-picker" data-variant="${variantKey}" title="Cerrar selector local">
+              <svg class="btn-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+              Cerrar
+            </button>
+          </div>
         </div>
         <div style="display:flex; gap:0.4rem; flex-wrap:wrap; align-items:center;">
           <select id="editVariantLocalSelect_${variantKey}" style="flex:1; min-width:220px; font-size:0.76rem; padding:0.35rem 0.55rem;"></select>
-          <button type="button" class="btn btn-primary btn-xs btn-link-local-build" data-variant="${variantKey}" data-version="${escapeHtml(versionName)}">
+          <button type="button" class="btn btn-primary btn-xs btn-link-local-build" id="btnLinkLocalBuild_${variantKey}" data-variant="${variantKey}" data-version="${escapeHtml(versionName)}">
             Vincular Seleccionado
           </button>
         </div>
+        <div id="editVariantLocalEmptyHint_${variantKey}" class="edit-variant-picker-empty" style="display:none;"></div>
       </div>
     </div>
   `;
@@ -7133,40 +7351,101 @@ function renderEditReleaseVariants(rel) {
   const container = document.getElementById('editRelVariantsContainer');
   if (!container) return;
 
-  const universalData = rel.universal_apk || (rel.apk_file_path && rel.abi_variant !== 'ARM64' ? {
-    file_path: rel.apk_file_path,
-    file_size_mb: rel.file_size_mb,
-    sha256: rel.apk_sha256,
-    signature_status: rel.signature_status,
-    signature_verified: rel.signature_verified,
-    file_exists: rel.file_exists,
-  } : null);
-
-  const arm64Data = rel.arm64_apk || (rel.apk_file_path && rel.abi_variant === 'ARM64' ? {
-    file_path: rel.apk_file_path,
-    file_size_mb: rel.file_size_mb,
-    sha256: rel.apk_sha256,
-    signature_status: rel.signature_status,
-    signature_verified: rel.signature_verified,
-    file_exists: rel.file_exists,
-  } : null);
+  const universalData = getEditVariantData(rel, 'universal');
+  const arm64Data = getEditVariantData(rel, 'arm64');
+  const canUnlinkUniversal = canUnlinkEditVariantSlot(rel, 'universal').allowed;
+  const canUnlinkArm64 = canUnlinkEditVariantSlot(rel, 'arm64').allowed;
 
   container.innerHTML = `
     <div style="display:flex; flex-direction:column; gap:0.75rem;">
-      ${buildEditVariantCardHtml(rel, 'universal', 'Universal (~110 MB)', 'badge-universal', universalData)}
-      ${buildEditVariantCardHtml(rel, 'arm64', 'ARM64 Ligero (~30 MB)', 'badge-arm64', arm64Data)}
+      ${buildEditVariantCardHtml(rel, 'universal', 'Universal (~110 MB)', 'badge-universal', universalData, { canUnlink: canUnlinkUniversal })}
+      ${buildEditVariantCardHtml(rel, 'arm64', 'ARM64 Ligero (~30 MB)', 'badge-arm64', arm64Data, { canUnlink: canUnlinkArm64 })}
     </div>
   `;
 }
 
 /**
- * Abre/carga el selector de Biblioteca Local para vincular una variante sin subir por red
+ * Consulta APKs locales filtrados estrictamente por arquitectura ABI de la variante
+ */
+async function loadEditVariantLocalBuilds(variantKey, versionName) {
+  const statusEl = document.getElementById(`editVariantLocalStatus_${variantKey}`);
+  const selectEl = document.getElementById(`editVariantLocalSelect_${variantKey}`);
+  const linkBtn = document.getElementById(`btnLinkLocalBuild_${variantKey}`);
+  const emptyHintEl = document.getElementById(`editVariantLocalEmptyHint_${variantKey}`);
+  if (!selectEl) return;
+
+  const abiParam = variantKey === 'arm64' ? 'ARM64' : 'UNIVERSAL';
+  if (statusEl) statusEl.textContent = `Escaneando APKs ${abiParam}...`;
+  selectEl.innerHTML = `<option value="">Buscando APKs ${abiParam}...</option>`;
+  selectEl.disabled = true;
+  if (linkBtn) linkBtn.disabled = true;
+  if (emptyHintEl) {
+    emptyHintEl.style.display = 'none';
+    emptyHintEl.textContent = '';
+  }
+
+  try {
+    const res = await fetch(`/api/releases/detect-local-build?limit=24&abi=${encodeURIComponent(abiParam)}`);
+    if (!res.ok) throw new Error('Error al consultar biblioteca local');
+    const data = await res.json();
+
+    const rawBuilds = Array.isArray(data.available_builds) ? data.available_builds : [];
+    const compatibleBuilds = rawBuilds.filter((b) => validateApkAbiForVariantSlot(b.abi_variant, variantKey).ok);
+
+    editModalLocalBuildsByVariant[variantKey] = compatibleBuilds;
+    editModalLocalBuildsCache = compatibleBuilds;
+
+    if (compatibleBuilds.length === 0) {
+      if (statusEl) {
+        statusEl.textContent = variantKey === 'arm64'
+          ? 'Sin APKs ARM64 compatibles'
+          : 'Sin APKs Universal compatibles';
+      }
+      selectEl.innerHTML = `<option value="">No hay APKs ${abiParam} compatibles detectados</option>`;
+      selectEl.disabled = true;
+      if (linkBtn) linkBtn.disabled = true;
+      if (emptyHintEl) {
+        emptyHintEl.style.display = 'block';
+        emptyHintEl.textContent = variantKey === 'arm64'
+          ? 'No se encontraron APKs ARM64 Ligero (~30 MB) en las rutas configuradas. Compílalo ejecutando compilar_apk_arm64.bat o agrega su carpeta desde "Rutas...".'
+          : 'No se encontraron APKs Universal (~110 MB) en las rutas configuradas. Compílalo ejecutando compilar_apk_comercial.bat o agrega su carpeta desde "Rutas...".';
+      }
+      return;
+    }
+
+    if (statusEl) statusEl.textContent = `${compatibleBuilds.length} APK(s) ${abiParam} detectados`;
+    selectEl.disabled = false;
+    if (linkBtn) linkBtn.disabled = false;
+    selectEl.innerHTML = '';
+
+    compatibleBuilds.forEach((b, idx) => {
+      const opt = document.createElement('option');
+      opt.value = String(idx);
+      const sizeStr = formatApkSizeMb(b.size_mb);
+      const srcLower = (b.source_label || '').toLowerCase();
+      const originStr = srcLower.includes('biblioteca')
+        ? 'Biblioteca'
+        : (srcLower.includes('compilación') || srcLower.includes('build') ? 'Build Local' : (b.source_label || 'Carpeta Local'));
+      opt.textContent = `v${b.version_name || '?'} · ${b.abi_variant || abiParam} · ${sizeStr} · ${originStr} (${b.file_name || ''})`;
+      if (b.version_name === versionName) {
+        opt.selected = true;
+      }
+      selectEl.appendChild(opt);
+    });
+  } catch (e) {
+    if (statusEl) statusEl.textContent = 'Error';
+    selectEl.innerHTML = `<option value="">Error: ${escapeHtml(e.message)}</option>`;
+    selectEl.disabled = true;
+    if (linkBtn) linkBtn.disabled = true;
+  }
+}
+
+/**
+ * Abre o cierra el selector inline de Biblioteca Local para una variante en #modalEditRelease
  */
 async function toggleEditVariantLocalPicker(variantKey, versionName) {
   const picker = document.getElementById(`editVariantLocalPicker_${variantKey}`);
-  const statusEl = document.getElementById(`editVariantLocalStatus_${variantKey}`);
-  const selectEl = document.getElementById(`editVariantLocalSelect_${variantKey}`);
-  if (!picker || !selectEl) return;
+  if (!picker) return;
 
   const isVisible = picker.style.display !== 'none';
   if (isVisible) {
@@ -7175,37 +7454,21 @@ async function toggleEditVariantLocalPicker(variantKey, versionName) {
   }
 
   picker.style.display = 'flex';
-  if (statusEl) statusEl.textContent = 'Escaneando biblioteca...';
-  selectEl.innerHTML = '<option value="">Buscando APKs locales...</option>';
+  await loadEditVariantLocalBuilds(variantKey, versionName);
+}
 
-  try {
-    const res = await fetch('/api/releases/detect-local-build');
-    if (!res.ok) throw new Error('Error al consultar biblioteca local');
-    const data = await res.json();
-    editModalLocalBuildsCache = Array.isArray(data.available_builds) ? data.available_builds : [];
+function closeEditVariantLocalPicker(variantKey) {
+  const picker = document.getElementById(`editVariantLocalPicker_${variantKey}`);
+  if (picker) picker.style.display = 'none';
+}
 
-    if (editModalLocalBuildsCache.length === 0) {
-      if (statusEl) statusEl.textContent = 'Sin APKs detectados';
-      selectEl.innerHTML = '<option value="">No se encontraron APKs en biblioteca ni build/</option>';
-      return;
-    }
-
-    if (statusEl) statusEl.textContent = `${editModalLocalBuildsCache.length} APK(s) detectados`;
-    selectEl.innerHTML = '';
-    editModalLocalBuildsCache.forEach((b, idx) => {
-      const opt = document.createElement('option');
-      opt.value = String(idx);
-      const sizeStr = formatApkSizeMb(b.size_mb);
-      const originStr = (b.source_label || '').toLowerCase().includes('biblioteca') ? 'Biblioteca' : 'Build Local';
-      opt.textContent = `v${b.version_name || '?'} · ${b.abi_variant || 'UNIVERSAL'} · ${sizeStr} · ${originStr} (${b.file_name || ''})`;
-      if (b.version_name === versionName && ((variantKey === 'arm64' && b.abi_variant === 'ARM64') || (variantKey === 'universal' && b.abi_variant !== 'ARM64'))) {
-        opt.selected = true;
-      }
-      selectEl.appendChild(opt);
-    });
-  } catch (e) {
-    if (statusEl) statusEl.textContent = 'Error';
-    selectEl.innerHTML = `<option value="">Error: ${escapeHtml(e.message)}</option>`;
+async function openEditSearchDirsPanel() {
+  const panel = document.getElementById('editSearchDirsPanel');
+  if (!panel) return;
+  panel.style.display = 'flex';
+  await loadSearchDirsForContext('edit');
+  if (typeof panel.scrollIntoView === 'function') {
+    panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   }
 }
 
@@ -7215,9 +7478,18 @@ async function toggleEditVariantLocalPicker(variantKey, versionName) {
 async function linkLocalBuildToReleaseVariant(versionName, variantKey) {
   const selectEl = document.getElementById(`editVariantLocalSelect_${variantKey}`);
   const idx = parseInt(selectEl?.value ?? '', 10);
-  const build = Number.isInteger(idx) ? editModalLocalBuildsCache[idx] : null;
+  const variantList = Array.isArray(editModalLocalBuildsByVariant[variantKey]) && editModalLocalBuildsByVariant[variantKey].length > 0
+    ? editModalLocalBuildsByVariant[variantKey]
+    : editModalLocalBuildsCache;
+  const build = Number.isInteger(idx) ? variantList[idx] : null;
   if (!build || !build.file_path) {
     showToast('Selecciona un APK válido de la lista local.', 'warning');
+    return;
+  }
+
+  const preCheck = validateApkAbiForVariantSlot(build.abi_variant, variantKey);
+  if (!preCheck.ok) {
+    showToast(preCheck.error, 'error');
     return;
   }
 
@@ -7233,53 +7505,58 @@ async function linkLocalBuildToReleaseVariant(versionName, variantKey) {
       throw new Error(impData.error || 'No se pudo importar el APK local');
     }
 
-    const normalizedSize = formatApkSizeMb(impData.size_mb);
-    const variantData = {
-      file_path: impData.imported_path || impData.file_path,
-      file_size_mb: normalizedSize,
-      sha256: impData.sha256,
-      signature_status: impData.signature_status,
-      signature_verified: impData.signature_verified,
-      signature_detail: impData.signature_detail,
-      signer_sha256: impData.signer_sha256,
-      signer_dn: impData.signer_dn,
-      file_exists: true,
-    };
-
-    const updates = {};
-    if (variantKey === 'arm64') {
-      updates.arm64_apk = variantData;
-    } else {
-      updates.universal_apk = variantData;
-      updates.apk_file_path = variantData.file_path;
-      updates.file_size_mb = normalizedSize;
-      updates.apk_sha256 = impData.sha256;
-      updates.signature_status = impData.signature_status;
-      updates.signature_verified = impData.signature_verified;
-      updates.signature_detail = impData.signature_detail;
-      updates.signer_sha256 = impData.signer_sha256;
-      updates.signer_dn = impData.signer_dn;
+    const postCheck = validateApkAbiForVariantSlot(impData.abi_variant, variantKey);
+    if (!postCheck.ok) {
+      showToast(postCheck.error, 'error');
+      return;
     }
 
-    const putRes = await fetch(`/api/releases/${encodeURIComponent(versionName)}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(updates),
-    });
-    if (!putRes.ok) throw new Error('Error al vincular variante en la base de datos');
-    const updatedRel = await putRes.json();
-    updatedRel.file_exists = true;
-
-    const rIdx = globalReleases.findIndex(r => r.version_name === versionName);
-    if (rIdx !== -1) globalReleases[rIdx] = updatedRel;
-
-    renderEditReleaseVariants(updatedRel);
-    await loadReleases();
-    await loadReleaseMatrix();
-    showToast(`Variante ${variantKey.toUpperCase()} vinculada desde biblioteca local (${normalizedSize}).`, 'success');
+    await commitReleaseVariantUpdate(
+      versionName,
+      variantKey,
+      impData,
+      impData.imported_path || impData.file_path,
+      'desde biblioteca local'
+    );
   } catch (err) {
     showToast('Error al vincular desde biblioteca: ' + err.message, 'error');
   }
+}
+
+function unlinkReleaseVariant(versionName, variantKey) {
+  const rel = globalReleases.find(r => r.version_name === versionName);
+  const check = canUnlinkEditVariantSlot(rel, variantKey);
+  if (!check.allowed) {
+    showToast(check.reason || 'No se puede desvincular esta variante.', 'warning');
+    return;
+  }
+
+  const slotLabel = variantKey === 'arm64' ? 'ARM64 Ligero (~30 MB)' : 'Universal (~110 MB)';
+  showConfirmModal(
+    `Desvincular APK ${slotLabel}`,
+    `¿Deseas desvincular la variante "${slotLabel}" de la versión v${versionName}? Los archivos físicos no se borrarán del disco y podrás volver a vincular otro APK cuando lo necesites.`,
+    async () => {
+      try {
+        const payload = variantKey === 'arm64'
+          ? { arm64_apk: null }
+          : { universal_apk: null };
+        const putRes = await fetch(`/api/releases/${encodeURIComponent(versionName)}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        const updatedRel = await putRes.json().catch(() => ({}));
+        if (!putRes.ok) {
+          throw new Error(updatedRel.error || 'No se pudo desvincular la variante');
+        }
+        await syncReleaseAcrossUiAndComposer(versionName, updatedRel);
+        showToast(`Variante ${slotLabel} desvinculada de v${versionName}.`, 'success');
+      } catch (err) {
+        showToast('Error al desvincular variante: ' + err.message, 'error');
+      }
+    },
+    true
+  );
 }
 
 function triggerVariantUpload(variant, versionName) {
@@ -7295,7 +7572,11 @@ function triggerVariantUpload(variant, versionName) {
 
 async function handleVariantFileSelected(file, variant, versionName) {
   if (!file || !versionName) return;
-  showToast(`Subiendo variante ${variant.toUpperCase()} para v${versionName}...`, 'info');
+  if (!String(file.name || '').toLowerCase().endsWith('.apk')) {
+    showToast('El archivo seleccionado no es un archivo .APK válido.', 'error');
+    return;
+  }
+  showToast(`Analizando variante ${variant.toUpperCase()} para v${versionName}...`, 'info');
   try {
     const res = await fetch(`/api/releases/upload-apk?filename=${encodeURIComponent(file.name)}`, {
       method: 'POST',
@@ -7306,50 +7587,19 @@ async function handleVariantFileSelected(file, variant, versionName) {
       throw new Error(data.error || 'Error al inspeccionar archivo subido');
     }
 
-    const normalizedSize = formatApkSizeMb(data.size_mb);
-    const variantData = {
-      file_path: data.file_path,
-      file_size_mb: normalizedSize,
-      sha256: data.sha256,
-      signature_status: data.signature_status,
-      signature_verified: data.signature_verified,
-      signature_detail: data.signature_detail,
-      signer_sha256: data.signer_sha256,
-      signer_dn: data.signer_dn,
-      file_exists: true,
-    };
-
-    const updates = {};
-    if (variant === 'arm64') {
-      updates.arm64_apk = variantData;
-    } else {
-      updates.universal_apk = variantData;
-      updates.apk_file_path = data.file_path;
-      updates.file_size_mb = normalizedSize;
-      updates.apk_sha256 = data.sha256;
-      updates.signature_status = data.signature_status;
-      updates.signature_verified = data.signature_verified;
-      updates.signature_detail = data.signature_detail;
-      updates.signer_sha256 = data.signer_sha256;
-      updates.signer_dn = data.signer_dn;
+    const abiCheck = validateApkAbiForVariantSlot(data.abi_variant, variant);
+    if (!abiCheck.ok) {
+      showToast(abiCheck.error, 'error');
+      return;
     }
 
-    const putRes = await fetch(`/api/releases/${encodeURIComponent(versionName)}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(updates),
-    });
-    if (!putRes.ok) throw new Error('Error al vincular variante en el release');
-    const updatedRel = await putRes.json();
-    updatedRel.file_exists = true;
-
-    const idx = globalReleases.findIndex(r => r.version_name === versionName);
-    if (idx !== -1) globalReleases[idx] = updatedRel;
-
-    renderEditReleaseVariants(updatedRel);
-    await loadReleases();
-    await loadReleaseMatrix();
-    showToast(`Variante ${variant.toUpperCase()} vinculada con éxito (${normalizedSize}).`, 'success');
+    await commitReleaseVariantUpdate(
+      versionName,
+      variant,
+      data,
+      data.file_path,
+      'por subida directa'
+    );
   } catch (err) {
     showToast('Error al actualizar variante: ' + err.message, 'error');
   }
@@ -7371,6 +7621,15 @@ function openEditReleaseModal(versionName) {
   document.getElementById('editRelDownloadUrl').value = rel.apk_download_url || '';
   document.getElementById('editRelChangelog').value = rel.changelog || '';
   document.getElementById('editRelInternalNotes').value = rel.internal_notes || '';
+
+  if (typeof resetExpandableTextarea === 'function') {
+    resetExpandableTextarea('editRelChangelog');
+    resetExpandableTextarea('editRelInternalNotes');
+  }
+  const editDirsPanel = document.getElementById('editSearchDirsPanel');
+  if (editDirsPanel) editDirsPanel.style.display = 'none';
+  const newEditDirInp = document.getElementById('inputEditNewApkSearchDir');
+  if (newEditDirInp) newEditDirInp.value = '';
 
   // Actualizar tarjeta explicativa reactiva
   updateReleaseTypeInfo('editRelType', 'editRelTypeInfoText');
@@ -8322,9 +8581,33 @@ function initReleaseUploadAndAutoDetect() {
       return;
     }
 
+    const rescanBtn = e.target.closest('.btn-rescan-edit-local');
+    if (rescanBtn) {
+      loadEditVariantLocalBuilds(rescanBtn.dataset.variant, rescanBtn.dataset.version);
+      return;
+    }
+
+    const openDirsBtn = e.target.closest('.btn-open-edit-search-dirs');
+    if (openDirsBtn) {
+      openEditSearchDirsPanel();
+      return;
+    }
+
+    const closePickerBtn = e.target.closest('.btn-close-edit-local-picker');
+    if (closePickerBtn) {
+      closeEditVariantLocalPicker(closePickerBtn.dataset.variant);
+      return;
+    }
+
     const linkLocalBtn = e.target.closest('.btn-link-local-build');
     if (linkLocalBtn) {
       linkLocalBuildToReleaseVariant(linkLocalBtn.dataset.version, linkLocalBtn.dataset.variant);
+      return;
+    }
+
+    const unlinkBtn = e.target.closest('.btn-unlink-variant');
+    if (unlinkBtn) {
+      unlinkReleaseVariant(unlinkBtn.dataset.version, unlinkBtn.dataset.variant);
     }
   });
 
@@ -8345,8 +8628,16 @@ function initReleaseUploadAndAutoDetect() {
   });
 
   document.getElementById('btnEditLoadAtpTxt')?.addEventListener('click', () => {
-    const ver = document.getElementById('editRelInternalNotes')?.value || '';
+    const ver = document.getElementById('editRelVersionName')?.value || '';
     loadCompanionNoteIntoField(ver, 'editRelInternalNotes', 'internal_notes');
+  });
+
+  // Delegación para botón "Cambiar / Quitar APK" dentro de #activeCreateApkCard
+  document.getElementById('activeCreateApkCard')?.addEventListener('click', (e) => {
+    const clearBtn = e.target.closest('#btnClearSelectedCreateApk');
+    if (clearBtn) {
+      clearSelectedCreateApk();
+    }
   });
 
   // Drag & drop handlers
@@ -8380,109 +8671,886 @@ function initReleaseUploadAndAutoDetect() {
   buildsGridEl?.addEventListener('click', (e) => {
     const btn = e.target.closest('.btn-import-local-build');
     if (!btn) return;
-    const sourcePath = btn.dataset.sourcePath || availableLocalBuilds[parseInt(btn.dataset.buildIndex || '-1', 10)]?.file_path;
+    const idx = parseInt(btn.dataset.buildIndex || '-1', 10);
+    const sourcePath = btn.dataset.sourcePath || availableLocalBuilds[idx]?.file_path;
     if (sourcePath) {
-      importLocalApkDirectly(sourcePath);
+      importLocalApkDirectly(sourcePath, idx, btn);
     }
   });
 
-  // Autodetectar builds locales desde biblioteca oficial y app_movil/build
+  // Barra de filtros rápidos en #localBuildsToolbar
+  document.getElementById('localBuildsAbiChips')?.addEventListener('click', (e) => {
+    const chip = e.target.closest('.local-abi-chip');
+    if (!chip) return;
+    const abi = chip.dataset.abi || 'ALL';
+    localBuildsFilterState.abi = abi;
+    document.querySelectorAll('#localBuildsAbiChips .local-abi-chip').forEach((c) => {
+      c.classList.toggle('active', c === chip);
+    });
+    fetchAndRenderLocalBuilds({ silentToast: true });
+  });
+
+  document.getElementById('inputLocalBuildsFilter')?.addEventListener('input', (e) => {
+    localBuildsFilterState.query = e.target.value || '';
+    clearTimeout(localBuildsFilterTimer);
+    localBuildsFilterTimer = setTimeout(() => {
+      fetchAndRenderLocalBuilds({ silentToast: true });
+    }, 220);
+  });
+
+  document.getElementById('selectLocalBuildsLimit')?.addEventListener('change', (e) => {
+    localBuildsFilterState.limit = parseInt(e.target.value || '6', 10) || 6;
+    fetchAndRenderLocalBuilds({ silentToast: true });
+  });
+
+  // Mini-panel colapsable "Rutas de búsqueda"
+  document.getElementById('btnToggleSearchDirsPanel')?.addEventListener('click', async () => {
+    const panel = document.getElementById('createSearchDirsPanel');
+    const toggleBtn = document.getElementById('btnToggleSearchDirsPanel');
+    if (!panel) return;
+    const willOpen = panel.style.display === 'none' || !panel.style.display;
+    panel.style.display = willOpen ? 'flex' : 'none';
+    toggleBtn?.classList.toggle('active', willOpen);
+    if (willOpen) {
+      await loadCreateSearchDirs();
+    }
+  });
+
+  document.getElementById('btnBrowseApkSearchDir')?.addEventListener('click', browseAndFillNewSearchDir);
+  document.getElementById('btnAddApkSearchDir')?.addEventListener('click', addCreateSearchDir);
+  document.getElementById('btnResetApkSearchDirs')?.addEventListener('click', resetCreateSearchDirs);
+  document.getElementById('inputNewApkSearchDir')?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      addCreateSearchDir();
+    }
+  });
+
+  function bindSearchDirsListDelegation(listId, context) {
+    const listEl = document.getElementById(listId);
+    if (!listEl) return;
+    listEl.addEventListener('change', async (e) => {
+      const chk = e.target.closest('.chk-toggle-search-dir');
+      if (!chk) return;
+      const idx = parseInt(chk.dataset.dirIndex || '-1', 10);
+      if (idx < 0 || idx >= createApkSearchDirs.length) return;
+      const next = createApkSearchDirs.map((d, i) => (
+        i === idx ? { ...d, enabled: chk.checked } : { ...d }
+      ));
+      await saveSearchDirsForContext(next, context);
+    });
+
+    listEl.addEventListener('click', async (e) => {
+      const delBtn = e.target.closest('.btn-remove-search-dir');
+      if (!delBtn) return;
+      const idx = parseInt(delBtn.dataset.dirIndex || '-1', 10);
+      if (idx < 0 || idx >= createApkSearchDirs.length) return;
+      const target = createApkSearchDirs[idx];
+      if (target?.is_default) return;
+      const next = createApkSearchDirs.filter((_, i) => i !== idx);
+      await saveSearchDirsForContext(next, context);
+    });
+  }
+
+  bindSearchDirsListDelegation('createSearchDirsList', 'create');
+  bindSearchDirsListDelegation('editSearchDirsList', 'edit');
+
+  document.getElementById('btnCloseEditSearchDirsPanel')?.addEventListener('click', () => {
+    const panel = document.getElementById('editSearchDirsPanel');
+    if (panel) panel.style.display = 'none';
+  });
+  document.getElementById('btnEditBrowseApkSearchDir')?.addEventListener('click', () => browseAndFillSearchDirInput('edit'));
+  document.getElementById('btnEditAddApkSearchDir')?.addEventListener('click', () => addSearchDirForContext('edit'));
+  document.getElementById('btnEditResetApkSearchDirs')?.addEventListener('click', () => resetSearchDirsForContext('edit'));
+  document.getElementById('inputEditNewApkSearchDir')?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      addSearchDirForContext('edit');
+    }
+  });
+
+  // Controles Expandir/Contraer y contadores en vivo para los 4 textareas (Plan 22.5 Fase 3)
+  document.querySelectorAll('.btn-toggle-textarea').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const targetId = btn.dataset?.target || btn.getAttribute?.('data-target') || '';
+      if (targetId) toggleExpandableTextarea(targetId);
+    });
+  });
+  EXPANDABLE_TEXTAREA_IDS.forEach((textareaId) => {
+    const ta = document.getElementById(textareaId);
+    if (ta) {
+      ta.addEventListener('input', () => updateTextareaMetaCounter(textareaId));
+      updateTextareaMetaCounter(textareaId);
+    }
+  });
+
+  // Autodetectar builds locales desde rutas configurables
   document.getElementById('btnDetectLocalBuild')?.addEventListener('click', async () => {
-    const statusEl = document.getElementById('detectApkStatus');
-    const gridEl = document.getElementById('localBuildsGrid');
-    if (statusEl) statusEl.textContent = 'Escaneando biblioteca oficial y app_movil/build/...';
+    await fetchAndRenderLocalBuilds({ silentToast: false });
+  });
+}
 
-    try {
-      const res = await fetch('/api/releases/detect-local-build');
-      if (!res.ok) throw new Error('Error al autodetectar build');
-      const data = await res.json();
+const EXPANDABLE_TEXTAREA_IDS = [
+  'relChangelog',
+  'relInternalNotes',
+  'editRelChangelog',
+  'editRelInternalNotes',
+];
 
-      if (data.apk_found && data.available_builds && data.available_builds.length > 0) {
-        availableLocalBuilds = data.available_builds;
-        if (statusEl) {
-          statusEl.textContent = `Se encontraron ${data.total_found} APK(s) recientes. Selecciona uno para importar:`;
-        }
-        if (gridEl) {
-          gridEl.style.display = 'grid';
-          gridEl.innerHTML = '';
+function computeTextareaStats(value) {
+  const raw = String(value ?? '');
+  if (raw.length === 0) return { lines: 0, chars: 0 };
+  const lines = raw.replace(/\r\n/g, '\n').split('\n').length;
+  return { lines, chars: raw.length };
+}
 
-          data.available_builds.forEach((b, idx) => {
-            const card = document.createElement('div');
-            card.className = 'local-build-card';
+function updateTextareaMetaCounter(textareaId) {
+  const ta = document.getElementById(textareaId);
+  const counter = document.getElementById(`${textareaId}Counter`);
+  if (!counter) return;
+  const stats = computeTextareaStats(ta ? ta.value : '');
+  counter.textContent = `${stats.lines} lín. · ${stats.chars} car.`;
+}
 
-            const isOfficialLib = (b.source_label || '').toLowerCase().includes('biblioteca oficial');
-            const originBadge = isOfficialLib
-              ? '<span class="badge badge-origin-lib">Biblioteca Oficial</span>'
-              : '<span class="badge badge-origin-local">Build Local</span>';
+function setExpandableTextareaState(textareaId, expanded) {
+  const ta = document.getElementById(textareaId);
+  const btn = document.querySelector(`.btn-toggle-textarea[data-target="${textareaId}"]`);
+  const isExpanded = Boolean(expanded);
 
-            const variantBadge = b.abi_variant === 'ARM64'
-              ? '<span class="badge badge-arm64">ARM64 Ligero</span>'
-              : '<span class="badge badge-universal">Universal</span>';
+  if (ta) {
+    ta.classList.toggle('is-expanded', isExpanded);
+    if (!isExpanded) {
+      ta.style.height = '';
+    }
+  }
+  if (btn) {
+    btn.setAttribute('aria-expanded', isExpanded ? 'true' : 'false');
+    btn.title = isExpanded
+      ? 'Contraer área de texto'
+      : 'Expandir área de texto';
+    const labelEl = btn.querySelector('.btn-toggle-textarea-label');
+    if (labelEl) {
+      labelEl.textContent = isExpanded ? 'Contraer' : 'Expandir';
+    }
+    const svg = btn.querySelector('svg');
+    if (svg) {
+      svg.innerHTML = isExpanded
+        ? '<polyline points="4 14 10 14 10 20"/><polyline points="20 10 14 10 14 4"/><line x1="14" y1="10" x2="21" y2="3"/><line x1="3" y1="21" x2="10" y2="14"/>'
+        : '<polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/>';
+    }
+  }
+  updateTextareaMetaCounter(textareaId);
+}
 
-            const sigBadge = renderSignatureStatusBadge(b.signature_status, b.signature_verified, 'Oficial RSA-4096');
+function toggleExpandableTextarea(textareaId) {
+  const ta = document.getElementById(textareaId);
+  if (!ta) return false;
+  const nextExpanded = !ta.classList.contains('is-expanded');
+  setExpandableTextareaState(textareaId, nextExpanded);
+  return nextExpanded;
+}
 
-            const modDate = b.modified_at ? b.modified_at.substring(0, 16).replace('T', ' ') : '-';
-            const shortSha = b.sha256 ? `${b.sha256.substring(0, 10)}...` : '-';
-            const sizeFormatted = formatApkSizeMb(b.size_mb);
-            const dupPaths = Array.isArray(b.duplicate_paths) ? b.duplicate_paths : [];
-            const dupHtml = dupPaths.length > 0
-              ? `<div class="local-build-dup" title="${escapeHtml(dupPaths.join('\n'))}">Deduplicado por SHA-256 (${dupPaths.length} copia idéntica omitida)</div>`
-              : '';
+function resetExpandableTextarea(textareaId, options = {}) {
+  const ta = document.getElementById(textareaId);
+  if (ta && options.clearValue === true) {
+    ta.value = '';
+  }
+  setExpandableTextareaState(textareaId, false);
+}
 
-            card.innerHTML = `
-              <div class="local-build-header">
-                <strong style="color:var(--text-primary); font-size:0.85rem;">v${escapeHtml(b.version_name || '')} (Build ${b.version_code || '-'})</strong>
-                <div style="display:flex; gap:0.25rem; flex-wrap:wrap; justify-content:flex-end;">
-                  ${originBadge}
-                  ${variantBadge}
-                  ${sigBadge}
-                </div>
-              </div>
-              <div class="local-build-path" title="${escapeHtml(b.file_path || '')}">${escapeHtml(b.file_path || b.file_name)}</div>
-              <div class="local-build-meta">
-                <span>${escapeHtml(sizeFormatted)}</span>
-                <span>•</span>
-                <span>${escapeHtml(modDate)}</span>
-                <span>•</span>
-                <code style="font-size:0.7rem;">${escapeHtml(shortSha)}</code>
-              </div>
-              ${dupHtml}
-            `;
+function resetAllModalExpandableTextareas(ids = EXPANDABLE_TEXTAREA_IDS, options = {}) {
+  ids.forEach((id) => resetExpandableTextarea(id, options));
+}
 
-            const importBtn = document.createElement('button');
-            importBtn.type = 'button';
-            importBtn.className = 'btn btn-outline btn-sm btn-import-local-build';
-            importBtn.style.marginTop = '0.4rem';
-            importBtn.style.width = '100%';
-            importBtn.dataset.sourcePath = b.file_path || '';
-            importBtn.dataset.buildIndex = String(idx);
-            importBtn.innerHTML = `
-              <svg class="btn-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-              Seleccionar e Importar
-            `;
-            card.appendChild(importBtn);
-            gridEl.appendChild(card);
-          });
-        }
+function normalizePathForCompare(rawPath) {
+  return String(rawPath || '').trim().replace(/\\/g, '/').toLowerCase();
+}
+
+function resetDropZoneDefaultState() {
+  const dropZone = document.getElementById('apkDropZone');
+  const fileInput = document.getElementById('apkFileInput');
+  const iconEl = document.getElementById('apkDropZoneIcon');
+  const titleEl = document.getElementById('apkDropZoneTitle');
+  const subEl = document.getElementById('apkDropZoneSubtitle');
+  const progressContainer = document.getElementById('apkUploadProgress');
+  const progressBar = document.getElementById('apkProgressBar');
+  const progressText = document.getElementById('apkUploadStatusText');
+
+  if (fileInput) fileInput.value = '';
+  if (dropZone) {
+    dropZone.classList.remove('dragover', 'has-manual-apk');
+  }
+  if (iconEl) {
+    iconEl.innerHTML = '<svg width="38" height="38" style="width:38px; height:38px; color:var(--primary);" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>';
+  }
+  if (titleEl) {
+    titleEl.textContent = 'Arrastra tu archivo .APK aquí o haz clic para seleccionarlo';
+  }
+  if (subEl) {
+    subEl.textContent = 'Compatible con APK Universal (~110 MB) y APK Ligero ARM64 (~30 MB)';
+  }
+  if (progressContainer) progressContainer.style.display = 'none';
+  if (progressBar) progressBar.style.width = '0%';
+  if (progressText) progressText.textContent = 'Procesando archivo e inspeccionando metadatos...';
+}
+
+function setDropZoneManualLoadedState(fileName, sizeLabel) {
+  const dropZone = document.getElementById('apkDropZone');
+  const iconEl = document.getElementById('apkDropZoneIcon');
+  const titleEl = document.getElementById('apkDropZoneTitle');
+  const subEl = document.getElementById('apkDropZoneSubtitle');
+
+  if (dropZone) {
+    dropZone.classList.remove('dragover');
+    dropZone.classList.add('has-manual-apk');
+  }
+  if (iconEl) {
+    iconEl.innerHTML = '<svg width="38" height="38" style="width:38px; height:38px; color:#0ea5e9;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><polyline points="9 12 11 14 15 10"/></svg>';
+  }
+  if (titleEl) {
+    titleEl.textContent = `Archivo manual listo: ${fileName || 'archivo.apk'}`;
+  }
+  if (subEl) {
+    const cleanSize = sizeLabel && sizeLabel !== '-' ? `${sizeLabel} · ` : '';
+    subEl.textContent = `${cleanSize}Verificado e inspeccionado — Haz clic o arrastra otro .APK para reemplazarlo`;
+  }
+}
+
+/**
+ * Renderiza la tarjeta unívoca de APK Activo Listo para Publicar (#activeCreateApkCard)
+ */
+function renderActiveCreateApkCard(data, sourceKind = 'manual', sourceMeta = {}) {
+  const card = document.getElementById('activeCreateApkCard');
+  if (!card || !data) return;
+
+  activeCreateApkSource = sourceKind === 'autodetect' ? 'autodetect' : 'manual';
+  const isManual = activeCreateApkSource === 'manual';
+
+  const originBadge = isManual
+    ? '<span class="badge badge-source-manual"><svg class="btn-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg> Subido manualmente desde PC</span>'
+    : `<span class="badge badge-source-autodetect"><svg class="btn-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/><polyline points="9 13 11 15 15 11"/></svg> Seleccionado desde Autodetección</span>`;
+
+  const variant = (data.abi_variant || 'UNIVERSAL').toUpperCase();
+  const variantBadge = variant === 'ARM64'
+    ? '<span class="badge badge-arm64">ARM64 LIGERO</span>'
+    : '<span class="badge badge-universal">UNIVERSAL</span>';
+  const sigBadge = renderSignatureStatusBadge(
+    data.signature_status,
+    data.signature_verified,
+    'Oficial RSA-4096'
+  );
+  const sizeFormatted = formatApkSizeMb(data.size_mb);
+  const sha = data.sha256 ? String(data.sha256) : '';
+  const shortSha = sha ? `${sha.substring(0, 14)}...` : '-';
+  const sourceDetail = sourceMeta.sourceLabel
+    ? ` · Origen: ${escapeHtml(sourceMeta.sourceLabel)}`
+    : '';
+
+  card.className = `active-apk-card ${isManual ? 'source-manual' : 'source-autodetect'} visible`;
+  card.style.display = 'flex';
+  card.innerHTML = `
+    <div class="active-apk-card-top">
+      <div class="active-apk-card-badges">
+        ${originBadge}
+        ${variantBadge}
+        ${sigBadge}
+      </div>
+      <button type="button" class="btn btn-outline btn-xs" id="btnClearSelectedCreateApk" title="Quitar APK seleccionado sin cerrar el modal">
+        <svg class="btn-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        Cambiar / Quitar APK
+      </button>
+    </div>
+    <div class="active-apk-card-details">
+      <div>
+        <strong style="color:var(--text-primary);">${escapeHtml(data.file_name || 'app-release.apk')}</strong>
+        <span> · v${escapeHtml(data.version_name || '-')} (Build ${escapeHtml(String(data.version_code || '-'))})${sourceDetail}</span>
+      </div>
+      <div style="display:flex; align-items:center; gap:0.5rem; flex-wrap:wrap;">
+        <span><strong>${escapeHtml(sizeFormatted)}</strong></span>
+        <span>·</span>
+        <code style="font-family:var(--font-mono); font-size:0.74rem;" title="${escapeHtml(sha)}">SHA-256: ${escapeHtml(shortSha)}</code>
+      </div>
+    </div>
+  `;
+}
+
+/**
+ * Limpia únicamente el APK activo seleccionado sin cerrar #modalCreateRelease ni borrar notas escritas
+ */
+function clearSelectedCreateApk() {
+  lastInspectedCreateData = null;
+  activeCreateApkSource = null;
+  selectedLocalBuildPath = null;
+  selectedLocalBuildIndex = -1;
+  pendingManualFileMeta = null;
+
+  resetDropZoneDefaultState();
+
+  const card = document.getElementById('activeCreateApkCard');
+  if (card) {
+    card.style.display = 'none';
+    card.className = 'active-apk-card';
+    card.innerHTML = '';
+  }
+
+  const banner = document.getElementById('apkSignatureBanner');
+  if (banner) {
+    banner.style.display = 'none';
+    banner.className = 'apk-signature-banner';
+    banner.innerHTML = '';
+  }
+
+  const clearIds = [
+    'relUploadedPath',
+    'relSignatureVerified',
+    'relSignatureStatus',
+    'relSignerSha256',
+    'relSignerDn',
+    'relSizeMb',
+    'relSha256',
+  ];
+  clearIds.forEach((id) => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+
+  const abiInput = document.getElementById('relAbiVariant');
+  if (abiInput) abiInput.value = 'UNIVERSAL';
+  const badge = document.getElementById('badgeRelVariantDisplay');
+  if (badge) {
+    badge.className = 'badge badge-universal';
+    badge.textContent = 'UNIVERSAL';
+  }
+
+  syncLocalBuildsSelectionUi(null);
+}
+
+/**
+ * Restablece de forma 100% determinista el estado visual, DOM y variables de #modalCreateRelease
+ */
+function resetCreateReleaseModalState() {
+  lastInspectedCreateData = null;
+  availableLocalBuilds = [];
+  activeCreateApkSource = null;
+  selectedLocalBuildPath = null;
+  selectedLocalBuildIndex = -1;
+  pendingManualFileMeta = null;
+  localBuildsFilterState = { abi: 'ALL', query: '', limit: 6 };
+  clearTimeout(localBuildsFilterTimer);
+
+  resetDropZoneDefaultState();
+
+  const activeCard = document.getElementById('activeCreateApkCard');
+  if (activeCard) {
+    activeCard.style.display = 'none';
+    activeCard.className = 'active-apk-card';
+    activeCard.innerHTML = '';
+  }
+
+  const banner = document.getElementById('apkSignatureBanner');
+  if (banner) {
+    banner.style.display = 'none';
+    banner.className = 'apk-signature-banner';
+    banner.innerHTML = '';
+  }
+
+  const grid = document.getElementById('localBuildsGrid');
+  if (grid) {
+    grid.style.display = 'none';
+    grid.innerHTML = '';
+  }
+
+  const toolbar = document.getElementById('localBuildsToolbar');
+  if (toolbar) toolbar.style.display = 'none';
+  document.querySelectorAll('#localBuildsAbiChips .local-abi-chip').forEach((chip) => {
+    chip.classList.toggle('active', chip.dataset.abi === 'ALL');
+  });
+  const filterInp = document.getElementById('inputLocalBuildsFilter');
+  if (filterInp) filterInp.value = '';
+  const limitSel = document.getElementById('selectLocalBuildsLimit');
+  if (limitSel) limitSel.value = '6';
+
+  const searchDirsPanel = document.getElementById('createSearchDirsPanel');
+  if (searchDirsPanel) searchDirsPanel.style.display = 'none';
+  document.getElementById('btnToggleSearchDirsPanel')?.classList.remove('active');
+  const newDirInp = document.getElementById('inputNewApkSearchDir');
+  if (newDirInp) newDirInp.value = '';
+
+  const statusEl = document.getElementById('detectApkStatus');
+  if (statusEl) {
+    statusEl.textContent = 'Escanea tus rutas configuradas (Biblioteca Oficial, compilaciones locales o carpetas personalizadas) con fecha, SHA-256 y firma real.';
+  }
+
+  const form = document.getElementById('formCreateRelease');
+  form?.reset();
+
+  const defaults = {
+    relUploadedPath: '',
+    relAbiVariant: 'UNIVERSAL',
+    relSignatureVerified: '',
+    relSignatureStatus: '',
+    relSignerSha256: '',
+    relSignerDn: '',
+    relVersionName: '',
+    relVersionCode: '',
+    relMinRequiredVersion: '9.0.0',
+    relDbSchema: '36',
+    relType: 'FEATURE_RELEASE',
+    relSizeMb: '',
+    relSha256: '',
+    relDownloadUrl: '',
+    relChangelog: '',
+    relInternalNotes: '',
+  };
+  Object.entries(defaults).forEach(([id, val]) => {
+    const el = document.getElementById(id);
+    if (el) el.value = val;
+  });
+
+  if (typeof resetExpandableTextarea === 'function') {
+    resetExpandableTextarea('relChangelog');
+    resetExpandableTextarea('relInternalNotes');
+  }
+
+  const badge = document.getElementById('badgeRelVariantDisplay');
+  if (badge) {
+    badge.className = 'badge badge-universal';
+    badge.textContent = 'UNIVERSAL';
+  }
+  updateReleaseTypeInfo('relType', 'relTypeInfoText');
+}
+
+function syncLocalBuildsSelectionUi(selectedPath) {
+  const gridEl = document.getElementById('localBuildsGrid');
+  if (!gridEl) return;
+  const targetNorm = normalizePathForCompare(selectedPath);
+  const hasSelection = Boolean(targetNorm);
+
+  gridEl.querySelectorAll('.local-build-card').forEach((card) => {
+    const cardPathNorm = normalizePathForCompare(card.dataset.sourcePath);
+    const isMatch = hasSelection && cardPathNorm && cardPathNorm === targetNorm;
+    const pillEl = card.querySelector('.local-build-selected-pill');
+    const btn = card.querySelector('.btn-import-local-build');
+
+    card.classList.toggle('is-selected', isMatch);
+    card.classList.toggle('is-dimmed', hasSelection && !isMatch);
+    if (pillEl) pillEl.style.display = isMatch ? 'inline-flex' : 'none';
+
+    if (btn) {
+      btn.disabled = false;
+      btn.classList.remove('is-loading');
+      if (isMatch) {
+        btn.className = 'btn btn-sm btn-import-local-build btn-selected-apk';
+        btn.innerHTML = `
+          <svg class="btn-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+          Seleccionado (Activo)
+        `;
       } else {
-        availableLocalBuilds = [];
-        if (statusEl) {
-          statusEl.textContent = 'No se encontraron archivos APK en la biblioteca oficial ni en build/app/outputs/flutter-apk/.';
-        }
-        if (gridEl) gridEl.style.display = 'none';
-        showToast('No se encontraron compilaciones APK locales.', 'info');
+        btn.className = 'btn btn-outline btn-sm btn-import-local-build';
+        btn.innerHTML = `
+          <svg class="btn-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Seleccionar e Importar
+        `;
       }
-    } catch (e) {
-      if (statusEl) statusEl.textContent = 'Error: ' + e.message;
-      showToast('Error: ' + e.message, 'error');
     }
   });
+}
+
+function renderLocalBuildsGrid(builds) {
+  const gridEl = document.getElementById('localBuildsGrid');
+  if (!gridEl) return;
+  gridEl.style.display = 'grid';
+  gridEl.innerHTML = '';
+
+  builds.forEach((b, idx) => {
+    const card = document.createElement('div');
+    card.className = 'local-build-card';
+    card.dataset.sourcePath = b.file_path || '';
+
+    const srcLower = (b.source_label || '').toLowerCase();
+    const originBadge = srcLower.includes('biblioteca')
+      ? '<span class="badge badge-origin-lib">Biblioteca Oficial</span>'
+      : (srcLower.includes('compilación') || srcLower.includes('build')
+          ? '<span class="badge badge-origin-local">Build Local</span>'
+          : `<span class="badge badge-origin-local">${escapeHtml(b.source_label || 'Carpeta Local')}</span>`);
+
+    const variantBadge = b.abi_variant === 'ARM64'
+      ? '<span class="badge badge-arm64">ARM64 Ligero</span>'
+      : '<span class="badge badge-universal">Universal</span>';
+
+    const sigBadge = renderSignatureStatusBadge(b.signature_status, b.signature_verified, 'Oficial RSA-4096');
+    const modDate = b.modified_at ? b.modified_at.substring(0, 16).replace('T', ' ') : '-';
+    const shortSha = b.sha256 ? `${b.sha256.substring(0, 10)}...` : '-';
+    const sizeFormatted = formatApkSizeMb(b.size_mb);
+    const dupPaths = Array.isArray(b.duplicate_paths) ? b.duplicate_paths : [];
+    const dupHtml = dupPaths.length > 0
+      ? `<div class="local-build-dup" title="${escapeHtml(dupPaths.join('\n'))}">Deduplicado por SHA-256 (${dupPaths.length} copia idéntica omitida)</div>`
+      : '';
+
+    card.innerHTML = `
+      <div class="local-build-header">
+        <div style="display:flex; align-items:center; gap:0.35rem; flex-wrap:wrap;">
+          <strong style="color:var(--text-primary); font-size:0.85rem;">v${escapeHtml(b.version_name || '')} (Build ${b.version_code || '-'})</strong>
+          <span class="local-build-selected-pill" style="display:none;"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> Seleccionado</span>
+        </div>
+        <div style="display:flex; gap:0.25rem; flex-wrap:wrap; justify-content:flex-end;">
+          ${originBadge}
+          ${variantBadge}
+          ${sigBadge}
+        </div>
+      </div>
+      <div class="local-build-path" title="${escapeHtml(b.file_path || '')}">${escapeHtml(b.file_path || b.file_name)}</div>
+      <div class="local-build-meta">
+        <span>${escapeHtml(sizeFormatted)}</span>
+        <span>•</span>
+        <span>${escapeHtml(modDate)}</span>
+        <span>•</span>
+        <code style="font-size:0.7rem;">${escapeHtml(shortSha)}</code>
+      </div>
+      ${dupHtml}
+    `;
+
+    const importBtn = document.createElement('button');
+    importBtn.type = 'button';
+    importBtn.className = 'btn btn-outline btn-sm btn-import-local-build';
+    importBtn.style.marginTop = '0.4rem';
+    importBtn.style.width = '100%';
+    importBtn.dataset.sourcePath = b.file_path || '';
+    importBtn.dataset.buildIndex = String(idx);
+    importBtn.innerHTML = `
+      <svg class="btn-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      Seleccionar e Importar
+    `;
+    card.appendChild(importBtn);
+    gridEl.appendChild(card);
+  });
+
+  syncLocalBuildsSelectionUi(
+    activeCreateApkSource === 'autodetect' ? selectedLocalBuildPath : null
+  );
+}
+
+async function fetchAndRenderLocalBuilds(options = {}) {
+  const silentToast = options.silentToast === true;
+  const statusEl = document.getElementById('detectApkStatus');
+  const gridEl = document.getElementById('localBuildsGrid');
+  const toolbarEl = document.getElementById('localBuildsToolbar');
+
+  if (statusEl) statusEl.textContent = 'Escaneando rutas configuradas (Biblioteca Oficial, compilaciones y carpetas activas)...';
+
+  try {
+    const params = new URLSearchParams({
+      limit: String(localBuildsFilterState.limit || 6),
+      abi: localBuildsFilterState.abi || 'ALL',
+      q: localBuildsFilterState.query || '',
+    });
+    const res = await fetch(`/api/releases/detect-local-build?${params.toString()}`);
+    if (!res.ok) throw new Error('Error al autodetectar build');
+    const data = await res.json();
+
+    if (Array.isArray(data.per_dir_stats)) {
+      createApkSearchDirs = data.per_dir_stats;
+      const panel = document.getElementById('createSearchDirsPanel');
+      if (panel && panel.style.display !== 'none') {
+        renderCreateSearchDirsList(createApkSearchDirs);
+      }
+    }
+
+    if (toolbarEl) toolbarEl.style.display = 'flex';
+
+    if (data.apk_found && Array.isArray(data.available_builds) && data.available_builds.length > 0) {
+      availableLocalBuilds = data.available_builds;
+      const totalUnique = data.total_unique_found ?? data.available_builds.length;
+      const totalAll = data.total_all_unique ?? totalUnique;
+      if (statusEl) {
+        statusEl.textContent = `Mostrando ${data.available_builds.length} de ${totalUnique} APK(s) únicos (${totalAll} totales en rutas activas). Selecciona uno para importar:`;
+      }
+      renderLocalBuildsGrid(data.available_builds);
+    } else {
+      availableLocalBuilds = [];
+      const hasFilters = (localBuildsFilterState.abi && localBuildsFilterState.abi !== 'ALL') ||
+        Boolean((localBuildsFilterState.query || '').trim());
+      if (statusEl) {
+        statusEl.textContent = hasFilters
+          ? 'Ningún APK coincide con el filtro actual. Prueba cambiar a "Todos" o limpiar la búsqueda.'
+          : 'No se encontraron archivos APK en las rutas de búsqueda configuradas.';
+      }
+      if (gridEl) {
+        gridEl.style.display = 'none';
+        gridEl.innerHTML = '';
+      }
+      if (!silentToast) {
+        showToast('No se encontraron compilaciones APK con los criterios actuales.', 'info');
+      }
+    }
+  } catch (e) {
+    if (statusEl) statusEl.textContent = 'Error: ' + e.message;
+    if (!silentToast) showToast('Error: ' + e.message, 'error');
+  }
+}
+
+function getSearchDirsPanelConfig(context = 'create') {
+  if (context === 'edit') {
+    return {
+      context: 'edit',
+      listId: 'editSearchDirsList',
+      inputId: 'inputEditNewApkSearchDir',
+      browseBtnId: 'btnEditBrowseApkSearchDir',
+      panelId: 'editSearchDirsPanel',
+    };
+  }
+  return {
+    context: 'create',
+    listId: 'createSearchDirsList',
+    inputId: 'inputNewApkSearchDir',
+    browseBtnId: 'btnBrowseApkSearchDir',
+    panelId: 'createSearchDirsPanel',
+  };
+}
+
+function renderSearchDirsListInto(listId, dirs) {
+  const listEl = document.getElementById(listId);
+  if (!listEl) return;
+  listEl.innerHTML = '';
+
+  if (!Array.isArray(dirs) || dirs.length === 0) {
+    listEl.innerHTML = '<div style="font-size:0.76rem; color:var(--text-muted);">No hay rutas configuradas.</div>';
+    return;
+  }
+
+  dirs.forEach((d, idx) => {
+    const item = document.createElement('div');
+    item.className = `search-dir-item${d.enabled === false ? ' disabled' : ''}`;
+    const existsBadge = d.exists
+      ? '<span class="badge badge-dir-exists">Existe en disco</span>'
+      : '<span class="badge badge-dir-missing">No encontrada</span>';
+    const countLabel = `${d.apk_count ?? 0} APK(s)`;
+    const removeBtnHtml = d.is_default
+      ? ''
+      : `<button type="button" class="btn btn-outline btn-xs btn-remove-search-dir" data-dir-index="${idx}" title="Eliminar ruta personalizada" style="color:var(--danger); border-color:var(--danger);">
+          <svg class="btn-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+        </button>`;
+
+    item.innerHTML = `
+      <label class="search-dir-info" style="cursor:pointer;">
+        <input type="checkbox" class="chk-toggle-search-dir" data-dir-index="${idx}" ${d.enabled !== false ? 'checked' : ''} style="margin-top:3px;">
+        <div>
+          <div style="font-size:0.78rem; font-weight:600; color:var(--text-primary);">${escapeHtml(d.label || 'Carpeta')}</div>
+          <div class="search-dir-path">${escapeHtml(d.path || '')}</div>
+        </div>
+      </label>
+      <div class="search-dir-actions">
+        ${existsBadge}
+        <span class="release-adoption-pill">${escapeHtml(countLabel)}</span>
+        ${removeBtnHtml}
+      </div>
+    `;
+    listEl.appendChild(item);
+  });
+}
+
+function renderAllSearchDirsLists(dirs) {
+  renderSearchDirsListInto('createSearchDirsList', dirs);
+  renderSearchDirsListInto('editSearchDirsList', dirs);
+}
+
+function renderCreateSearchDirsList(dirs) {
+  renderSearchDirsListInto('createSearchDirsList', dirs);
+}
+
+function renderEditSearchDirsList(dirs) {
+  renderSearchDirsListInto('editSearchDirsList', dirs);
+}
+
+async function rescanOpenSearchDirsPickers(context = 'create') {
+  if (context === 'create' || document.getElementById('modalCreateRelease')?.classList.contains('open')) {
+    await fetchAndRenderLocalBuilds({ silentToast: true });
+  }
+  const editModalOpen = document.getElementById('modalEditRelease')?.classList.contains('open');
+  if (context === 'edit' || editModalOpen) {
+    const editVer = document.getElementById('editRelVersionName')?.value || '';
+    for (const vk of ['universal', 'arm64']) {
+      const picker = document.getElementById(`editVariantLocalPicker_${vk}`);
+      if (picker && picker.style.display !== 'none' && typeof loadEditVariantLocalBuilds === 'function') {
+        await loadEditVariantLocalBuilds(vk, editVer);
+      }
+    }
+  }
+}
+
+async function loadSearchDirsForContext(context = 'create') {
+  try {
+    const res = await fetch('/api/releases/search-dirs');
+    if (!res.ok) throw new Error('No se pudieron cargar las rutas de búsqueda');
+    const data = await res.json();
+    createApkSearchDirs = Array.isArray(data.search_dirs) ? data.search_dirs : [];
+    renderAllSearchDirsLists(createApkSearchDirs);
+  } catch (e) {
+    showToast('Error cargando rutas: ' + e.message, 'error');
+  }
+}
+
+async function loadCreateSearchDirs() {
+  return loadSearchDirsForContext('create');
+}
+
+async function saveSearchDirsForContext(nextDirs, context = 'create') {
+  try {
+    const payloadDirs = nextDirs.map((d) => ({
+      path: d.path,
+      label: d.label,
+      enabled: d.enabled !== false,
+      is_default: d.is_default === true,
+      kind: d.kind || 'custom',
+    }));
+    const res = await fetch('/api/releases/search-dirs', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ search_dirs: payloadDirs }),
+    });
+    const data = await res.json();
+    if (!res.ok || !data.ok) {
+      throw new Error(data.error || 'No se pudieron guardar las rutas');
+    }
+    createApkSearchDirs = Array.isArray(data.search_dirs) ? data.search_dirs : [];
+    editModalLocalBuildsCache = [];
+    if (typeof editModalLocalBuildsByVariant !== 'undefined') {
+      editModalLocalBuildsByVariant.universal = [];
+      editModalLocalBuildsByVariant.arm64 = [];
+    }
+    renderAllSearchDirsLists(createApkSearchDirs);
+    showToast('Rutas de búsqueda actualizadas. Re-escaneando APKs...', 'success');
+    await rescanOpenSearchDirsPickers(context);
+  } catch (e) {
+    showToast(e.message, 'error');
+    await loadSearchDirsForContext(context);
+  }
+}
+
+async function saveCreateSearchDirs(nextDirs) {
+  return saveSearchDirsForContext(nextDirs, 'create');
+}
+
+async function browseAndFillSearchDirInput(context = 'create') {
+  const cfg = getSearchDirsPanelConfig(context);
+  const inputEl = document.getElementById(cfg.inputId);
+  const btn = document.getElementById(cfg.browseBtnId);
+  if (btn) btn.disabled = true;
+  try {
+    const res = await fetch('/api/releases/browse-search-dir', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ initial_path: inputEl?.value?.trim() || '' }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      throw new Error(data.error || 'Carpeta rechazada o error al examinar');
+    }
+    if (data.supported === false) {
+      showToast(data.error || 'Selector nativo no disponible en este sistema; escribe la ruta manualmente.', 'info');
+      inputEl?.focus();
+      return;
+    }
+    if (data.cancelled) {
+      showToast('Selección de carpeta cancelada.', 'info');
+      return;
+    }
+    if (data.path && inputEl) {
+      inputEl.value = data.path;
+      inputEl.focus();
+      showToast('Carpeta seleccionada. Pulsa "Agregar ruta" para guardarla.', 'success');
+    }
+  } catch (e) {
+    showToast('Error al examinar carpeta: ' + e.message, 'error');
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+async function browseAndFillNewSearchDir() {
+  return browseAndFillSearchDirInput('create');
+}
+
+async function addSearchDirForContext(context = 'create') {
+  const cfg = getSearchDirsPanelConfig(context);
+  const inputEl = document.getElementById(cfg.inputId);
+  const rawPath = inputEl?.value?.trim() || '';
+  if (!rawPath) {
+    showToast('Ingresa o examina una ruta de carpeta válida.', 'warning');
+    inputEl?.focus();
+    return;
+  }
+  if (createApkSearchDirs.length === 0) {
+    await loadSearchDirsForContext(context);
+  }
+  const norm = normalizePathForCompare(rawPath);
+  if (createApkSearchDirs.some((d) => normalizePathForCompare(d.path) === norm || normalizePathForCompare(d.canonical_path) === norm)) {
+    showToast('Esa ruta ya está registrada en la lista.', 'info');
+    return;
+  }
+  const segs = rawPath.replace(/\\/g, '/').split('/').filter(Boolean);
+  const folderName = segs.length > 0 ? segs[segs.length - 1] : 'Carpeta Personalizada';
+  const next = [
+    ...createApkSearchDirs,
+    {
+      path: rawPath,
+      label: `Carpeta: ${folderName}`,
+      enabled: true,
+      is_default: false,
+      kind: 'custom',
+    },
+  ];
+  await saveSearchDirsForContext(next, context);
+  if (inputEl) inputEl.value = '';
+}
+
+async function addCreateSearchDir() {
+  return addSearchDirForContext('create');
+}
+
+async function resetSearchDirsForContext(context = 'create') {
+  try {
+    const res = await fetch('/api/releases/search-dirs/reset', { method: 'POST' });
+    const data = await res.json();
+    if (!res.ok || !data.ok) {
+      throw new Error(data.error || 'No se pudieron restablecer las rutas');
+    }
+    createApkSearchDirs = Array.isArray(data.search_dirs) ? data.search_dirs : [];
+    editModalLocalBuildsCache = [];
+    if (typeof editModalLocalBuildsByVariant !== 'undefined') {
+      editModalLocalBuildsByVariant.universal = [];
+      editModalLocalBuildsByVariant.arm64 = [];
+    }
+    renderAllSearchDirsLists(createApkSearchDirs);
+    showToast('Rutas de búsqueda restablecidas a los valores por defecto.', 'success');
+    await rescanOpenSearchDirsPickers(context);
+  } catch (e) {
+    showToast('Error al restablecer rutas: ' + e.message, 'error');
+  }
+}
+
+async function resetCreateSearchDirs() {
+  return resetSearchDirsForContext('create');
 }
 
 /**
  * Importa atómicamente un build local en disco sin subirlo por la red
  */
-async function importLocalApkDirectly(sourcePath) {
+async function importLocalApkDirectly(sourcePath, buildIndex = -1, triggerBtn = null) {
+  const gridEl = document.getElementById('localBuildsGrid');
+  const btn = triggerBtn || (gridEl && Array.from(gridEl.querySelectorAll('.btn-import-local-build')).find(
+    (el) => normalizePathForCompare(el.dataset.sourcePath) === normalizePathForCompare(sourcePath)
+  ));
+
+  if (btn) {
+    btn.disabled = true;
+    btn.classList.add('is-loading');
+    btn.innerHTML = `
+      <svg class="btn-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+      Importando e inspeccionando...
+    `;
+  }
+
   try {
     const res = await fetch('/api/releases/import-local-apk', {
       method: 'POST',
@@ -8494,9 +9562,24 @@ async function importLocalApkDirectly(sourcePath) {
       throw new Error(err.error || 'Error al importar APK local');
     }
     const data = await res.json();
-    populateCreateReleaseFormFromInspection(data);
+
+    // Limpiar estado manual del dropzone para garantizar origen único
+    resetDropZoneDefaultState();
+    pendingManualFileMeta = null;
+    selectedLocalBuildPath = sourcePath;
+    selectedLocalBuildIndex = buildIndex;
+
+    const matchedBuild = availableLocalBuilds[buildIndex] || availableLocalBuilds.find(
+      (b) => normalizePathForCompare(b.file_path) === normalizePathForCompare(sourcePath)
+    );
+    populateCreateReleaseFormFromInspection(data, 'autodetect', {
+      sourceLabel: matchedBuild?.source_label || '',
+    });
+    syncLocalBuildsSelectionUi(sourcePath);
+
     showToast(`APK importado exitosamente: ${data.file_name} (${formatApkSizeMb(data.size_mb)}).`, 'success');
   } catch (e) {
+    syncLocalBuildsSelectionUi(activeCreateApkSource === 'autodetect' ? selectedLocalBuildPath : null);
     showToast('Error: ' + e.message, 'error');
   }
 }
@@ -8504,7 +9587,7 @@ async function importLocalApkDirectly(sourcePath) {
 /**
  * Rellena el formulario de nuevo release a partir de la inspección real
  */
-function populateCreateReleaseFormFromInspection(data) {
+function populateCreateReleaseFormFromInspection(data, sourceKind = 'manual', sourceMeta = {}) {
   lastInspectedCreateData = data;
   document.getElementById('relUploadedPath').value = data.imported_path || data.file_path || '';
   document.getElementById('relVersionName').value = data.version_name || '';
@@ -8544,7 +9627,13 @@ function populateCreateReleaseFormFromInspection(data) {
     internalNotesInput.value = data.suggested_internal_notes;
   }
 
-  // Escudo Anti-debug.apk Banner
+  if (typeof updateTextareaMetaCounter === 'function') {
+    updateTextareaMetaCounter('relChangelog');
+    updateTextareaMetaCounter('relInternalNotes');
+  }
+
+  // Tarjeta unívoca de APK Activo + Escudo Anti-debug.apk
+  renderActiveCreateApkCard(data, sourceKind, sourceMeta);
   renderSignatureShieldBanner(data);
 }
 
@@ -8644,9 +9733,20 @@ async function handleApkUpload(file) {
     const data = await res.json();
 
     if (progressBar) progressBar.style.width = '100%';
-    if (progressText) progressText.textContent = `${data.file_name} verificado e inspeccionado (${data.size_mb}).`;
+    if (progressText) progressText.textContent = `${data.file_name} verificado e inspeccionado (${formatApkSizeMb(data.size_mb)}).`;
 
-    populateCreateReleaseFormFromInspection(data);
+    selectedLocalBuildPath = null;
+    selectedLocalBuildIndex = -1;
+    pendingManualFileMeta = {
+      fileName: data.file_name || file.name,
+      sizeMb: formatApkSizeMb(data.size_mb),
+    };
+    setDropZoneManualLoadedState(
+      pendingManualFileMeta.fileName,
+      pendingManualFileMeta.sizeMb
+    );
+    syncLocalBuildsSelectionUi(null);
+    populateCreateReleaseFormFromInspection(data, 'manual');
 
     showToast(`APK ${data.file_name} subido y analizado con éxito.`, 'success');
   } catch (e) {
@@ -9994,28 +11094,7 @@ function initModalEvents() {
 
   // Modal Crear Release
   document.getElementById('btnOpenCreateRelease')?.addEventListener('click', () => {
-    lastInspectedCreateData = null;
-    document.getElementById('formCreateRelease')?.reset();
-    const banner = document.getElementById('apkSignatureBanner');
-    if (banner) {
-      banner.style.display = 'none';
-      banner.innerHTML = '';
-    }
-    const grid = document.getElementById('localBuildsGrid');
-    if (grid) {
-      grid.style.display = 'none';
-      grid.innerHTML = '';
-    }
-    const statusEl = document.getElementById('detectApkStatus');
-    if (statusEl) {
-      statusEl.textContent = 'Escanea la biblioteca oficial y compilaciones de app_movil/build con fecha, SHA-256 y firma real.';
-    }
-    const badge = document.getElementById('badgeRelVariantDisplay');
-    if (badge) {
-      badge.className = 'badge badge-universal';
-      badge.textContent = 'UNIVERSAL';
-    }
-    updateReleaseTypeInfo('relType', 'relTypeInfoText');
+    resetCreateReleaseModalState();
     openModal('modalCreateRelease');
   });
 
@@ -10080,7 +11159,7 @@ function initModalEvents() {
 
       if (!res.ok) throw new Error('Error al publicar versión');
       closeModal('modalCreateRelease');
-      document.getElementById('formCreateRelease').reset();
+      resetCreateReleaseModalState();
       showToast(`Versión v${versionName} registrada y publicada.`, 'success');
       await loadReleases();
       await loadReleaseMatrix();
@@ -10116,11 +11195,19 @@ function initModalEvents() {
         }),
       });
 
-      if (!res.ok) throw new Error('Error al actualizar versión');
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || 'Error al actualizar versión');
+      }
+      const updatedRel = await res.json().catch(() => null);
       closeModal('modalEditRelease');
       showToast(`Versión v${versionName} actualizada.`, 'success');
-      await loadReleases();
-      await loadReleaseMatrix();
+      if (updatedRel && typeof syncReleaseAcrossUiAndComposer === 'function') {
+        await syncReleaseAcrossUiAndComposer(versionName, updatedRel);
+      } else {
+        await loadReleases();
+        await loadReleaseMatrix();
+      }
     } catch (e) {
       showToast('Error: ' + e.message, 'error');
     }
@@ -10128,15 +11215,19 @@ function initModalEvents() {
 
   // Inputs ocultos para subida de variantes en modal de edición
   document.getElementById('editRelUniversalInput')?.addEventListener('change', (e) => {
-    if (e.target.files && e.target.files[0]) {
-      handleVariantFileSelected(e.target.files[0], 'universal', currentUploadVariantVersion);
+    const file = e.target.files?.[0];
+    if (file) {
+      handleVariantFileSelected(file, 'universal', currentUploadVariantVersion);
     }
+    e.target.value = '';
   });
 
   document.getElementById('editRelArm64Input')?.addEventListener('change', (e) => {
-    if (e.target.files && e.target.files[0]) {
-      handleVariantFileSelected(e.target.files[0], 'arm64', currentUploadVariantVersion);
+    const file = e.target.files?.[0];
+    if (file) {
+      handleVariantFileSelected(file, 'arm64', currentUploadVariantVersion);
     }
+    e.target.value = '';
   });
 
   // Modal Registrar Pago Manual (Abrir y Guardar)
@@ -10821,6 +11912,19 @@ function openModalFromDrawer(modalId) {
 
 function closeModal(id) {
   document.getElementById(id)?.classList.remove('open');
+  if (id === 'modalCreateRelease' && typeof resetCreateReleaseModalState === 'function') {
+    resetCreateReleaseModalState();
+  }
+  if (id === 'modalEditRelease') {
+    if (typeof resetExpandableTextarea === 'function') {
+      resetExpandableTextarea('editRelChangelog');
+      resetExpandableTextarea('editRelInternalNotes');
+    }
+    const editDirsPanel = document.getElementById('editSearchDirsPanel');
+    if (editDirsPanel) editDirsPanel.style.display = 'none';
+    const newEditDirInp = document.getElementById('inputEditNewApkSearchDir');
+    if (newEditDirInp) newEditDirInp.value = '';
+  }
   const remainingModals = document.querySelectorAll('.modal-overlay.open');
   if (remainingModals.length === 0 && drawerReturnState) {
     const returnInfo = drawerReturnState;
@@ -11193,6 +12297,7 @@ async function saveOwnerConfig() {
     const tableDensity = document.getElementById('cfgTableDensity')?.value || 'comfortable';
 
     const system = {
+      ...(ownerConfig?.system || {}),
       default_mode: defaultEnv,
       theme: defaultTheme,
       table_density: tableDensity,
