@@ -60,7 +60,24 @@ function normalizePeruPhone(raw) {
 }
 
 /**
+ * Calcula longitud UTF-8 en bytes de forma segura en navegador y Node.js
+ */
+function getUtf8ByteLength(text) {
+  const str = String(text ?? '');
+  if (typeof TextEncoder !== 'undefined') {
+    return new TextEncoder().encode(str).length;
+  }
+  try {
+    return unescape(encodeURIComponent(str)).length;
+  } catch (_) {
+    return str.length;
+  }
+}
+
+/**
  * Renderiza de forma segura un código QR vectorial sin fallos por QRCode.CorrectLevel
+ * Selecciona automáticamente CorrectLevel.L para payloads densos (> 900 B, p. ej. MLC1)
+ * y aplica fallback controlado sin dejar errores silenciosos.
  */
 function renderSafeQrCode(container, text, size = 196, colorDark = '#0f172a', colorLight = '#ffffff') {
   const containerEl = (typeof container === 'string') ? document.getElementById(container) : container;
@@ -68,31 +85,41 @@ function renderSafeQrCode(container, text, size = 196, colorDark = '#0f172a', co
   containerEl.innerHTML = '';
   if (typeof QRCode === 'undefined') return null;
 
-  let level = 0;
-  if (typeof QRCode.CorrectLevel !== 'undefined' && QRCode.CorrectLevel.M !== undefined) {
-    level = QRCode.CorrectLevel.M;
-  }
+  const payloadStr = String(text ?? '');
+  const byteLen = getUtf8ByteLength(payloadStr);
+  const hasLevels = typeof QRCode.CorrectLevel !== 'undefined';
+  const levelL = hasLevels && QRCode.CorrectLevel.L !== undefined ? QRCode.CorrectLevel.L : 1;
+  const levelM = hasLevels && QRCode.CorrectLevel.M !== undefined ? QRCode.CorrectLevel.M : 0;
+  const preferredLevel = byteLen > 900 ? levelL : levelM;
 
   try {
     return new QRCode(containerEl, {
-      text: text,
+      text: payloadStr,
       width: size,
       height: size,
       colorDark: colorDark,
       colorLight: colorLight,
-      correctLevel: level,
+      correctLevel: preferredLevel,
     });
   } catch (e) {
     try {
       return new QRCode(containerEl, {
-        text: text,
+        text: payloadStr,
         width: size,
         height: size,
         colorDark: colorDark,
         colorLight: colorLight,
+        correctLevel: levelL,
       });
     } catch (e2) {
-      console.error('renderSafeQrCode fallback error:', e2);
+      console.error('renderSafeQrCode capacity/fallback error:', e2);
+      if (typeof document !== 'undefined' && typeof document.createElement === 'function') {
+        const warnEl = document.createElement('div');
+        warnEl.className = 'qr-capacity-warning';
+        warnEl.style.cssText = 'padding:0.75rem; font-size:0.78rem; color:#b91c1c; text-align:center; font-weight:600;';
+        warnEl.textContent = `No se pudo generar el QR (${byteLen} B excede el máximo físico QR V40-L de 2,953 B).`;
+        containerEl.appendChild(warnEl);
+      }
       return null;
     }
   }
@@ -13743,7 +13770,9 @@ function populateSettingsForm(cfg) {
     tbody.innerHTML = '';
     const catalog = cfg.catalog;
     for (const [slug, item] of Object.entries(catalog)) {
-      const updatesVal = item.updates_window_months ?? item.updates_months ?? 0;
+      const hasDefault12Updates = slug === 'PERPETUO_LIBERADO' || slug === 'PASE_ACTUALIZACION_ANUAL';
+      const rawUpd = Number(item.updates_window_months ?? item.updates_months ?? 0);
+      const updatesVal = (hasDefault12Updates && (!Number.isFinite(rawUpd) || rawUpd <= 0)) ? 12 : rawUpd;
       const tr = document.createElement('tr');
       tr.innerHTML = `
         <td><strong style="font-family:var(--font-mono);">${slug}</strong></td>
@@ -14148,6 +14177,18 @@ function renderConfigTemplate(templateKey, context = {}) {
 // =================== 8B. EMISOR DECLARATIVO MLC1- Y EXPORTADOR DART (PLAN 23 FASE 3) ===================
 
 let lastGeneratedMlc1Data = null;
+let currentMlc1DartFilename = 'owner_commercial_defaults.dart';
+
+function _syncMlc1DartTargetMetadata(data) {
+  if (!data || typeof data !== 'object') return;
+  if (typeof data.download_filename === 'string' && data.download_filename.trim()) {
+    currentMlc1DartFilename = data.download_filename.trim();
+  }
+  const targetPathEl = document.getElementById('mlc1DartTargetPath');
+  if (targetPathEl && typeof data.target_file_path === 'string' && data.target_file_path.trim()) {
+    targetPathEl.textContent = data.target_file_path.trim();
+  }
+}
 
 function initCommercialSyncModalEvents() {
   document.getElementById('btnOpenCommercialSyncModal')?.addEventListener('click', () => {
@@ -14203,13 +14244,21 @@ function initCommercialSyncModalEvents() {
     shareMlc1TokenViaWhatsApp();
   });
 
+  document.getElementById('btnAuditMlc1InInspector')?.addEventListener('click', () => {
+    auditMlc1TokenInInspector();
+  });
+
   document.getElementById('btnCopyMlc1Dart')?.addEventListener('click', () => {
     const code = document.getElementById('mlc1DartSnippetOutput')?.value || '';
     if (!code.trim()) {
-      showToast('No hay constantes Dart cargadas todavía.', 'warning');
+      showToast('No hay archivo Dart cargado todavía.', 'warning');
       return;
     }
-    copyPlainTextToClipboard(code, 'Bloque de constantes Dart copiado al portapapeles.');
+    copyPlainTextToClipboard(code, 'Archivo Dart completo copiado al portapapeles.');
+  });
+
+  document.getElementById('btnDownloadMlc1Dart')?.addEventListener('click', () => {
+    downloadMlc1DartDefaultsFile();
   });
 }
 
@@ -14262,8 +14311,21 @@ function renderMlc1CommercialSummary(summary) {
 
   if (tbody && Array.isArray(summary.plans)) {
     tbody.innerHTML = summary.plans.map(p => {
-      const daysTxt = p.days >= 99999 ? 'Vitalicia' : `${p.days || 0} d`;
-      const updTxt = (p.updates_months || 0) > 0 ? `${p.updates_months} m` : '-';
+      let daysTxt;
+      if ((p.days || 0) >= 99999) {
+        daysTxt = 'Vitalicia';
+      } else if (p.id === 'bolsa_extra_ia') {
+        daysTxt = 'Recarga';
+      } else if (p.id === 'pase_anual_updates') {
+        daysTxt = 'Pase anual';
+      } else if (p.id === 'migracion') {
+        daysTxt = 'Único';
+      } else if ((p.days || 0) > 0) {
+        daysTxt = `${p.days} días`;
+      } else {
+        daysTxt = 'Único';
+      }
+      const updTxt = (p.updates_months || 0) > 0 ? `${p.updates_months} meses` : '-';
       return `
         <tr>
           <td><strong>${escapeHtml(p.label || p.id)}</strong> <code style="font-size:0.72rem; color:var(--text-muted);">${escapeHtml(p.id)}</code></td>
@@ -14275,6 +14337,41 @@ function renderMlc1CommercialSummary(summary) {
       `;
     }).join('');
   }
+}
+
+function updateMlc1QrAndInspectorUiState(qrInst, hasToken) {
+  const auditBtn = document.getElementById('btnAuditMlc1InInspector');
+  if (auditBtn) {
+    auditBtn.disabled = !hasToken;
+  }
+
+  const metaBadge = document.getElementById('mlc1QrMetaBadge');
+  if (!metaBadge) return;
+
+  metaBadge.classList.remove('is-ready', 'is-error');
+  if (!hasToken) {
+    metaBadge.textContent = 'QR pendiente de emisión';
+    return;
+  }
+
+  const qrContainer = document.getElementById('mlc1QrContainer');
+  const hasCapacityError = Boolean(
+    qrInst === null ||
+    (qrContainer && typeof qrContainer.querySelector === 'function' && qrContainer.querySelector('.qr-capacity-warning'))
+  );
+  if (hasCapacityError) {
+    metaBadge.classList.add('is-error');
+    metaBadge.textContent = 'QR excede capacidad física (2,953 B) — usa texto MLC1';
+    return;
+  }
+
+  const lvlMap = { 1: 'L', 0: 'M', 3: 'Q', 2: 'H' };
+  const verPart = qrInst && qrInst._lastVersion ? ` · V${qrInst._lastVersion}` : '';
+  const lvlPart = (qrInst && qrInst._lastCorrectLevel !== undefined)
+    ? ` · Nivel ${lvlMap[qrInst._lastCorrectLevel] || 'L'}`
+    : ' · Nivel L';
+  metaBadge.classList.add('is-ready');
+  metaBadge.textContent = `QR 512 px${verPart}${lvlPart} · Listo para escanear`;
 }
 
 async function loadAndOpenCommercialSyncModal() {
@@ -14298,13 +14395,16 @@ async function loadAndOpenCommercialSyncModal() {
 
     const dartOut = document.getElementById('mlc1DartSnippetOutput');
     if (dartOut) dartOut.value = data.dart_snippet || '';
+    _syncMlc1DartTargetMetadata(data);
 
     if (data.summary) renderMlc1CommercialSummary(data.summary);
 
-    const hasSameToken = lastGeneratedMlc1Data &&
+    const hasSameToken = Boolean(
+      lastGeneratedMlc1Data &&
       lastGeneratedMlc1Data.revision === data.revision &&
       data.revision > 0 &&
-      lastGeneratedMlc1Data.token;
+      lastGeneratedMlc1Data.token
+    );
     const resultContainer = document.getElementById('mlc1TokenResultContainer');
     const emptyHint = document.getElementById('mlc1EmptyResultHint');
     if (resultContainer && emptyHint) {
@@ -14315,9 +14415,24 @@ async function loadAndOpenCommercialSyncModal() {
       const issuedBadge = document.getElementById('mlc1IssuedAtLimaBadge');
       const sizeBadge = document.getElementById('mlc1PayloadSizeBadge');
       const tokOut = document.getElementById('mlc1TokenOutput');
+      const qrContainer = document.getElementById('mlc1QrContainer');
       if (issuedBadge) issuedBadge.textContent = 'Pendiente de emitir nueva ficha';
       if (sizeBadge) sizeBadge.textContent = '0 B / 8192 B';
       if (tokOut) tokOut.value = '';
+      if (qrContainer) qrContainer.innerHTML = '';
+      updateMlc1QrAndInspectorUiState(undefined, false);
+    } else {
+      const tokOut = document.getElementById('mlc1TokenOutput');
+      if (tokOut) tokOut.value = lastGeneratedMlc1Data.token;
+      const qrContainer = document.getElementById('mlc1QrContainer');
+      let qrInst;
+      if (qrContainer && typeof renderSafeQrCode === 'function') {
+        const hasCanvas = typeof qrContainer.querySelector === 'function' && Boolean(qrContainer.querySelector('canvas'));
+        if (!hasCanvas) {
+          qrInst = renderSafeQrCode(qrContainer, lastGeneratedMlc1Data.token, 512, '#0f172a', '#ffffff');
+        }
+      }
+      updateMlc1QrAndInspectorUiState(qrInst, true);
     }
   } catch (err) {
     showToast('Error al cargar datos MLC1: ' + err.message, 'error');
@@ -14368,6 +14483,7 @@ async function generateMlc1SyncToken() {
 
     const dartOut = document.getElementById('mlc1DartSnippetOutput');
     if (dartOut && data.dart_snippet) dartOut.value = data.dart_snippet;
+    _syncMlc1DartTargetMetadata(data);
 
     if (data.summary) renderMlc1CommercialSummary(data.summary);
 
@@ -14377,9 +14493,11 @@ async function generateMlc1SyncToken() {
     if (emptyHint) emptyHint.style.display = 'none';
 
     const qrContainer = document.getElementById('mlc1QrContainer');
+    let qrInst;
     if (qrContainer && typeof renderSafeQrCode === 'function') {
-      renderSafeQrCode(qrContainer, data.token, 512, '#0f172a', '#ffffff');
+      qrInst = renderSafeQrCode(qrContainer, data.token, 512, '#0f172a', '#ffffff');
     }
+    updateMlc1QrAndInspectorUiState(qrInst, Boolean(data.token));
 
     showToast(`Ficha comercial MLC1 (Revisión #${data.revision}) emitida y verificada con Ed25519.`, 'success');
     return data;
@@ -14389,6 +14507,40 @@ async function generateMlc1SyncToken() {
   } finally {
     if (btn) btn.disabled = false;
   }
+}
+
+async function auditMlc1TokenInInspector() {
+  const tok = document.getElementById('mlc1TokenOutput')?.value?.trim() || '';
+  if (!tok) {
+    showToast('Genera primero una ficha MLC1 antes de auditarla en Inspector.', 'warning');
+    return false;
+  }
+
+  if (typeof closeModal === 'function') {
+    closeModal('modalCommercialConfigSync');
+  }
+
+  document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+
+  document.querySelector('[data-tab="tabInspector"]')?.classList.add('active');
+  document.getElementById('tabInspector')?.classList.add('active');
+
+  const viewNameEl = document.getElementById('currentViewName');
+  if (viewNameEl) {
+    viewNameEl.textContent = 'Inspector Forense (ML9 / MLS1 / MLC1)';
+  }
+
+  const inspectInput = document.getElementById('inspectTokenInput');
+  if (inspectInput) {
+    inspectInput.value = tok;
+    if (typeof inspectToken === 'function') {
+      await inspectToken();
+    }
+    showToast('Ficha MLC1 transferida al Inspector Forense.', 'info');
+    return true;
+  }
+  return false;
 }
 
 function shareMlc1TokenViaWhatsApp() {
@@ -14416,6 +14568,43 @@ function shareMlc1TokenViaWhatsApp() {
 
   copyPlainTextToClipboard(msg, 'Mensaje MLC1 copiado al portapapeles; abriendo WhatsApp...');
   window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(msg)}`, '_blank');
+}
+
+function downloadMlc1DartDefaultsFile() {
+  const code = document.getElementById('mlc1DartSnippetOutput')?.value || '';
+  if (!code.trim()) {
+    showToast('No hay archivo Dart cargado todavía.', 'warning');
+    return false;
+  }
+  const fileName = currentMlc1DartFilename || 'owner_commercial_defaults.dart';
+  const cleanContent = code.replace(/^\uFEFF/, '');
+  try {
+    const blob = new Blob([cleanContent], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = fileName;
+    if (link.style) link.style.display = 'none';
+    document.body?.appendChild?.(link);
+    if (typeof link.click === 'function') {
+      link.click();
+    }
+    if (typeof link.remove === 'function') {
+      link.remove();
+    } else {
+      document.body?.removeChild?.(link);
+    }
+    setTimeout(() => {
+      try {
+        URL.revokeObjectURL(url);
+      } catch (_) {}
+    }, 1500);
+    showToast(`Archivo ${fileName} descargado (UTF-8 sin BOM).`, 'success');
+    return true;
+  } catch (err) {
+    showToast('No se pudo descargar el archivo .dart: ' + err.message, 'error');
+    return false;
+  }
 }
 
 function copyMlc1QrToClipboard() {

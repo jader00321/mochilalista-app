@@ -254,12 +254,13 @@ class CommercialConfigSyncService {
               slug == 'PASE_ACTUALIZACION_ANUAL')
           ? 12
           : 0;
-      final um = _parseNonNegativeInt(
+      final parsedUm = _parseNonNegativeInt(
         rawEntry['updates_window_months'] ?? rawEntry['updates_months'],
         '$slug.updates_window_months',
         max: 1200,
         fallback: defaultUm,
       );
+      final um = (defaultUm > 0 && parsedUm <= 0) ? defaultUm : parsedUm;
       final lb = _sanitizeString(rawEntry['label'] ?? slug, maxLength: 80);
       final ds = _sanitizeString(rawEntry['description'] ?? '', maxLength: 180);
 
@@ -904,9 +905,9 @@ class CommercialConfigSyncService {
         .replaceAll('\n', r'\n');
   }
 
-  /// Genera código Dart limpio listo para copiar en `OwnerLegalIdentity` y defaults móviles
-  /// cuando se compile una nueva versión APK.
-  String generateOwnerLegalIdentityDartSnippet(
+  /// Genera el archivo Dart completo `owner_commercial_defaults.dart` listo para
+  /// copiar (Ctrl+A -> Ctrl+V) o descargar y compilar en nuevas versiones APK.
+  String generateOwnerCommercialDefaultsDartFile(
     Map<String, dynamic> config, {
     int? revision,
   }) {
@@ -972,10 +973,20 @@ class CommercialConfigSyncService {
 
     final buf = StringBuffer()
       ..writeln(
-          '// Generado desde MochilaLista Admin (owner_config.json • Revisión MLC1 #$effectiveRev)')
+          '// Archivo autogenerado desde MochilaLista Admin (owner_config.json • Revisión MLC1 #$effectiveRev)')
       ..writeln(
-          '// Pegar en: app_movil/lib/core/config/owner_legal_identity.dart')
-      ..writeln("  static const int commercialSyncDefaultRevision = $effectiveRev;")
+          '// Ruta destino: app_movil/lib/core/config/owner_commercial_defaults.dart')
+      ..writeln(
+          '// Instrucciones: Ctrl+A -> Ctrl+V o reemplaza este archivo completo antes de compilar.')
+      ..writeln('')
+      ..writeln(
+          '/// Parámetros comerciales compilados por defecto para MochilaLista POS Móvil.')
+      ..writeln('///')
+      ..writeln(
+          '/// Archivo 100 % declarativo y puro (sin dependencias de Flutter UI ni SQLite).')
+      ..writeln('class OwnerCommercialDefaults {')
+      ..writeln(
+          '  static const int commercialSyncDefaultRevision = $effectiveRev;')
       ..writeln("  static const String authorFullName = '$author';")
       ..writeln("  static const String appCommercialName = '$commercialName';")
       ..writeln(
@@ -1013,10 +1024,19 @@ class CommercialConfigSyncService {
         ..writeln("      'ds': '$descEsc',")
         ..writeln('    },');
     }
-    buf.writeln('  };');
+    buf
+      ..writeln('  };')
+      ..writeln('}');
 
     // Referencia explícita a pm para evitar advertencias en futuros refactors
     assert(pm.isEmpty || pm.isNotEmpty);
     return buf.toString();
   }
+
+  /// Alias retrocompatible hacia [generateOwnerCommercialDefaultsDartFile].
+  String generateOwnerLegalIdentityDartSnippet(
+    Map<String, dynamic> config, {
+    int? revision,
+  }) =>
+      generateOwnerCommercialDefaultsDartFile(config, revision: revision);
 }

@@ -3084,7 +3084,7 @@ Future<void> _handleApiRoute(
         return;
       }
 
-      final dartSnippet = syncService.generateOwnerLegalIdentityDartSnippet(
+      final dartSnippet = syncService.generateOwnerCommercialDefaultsDartFile(
         configService.config,
         revision: nextRev,
       );
@@ -3101,6 +3101,9 @@ Future<void> _handleApiRoute(
         'payload': issued['payload'],
         'summary': issued['summary'],
         'dart_snippet': dartSnippet,
+        'target_file_path':
+            'app_movil/lib/core/config/owner_commercial_defaults.dart',
+        'download_filename': 'owner_commercial_defaults.dart',
         'config': configService.config,
       }));
     } on CommercialConfigSyncException catch (e) {
@@ -3124,7 +3127,7 @@ Future<void> _handleApiRoute(
     final syncService = commercialSyncService ?? CommercialConfigSyncService();
     try {
       final currentRev = configService.commercialSyncRevision;
-      final dartSnippet = syncService.generateOwnerLegalIdentityDartSnippet(
+      final dartSnippet = syncService.generateOwnerCommercialDefaultsDartFile(
         configService.config,
         revision: currentRev,
       );
@@ -3136,6 +3139,9 @@ Future<void> _handleApiRoute(
         'ok': true,
         'revision': currentRev,
         'dart_snippet': dartSnippet,
+        'target_file_path':
+            'app_movil/lib/core/config/owner_commercial_defaults.dart',
+        'download_filename': 'owner_commercial_defaults.dart',
         'summary': summary,
       }));
     } on CommercialConfigSyncException catch (e) {

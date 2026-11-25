@@ -1129,7 +1129,18 @@ class ConfigService {
                   (defEntry['updates_months'] as num?)?.toInt() ??
                   0;
         }
-        final safeUpdates = (resolvedUpdates ?? 0) < 0 ? 0 : (resolvedUpdates ?? 0);
+        final defUpdates = defEntry != null
+            ? ((defEntry['updates_window_months'] as num?)?.toInt() ??
+                (defEntry['updates_months'] as num?)?.toInt() ??
+                0)
+            : 0;
+        var safeUpdates =
+            (resolvedUpdates ?? 0) < 0 ? 0 : (resolvedUpdates ?? 0);
+        // Saneamiento de raíz (Plan 24 Fase 1): en productos con ventana oficial > 0
+        // (PERPETUO_LIBERADO y PASE_ACTUALIZACION_ANUAL), un valor legado <= 0 se sana a 12 meses.
+        if (defUpdates > 0 && safeUpdates <= 0) {
+          safeUpdates = defUpdates;
+        }
         vMap['updates_window_months'] = safeUpdates;
         vMap['updates_months'] = safeUpdates;
 

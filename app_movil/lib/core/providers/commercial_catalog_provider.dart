@@ -1,6 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:app_movil/core/config/owner_legal_identity.dart';
+import 'package:app_movil/core/config/owner_commercial_defaults.dart';
 import 'package:app_movil/core/services/license/commercial_config_sync_service.dart';
 
 /// Especificación declarativa tipada de un producto comercial o tarifa técnica.
@@ -65,107 +65,56 @@ class EffectiveCommercialConfig {
     required this.plansById,
   });
 
-  static const Map<String, CommercialSyncProductSpec> defaultPlansMap = {
-    'mensual': CommercialSyncProductSpec(
-      id: 'mensual',
-      price: 35.0,
-      days: 30,
-      aiCredits: 50,
-      updatesMonths: 0,
-      label: 'Mensual',
-      description: 'Ideal para probar el sistema mes a mes',
-    ),
-    'trimestral': CommercialSyncProductSpec(
-      id: 'trimestral',
-      price: 90.0,
-      days: 90,
-      aiCredits: 180,
-      updatesMonths: 0,
-      label: 'Trimestral',
-      description: 'Ahorro de S/ 15 vs mensual (S/ 30/mes)',
-    ),
-    'semestral': CommercialSyncProductSpec(
-      id: 'semestral',
-      price: 160.0,
-      days: 180,
-      aiCredits: 450,
-      updatesMonths: 0,
-      label: 'Semestral',
-      description: 'Ahorro de S/ 50 (S/ 26.60/mes)',
-    ),
-    'anual': CommercialSyncProductSpec(
-      id: 'anual',
-      price: 280.0,
-      days: 365,
-      aiCredits: 1200,
-      updatesMonths: 0,
-      label: 'Anual',
-      description: 'Mayor ahorro comercial (S/ 23.30/mes)',
-    ),
-    'perpetua': CommercialSyncProductSpec(
-      id: 'perpetua',
-      price: 850.0,
-      days: 99999,
-      aiCredits: 200,
-      updatesMonths: 12,
-      label: 'Perpetua',
-      description: 'Pago único de por vida + 12 meses de updates',
-    ),
-    'bolsa_extra_ia': CommercialSyncProductSpec(
-      id: 'bolsa_extra_ia',
-      price: 20.0,
-      days: 0,
-      aiCredits: 150,
-      updatesMonths: 0,
-      label: 'Bolsa Extra IA',
-      description: '+150 escaneos acumulativos sin vencimiento para cualquier plan',
-    ),
-    'pase_anual_updates': CommercialSyncProductSpec(
-      id: 'pase_anual_updates',
-      price: 150.0,
-      days: 0,
-      aiCredits: 100,
-      updatesMonths: 12,
-      label: 'Pase Anual de Updates',
-      description: '12 meses extra de nuevas funciones para Licencias Perpetuas',
-    ),
-    'migracion': CommercialSyncProductSpec(
-      id: 'migracion',
-      price: 40.0,
-      days: 0,
-      aiCredits: 0,
-      updatesMonths: 0,
-      label: 'Tarifa Técnica de Migración',
-      description: 'Reasignación criptográfica oficial por cambio de equipo',
-    ),
-  };
+  static CommercialSyncProductSpec _buildSpecFromDefaults(String id) {
+    final m = OwnerCommercialDefaults.defaultCommercialPlans[id]!;
+    return CommercialSyncProductSpec(
+      id: id,
+      price: (m['pr'] as num).toDouble(),
+      days: (m['d'] as num).toInt(),
+      aiCredits: (m['ai'] as num).toInt(),
+      updatesMonths: (m['um'] as num).toInt(),
+      label: m['lb'] as String,
+      description: m['ds'] as String,
+    );
+  }
+
+  static final Map<String, CommercialSyncProductSpec> defaultPlansMap =
+      Map<String, CommercialSyncProductSpec>.unmodifiable({
+    for (final id in OwnerCommercialDefaults.defaultCommercialPlans.keys)
+      id: _buildSpecFromDefaults(id),
+  });
 
   static String deriveWhatsAppUrl(String phone) {
     final cleanDigits = phone.replaceAll(RegExp(r'[^0-9]'), '');
     if (cleanDigits.length >= 8) {
       return 'https://wa.me/$cleanDigits';
     }
-    return OwnerLegalIdentity.supportWhatsAppUrl;
+    return OwnerCommercialDefaults.supportWhatsAppUrl;
   }
 
   /// Retorna la configuración compilada de fábrica sin overrides externos.
   factory EffectiveCommercialConfig.defaults() {
+    // Mantiene compatibilidad estricta con el formato visual previo cuando yapePlinPhone conserva el valor base.
+    final defaultYapePhone =
+        OwnerCommercialDefaults.yapePlinPhone == '922836879'
+            ? OwnerCommercialDefaults.supportPhone
+            : OwnerCommercialDefaults.yapePlinPhone;
     return EffectiveCommercialConfig(
       hasSyncedOverride: false,
-      revision: 0,
+      revision: OwnerCommercialDefaults.commercialSyncDefaultRevision,
       issuedAtUnix: null,
       issuedAtLimaLabel: null,
       appliedAtLimaLabel: null,
-      supportPhone: OwnerLegalIdentity.supportPhone,
-      supportWhatsAppUrl: OwnerLegalIdentity.supportWhatsAppUrl,
-      yapeHolder: OwnerLegalIdentity.yapePlinHolder,
-      yapePhone: OwnerLegalIdentity.supportPhone,
-      bcpHolder: '',
-      bcpAccount: OwnerLegalIdentity.bcpAccountNumber,
-      bcpCci: OwnerLegalIdentity.bcpCciNumber,
-      bbvaHolder: '',
-      bbvaAccount: OwnerLegalIdentity.bbvaAccountNumber,
-      bbvaCci: OwnerLegalIdentity.bbvaCciNumber,
+      supportPhone: OwnerCommercialDefaults.supportPhone,
+      supportWhatsAppUrl: OwnerCommercialDefaults.supportWhatsAppUrl,
+      yapeHolder: OwnerCommercialDefaults.yapePlinHolder,
+      yapePhone: defaultYapePhone,
+      bcpHolder: OwnerCommercialDefaults.bcpAccountHolder,
+      bcpAccount: OwnerCommercialDefaults.bcpAccountNumber,
+      bcpCci: OwnerCommercialDefaults.bcpCciNumber,
+      bbvaHolder: OwnerCommercialDefaults.bbvaAccountHolder,
+      bbvaAccount: OwnerCommercialDefaults.bbvaAccountNumber,
+      bbvaCci: OwnerCommercialDefaults.bbvaCciNumber,
       plansById: defaultPlansMap,
     );
   }
@@ -190,12 +139,12 @@ class EffectiveCommercialConfig {
     final supRaw = (payload['sup']?.toString() ?? '').trim();
     final supportPhone = supRaw.isNotEmpty
         ? supRaw
-        : OwnerLegalIdentity.supportPhone;
+        : OwnerCommercialDefaults.supportPhone;
 
     final yhRaw = (payload['yh']?.toString() ?? '').trim();
     final yapeHolder = yhRaw.isNotEmpty
         ? yhRaw
-        : OwnerLegalIdentity.yapePlinHolder;
+        : OwnerCommercialDefaults.yapePlinHolder;
 
     final ypRaw = (payload['yp']?.toString() ?? '').trim();
     final yapePhone = ypRaw.isNotEmpty ? ypRaw : supportPhone;

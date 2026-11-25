@@ -63,11 +63,16 @@ void main() {
         contains(r'C:\Users\vjuli\Documents\v-app-offline apks\'),
       );
 
-      // 3 comandos copiables exactos
+      // 4 comandos copiables exactos (incluyendo --init-notes de Plan 24)
       expect(releaseTabHtml, contains('data-cmd="compilar_release_dual.bat"'));
       expect(
         releaseTabHtml,
         contains('data-cmd="compilar_release_dual.bat --verify-only --no-pause"'),
+      );
+      expect(
+        releaseTabHtml,
+        contains(
+            'data-cmd="compilar_release_dual.bat --verify-only --init-notes --no-pause"'),
       );
       expect(
         releaseTabHtml,
@@ -77,7 +82,7 @@ void main() {
         RegExp(r'class="[^"]*btn-copy-dual-cmd[^"]*"')
             .allMatches(releaseTabHtml)
             .length,
-        equals(3),
+        equals(4),
       );
 
       // Flujo guiado en 4 pasos
@@ -224,7 +229,8 @@ toggleBtn.setAttribute('aria-expanded', 'false');
 const copyButtons = [
   new MockButton('cmd1', 'compilar_release_dual.bat'),
   new MockButton('cmd2', 'compilar_release_dual.bat --verify-only --no-pause'),
-  new MockButton('cmd3', 'compilar_release_dual.bat --dry-run --no-pause'),
+  new MockButton('cmd3', 'compilar_release_dual.bat --verify-only --init-notes --no-pause'),
+  new MockButton('cmd4', 'compilar_release_dual.bat --dry-run --no-pause'),
 ];
 
 const clipboardWrites = [];
@@ -278,7 +284,7 @@ initDualBuildGuide();
   assert.strictEqual(toggleBtn.getAttribute('aria-expanded'), 'false');
   assert.strictEqual(toggleBtn.classList.contains('active'), false);
 
-  // 2. Copia de los 3 comandos oficiales
+  // 2. Copia de los 4 comandos oficiales
   for (const btn of copyButtons) {
     btn.click();
     await new Promise(r => setImmediate(r));
@@ -288,9 +294,10 @@ initDualBuildGuide();
   assert.deepStrictEqual(clipboardWrites, [
     'compilar_release_dual.bat',
     'compilar_release_dual.bat --verify-only --no-pause',
+    'compilar_release_dual.bat --verify-only --init-notes --no-pause',
     'compilar_release_dual.bat --dry-run --no-pause',
   ]);
-  assert.strictEqual(toasts.length, 3);
+  assert.strictEqual(toasts.length, 4);
   assert.ok(toasts.every(t => t.type === 'success'));
 
   // 3. Fallback sin navigator.clipboard

@@ -741,7 +741,7 @@
           </div>
 
           <div class="dual-build-commands-box">
-            <div class="dual-build-section-title">3 comandos listos para copiar y ejecutar en la raíz de MochilaLista</div>
+            <div class="dual-build-section-title">4 comandos listos para copiar y ejecutar en la raíz de MochilaLista</div>
             <div class="dual-build-cmd-list">
               <div class="dual-build-cmd-row">
                 <div class="dual-build-cmd-meta">
@@ -765,6 +765,16 @@
               </div>
               <div class="dual-build-cmd-row">
                 <div class="dual-build-cmd-meta">
+                  <code class="dual-build-cmd-code">compilar_release_dual.bat --verify-only --init-notes --no-pause</code>
+                  <span class="dual-build-cmd-desc">Auditar APKs y generar borradores de notas (solo si faltan, sin sobrescribir archivos existentes).</span>
+                </div>
+                <button type="button" class="btn btn-outline btn-xs btn-copy-dual-cmd" data-cmd="compilar_release_dual.bat --verify-only --init-notes --no-pause" title="Copiar comando --verify-only --init-notes">
+                  <svg class="btn-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                  <span data-copy-label>Copiar</span>
+                </button>
+              </div>
+              <div class="dual-build-cmd-row">
+                <div class="dual-build-cmd-meta">
                   <code class="dual-build-cmd-code">compilar_release_dual.bat --dry-run --no-pause</code>
                   <span class="dual-build-cmd-desc">Validar entorno, <code>pubspec.yaml</code>, keystore, SDK Android y rutas destino antes de compilar.</span>
                 </div>
@@ -779,7 +789,7 @@
           <div class="dual-build-steps-box">
             <div class="dual-build-section-title">Flujo guiado en 4 pasos para publicar una nueva versión</div>
             <ol class="dual-build-steps-list">
-              <li>Actualiza la versión en <code>app_movil/pubspec.yaml</code> y redacta sus notas compañeras <code>*_atp.txt</code> y <code>*_cambios.txt</code>.</li>
+              <li>Actualiza la versión en <code>app_movil/pubspec.yaml</code> y redacta sus notas compañeras <code>*_atp.txt</code> y <code>*_cambios.txt</code> (o usa <code>--init-notes</code> para prellenar borradores sin sobrescribir notas existentes).</li>
               <li>Ejecuta <code>compilar_release_dual.bat</code> desde la raíz del proyecto hasta ver la certificación dual en verde.</li>
               <li>Pulsa <strong>Subir / Registrar Nueva Versión del APK</strong>, selecciona el APK <strong>Universal</strong> en <em>Biblioteca Oficial</em> y publica el lanzamiento.</li>
               <li>Abre <strong>Editar Versión</strong> sobre la versión recién creada y vincula la variante <strong>ARM64 Ligero</strong> en su tarjeta correspondiente.</li>
@@ -4653,12 +4663,12 @@
     </div>
   </div>
 
-  <!-- MODAL: SINCRONIZACIÓN COMERCIAL SEGURA MLC1 HACIA APP MÓVIL (PLAN 23 FASE 3) -->
+  <!-- MODAL: SINCRONIZACIÓN COMERCIAL SEGURA MLC1 HACIA APP MÓVIL (PLAN 23 FASE 3 + PLAN 24 FASE 2) -->
   <div class="modal-overlay" id="modalCommercialConfigSync">
-    <div class="modal-dialog" style="max-width: 900px;">
+    <div class="modal-dialog" style="max-width: 940px;">
       <div class="modal-header">
         <div style="display:flex; align-items:center; gap:0.55rem;">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:20px; height:20px; color:var(--primary);"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><polyline points="9 12 11 14 15 10"/></svg>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:20px; height:20px; color:var(--primary); flex-shrink:0;"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><polyline points="9 12 11 14 15 10"/></svg>
           <h3 style="margin:0;">Sincronización Comercial Segura hacia App Móvil (MLC1)</h3>
         </div>
         <button type="button" class="btn btn-outline btn-sm" id="btnCloseCommercialSyncModal" title="Cerrar">
@@ -4675,16 +4685,16 @@
 
         <div class="mlc1-tabs-bar">
           <button type="button" class="mlc1-tab-btn active" data-mlc1-tab="mlc1PaneToken">
-            <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
-            <span>Vía 1: Ficha Firmada MLC1 (Actualización Offline Instantánea)</span>
+            <svg class="btn-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+            <span>Vía 1: Ficha Firmada MLC1 (Offline)</span>
           </button>
           <button type="button" class="mlc1-tab-btn" data-mlc1-tab="mlc1PaneDart">
-            <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
-            <span>Vía 2: Constantes Dart (Futuras Compilaciones APK)</span>
+            <svg class="btn-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+            <span>Vía 2: Archivo Dart Completo (Futuros APKs)</span>
           </button>
         </div>
 
-        <!-- PANE VÍA 1: EMISIÓN MLC1 + QR + WHATSAPP -->
+        <!-- PANE VÍA 1: EMISIÓN MLC1 + QR + WHATSAPP + INSPECTOR -->
         <div class="mlc1-tab-pane active" id="mlc1PaneToken">
           <div class="mlc1-control-strip">
             <div class="mlc1-meta-pills">
@@ -4693,7 +4703,7 @@
               <span class="badge badge-outline" id="mlc1PayloadSizeBadge">0 B / 8192 B</span>
             </div>
             <button type="button" class="btn btn-primary" id="btnGenerateMlc1Token">
-              <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>
+              <svg class="btn-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>
               <span>Generar Ficha Firmada MLC1</span>
             </button>
           </div>
@@ -4702,13 +4712,13 @@
             <div class="mlc1-summary-accounts" id="mlc1AccountsSummary">
               Cargando resumen comercial guardado en disco...
             </div>
-            <div class="table-responsive" style="max-height: 185px; overflow-y:auto;">
+            <div class="table-responsive mlc1-summary-table-wrap">
               <table class="data-table table-compact mlc1-plans-mini-table">
                 <thead>
                   <tr>
-                    <th>Plan / Producto</th>
-                    <th style="text-align:right;">Tarifa</th>
-                    <th style="text-align:right;">Días</th>
+                    <th>Producto</th>
+                    <th style="text-align:right;">Precio</th>
+                    <th style="text-align:right;">Vigencia</th>
                     <th style="text-align:right;">Bolsa IA</th>
                     <th style="text-align:right;">Updates</th>
                   </tr>
@@ -4727,15 +4737,19 @@
           <div class="mlc1-result-grid" id="mlc1TokenResultContainer" style="display:none;">
             <div class="mlc1-token-col">
               <label for="mlc1TokenOutput" style="font-weight:700; font-size:0.85rem;">Código Criptográfico Declarativo <code>MLC1-...</code>:</label>
-              <textarea id="mlc1TokenOutput" readonly rows="5" class="mlc1-code-textarea" placeholder="MLC1-..."></textarea>
+              <textarea id="mlc1TokenOutput" readonly rows="6" class="mlc1-code-textarea" placeholder="MLC1-..."></textarea>
               <div class="mlc1-action-row">
                 <button type="button" class="btn btn-outline btn-sm" id="btnCopyMlc1Token">
-                  <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                  <svg class="btn-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
                   <span>Copiar Código MLC1</span>
                 </button>
                 <button type="button" class="btn btn-wa btn-sm" id="btnSendMlc1Whatsapp">
-                  <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+                  <svg class="btn-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
                   <span>Enviar / Compartir por WhatsApp</span>
+                </button>
+                <button type="button" class="btn btn-outline btn-sm" id="btnAuditMlc1InInspector" disabled>
+                  <svg class="btn-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                  <span>Auditar esta ficha en Inspector</span>
                 </button>
               </div>
             </div>
@@ -4744,33 +4758,58 @@
               <div class="mlc1-qr-white-box">
                 <div id="mlc1QrContainer"></div>
               </div>
-              <span style="font-size:0.75rem; color:var(--text-secondary); text-align:center;">
-                Escaneable offline desde Perfil &gt; Licencia en la app móvil
+              <div class="badge badge-outline mlc1-qr-meta-badge" id="mlc1QrMetaBadge">QR pendiente de emisión</div>
+              <span class="mlc1-qr-caption">
+                Escaneable offline desde Perfil &gt; Licencia y Activación
               </span>
               <div class="mlc1-action-row" style="justify-content:center;">
                 <button type="button" class="btn btn-outline btn-xs" id="btnDownloadMlc1Qr">
-                  <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                  <svg class="btn-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
                   <span>Descargar QR PNG</span>
                 </button>
                 <button type="button" class="btn btn-outline btn-xs" id="btnCopyMlc1Qr">
-                  <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                  <svg class="btn-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
                   <span>Copiar QR</span>
                 </button>
               </div>
             </div>
           </div>
+
+          <div class="mlc1-client-steps-box">
+            <div class="mlc1-client-steps-title">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0; color:var(--primary);"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>
+              <strong>Cómo aplica esta ficha el cliente en su celular</strong>
+            </div>
+            <ol class="mlc1-client-steps-list">
+              <li>Abre <strong>MochilaLista</strong> en su celular y entra a <strong>Perfil &gt; Licencia y Activación</strong>.</li>
+              <li>Escanea el <strong>Código QR</strong> (o pega el mensaje/código <code>MLC1-...</code> recibido por WhatsApp).</li>
+              <li>Revisa el resumen de nuevas tarifas/cuentas en el diálogo de confirmación y pulsa <strong>Aplicar Tarifas Oficiales</strong> (100 % sin internet).</li>
+            </ol>
+          </div>
         </div>
 
-        <!-- PANE VÍA 2: CONSTANTES DART PARA COMPILACIONES FUTURAS -->
+        <!-- PANE VÍA 2: ARCHIVO DART COMPLETO PARA COMPILACIONES FUTURAS -->
         <div class="mlc1-tab-pane" id="mlc1PaneDart">
-          <p style="font-size:0.84rem; color:var(--text-secondary); margin:0 0 0.65rem 0; line-height:1.45;">
-            Este bloque refleja las tarifas, cuotas IA, soporte y cuentas guardadas actualmente en <code>owner_config.json</code>. Pégalo en <code>app_movil/lib/core/config/owner_legal_identity.dart</code> para embeber estos defaults al compilar nuevos APKs (consultar esta pestaña no altera la revisión <code>ver</code>).
-          </p>
-          <textarea id="mlc1DartSnippetOutput" readonly rows="15" class="mlc1-code-textarea" style="min-height:280px;"></textarea>
-          <div style="display:flex; justify-content:flex-end; margin-top:0.65rem;">
+          <div class="mlc1-dart-target-box">
+            <div class="mlc1-dart-target-label">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0; color:var(--primary);"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+              <span>Archivo destino exacto:</span>
+              <code id="mlc1DartTargetPath" class="mlc1-dart-path-code">app_movil/lib/core/config/owner_commercial_defaults.dart</code>
+            </div>
+            <ol class="mlc1-dart-steps-list">
+              <li><strong>Paso 1:</strong> Abre <code>app_movil/lib/core/config/owner_commercial_defaults.dart</code> en tu editor.</li>
+              <li><strong>Paso 2:</strong> Usa <strong>Copiar Archivo Completo (.dart)</strong> y reemplaza todo con <code>Ctrl+A</code> → <code>Ctrl+V</code>, o pulsa <strong>Descargar archivo .dart</strong> para sustituirlo antes de compilar con <code>compilar_release_dual.bat</code> (consultar esta pestaña no altera la revisión <code>ver</code>).</li>
+            </ol>
+          </div>
+          <textarea id="mlc1DartSnippetOutput" readonly rows="16" class="mlc1-code-textarea" style="min-height:290px;"></textarea>
+          <div class="mlc1-action-row" style="justify-content:flex-end; margin-top:0.75rem;">
+            <button type="button" class="btn btn-outline btn-sm" id="btnDownloadMlc1Dart">
+              <svg class="btn-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              <span>Descargar archivo .dart</span>
+            </button>
             <button type="button" class="btn btn-primary btn-sm" id="btnCopyMlc1Dart">
-              <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-              <span>Copiar Bloque Dart</span>
+              <svg class="btn-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+              <span>Copiar Archivo Completo (.dart)</span>
             </button>
           </div>
         </div>

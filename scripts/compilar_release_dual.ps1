@@ -38,6 +38,7 @@ $DryRun = $false
 $VerifyOnly = $false
 $SkipAnalyze = $false
 $NoPause = $false
+$InitNotes = $false
 $OutDir = $DefaultOutDir
 
 function Wait-IfInteractive {
@@ -96,11 +97,14 @@ function Show-UsageHelp {
     Write-Host (T "                   de la versión actual sin recompilar Flutter.") -ForegroundColor Gray
     Write-Host (T "  --skip-analyze   Omite el análisis estático (flutter analyze --no-pub).") -ForegroundColor Gray
     Write-Host (T "  --no-pause       Finaliza sin esperar ENTER (ideal para automatización).") -ForegroundColor Gray
+    Write-Host (T "  --init-notes     Crea *_atp.txt y *_atp_cambios.txt en UTF-8 sin BOM solo") -ForegroundColor Gray
+    Write-Host (T "                   si faltan; jamás sobrescribe notas existentes en disco.") -ForegroundColor Gray
     Write-Host (T "  --out-dir <ruta> Cambia la carpeta destino donde se entregan los APKs.") -ForegroundColor Gray
     Write-Host ""
     Write-Host (T "EJEMPLOS LISTOS PARA COPIAR Y PEGAR:") -ForegroundColor White
     Write-Host "  compilar_release_dual.bat" -ForegroundColor Cyan
     Write-Host "  compilar_release_dual.bat --verify-only --no-pause" -ForegroundColor Cyan
+    Write-Host "  compilar_release_dual.bat --verify-only --init-notes --no-pause" -ForegroundColor Cyan
     Write-Host "  compilar_release_dual.bat --dry-run --no-pause" -ForegroundColor Cyan
     Write-Host "  compilar_release_dual.bat --skip-analyze --no-pause" -ForegroundColor Cyan
     Write-Host "  compilar_release_dual.bat --out-dir `"D:\Entregas\MochilaLista`"" -ForegroundColor Cyan
@@ -141,6 +145,10 @@ for ($i = 0; $i -lt $args.Count; $i++) {
     }
     if ($norm -eq '--no-pause' -or $norm -ieq '-NoPause') {
         $NoPause = $true
+        continue
+    }
+    if ($norm -eq '--init-notes' -or $norm -ieq '-InitNotes') {
+        $InitNotes = $true
         continue
     }
     if ($norm -eq '--out-dir' -or $norm -ieq '-OutDir') {
@@ -464,6 +472,14 @@ function Certify-ApkForensic {
     if ($badging -match "native-code:\s*([^\r\n]+)") {
         $abisText = $matches[1].Trim()
     }
+    $minSdk = '24'
+    if ($badging -match "sdkVersion:'([^']+)'") {
+        $minSdk = $matches[1].Trim()
+    }
+    $targetSdk = '36'
+    if ($badging -match "targetSdkVersion:'([^']+)'") {
+        $targetSdk = $matches[1].Trim()
+    }
     if ($IsArm64Split) {
         if (-not $abisText.Contains('arm64-v8a') -or $abisText.Contains('armeabi-v7a') -or $abisText.Contains('x86_64')) {
             Fail-WithGuidance `
@@ -518,13 +534,109 @@ function Certify-ApkForensic {
         FileSha256   = $fileSha256
         VersionCode  = $apkVerCode
         Abis         = $abisText
+        MinSdk       = $minSdk
+        TargetSdk    = $targetSdk
         SignerSha256 = $matchedSigner.Sha256
         SignerDn     = $matchedSigner.Dn
     }
 }
 
+function Get-LimaTimestampString {
+    try {
+        $tz = [System.TimeZoneInfo]::FindSystemTimeZoneById('SA Pacific Standard Time')
+        $limaNow = [System.TimeZoneInfo]::ConvertTime([DateTimeOffset]::UtcNow, $tz)
+    } catch {
+        $limaNow = [DateTimeOffset]::UtcNow.ToOffset([TimeSpan]::FromHours(-5))
+    }
+    return $limaNow.ToString('yyyy-MM-dd HH:mm:ss', [System.Globalization.CultureInfo]::InvariantCulture) + ' (America/Lima GMT-5)'
+}
+
+function New-CompanionAtpTechnicalTemplate {
+    param(
+        $VersionMeta,
+        $CertUniv,
+        $CertArm64,
+        [string]$SavingsPct,
+        [string]$LimaTimestamp
+    )
+    $inv = [System.Globalization.CultureInfo]::InvariantCulture
+    $univBytesFmt = ([int64]$CertUniv.SizeBytes).ToString('N0', $inv)
+    $armBytesFmt = ([int64]$CertArm64.SizeBytes).ToString('N0', $inv)
+    $univDisplayAbis = (($CertUniv.Abis -replace "'", '') -replace '\s+', ', ').Trim(', ')
+    if ([string]::IsNullOrWhiteSpace($univDisplayAbis)) { $univDisplayAbis = 'arm64-v8a, armeabi-v7a, x86_64' }
+
+    $atpBulletVer = (T "Versión: ") + "v$($VersionMeta.FullVersion) (Build Code $($VersionMeta.BuildCode) | ARM64 split code $($CertArm64.VersionCode))"
+    $atpBulletDate = (T "Fecha de Compilación: ") + $LimaTimestamp
+    $atpBulletEnv = (T "Ambiente: Producción Comercial Oficial (Ofuscado con --dart-define=PRODUCTION=true)")
+    $atpSecIdent = (T "IDENTIFICACI") + [char]0x00D3 + (T "N DE BINARIOS (RELEASE DUAL UNIVERSAL + ARM64 LIGERO)")
+    $atpSecFirm = (T "CERTIFICACI") + [char]0x00D3 + (T "N CRIPTOGR") + [char]0x00C1 + (T "FICA Y FIRMA DIGITAL (AMBOS BINARIOS)")
+    $emDash = [char]0x2014
+
+    $lines = @(
+        ((T "FICHA T") + [char]0x00C9 + "CNICA DE LANZAMIENTO OFICIAL - MOCHILALISTA POS"),
+        $atpBulletVer,
+        $atpBulletDate,
+        $atpBulletEnv,
+        "",
+        "================================================================================",
+        $atpSecIdent,
+        "================================================================================",
+        (T "[1] APK UNIVERSAL (Compatibilidad Completa)"),
+        "Archivo: $($CertUniv.FileName)",
+        "Ruta de Entrega: $($CertUniv.Path)",
+        ((T "Tamaño: ") + "$($CertUniv.SizeMb) MB ($univBytesFmt bytes)"),
+        "Hash SHA-256: $($CertUniv.FileSha256)",
+        "Package Name: $ExpectedPackageName",
+        "Version Name / Code: $($VersionMeta.VersionName) (versionCode $($CertUniv.VersionCode))",
+        "Native Code ABIs: $univDisplayAbis",
+        "Target SDK: $($CertUniv.TargetSdk) | Min SDK: $($CertUniv.MinSdk)",
+        "Esquema de Base de Datos SQLite: v36",
+        (T "Inspección aapt2: application-debuggable AUSENTE (0 ocurrencias)"),
+        "",
+        ((T "[2] APK ARM64 LIGERO (Optimizado para Descarga R") + [char]0x00E1 + "pida por WhatsApp)"),
+        "Archivo: $($CertArm64.FileName)",
+        "Ruta de Entrega: $($CertArm64.Path)",
+        ((T "Tamaño: ") + "$($CertArm64.SizeMb) MB ($armBytesFmt bytes) $emDash Ahorro del -$SavingsPct % frente al Universal ($($CertUniv.SizeMb) MB)"),
+        "Hash SHA-256: $($CertArm64.FileSha256)",
+        "Package Name: $ExpectedPackageName",
+        ("Version Name / Code: $($VersionMeta.VersionName) (versionCode $($CertArm64.VersionCode) $emDash split ARM64)"),
+        "Native Code ABI Exclusiva: arm64-v8a",
+        "Target SDK: $($CertArm64.TargetSdk) | Min SDK: $($CertArm64.MinSdk)",
+        "Esquema de Base de Datos SQLite: v36",
+        (T "Inspección aapt2: application-debuggable AUSENTE (0 ocurrencias)"),
+        "",
+        "================================================================================",
+        $atpSecFirm,
+        "================================================================================",
+        (T "Herramienta de Auditoría: ") + "Android SDK build-tools $($BuildTools.Version) apksigner (APK Signature Scheme v2 verified: true)",
+        "Titular del Certificado: $($CertUniv.SignerDn)",
+        "Algoritmo de Firma: RSA 4096 bits",
+        "Huella Digital SHA-256 Oficial: $($CertUniv.SignerSha256)",
+        (T "Estado de Inspección Anti-debug: OFICIAL CERTIFICADO (Verificación exitosa exit code 0 en ambos binarios)"),
+        "",
+        "================================================================================",
+        ((T "ALCANCE T") + [char]0x00C9 + "CNICO DEL RELEASE v$($VersionMeta.FullVersion)"),
+        "================================================================================",
+        (T "1. Mejoras y Alcance Principal:"),
+        (T "   - [Completa aquí el resumen técnico principal de v$($VersionMeta.FullVersion)]."),
+        (T "   - [Integridad verificada con esquema SQLite v36 sin migraciones destructivas]."),
+        ""
+    )
+    return ($lines -join "`r`n")
+}
+
+function New-CompanionChangesTemplate {
+    param($VersionMeta)
+    $bullet = [char]0x2022
+    $lines = @(
+        ($bullet + (T " Mejora Principal v$($VersionMeta.VersionName): Actualización oficial certificada con optimizaciones de estabilidad y rendimiento diario.")),
+        ($bullet + (T " Compatibilidad y Seguridad Offline: Edición Universal y edición Ligera ARM64 listas para instalar por WhatsApp conservando intactos tus negocios, catálogo y respaldos."))
+    )
+    return ($lines -join "`r`n") + "`r`n"
+}
+
 # ==============================================================================
-# EJECUCIÓN PRINCIPAL EN 6 PASOS GUIADOS
+# EJECUCION PRINCIPAL EN 6 PASOS GUIADOS
 # ==============================================================================
 $PubspecPath = if ($env:ML_DUAL_PUBSPEC_PATH) { $env:ML_DUAL_PUBSPEC_PATH } else { Join-Path $RepoRoot 'app_movil\pubspec.yaml' }
 $KeyPropertiesPath = if ($env:ML_DUAL_KEY_PROPERTIES_PATH) { $env:ML_DUAL_KEY_PROPERTIES_PATH } else { Join-Path $RepoRoot 'app_movil\android\key.properties' }
@@ -577,7 +689,7 @@ Write-Host ((T "  [OK] Carpeta destino    : ") + $OutDir) -ForegroundColor Green
 Write-Host ""
 
 if ($DryRun) {
-    Write-Host (T "[MODO SIMULACIÓN --dry-run] Pre-chequeos superados. No se compilará ni escribirá en disco.") -ForegroundColor Cyan
+    Write-Host ((T "[MODO SIMULACI") + [char]0x00D3 + (T "N --dry-run] Pre-chequeos superados. No se compilará ni escribirá en disco.")) -ForegroundColor Cyan
     Write-Host ""
     Write-Host (T "  [Paso 2/6] Análisis estático : ") -NoNewline; Write-Host $(if ($SkipAnalyze) { T "Omitido por --skip-analyze" } else { "$FlutterCmd analyze --no-pub" }) -ForegroundColor Gray
     Write-Host (T "  [Paso 3/6] Build Universal   : ") -NoNewline; Write-Host "$FlutterCmd build apk --release --obfuscate --split-debug-info=build/app_symbols --dart-define=PRODUCTION=true" -ForegroundColor Gray
@@ -585,7 +697,13 @@ if ($DryRun) {
     Write-Host (T "  [Paso 4/6] Build ARM64       : ") -NoNewline; Write-Host "$FlutterCmd build apk --release --split-per-abi --obfuscate --split-debug-info=build/app_symbols --dart-define=PRODUCTION=true" -ForegroundColor Gray
     Write-Host (T "             Entrega ARM64     : ") -NoNewline; Write-Host $Arm64TargetPath -ForegroundColor Gray
     Write-Host (T "  [Paso 5/6] Certificación     : ") -NoNewline; Write-Host "aapt2 dump badging + apksigner verify (SHA-256 $ExpectedSignerSha256)" -ForegroundColor Gray
-    Write-Host (T "  [Paso 6/6] Notas compañeras  : ") -NoNewline; Write-Host "$NotesAtpPath | $NotesChangesPath" -ForegroundColor Gray
+    if ($InitNotes) {
+        $dryAtp = if (Test-Path -LiteralPath $NotesAtpPath) { T "Ya existe en disco (se respetará sin sobrescribir)" } else { T "Creará plantilla técnica (UTF-8 sin BOM)" }
+        $dryChg = if (Test-Path -LiteralPath $NotesChangesPath) { T "Ya existe en disco (se respetará sin sobrescribir)" } else { T "Creará plantilla de cambios (UTF-8 sin BOM)" }
+        Write-Host (T "  [Paso 6/6] Notas (--init-notes): ") -NoNewline; Write-Host "$NotesAtpPath [$dryAtp] | $NotesChangesPath [$dryChg]" -ForegroundColor Gray
+    } else {
+        Write-Host (T "  [Paso 6/6] Notas compañeras  : ") -NoNewline; Write-Host "$NotesAtpPath | $NotesChangesPath" -ForegroundColor Gray
+    }
     Write-Host ""
     Wait-IfInteractive -ForceNoPause $NoPause
     exit 0
@@ -702,8 +820,41 @@ $SavingsPct = if ($CertUniv.SizeBytes -gt 0) {
     '0.00'
 }
 
-$AtpTxtStatus = if (Test-Path -LiteralPath $NotesAtpPath) { T "Presente en disco (respetada)" } else { T "No encontrada (opcional crear antes de publicar)" }
-$CambiosTxtStatus = if (Test-Path -LiteralPath $NotesChangesPath) { T "Presente en disco (respetada)" } else { T "No encontrada (opcional crear antes de publicar)" }
+if ($InitNotes) {
+    $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+    $limaNowStr = Get-LimaTimestampString
+    $alreadyRespectedMsg = (T "Ya existe en disco ") + [char]0x2014 + (T " respetada sin sobrescribir")
+
+    if (Test-Path -LiteralPath $NotesAtpPath) {
+        $AtpTxtStatus = $alreadyRespectedMsg
+    } else {
+        if (-not (Test-Path -LiteralPath $OutDir)) {
+            New-Item -ItemType Directory -Path $OutDir -Force | Out-Null
+        }
+        $atpBody = New-CompanionAtpTechnicalTemplate `
+            -VersionMeta $VersionMeta `
+            -CertUniv $CertUniv `
+            -CertArm64 $CertArm64 `
+            -SavingsPct $SavingsPct `
+            -LimaTimestamp $limaNowStr
+        [System.IO.File]::WriteAllText($NotesAtpPath, $atpBody, $utf8NoBom)
+        $AtpTxtStatus = T "Creada plantilla técnica en UTF-8 sin BOM"
+    }
+
+    if (Test-Path -LiteralPath $NotesChangesPath) {
+        $CambiosTxtStatus = $alreadyRespectedMsg
+    } else {
+        if (-not (Test-Path -LiteralPath $OutDir)) {
+            New-Item -ItemType Directory -Path $OutDir -Force | Out-Null
+        }
+        $changesBody = New-CompanionChangesTemplate -VersionMeta $VersionMeta
+        [System.IO.File]::WriteAllText($NotesChangesPath, $changesBody, $utf8NoBom)
+        $CambiosTxtStatus = T "Creada plantilla de cambios en UTF-8 sin BOM"
+    }
+} else {
+    $AtpTxtStatus = if (Test-Path -LiteralPath $NotesAtpPath) { T "Presente en disco (respetada)" } else { T "No encontrada (opcional crear antes de publicar)" }
+    $CambiosTxtStatus = if (Test-Path -LiteralPath $NotesChangesPath) { T "Presente en disco (respetada)" } else { T "No encontrada (opcional crear antes de publicar)" }
+}
 
 Write-Host ""
 Write-Host "========================================================================" -ForegroundColor Green
@@ -721,7 +872,7 @@ Write-Host ((T "    Tamaño    : ") + "$($CertArm64.SizeMb) MB ($($CertArm64.Siz
 Write-Host ((T "    SHA-256   : ") + $CertArm64.FileSha256) -ForegroundColor Gray
 Write-Host ((T "    Metadatos : ") + "versionCode=$($CertArm64.VersionCode) | ABIs=$($CertArm64.Abis)") -ForegroundColor Gray
 Write-Host ""
-Write-Host (T "[3] FIRMA OFICIAL Y NOTAS COMPAÑERAS:") -ForegroundColor White
+Write-Host ((T "[3] FIRMA OFICIAL Y NOTAS COMPA") + [char]0x00D1 + "ERAS:") -ForegroundColor White
 Write-Host ((T "    Certificado    : ") + $CertUniv.SignerDn) -ForegroundColor Gray
 Write-Host ((T "    Huella RSA-4096: ") + $CertUniv.SignerSha256) -ForegroundColor Green
 Write-Host ("    mochilalista_v$($VersionMeta.Tag)_atp.txt        : $AtpTxtStatus") -ForegroundColor Gray

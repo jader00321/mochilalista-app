@@ -1,33 +1,50 @@
+import 'package:app_movil/core/config/owner_commercial_defaults.dart';
+
 /// Parámetros centralizados de identidad legal, titularidad de propiedad intelectual
 /// y canales oficiales de soporte de MochilaLista.
 class OwnerLegalIdentity {
-  // Identidad oficial del Titular y Autor
-  static const String authorFullName = "Julio Angello Vasquez Navarro";
-  static const String appCommercialName = "MochilaLista";
+  // Identidad oficial del Titular y Autor (delegada a OwnerCommercialDefaults)
+  static const int commercialSyncDefaultRevision =
+      OwnerCommercialDefaults.commercialSyncDefaultRevision;
+  static const String authorFullName = OwnerCommercialDefaults.authorFullName;
+  static const String appCommercialName =
+      OwnerCommercialDefaults.appCommercialName;
   static const String currentAppVersion = "9.41.0";
   static const String currentAppVersionWithBuild = "9.41.0+85";
   static const String legalJurisdiction = "Lima, República del Perú";
   static const String legalFrameworkNotice =
-      "Protegido por el D.L. 822 (Ley de Derecho de Autor) e INDECOPI";
+      OwnerCommercialDefaults.legalFrameworkNotice;
   static const String personalDataLawNotice =
-      "Ley N° 29733 (Ley de Protección de Datos Personales)";
+      OwnerCommercialDefaults.personalDataLawNotice;
 
   // Títulos y Subtítulos Oficiales EULA
   static const String legalEulaTitle = "Términos de Licencia (EULA)";
   static const String legalSubtitleCommercial = "MochilaLista POS Comercial";
-  static const String legalAuthorTitle = "Autor y Titular: Julio Angello Vasquez Navarro";
+  static const String legalAuthorTitle = "Autor y Titular: $authorFullName";
 
   // Canales Oficiales de Soporte y Gestión de Licencias
-  static const String supportPhone = "+51 922 836 879";
-  static const String supportWhatsAppUrl = "https://wa.me/51922836879";
-  static const String officialWebsite = "https://mochilalista.com";
+  static const String supportPhone = OwnerCommercialDefaults.supportPhone;
+  static const String supportWhatsAppUrl =
+      OwnerCommercialDefaults.supportWhatsAppUrl;
+  static const String officialWebsite = OwnerCommercialDefaults.officialWebsite;
 
   // Medios de Pago Parametrizados (Perú)
-  static const String yapePlinHolder = "Julio Angello Vasquez Navarro";
-  static const String bcpAccountNumber = ""; // Configurable
-  static const String bcpCciNumber = ""; // Configurable
-  static const String bbvaAccountNumber = ""; // Configurable
-  static const String bbvaCciNumber = ""; // Configurable
+  static const String yapePlinHolder = OwnerCommercialDefaults.yapePlinHolder;
+  static const String yapePlinPhone = OwnerCommercialDefaults.yapePlinPhone;
+  static const String bcpAccountHolder =
+      OwnerCommercialDefaults.bcpAccountHolder;
+  static const String bcpAccountNumber =
+      OwnerCommercialDefaults.bcpAccountNumber;
+  static const String bcpCciNumber = OwnerCommercialDefaults.bcpCciNumber;
+  static const String bbvaAccountHolder =
+      OwnerCommercialDefaults.bbvaAccountHolder;
+  static const String bbvaAccountNumber =
+      OwnerCommercialDefaults.bbvaAccountNumber;
+  static const String bbvaCciNumber = OwnerCommercialDefaults.bbvaCciNumber;
+
+  /// Catálogo comercial por defecto compilado para nuevas versiones APK
+  static const Map<String, Map<String, Object>> defaultCommercialPlans =
+      OwnerCommercialDefaults.defaultCommercialPlans;
 
   /// Formatea gramaticalmente el nombre del plan con su artículo correspondiente
   static String formatPlanArticleName(String planName) {
