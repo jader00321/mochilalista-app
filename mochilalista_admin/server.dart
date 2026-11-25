@@ -77,6 +77,8 @@ Future<void> main(List<String> args) async {
   print(
       '📦 [ApkInspector] Caché APK cargada desde disco (${apkInspector.liveCacheCount} entradas).');
 
+  final commercialSyncService = CommercialConfigSyncService();
+
   final server = await HttpServer.bind(InternetAddress.anyIPv4, port);
   print('================================================================');
   print('🚀 MOCHILALISTA ADMIN — Servidor Local de Licencias y Versiones');
@@ -95,6 +97,7 @@ Future<void> main(List<String> args) async {
       excelService,
       vaultStorage,
       apkInspectorService: apkInspector,
+      commercialSyncService: commercialSyncService,
     );
   }
 }
@@ -446,7 +449,8 @@ Future<void> handleRequest(
           apkInspectorService: apkInspectorService,
           onCopyFileOverride: onCopyFileOverride,
           onBrowseFolderOverride: onBrowseFolderOverride,
-          clientSyncService: clientSyncService);
+          clientSyncService: clientSyncService,
+          commercialSyncService: commercialSyncService);
       return;
     }
 
@@ -1645,13 +1649,90 @@ Future<void> _handleApiRoute(
     return;
   }
 
-  // Inspección de Token Forense (Soporte Dual: Tokens de Licencia ML9-... y Fichas de Sincronización MLS1-...)
+  // Inspección de Token Forense (Soporte Tri-Protocolo: Fichas MLC1-..., Sincronización MLS1-.../.mlsync y Licencias ML9-...)
   if (path == '/api/licenses/inspect' && method == 'POST') {
     final bodyStr = await utf8.decodeStream(request);
     final body = jsonDecode(bodyStr) as Map<String, dynamic>;
     final token = (body['token'] as String? ?? '').trim();
 
-    // Detección automática de ficha de sincronización offline (.mlsync o token MLS1-...)
+    // 1. Prioridad: Detección automática de ficha comercial declarativa MLC1-... (Ed25519 con separación de dominio)
+    if (CommercialConfigSyncService.looksLikeMlc1Input(token)) {
+      final mlc1Service =
+          commercialSyncService ?? CommercialConfigSyncService();
+      if (!signer.isLoaded) {
+        try {
+          await signer.loadMasterKey();
+        } catch (_) {}
+      }
+
+      final verifyRes = signer.isLoaded
+          ? await mlc1Service.verifySignedToken(token, signer: signer)
+          : {
+              'valid': false,
+              'status': 'MISSING_PUBLIC_KEY',
+              'error':
+                  'No se pudo cargar la clave pública Ed25519 para verificar la ficha MLC1.',
+            };
+
+      if (verifyRes['valid'] == true) {
+        final payload = Map<String, dynamic>.from(verifyRes['payload'] as Map);
+        final comparison = mlc1Service.buildCurrentConfigComparison(
+          payload,
+          configService.config,
+          localRevision: configService.commercialSyncRevision,
+        );
+        request.response.write(jsonEncode({
+          'ok': true,
+          'input_kind': 'COMMERCIAL_CONFIG',
+          'token_kind': 'MLC1',
+          'valid': true,
+          'isValid': true,
+          'status': verifyRes['status'] ?? 'VALID',
+          'error': null,
+          'domain_separated': true,
+          'domain_message_prefix': CommercialConfigSyncService.tokenPrefix,
+          'revision': verifyRes['revision'],
+          'schema_version': verifyRes['schema_version'],
+          'issued_at': verifyRes['issued_at'],
+          'issued_at_unix': verifyRes['issued_at_unix'],
+          'issued_at_lima': verifyRes['issued_at_lima'],
+          'payload_bytes': verifyRes['payload_bytes'],
+          'token_bytes': verifyRes['token_bytes'],
+          'max_payload_bytes': CommercialConfigSyncService.maxPayloadBytes,
+          'clean_token': verifyRes['clean_token'],
+          'payload': payload,
+          'summary': verifyRes['summary'],
+          'current_config_comparison': comparison,
+        }));
+      } else {
+        final diagPayload = mlc1Service.tryDecodePayloadDiagnostic(token);
+        final diagSummary = diagPayload != null
+            ? mlc1Service.buildDiagnosticSummaryFromMap(diagPayload)
+            : null;
+        request.response.write(jsonEncode({
+          'ok': false,
+          'input_kind': 'COMMERCIAL_CONFIG',
+          'token_kind': 'MLC1',
+          'valid': false,
+          'isValid': false,
+          'status': verifyRes['status'] ?? 'INVALID_SIGNATURE',
+          'error': verifyRes['error'] ??
+              'Ficha comercial MLC1 inválida o adulterada.',
+          'domain_separated': true,
+          'domain_message_prefix': CommercialConfigSyncService.tokenPrefix,
+          'security_alert':
+              'FIRMA ED25519 INVÁLIDA O FICHA ALTERADA — No compartir ni aplicar; regenera una ficha oficial desde Configuración',
+          'diagnostic_only': true,
+          'payload': null,
+          'diagnostic_payload': diagPayload,
+          'diagnostic_summary': diagSummary,
+        }));
+      }
+      await request.response.close();
+      return;
+    }
+
+    // 2. Detección automática de ficha de sincronización offline (.mlsync o token MLS1-...)
     if (token.contains('MLS1-') ||
         token.contains('MLSYNC_V1') ||
         token.contains('"format": "MLSYNC_V1"') ||

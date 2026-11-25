@@ -24,7 +24,7 @@ Aquí se detallan todos los procedimientos paso a paso, comandos de terminal, pr
    - 1.3. Navegación por las 8 Pestañas Oficiales (`http://localhost:8080`)
    - 1.4. Flujo de Alta y Edición Total en Cartera CRM con Buscador Omnicanal
    - 1.5. Generador de Licencias Ed25519 con Tarjeta de Resumen y Ajustes Personalizados
-   - 1.6. [Inspector Forense Dual (`#tabInspector`: Tokens `ML9-...` y Fichas `.mlsync` / `MLS1-...`)](#16-inspector-forense-dual-tabinspector-tokens-ml9--y-fichas-mlsync--mls1-)
+   - 1.6. [Inspector Forense Tri-Protocolo (`#tabInspector`: Tokens `ML9-...`, Fichas `.mlsync` / `MLS1-...` y Fichas Comerciales `MLC1-...`)](#16-inspector-forense-tri-protocolo-tabinspector-tokens-ml9--fichas-mlsync--mls1--y-fichas-comerciales-mlc1-)
    - 1.7. Pestaña Finanzas & Respaldos: Libro Contable y Centro de Respaldos en Disco (`backups/`)
    - 1.8. Venta de Bolsas Extra de Escaneos IA (+150 escaneos)
    - 1.9. Reasignación Técnica de Dispositivo por Cambio o Pérdida de Celular
@@ -34,11 +34,11 @@ Aquí se detallan todos los procedimientos paso a paso, comandos de terminal, pr
 2. [GUÍA 2: Compilación y Firma Oficial Release de la App Móvil](#guía-2-compilación-y-firma-oficial-release-de-la-app-móvil)
    - 2.1. Creación del Keystore de Producción (`keytool`)
    - 2.2. Configuración Segura de `android/key.properties` y Anti-Fugas en `.gitignore`
-   - 2.3. Compilación del APK Release Universal (`compilar_apk_comercial.bat`)
-   - 2.4. Compilación del APK Release Ligero ARM64 para WhatsApp (`compilar_apk_arm64.bat`)
+   - 2.3. Compilador Dual Oficial Único y Guiado (`compilar_release_dual.bat` — Recomendado)
+   - 2.4. Scripts Individuales de Compatibilidad (`compilar_apk_comercial.bat` y `compilar_apk_arm64.bat`)
    - 2.5. Compilación del App Bundle para Google Play Store (`flutter build appbundle`)
-   - 2.6. Auditoría Forense y Verificación de Firma con `apksigner`
-3. [GUÍA 3: Publicación y Notificación de Actualizaciones (Release Manager — Planes 19, 22 y 22.5)](#guía-3-publicación-y-notificación-de-actualizaciones-release-manager--planes-19-22-y-225)
+   - 2.6. Auditoría Forense Manual y Verificación de Firma (`aapt2` + `apksigner`)
+3. [GUÍA 3: Publicación y Notificación de Actualizaciones (Release Manager — Planes 19, 22, 22.5 y 23)](#guía-3-publicación-y-notificación-de-actualizaciones-release-manager--planes-19-22-225-y-23)
    - 3.1. Diferenciación Estricta: `HOTFIX` vs. `FEATURE_RELEASE`
    - 3.2. Alta Determinista (`#modalCreateRelease`), Escudo de Firma 3 Estados y Autodetección con Rutas Configurables
    - 3.3. Catálogo, Campos Expandibles y Gestión Segura de Variantes ABI en `#modalEditRelease`
@@ -134,8 +134,8 @@ Abre tu navegador web en `http://localhost:8080`. Dispones de **8 módulos de co
 1. **📊 Dashboard Financiero (`#tabDashboard`):** KPIs en tiempo real con micro-gráficos SVG interactivos (ingresos del mes, acumulado, clientes activos, por vencer, vencidos, perpetuos y desactualizados) más la tabla de **Acciones Urgentes (≤ 7 días)** con aviso directo a WhatsApp y accesos rápidos de emisión.
 2. **👥 Cartera de Clientes CRM (`#tabClients`):** Directorio unificado con **buscador omnicanal reactivo**, filtros por estado, Drawer Lateral "Ficha 360°" con 5 pestañas de detalle profundo, insignias `DeviceID` con micro-botón `[📋]`, enlace directo a WhatsApp, botón de migración inmediata en 1 paso, edición total y eliminación protegida.
 3. **🔑 Generador de Licencias Ed25519 (`#tabGenerator`):** Firma criptográfica asimétrica con **Tarjeta de Resumen Ejecutivo en tiempo real**, **Panel de Ajustes Comerciales Personalizados** (días libres, bonos IA, regla acumulativa vs. reinicio y fecha exacta), **Credencial PNG @2x de alta resolución**, descarga/copiado de QR y botón **`[Auditar en Inspector]`**.
-4. **🚀 Gestor de Versiones / Release Manager (`#tabReleases`):** Matriz inteligente de distribución de versiones, soporte para APK universal y ligero ARM64, zona Drag & Drop a `releases_apks/`, botones de descarga directa, apertura de carpeta en Windows (`explorer.exe /select,...`) y botón **`[Autorizar Envío de Cortesía]`**.
-5. **🔍 Inspector Forense de Tokens ML9 (`#tabInspector`):** Auditoría forense Ed25519 con **Lector Óptico de Imagen QR** (drag & drop de capturas de WhatsApp decodificadas offline con `jsQR`), **Tabla Unificada de Claims** (`d, p, y, n, v, iat, u, b, c`) y verificación de correlativo `nonce` contra el CRM.
+4. **🚀 Gestor de Versiones / Release Manager (`#tabReleaseManager`):** Matriz inteligente de distribución de versiones, soporte para APK universal y ligero ARM64, **Mini-Guía Rápida de Compilación Dual** (`#btnToggleDualBuildGuide` con 3 comandos copiables y flujo en 4 pasos), zona Drag & Drop a `releases_apks/`, botones de descarga directa, apertura de carpeta en Windows (`explorer.exe /select,...`) y botón **`[Autorizar Envío de Cortesía]`**.
+5. **🔍 Inspector Forense Tri-Protocolo (`#tabInspector`):** Auditoría criptográfica unificada para los **3 protocolos oficiales** (**`ML9-...`** licencias, **`MLS1-...` / `.mlsync`** telemetría móvil y **`MLC1-...`** tarifas/cuentas comerciales), con **Guía Desplegable de Protocolos**, **Lector Óptico QR** (`jsQR` offline con reescalado para QRs densos de `512 px`), comparador de diferencias `diff_vs_current`, verificación de los **4 estados de nonce**, botón **`Copiar Informe Forense`** e historial colapsable de sesión.
 6. **Finanzas & Respaldos (`#tabFinancesAndBackups`):**
    - **Submódulo 1:** Libro contable consolidado en hora `America/Lima (GMT-5)` con filtros en vivo (buscador omnicanal sin recortes, rango de fechas Lima, plan, medio de pago), KPIs dinámicos, exportación `.csv` con BOM UTF-8 / escape RFC-4180 y libro Excel Contable `.xlsx` de 5 hojas.
    - **Submódulo 2:** Centro de gestión de respaldos físicos en `backups/` en hora `America/Lima`, paginación `20` en `20`, filtros por entorno, modal de vista previa `#modalBackupPreview` (incluyendo restauración en caliente de `GLOBAL` `owner_config`) y limpieza segura de snapshots `SANDBOX`.
@@ -208,18 +208,35 @@ Toca el botón de edición para modificar libremente los datos del cliente, o ac
 
 ---
 
-### 1.6. Inspector Forense Dual (`#tabInspector`: Tokens `ML9-...` y Fichas `.mlsync` / `MLS1-...`)
+### 1.6. Inspector Forense Tri-Protocolo (`#tabInspector`: Tokens `ML9-...`, Fichas `.mlsync` / `MLS1-...` y Fichas Comerciales `MLC1-...`)
 
-En la pestaña **Inspector Forense (`#tabInspector`)**:
-1. **Lector Óptico QR y Archivo `.mlsync`:** Arrastra una captura QR / Credencial PNG (`jsQR` local 100% offline), un archivo `.mlsync` / `.json` o pega cualquier mensaje de WhatsApp que contenga un token `ML9-...` o `MLS1-...`.
-2. **Tabla Unificada de Claims (`ML9-...`) y Fechas Perú GMT-5:** Muestra `d`, `p`, `y`, `n`, `v`, `iat` (`America/Lima` GMT-5 con UTC en `title`), `u`, `b`, `c`.
-3. **Matriz Exacta de 4 Estados de Nonce (`ultimo_nonce` + `next_nonce`):**
-   - **`Canjeado en celular (Verificado por .mlsync #N)`** (Verde): Cuando el celular reportó `ultimo_nonce >= tNonce`.
-   - **`Emitido — Pendiente de canje en celular (Sin .mlsync reciente)`** (Azul): Último token emitido (`tNonce == next_nonce - 1`) aún sin reporte `.mlsync` posterior.
-   - **`Nonce futuro listo para canje`** (Ámbar): Únicamente cuando `tNonce >= next_nonce`.
-   - **`Superado / Histórico`** (Púrpura): Tokens anteriores ya rebasados sin confirmación `.mlsync` vigente.
-4. **Auditoría `.mlsync` + Comparador Unificado:** Cuando se inspecciona una ficha `MLS1-...` / `.mlsync`, exhibe las 21 métricas humanizadas (`Sí`/`No`, `Óptimo`/`Requiere atención`/`Crítico`, hora `America/Lima` GMT-5) y reutiliza debajo la tabla comparativa **"Antes (Admin) ➔ Real (Celular)"** (con banner verde `Sin cambios por aplicar` cuando coincide al 100%).
-5. **Acciones en 1 Clic e Historial de Sesión (`#inspectorSessionHistoryPanel`):** Desde `#inspectMatchingClientBox` puedes ejecutar **`Abrir Ficha 360°`**, **`Abrir WhatsApp`** o **`Copiar Informe Forense`**. Al pie del panel, el historial colapsable conserva las **últimas 10 auditorías de la sesión** para recargarlas con un clic.
+En la pestaña **Inspector Forense (`#tabInspector`)** cuentas con una consola única de verificación criptográfica y diagnóstica para los **3 protocolos oficiales de MochilaLista**:
+
+| Protocolo | Dirección del Flujo | Propósito | Firma Criptográfica | Dónde se Genera | Dónde se Usa | Qué Valida el Inspector (`#tabInspector`) |
+|---|---|---|---|---|---|---|
+| **`ML9-...`** | Admin ➔ App Móvil | Activar suscripción, licencia perpetua, recarga IA o migración de hardware. | **Ed25519 asimétrica** con llave privada maestra (`ed25519_master.key`). | `#tabLicenseStudio` en MochilaLista Admin. | Pantalla *Licencia y Activación* o *Bloqueo* de la app móvil. | Firma Ed25519, cliente dueño por `d`/`hw`, los claims (`d, p, y, n, v, iat, u, b, c`), fechas en hora Perú y estado real del `nonce`. |
+| **`MLS1-...` / `.mlsync`** | App Móvil ➔ Admin | Reportar estado real del teléfono (licencia vigente, días, IA usada, versión APK y salud SQLite). | **HMAC-SHA256 determinista** (prefijo `MLS1-` o JSON `.mlsync`). | Dentro de la app móvil (*Sincronizar con Soporte / Exportar Ficha*). | `#tabInspector` o ficha del cliente para conciliar CRM sin internet. | Integridad HMAC, 21 métricas humanizadas (`Sí`/`No`, `Óptimo`/`Atención`/`Crítico`), comparador *Antes (Admin) ➔ Real (Celular)* y rescate `PENDIENTE_MIGRACION`. |
+| **`MLC1-...`** | Admin ➔ App Móvil (auditable de vuelta) | Actualizar precios de los 8 planes/bolsas IA y 5 canales de pago/soporte sin Internet. | **Ed25519 asimétrica con separación de dominio** (`utf8('MLC1-' + payloadB64)`). | `#tabSettings` ➔ *Emitir Ficha Comercial `MLC1-...`*. | App móvil (texto, WhatsApp o QR PNG de `512 px`) y `#tabInspector`. | Firma Ed25519 `MLC1-`, revisión (`CURRENT` / `SUPERSEDED` / `AHEAD_OR_EXTERNAL`), tabla `diff_vs_current` vs config vigente y diagnóstico forense ante manipulación. |
+
+#### Operación Paso a Paso del Inspector Forense (`#tabInspector`):
+1. **Guía Visual de Protocolos (`Guía de Protocolos (ML9 / MLS1 / MLC1)`):** Pulsa `#btnToggleInspectorGuide` en la cabecera para desplegar `#inspectorProtocolGuide` con el resumen comparativo, origen, destino y significado de cada código sin salir de la pantalla.
+2. **Entrada Multi-Formato y Lector Óptico QR (`jsQR`):**
+   - Pega un token puro o un mensaje completo de WhatsApp (el backend extrae automáticamente `ML9-...`, `MLS1-...` o `MLC1-...`, tolerando encabezados, emojis y saltos `\r\n`), carga un `.mlsync` / `.json`, o arrastra una captura **QR PNG** al **Lector Óptico QR**.
+   - Para fichas densas `MLC1-...`, el emisor exporta el QR a **`512 px`** con zona de quietud blanca (`32 px`) y el lector aplica **`tryDecodeQrCanvasWithUpscale()`** (reescalado entero `2x`/`3x` sin suavizado ni antialiasing + margen blanco e intento normal/invertido con `jsQR`) garantizando lectura offline confiable.
+3. **Auditoría `ML9-...` y Matriz Exacta de 4 Estados de Nonce (`ultimo_nonce` + `next_nonce`):**
+   - Muestra todos los claims (`d, p, y, n, v, iat, u, b, c`) con timestamps en **`America/Lima (GMT-5)`**:
+     - **`Canjeado en celular (Verificado por .mlsync #N)`** (Verde): Cuando el celular reportó `ultimo_nonce >= tNonce`.
+     - **`Emitido — Pendiente de canje en celular (Sin .mlsync reciente)`** (Azul): Último token emitido (`tNonce == next_nonce - 1`) aún sin reporte `.mlsync` posterior.
+     - **`Nonce futuro listo para canje`** (Ámbar): Únicamente cuando `tNonce >= next_nonce`.
+     - **`Superado / Histórico`** (Púrpura): Tokens anteriores ya rebasados sin confirmación `.mlsync` vigente.
+4. **Auditoría `.mlsync` / `MLS1-...`:** Exhibe las 21 métricas humanizadas en hora Perú y la tabla **"Antes (Admin) ➔ Real (Celular)"** (con banner verde `Sin cambios por aplicar` cuando coincide al 100%).
+5. **Auditoría Especializada de Fichas Comerciales `MLC1-...` (`#inspectMlc1AuditCard`):**
+   - **Estado de Revisión (`revision_status`):** Clasifica la ficha respecto a tu configuración actual en `#tabSettings` como **`CURRENT`** (*Vigente al día*), **`SUPERSEDED`** (*Obsoleta — ya existe una revisión más reciente*) o **`AHEAD_OR_EXTERNAL`** (*Adelantada o emitida desde otro equipo / entorno*).
+   - **Comparador de Diferencias (`diff_vs_current`):** Compara valor por valor los **8 productos** (tarifario y bolsas IA) y los **5 canales** (`WhatsApp soporte`, `Yape`, `Plin`, `BCP`, `BBVA`), ofreciendo acceso directo con **`Abrir Configuración (#tabSettings)`**.
+   - **Escudo Ante Firma Inválida o Manipulación (`security_alert`):** Si alguien altera aunque sea un carácter o firma con otra clave privada, bloquea la validación (`valid: false`, `payload: null`) y muestra una alerta forense crítica junto a `diagnostic_payload` (inspección de solo lectura del contenido alterado sin aceptarlo como legítimo).
+6. **Copiar Informe Forense e Historial de Sesión (`#inspectorSessionHistoryPanel`):**
+   - Pulsa **`Copiar Informe Forense`** para obtener un reporte de soporte limpio con fecha `America/Lima (GMT-5)`, validez, contexto (`Cliente CRM` para `ML9`/`MLS1` o `Contexto Admin` para `MLC1`), recomendación y detalle técnico.
+   - El panel inferior colapsable guarda las **últimas 10 auditorías de la sesión** con insignia diferenciada (`ML9`, `MLS1`, `MLC1`) para recargarlas en 1 clic.
 
 ---
 
@@ -385,27 +402,55 @@ En `.gitignore` se encuentran protegidos `key.properties`, `*.jks`, `*.key`, `pr
 
 ---
 
-### 2.3. Compilación del APK Release Universal (`compilar_apk_comercial.bat`)
-Haz doble clic sobre:
-```cmd
-C:\Users\vjuli\Documents\mochilalista-app\compilar_apk_comercial.bat
-```
-El script ejecuta el análisis estático, compila con ofuscación completa (`--obfuscate --split-debug-info=build/app_symbols --dart-define=PRODUCTION=true`), calcula la huella criptográfica SHA-256 y genera:
-- **Ruta:** `app_movil/build/app/outputs/flutter-apk/app-release.apk`
-- **Uso:** Instalador universal compatible con todas las arquitecturas Android.
+### 2.3. Compilador Dual Oficial Único y Guiado (`compilar_release_dual.bat` — Recomendado)
+
+Desde el **Plan Maestro 23.5**, la vía oficial principal para compilar y certificar cada lanzamiento móvil es el lanzador único **`compilar_release_dual.bat`** (en la raíz del repositorio) junto con su motor **`scripts/compilar_release_dual.ps1`**.
+
+Genera, audita forensemente y entrega automáticamente en `C:\Users\vjuli\Documents\v-app-offline apks\` **ambos binarios oficiales** de la versión declarada en `app_movil/pubspec.yaml`:
+- **APK Universal (`~108 MB`):** `mochilalista_v<tag>_atp.apk` (todas las ABIs `arm64-v8a`, `armeabi-v7a`, `x86_64`; ideal como respaldo maestro o instalación USB).
+- **APK ARM64 Ligero (`~39 MB`):** `mochilalista_v<tag>_arm64_atp.apk` (`--split-per-abi`; 99 % de celulares modernos de 64 bits, por debajo del tope de `100 MB` para envío directo por WhatsApp Web).
+- *(La etiqueta `<tag>` se calcula dinámicamente desde `pubspec.yaml`: si `patch == 0` usa `vX.Y`, p. ej. `9.41.0+85` ➔ `v9.41`; si `patch > 0` conserva `vX.Y.Z`, p. ej. `9.41.2+87` ➔ `v9.41.2`).*
+
+#### Tabla Completa de Parámetros (Flags):
+
+| Parámetro | Comportamiento | Cuándo Usarlo |
+|---|---|---|
+| *(sin flags)* | Ejecuta los 6 pasos completos (pre-chequeo, análisis, Universal, ARM64, certificación y resumen). | Al emitir una nueva versión oficial desde `app_movil/pubspec.yaml`. |
+| `--help`, `-h`, `/?` | Imprime la guía rápida de variantes, flags, ejemplos y etapas, y termina con código `0` sin compilar ni pausar. | Cuando necesites recordar flags o nombres de salida. |
+| `--dry-run` | Ejecuta el `[Paso 1/6]` (SemVer, keystore `.jks`, SDK `build-tools`, ruta destino) y muestra los comandos exactos sin compilar ni escribir en disco. | Para verificar el entorno antes de esperar una compilación completa. |
+| `--verify-only` | Omite análisis y compilación (`flutter` no requerido), auditando en segundos con `aapt2` + `apksigner` ambos APKs ya existentes en destino. | Para re-certificar o inspeccionar el SHA-256 y firma de binarios ya compilados. |
+| `--skip-analyze` | Salta `[Paso 2/6]` (`flutter analyze --no-pub`) manteniendo compilación Dual + certificación obligatoria. | En re-empaquetados urgentes tras haber ejecutado análisis previo. |
+| `--no-pause` | Finaliza inmediatamente sin esperar `ENTER` al concluir o fallar. | Scripts automatizados, CI local o verificación desde terminal/agente. |
+| `--out-dir "<ruta>"` | Redirige la carpeta de entrega de los APKs en lugar de `C:\Users\vjuli\Documents\v-app-offline apks`. | Respaldos aislados en disco externo o carpeta temporal de pruebas. |
+
+#### Flujo Guiado de 6 Pasos (`[Paso 1/6]` .. `[Paso 6/6]`):
+1. **`[Paso 1/6]` Pre-chequeos de entorno:** Lee `version: X.Y.Z+B` en `app_movil/pubspec.yaml`, verifica `app_movil/android/key.properties` leyendo **únicamente** `storeFile=` para confirmar que exista el `.jks` (**jamás** imprime `storePassword` ni `keyPassword`), valida Flutter y localiza la versión numérica más alta de Android SDK `build-tools` (p. ej. `37.0.0`).
+2. **`[Paso 2/6]` Análisis estático:** Ejecuta `flutter analyze --no-pub` en `app_movil/` (omitido con `--skip-analyze`, `--verify-only` o `--dry-run`).
+3. **`[Paso 3/6]` Compilación APK Universal:** `flutter build apk --release --obfuscate --split-debug-info=build/app_symbols --dart-define=PRODUCTION=true` y entrega a `mochilalista_v<tag>_atp.apk`.
+4. **`[Paso 4/6]` Compilación APK ARM64 Ligero:** `flutter build apk --release --split-per-abi --obfuscate --split-debug-info=build/app_symbols --dart-define=PRODUCTION=true` y entrega a `mochilalista_v<tag>_arm64_atp.apk`.
+5. **`[Paso 5/6]` Certificación forense obligatoria sobre AMBOS APKs:**
+   - **`aapt2 dump badging`:** Verifica `package: name='com.mochilalista.app'`, paridad exacta de `versionName` y `versionCode` (`B` en Universal; `2000 + B` o `B` en ARM64), ABIs esperadas y aborta si aparece `application-debuggable`.
+   - **`apksigner verify --verbose --print-certs`:** Soporta tanto **SDK `37+`** (`V2 Signer: certificate SHA-256 digest: ...`, ignorando líneas `SourceStamp`) como **SDK `<= 36.x`** (`Signer #1 certificate SHA-256 digest: ...`), exigiendo coincidencia `1:1` con la huella RSA-4096 oficial **`7c43addc34776f3974eac23fdacc47599efd5393a4dbb28672d06899833ffd20`**.
+6. **`[Paso 6/6]` Resumen Ejecutivo y Checklist:** Muestra tamaño exacto (`MB` y bytes), ahorro `%` del ARM64 frente al Universal, hashes `SHA-256` de archivo, titular del certificado (`CN=Julio Angello Vasquez Navarro`), estado en disco de las notas compañeras `mochilalista_v<tag>_atp.txt` / `_cambios.txt` (sin sobreescribirlas) y los 4 pasos de registro en `#tabReleaseManager`.
+
+#### Cómo Interpretar el Resumen Final y Resolver Errores Frecuentes (`QUÉ FALLÓ` / `CÓMO SOLUCIONARLO`):
+
+| Situación / Mensaje `QUÉ FALLÓ` | Qué Significa en la Práctica | `CÓMO SOLUCIONARLO` |
+|---|---|---|
+| `No se encontró el ejecutable 'flutter' en el PATH` | Windows no tiene `flutter\bin` accesible desde CMD/PowerShell. | Instala Flutter SDK o añade `flutter\bin` a las Variables de Entorno y abre nueva consola. |
+| `No existe el archivo de configuración de firma android\key.properties` / falta `.jks` | Falta el archivo de configuración local o la ruta de `storeFile=` no apunta al `.jks`. | Verifica `app_movil\android\key.properties` y que el archivo `.jks` oficial esté en `app_movil\android\`. |
+| `No se encontraron las herramientas 'aapt2' y 'apksigner'` | No hay `build-tools` en `ANDROID_HOME`, `ANDROID_SDK_ROOT` o `%LOCALAPPDATA%\Android\Sdk`. | Instala *Android SDK Build-Tools* desde Android Studio SDK Manager o define `ANDROID_HOME`. |
+| `El APK ... contiene la bandera 'application-debuggable'` | Se intentó certificar o colar un binario de depuración (`debug`). | Recompila en modo `--release` limpio sin flags de depuración y revisa `build.gradle.kts`. |
+| `FIRMA NO OFICIAL ... Huella detectada != 7c43addc...` | El binario fue firmado con debug keystore u otro certificado ajeno al propietario. | Verifica que `key.properties` apunte al keystore oficial RSA-4096 de Julio Angello Vasquez Navarro. |
+| `No se encontró el archivo APK ...` en `--verify-only` | No existen ambos archivos (`_atp.apk` y `_arm64_atp.apk`) de la versión actual en `--out-dir`. | Comprueba la ruta de salida o ejecuta `compilar_release_dual.bat` sin `--verify-only` para compilarlos. |
+| `Parámetro desconocido o no soportado` | Se escribió mal un flag CLI. | Ejecuta `compilar_release_dual.bat --help --no-pause` para copiar la sintaxis válida. |
 
 ---
 
-### 2.4. Compilación del APK Release Ligero ARM64 para WhatsApp (`compilar_apk_arm64.bat`)
-Para clientes que solicitan un archivo ligero y rápido de transferir por WhatsApp Web (pesa **`~38.66 MB`** en `v9.41.0+85`, frente a los **`107.73 MB`** del Universal, muy por debajo del tope de `100 MB` de WhatsApp Web):
-Haz doble clic sobre:
-```cmd
-C:\Users\vjuli\Documents\mochilalista-app\compilar_apk_arm64.bat
-```
-El script compila con `--split-per-abi`, ofuscación y símbolos debug protegidos, generando:
-- **Ruta:** `app_movil/build/app/outputs/flutter-apk/app-arm64-v8a-release.apk`
-- **Compatibilidad:** 99% de teléfonos Android modernos de 64 bits (Xiaomi, Samsung, Motorola, Realme, Honor).
-- **Ventaja:** Transferencia directa sin superar el límite de 100 MB en WhatsApp Web.
+### 2.4. Scripts Individuales de Compatibilidad (`compilar_apk_comercial.bat` y `compilar_apk_arm64.bat`)
+Ambos scripts individuales históricos se mantienen **100 % operativos** para compilaciones unitarias aisladas:
+- **APK Release Universal (`compilar_apk_comercial.bat`):** Ejecuta análisis estático, compila `app_movil/build/app/outputs/flutter-apk/app-release.apk` (`--release --obfuscate --split-debug-info=build/app_symbols --dart-define=PRODUCTION=true`), calcula el SHA-256 e instala compatibilidad con todas las arquitecturas (`~107.73 MB` en `v9.41.0+85`).
+- **APK Release Ligero ARM64 (`compilar_apk_arm64.bat`):** Compila con `--split-per-abi` produciendo `app_movil/build/app/outputs/flutter-apk/app-arm64-v8a-release.apk` (`~38.66 MB` en `v9.41.0+85`, compatible con el 99 % de teléfonos Android modernos de 64 bits y por debajo del tope de `100 MB` de WhatsApp Web).
 
 ---
 
@@ -418,11 +463,13 @@ flutter build appbundle --release --obfuscate --split-debug-info=build/app_symbo
 
 ---
 
-### 2.6. Auditoría Forense y Verificación de Firma con `apksigner`
-```bash
-apksigner verify --verbose C:\Users\vjuli\Documents\mochilalista-app\app_movil\build\app\outputs\flutter-apk\app-release.apk
+### 2.6. Auditoría Forense Manual y Verificación de Firma (`aapt2` + `apksigner`)
+Para auditar manualmente cualquier `.apk` desde terminal (equivalente al `[Paso 5/6]` de `compilar_release_dual.bat`):
+```cmd
+"%LOCALAPPDATA%\Android\Sdk\build-tools\37.0.0\aapt2.exe" dump badging "C:\Users\vjuli\Documents\v-app-offline apks\mochilalista_v9.41_atp.apk"
+"%LOCALAPPDATA%\Android\Sdk\build-tools\37.0.0\apksigner.bat" verify --verbose --print-certs "C:\Users\vjuli\Documents\v-app-offline apks\mochilalista_v9.41_atp.apk"
 ```
-Certifica que la firma v2 corresponde exclusivamente al certificado RSA-4096 emitido a nombre de **Julio Angello Vasquez Navarro** (`7c43addc34776f3974eac23fdacc47599efd5393a4dbb28672d06899833ffd20`).
+Certifica que no exista `application-debuggable`, valida `versionCode` / `ABIs` y comprueba en **`V2 Signer:`** (SDK `37+`) o **`Signer #1`** (SDK `<= 36`) que la firma corresponda exclusivamente al certificado RSA-4096 emitido a nombre de **Julio Angello Vasquez Navarro** (`7c43addc34776f3974eac23fdacc47599efd5393a4dbb28672d06899833ffd20`).
 
 ---
 

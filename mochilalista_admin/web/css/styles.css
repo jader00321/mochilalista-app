@@ -4760,6 +4760,15 @@ footer {
   justify-content: center;
 }
 
+.mlc1-qr-white-box canvas,
+.mlc1-qr-white-box img {
+  width: 196px !important;
+  height: 196px !important;
+  max-width: 100%;
+  display: block;
+  image-rendering: pixelated;
+}
+
 /* 5. Densidad Compacta de Tablas (.table-compact) */
 .data-table.table-compact th,
 .data-table.table-compact td {
@@ -6685,5 +6694,506 @@ button.is-spinning svg {
   background: #ffffff;
   border-color: #cbd5e1;
   color: #334155;
+}
+
+/* ========================================================
+   PLAN MAESTRO 23.5 - FASE 2: INSPECTOR TRI-PROTOCOLO MLC1 Y GUÍA VISUAL
+   ======================================================== */
+.badge-mlc1 {
+  background-color: rgba(20, 184, 166, 0.16);
+  color: #2dd4bf;
+  border: 1px solid rgba(20, 184, 166, 0.4);
+  font-family: var(--font-mono);
+}
+
+[data-theme="light"] .badge-mlc1 {
+  background-color: rgba(13, 148, 136, 0.12);
+  color: #0f766e;
+  border-color: rgba(13, 148, 136, 0.35);
+}
+
+.inspector-protocol-guide {
+  margin-bottom: 1.25rem;
+  padding: 1rem 1.1rem;
+  border-radius: 12px;
+  border: 1px solid rgba(59, 130, 246, 0.28);
+  background: rgba(15, 23, 42, 0.45);
+}
+
+[data-theme="light"] .inspector-protocol-guide {
+  background: #f8fafc;
+  border-color: #cbd5e1;
+}
+
+.inspector-guide-intro {
+  font-size: 0.84rem;
+  line-height: 1.48;
+  color: var(--text-secondary);
+  margin-bottom: 0.85rem;
+}
+
+[data-theme="light"] .inspector-guide-intro {
+  color: #334155;
+}
+
+.inspector-guide-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 0.85rem;
+  margin-bottom: 0.9rem;
+}
+
+.inspector-guide-card {
+  padding: 0.85rem 0.95rem;
+  border-radius: 10px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-secondary);
+}
+
+.inspector-guide-card.tone-ml9 {
+  border-top: 3px solid #6366f1;
+}
+
+.inspector-guide-card.tone-mls1 {
+  border-top: 3px solid #3b82f6;
+}
+
+.inspector-guide-card.tone-mlc1 {
+  border-top: 3px solid #14b8a6;
+}
+
+[data-theme="light"] .inspector-guide-card {
+  background: #ffffff;
+  border-color: #e2e8f0;
+}
+
+.inspector-guide-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.45rem;
+}
+
+.inspector-guide-dir {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--text-muted);
+}
+
+.inspector-guide-card h4 {
+  margin: 0 0 0.45rem 0;
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.inspector-guide-card ul {
+  margin: 0;
+  padding-left: 1.05rem;
+  font-size: 0.79rem;
+  line-height: 1.45;
+  color: var(--text-secondary);
+  display: flex;
+  flex-direction: column;
+  gap: 0.28rem;
+}
+
+.inspector-guide-tools {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 0.55rem 0.95rem;
+  padding-top: 0.75rem;
+  border-top: 1px dashed var(--border-color);
+}
+
+.inspector-guide-tool-item {
+  font-size: 0.78rem;
+  line-height: 1.45;
+  color: var(--text-secondary);
+}
+
+.mlc1-audit-guidance-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.65rem;
+  padding: 0.85rem 1rem;
+  border-radius: 10px;
+  border: 1px solid var(--border-color);
+  margin-bottom: 1rem;
+  font-size: 0.84rem;
+  line-height: 1.45;
+}
+
+.mlc1-audit-guidance-banner.is-current {
+  background: rgba(16, 185, 129, 0.11);
+  border-color: rgba(16, 185, 129, 0.35);
+  color: #34d399;
+}
+
+.mlc1-audit-guidance-banner.is-superseded {
+  background: rgba(245, 158, 11, 0.12);
+  border-color: rgba(245, 158, 11, 0.38);
+  color: #fbbf24;
+}
+
+.mlc1-audit-guidance-banner.is-ahead {
+  background: rgba(59, 130, 246, 0.12);
+  border-color: rgba(59, 130, 246, 0.38);
+  color: #60a5fa;
+}
+
+.mlc1-audit-guidance-banner.is-invalid {
+  background: rgba(239, 68, 68, 0.13);
+  border-color: rgba(239, 68, 68, 0.42);
+  color: #f87171;
+}
+
+[data-theme="light"] .mlc1-audit-guidance-banner.is-current {
+  background: #ecfdf5;
+  border-color: #6ee7b7;
+  color: #047857;
+}
+
+[data-theme="light"] .mlc1-audit-guidance-banner.is-superseded {
+  background: #fffbeb;
+  border-color: #fcd34d;
+  color: #b45309;
+}
+
+[data-theme="light"] .mlc1-audit-guidance-banner.is-ahead {
+  background: #eff6ff;
+  border-color: #93c5fd;
+  color: #1d4ed8;
+}
+
+[data-theme="light"] .mlc1-audit-guidance-banner.is-invalid {
+  background: #fef2f2;
+  border-color: #fca5a5;
+  color: #b91c1c;
+}
+
+.inspect-mlc1-meta-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.inspect-mlc1-meta-card {
+  padding: 0.75rem 0.9rem;
+  border-radius: 10px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+[data-theme="light"] .inspect-mlc1-meta-card {
+  background: #ffffff;
+  border-color: #e2e8f0;
+}
+
+.inspect-mlc1-meta-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--text-muted);
+}
+
+.inspect-mlc1-meta-val {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.inspect-mlc1-meta-sub {
+  font-size: 0.74rem;
+  color: var(--text-secondary);
+}
+
+.inspect-mlc1-channels-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 0.65rem;
+  margin-top: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.inspect-mlc1-channel-card {
+  padding: 0.7rem 0.85rem;
+  border-radius: 9px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-secondary);
+  font-size: 0.8rem;
+}
+
+[data-theme="light"] .inspect-mlc1-channel-card {
+  background: #ffffff;
+  border-color: #e2e8f0;
+}
+
+.inspect-mlc1-channel-card.has-diff {
+  border-color: rgba(245, 158, 11, 0.45);
+}
+
+.inspect-mlc1-diagnostic-box {
+  margin-top: 0.9rem;
+  padding: 0.85rem 0.95rem;
+  border-radius: 10px;
+  border: 1px dashed rgba(239, 68, 68, 0.45);
+  background: rgba(239, 68, 68, 0.06);
+}
+
+[data-theme="light"] .inspect-mlc1-diagnostic-box {
+  background: #fff5f5;
+  border-color: #f87171;
+}
+
+.inspect-mlc1-diagnostic-pre {
+  margin: 0.5rem 0 0 0;
+  padding: 0.65rem 0.75rem;
+  border-radius: 8px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  max-height: 220px;
+  overflow: auto;
+  color: var(--text-secondary);
+}
+
+/* ========================================================
+   PLAN MAESTRO 23.5 - FASE 4: MINI-GUÍA COMPILACIÓN DUAL (#tabReleaseManager)
+   ======================================================== */
+.dual-build-guide-panel {
+  margin-bottom: 1.25rem;
+  padding: 1.05rem 1.15rem;
+  border-radius: 12px;
+  border: 1px solid rgba(59, 130, 246, 0.3);
+  background: rgba(15, 23, 42, 0.45);
+}
+
+[data-theme="light"] .dual-build-guide-panel {
+  background: #f8fafc;
+  border-color: #cbd5e1;
+}
+
+.dual-build-guide-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.9rem;
+}
+
+.dual-build-guide-head h3 {
+  margin: 0 0 0.25rem 0;
+  font-size: 0.96rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.dual-build-guide-sub {
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+  line-height: 1.45;
+}
+
+.dual-build-guide-dest {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-secondary);
+  font-size: 0.76rem;
+}
+
+[data-theme="light"] .dual-build-guide-dest {
+  background: #ffffff;
+  border-color: #cbd5e1;
+}
+
+.dual-build-dest-label {
+  font-size: 0.69rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--text-muted);
+}
+
+.dual-build-variants-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 0.85rem;
+  margin-bottom: 0.95rem;
+}
+
+.dual-build-variant-card {
+  padding: 0.85rem 0.95rem;
+  border-radius: 10px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-secondary);
+}
+
+.dual-build-variant-card.is-universal {
+  border-top: 3px solid #6366f1;
+}
+
+.dual-build-variant-card.is-arm64 {
+  border-top: 3px solid #10b981;
+}
+
+[data-theme="light"] .dual-build-variant-card {
+  background: #ffffff;
+  border-color: #e2e8f0;
+}
+
+.dual-build-variant-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.35rem;
+  font-size: 0.9rem;
+  color: var(--text-primary);
+}
+
+.dual-build-size-pill {
+  padding: 0.14rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  font-family: var(--font-mono);
+  background: rgba(99, 102, 241, 0.16);
+  color: #a5b4fc;
+}
+
+.dual-build-size-pill.is-highlight {
+  background: rgba(16, 185, 129, 0.16);
+  color: #34d399;
+}
+
+[data-theme="light"] .dual-build-size-pill {
+  background: rgba(79, 70, 229, 0.12);
+  color: #4338ca;
+}
+
+[data-theme="light"] .dual-build-size-pill.is-highlight {
+  background: rgba(5, 150, 105, 0.12);
+  color: #047857;
+}
+
+.dual-build-variant-file {
+  margin-bottom: 0.35rem;
+  font-size: 0.78rem;
+}
+
+.dual-build-variant-card p {
+  margin: 0;
+  font-size: 0.79rem;
+  line-height: 1.45;
+  color: var(--text-secondary);
+}
+
+.dual-build-commands-box,
+.dual-build-steps-box {
+  padding: 0.85rem 0.95rem;
+  border-radius: 10px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-secondary);
+}
+
+.dual-build-commands-box {
+  margin-bottom: 0.85rem;
+}
+
+[data-theme="light"] .dual-build-commands-box,
+[data-theme="light"] .dual-build-steps-box {
+  background: #ffffff;
+  border-color: #e2e8f0;
+}
+
+.dual-build-section-title {
+  font-size: 0.81rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 0.6rem;
+}
+
+.dual-build-cmd-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.dual-build-cmd-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.55rem 0.7rem;
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-primary);
+  flex-wrap: wrap;
+}
+
+[data-theme="light"] .dual-build-cmd-row {
+  background: #f8fafc;
+  border-color: #e2e8f0;
+}
+
+.dual-build-cmd-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  min-width: 240px;
+  flex: 1;
+}
+
+.dual-build-cmd-code {
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #60a5fa;
+}
+
+[data-theme="light"] .dual-build-cmd-code {
+  color: #1d4ed8;
+}
+
+.dual-build-cmd-desc {
+  font-size: 0.76rem;
+  color: var(--text-secondary);
+}
+
+.btn-copy-dual-cmd.is-copied {
+  border-color: rgba(16, 185, 129, 0.55);
+  color: #34d399;
+}
+
+[data-theme="light"] .btn-copy-dual-cmd.is-copied {
+  border-color: #059669;
+  color: #047857;
+}
+
+.dual-build-steps-list {
+  margin: 0;
+  padding-left: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.32rem;
+  font-size: 0.8rem;
+  line-height: 1.48;
+  color: var(--text-secondary);
 }
 

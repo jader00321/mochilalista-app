@@ -72,6 +72,33 @@ class CommercialConfigSyncService {
 
   final Ed25519 _ed25519 = Ed25519();
 
+  /// Extrae un token `MLC1-...` desde mensajes completos de WhatsApp, texto libre o salida QR.
+  /// Paritario con `app_movil/lib/core/services/license/commercial_config_sync_service.dart`.
+  static String extractMlc1Token(String rawInput) {
+    final trimmed = rawInput.trim();
+    if (trimmed.isEmpty) return '';
+
+    final explicitPattern = RegExp(
+      r'mlc1-([A-Za-z0-9_\-+=]{10,}\.[A-Za-z0-9_\-+=]{20,})',
+      caseSensitive: false,
+    );
+    final match = explicitPattern.firstMatch(trimmed);
+    if (match != null) {
+      return '$tokenPrefix${match.group(1)!}';
+    }
+    return '';
+  }
+
+  /// Indica si la entrada apunta al protocolo `MLC1-` (incluso si está truncada o corrupta)
+  /// para evitar que sea evaluada por el validador `ML9`.
+  static bool looksLikeMlc1Input(String rawInput) {
+    final trimmed = rawInput.trim();
+    if (trimmed.isEmpty) return false;
+    if (trimmed.toUpperCase().startsWith(tokenPrefix)) return true;
+    if (extractMlc1Token(trimmed).isNotEmpty) return true;
+    return RegExp(r'(?:^|\s)\*?MLC1-', caseSensitive: false).hasMatch(trimmed);
+  }
+
   static double _roundPrice(num raw, String fieldName) {
     final val = raw.toDouble();
     if (val.isNaN || val.isInfinite || val < 0 || val > 1000000) {
@@ -336,7 +363,8 @@ class CommercialConfigSyncService {
     SimplePublicKey? publicKey,
     List<int>? publicKeyBytes,
   }) async {
-    final clean = rawToken.trim();
+    final extracted = extractMlc1Token(rawToken);
+    final clean = extracted.isNotEmpty ? extracted : rawToken.trim();
     if (clean.isEmpty || !clean.startsWith(tokenPrefix)) {
       return {
         'valid': false,
@@ -460,10 +488,281 @@ class CommercialConfigSyncService {
       'status': 'VALID',
       'revision': (payloadMap['ver'] as num).toInt(),
       'schema_version': (payloadMap['v'] as num).toInt(),
+      'issued_at': issuedUtc.toIso8601String(),
       'issued_at_unix': iatUnix,
       'issued_at_lima': PeruTimeHelper.formatLimaDateTime(issuedUtc),
+      'payload_bytes': payloadBytes.length,
+      'token_bytes': cleanBytes.length,
+      'max_payload_bytes': maxPayloadBytes,
+      'domain_separated': true,
+      'domain_message_prefix': tokenPrefix,
+      'clean_token': clean,
       'payload': payloadMap,
       'summary': buildSummaryFromPayload(payloadMap),
+    };
+  }
+
+  /// Decodifica de forma segura y acotada (solo lectura diagnóstica, nunca confiable)
+  /// el payload JSON de una ficha `MLC1-...` cuya firma o esquema fallaron.
+  Map<String, dynamic>? tryDecodePayloadDiagnostic(String rawInput) {
+    final extracted = extractMlc1Token(rawInput);
+    var clean = extracted.isNotEmpty ? extracted : rawInput.trim();
+    if (clean.isEmpty) return null;
+
+    if (!clean.toUpperCase().startsWith(tokenPrefix)) {
+      final marker = RegExp(
+        r'(?:^|\s)\*?(mlc1-[^\s*]+)',
+        caseSensitive: false,
+      ).firstMatch(clean);
+      if (marker == null) return null;
+      clean = marker.group(1)!;
+    }
+
+    if (utf8.encode(clean).length > maxTokenBytes) return null;
+    final body = clean.substring(tokenPrefix.length);
+    final dotIdx = body.indexOf('.');
+    final payloadB64 = dotIdx >= 0 ? body.substring(0, dotIdx) : body;
+    if (payloadB64.isEmpty) return null;
+
+    try {
+      final payloadBytes = LicenseSigner.decodeBase64UrlSafe(payloadB64);
+      if (payloadBytes.isEmpty || payloadBytes.length > maxPayloadBytes) {
+        return null;
+      }
+      final decoded = jsonDecode(utf8.decode(payloadBytes));
+      if (decoded is! Map) return null;
+      return Map<String, dynamic>.from(decoded);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Extrae un resumen diagnóstico tolerante a campos parciales o corruptos (solo lectura).
+  Map<String, dynamic> buildDiagnosticSummaryFromMap(
+    Map<String, dynamic> rawMap,
+  ) {
+    final rev = (rawMap['ver'] is num) ? (rawMap['ver'] as num).toInt() : null;
+    final iat = (rawMap['iat'] is num) ? (rawMap['iat'] as num).toInt() : null;
+    String? issuedLima;
+    if (iat != null && iat > 0) {
+      final dt = DateTime.fromMillisecondsSinceEpoch(iat * 1000, isUtc: true);
+      issuedLima = PeruTimeHelper.formatLimaDateTime(dt);
+    }
+    final productsRaw = rawMap['p'];
+    final unexpectedKeys = rawMap.keys
+        .map((k) => k.toString())
+        .where((k) => !_allowedTopLevelKeys.contains(k))
+        .toList();
+
+    return {
+      'revision': rev,
+      'schema_version': rawMap['v'],
+      'issued_at_lima': issuedLima,
+      'support_phone': rawMap['sup']?.toString(),
+      'yape_holder': rawMap['yh']?.toString(),
+      'yape_phone': rawMap['yp']?.toString(),
+      'products_count': productsRaw is Map ? productsRaw.length : 0,
+      'unexpected_keys': unexpectedKeys,
+    };
+  }
+
+  static String _formatBankAccountDisplay(Map? bankMap) {
+    if (bankMap == null) return 'Omitido';
+    final acc = (bankMap['acc'] ?? '').toString().trim();
+    final cci = (bankMap['cci'] ?? '').toString().trim();
+    final holder = (bankMap['h'] ?? '').toString().trim();
+    if (acc.isEmpty && cci.isEmpty && holder.isEmpty) return 'Omitido';
+    final parts = <String>[];
+    if (acc.isNotEmpty) parts.add(acc);
+    if (cci.isNotEmpty) parts.add('CCI: $cci');
+    if (holder.isNotEmpty) parts.add(holder);
+    return parts.join(' · ');
+  }
+
+  static bool _bankAccountsEqual(Map? a, Map? b) {
+    for (final k in const ['h', 'acc', 'cci']) {
+      final av = (a?[k] ?? '').toString().trim();
+      final bv = (b?[k] ?? '').toString().trim();
+      if (av != bv) return false;
+    }
+    return true;
+  }
+
+  /// Compara la ficha `MLC1` decodificada contra la revisión local y `owner_config.json` actual.
+  Map<String, dynamic> buildCurrentConfigComparison(
+    Map<String, dynamic> decodedPayload,
+    Map<String, dynamic> currentConfig, {
+    required int localRevision,
+  }) {
+    final tokenRev = (decodedPayload['ver'] as num?)?.toInt() ?? 0;
+    final safeLocalRev = localRevision < 0 ? 0 : localRevision;
+
+    final String revisionStatus;
+    final String revisionStatusLabel;
+    final String recommendation;
+    if (safeLocalRev >= 1 && tokenRev == safeLocalRev) {
+      revisionStatus = 'CURRENT';
+      revisionStatusLabel = 'Revisión vigente en Admin';
+      recommendation =
+          'Revisión vigente actual en Admin — Lista para compartir con tus clientes.';
+    } else if (tokenRev < safeLocalRev) {
+      revisionStatus = 'SUPERSEDED';
+      revisionStatusLabel = 'Revisión anterior a la local';
+      recommendation =
+          'Revisión anterior — Los celulares que ya aplicaron la Rev. #$safeLocalRev la rechazarán por protección anti-downgrade; genera una ficha nueva si deseas actualizarlos.';
+    } else {
+      revisionStatus = 'AHEAD_OR_EXTERNAL';
+      revisionStatusLabel = 'Revisión superior a la local';
+      recommendation =
+          'Revisión superior a la local — Emitida en otro equipo o antes de restaurar un respaldo.';
+    }
+
+    Map<String, dynamic> currentSnapshot;
+    try {
+      currentSnapshot = buildCanonicalPayload(
+        currentConfig,
+        revision: safeLocalRev < 1 ? 1 : safeLocalRev,
+      );
+    } catch (_) {
+      final li = currentConfig['legal_identity'] is Map
+          ? Map<String, dynamic>.from(currentConfig['legal_identity'] as Map)
+          : <String, dynamic>{};
+      final pm = currentConfig['payment_methods'] is Map
+          ? Map<String, dynamic>.from(currentConfig['payment_methods'] as Map)
+          : <String, dynamic>{};
+      final yape = _extractYapePlin(pm, li);
+      currentSnapshot = {
+        'sup': _sanitizeString(li['support_phone'] ?? '', maxLength: 40),
+        'yh': yape['holder']!,
+        'yp': yape['phone']!,
+        'bcp': _extractPaymentAccountTriple(pm, 'bcp'),
+        'bbva': _extractPaymentAccountTriple(pm, 'bbva'),
+        'p': <String, dynamic>{},
+      };
+    }
+
+    final tokProducts = decodedPayload['p'] is Map
+        ? decodedPayload['p'] as Map
+        : const <String, dynamic>{};
+    final curProducts = currentSnapshot['p'] is Map
+        ? currentSnapshot['p'] as Map
+        : const <String, dynamic>{};
+
+    final productsDiff = <Map<String, dynamic>>[];
+    int diffCount = 0;
+
+    for (final id in catalogSlugToSyncId.values) {
+      final tp = tokProducts[id] is Map ? tokProducts[id] as Map : const {};
+      final cp = curProducts[id] is Map ? curProducts[id] as Map : const {};
+
+      final tokPr = ((tp['pr'] as num?)?.toDouble() ?? 0.0);
+      final tokD = (tp['d'] as num?)?.toInt() ?? 0;
+      final tokAi = (tp['ai'] as num?)?.toInt() ?? 0;
+      final tokUm = (tp['um'] as num?)?.toInt() ?? 0;
+      final tokLb = (tp['lb'] ?? '').toString().trim();
+
+      final curPr = ((cp['pr'] as num?)?.toDouble() ?? 0.0);
+      final curD = (cp['d'] as num?)?.toInt() ?? 0;
+      final curAi = (cp['ai'] as num?)?.toInt() ?? 0;
+      final curUm = (cp['um'] as num?)?.toInt() ?? 0;
+      final curLb = (cp['lb'] ?? '').toString().trim();
+
+      final changedFields = <String>[];
+      if ((tokPr - curPr).abs() >= 0.005) changedFields.add('pr');
+      if (tokD != curD) changedFields.add('d');
+      if (tokAi != curAi) changedFields.add('ai');
+      if (tokUm != curUm) changedFields.add('um');
+
+      final matches = changedFields.isEmpty;
+      if (!matches) diffCount++;
+
+      productsDiff.add({
+        'id': id,
+        'label': curLb.isNotEmpty ? curLb : (tokLb.isNotEmpty ? tokLb : id),
+        'token_label': tokLb,
+        'current_label': curLb,
+        'token_values': {
+          'pr': tokPr,
+          'd': tokD,
+          'ai': tokAi,
+          'um': tokUm,
+        },
+        'current_values': {
+          'pr': curPr,
+          'd': curD,
+          'ai': curAi,
+          'um': curUm,
+        },
+        'changed_fields': changedFields,
+        'matches': matches,
+      });
+    }
+
+    final tokSup = (decodedPayload['sup'] ?? '').toString().trim();
+    final curSup = (currentSnapshot['sup'] ?? '').toString().trim();
+    final tokYh = (decodedPayload['yh'] ?? '').toString().trim();
+    final curYh = (currentSnapshot['yh'] ?? '').toString().trim();
+    final tokYp = (decodedPayload['yp'] ?? '').toString().trim();
+    final curYp = (currentSnapshot['yp'] ?? '').toString().trim();
+    final tokBcp = decodedPayload['bcp'] is Map ? decodedPayload['bcp'] as Map : null;
+    final curBcp = currentSnapshot['bcp'] is Map ? currentSnapshot['bcp'] as Map : null;
+    final tokBbva = decodedPayload['bbva'] is Map ? decodedPayload['bbva'] as Map : null;
+    final curBbva = currentSnapshot['bbva'] is Map ? currentSnapshot['bbva'] as Map : null;
+
+    final channelsDiff = <Map<String, dynamic>>[
+      {
+        'key': 'sup',
+        'label': 'Teléfono Soporte',
+        'token_value': tokSup.isEmpty ? 'Omitido' : tokSup,
+        'current_value': curSup.isEmpty ? 'Omitido' : curSup,
+        'matches': tokSup == curSup,
+      },
+      {
+        'key': 'yh',
+        'label': 'Titular Yape / Plin',
+        'token_value': tokYh.isEmpty ? 'Omitido' : tokYh,
+        'current_value': curYh.isEmpty ? 'Omitido' : curYh,
+        'matches': tokYh == curYh,
+      },
+      {
+        'key': 'yp',
+        'label': 'Número Yape / Plin',
+        'token_value': tokYp.isEmpty ? 'Omitido' : tokYp,
+        'current_value': curYp.isEmpty ? 'Omitido' : curYp,
+        'matches': tokYp == curYp,
+      },
+      {
+        'key': 'bcp',
+        'label': 'Cuenta BCP',
+        'token_value': _formatBankAccountDisplay(tokBcp),
+        'current_value': _formatBankAccountDisplay(curBcp),
+        'matches': _bankAccountsEqual(tokBcp, curBcp),
+      },
+      {
+        'key': 'bbva',
+        'label': 'Cuenta BBVA',
+        'token_value': _formatBankAccountDisplay(tokBbva),
+        'current_value': _formatBankAccountDisplay(curBbva),
+        'matches': _bankAccountsEqual(tokBbva, curBbva),
+      },
+    ];
+
+    for (final ch in channelsDiff) {
+      if (ch['matches'] != true) diffCount++;
+    }
+
+    return {
+      'local_revision': safeLocalRev,
+      'token_revision': tokenRev,
+      'revision_status': revisionStatus,
+      'revision_status_label': revisionStatusLabel,
+      'recommendation': recommendation,
+      'diff_vs_current': {
+        'matches_current': diffCount == 0,
+        'total_differences': diffCount,
+        'products_diff': productsDiff,
+        'channels_diff': channelsDiff,
+      },
     };
   }
 
