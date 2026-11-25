@@ -22,26 +22,20 @@ class AppChangelogRegistry {
   static const String currentVersion = OwnerLegalIdentity.currentAppVersionWithBuild;
 
   // =========================================================================
-  // NOVEDADES ACTIVAS DE LA VERSIÓN ACTUAL (v9.40.0+84)
+  // NOVEDADES ACTIVAS DE LA VERSIÓN ACTUAL (v9.41.0+85)
   // =========================================================================
   static const List<AppChangelogItem> activeChangelog = [
     AppChangelogItem(
-      icon: Icons.dashboard_customize_rounded,
-      title: "Inicio más amplio y fluido",
+      icon: Icons.verified_user_rounded,
+      title: "Actualización segura de tarifas y cuentas sin internet",
       description:
-          "Encabezado superior optimizado para ver tus herramientas clave de inmediato y navegación sin parpadeos al volver desde tu Perfil.",
+          "Actualiza los precios oficiales de planes, cuotas IA y cuentas bancarias mediante ficha firmada desde Código o QR sin necesidad de conexión ni esperar una nueva versión.",
     ),
     AppChangelogItem(
-      icon: Icons.explore_rounded,
-      title: "Guías interactivas ampliadas y respetuosas",
+      icon: Icons.bolt_rounded,
+      title: "App más liviana y descarga ágil por WhatsApp",
       description:
-          "Nuevas guías paso a paso por cada pestaña de Gestión de Negocio, Cotización Manual, Detalle Financiero de Ventas y pantallas secundarias, sin reactivarse automáticamente al actualizar la app.",
-    ),
-    AppChangelogItem(
-      icon: Icons.radar_rounded,
-      title: "Radar Comercial IA independiente por perfil de negocio",
-      description:
-          "Cada sucursal o perfil en tu celular conserva su propia ubicación y noticias guardadas.",
+          "Recursos visuales optimizados y nueva edición ligera ARM64 para instalaciones y envíos rápidos conservando tus negocios y respaldos intactos.",
     ),
   ];
 
@@ -63,6 +57,26 @@ class AppChangelogRegistry {
   // En cada nueva compilación de release, mover aquí el bloque anterior.
   // =========================================================================
   static final Map<String, List<AppChangelogItem>> _historicalChangelogs = {
+    '9.40.0+84': const [
+      AppChangelogItem(
+        icon: Icons.dashboard_customize_rounded,
+        title: "Inicio más amplio y fluido",
+        description:
+            "Encabezado superior optimizado para ver tus herramientas clave de inmediato y navegación sin parpadeos al volver desde tu Perfil.",
+      ),
+      AppChangelogItem(
+        icon: Icons.explore_rounded,
+        title: "Guías interactivas ampliadas y respetuosas",
+        description:
+            "Nuevas guías paso a paso por cada pestaña de Gestión de Negocio, Cotización Manual, Detalle Financiero de Ventas y pantallas secundarias, sin reactivarse automáticamente al actualizar la app.",
+      ),
+      AppChangelogItem(
+        icon: Icons.radar_rounded,
+        title: "Radar Comercial IA independiente por perfil de negocio",
+        description:
+            "Cada sucursal o perfil en tu celular conserva su propia ubicación y noticias guardadas.",
+      ),
+    ],
     '9.39.0+83': const [
       AppChangelogItem(
         icon: Icons.workspace_premium_rounded,

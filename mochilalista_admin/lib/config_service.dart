@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 import 'apk_inspector_service.dart';
+import 'time_utils.dart';
 
 /// Excepción lanzada cuando el propietario intenta registrar una ruta prohibida o inválida
 class InvalidApkSearchDirException implements Exception {
@@ -307,6 +308,31 @@ class ConfigService {
   double get migrationFee =>
       (catalog['HARDWARE_MIGRATION_FEE']?['price'] as num?)?.toDouble() ?? 40.0;
 
+  /// Revisión monotónica de sincronización comercial `MLC1-...` (nunca retrocede).
+  int get commercialSyncRevision {
+    final raw = (system['commercial_sync_revision'] as num?)?.toInt() ?? 0;
+    return raw < 0 ? 0 : raw;
+  }
+
+  /// Incrementa atómicamente `system.commercial_sync_revision` y persiste en disco.
+  Future<int> incrementCommercialSyncRevision() async {
+    final nextRevision = commercialSyncRevision + 1;
+    final sysMap = Map<String, dynamic>.from(system);
+    sysMap['commercial_sync_revision'] = nextRevision;
+    _config['system'] = sysMap;
+    await _persistConfig();
+
+    if (onConfigChanged != null) {
+      try {
+        await onConfigChanged!();
+      } catch (e) {
+        stderr.writeln(
+            'Warning: Error al ejecutar onConfigChanged tras incrementCommercialSyncRevision: $e');
+      }
+    }
+    return nextRevision;
+  }
+
   /// Inicializa el servicio: crea directorios si no existen y carga o crea la configuración de fábrica
   Future<void> init() async {
     if (!await dataDirectory.exists()) {
@@ -321,6 +347,7 @@ class ConfigService {
         final content = await configFile.readAsString();
         final parsed = jsonDecode(content) as Map<String, dynamic>;
         _config = _deepMerge(getDefaultConfig(), parsed);
+        _normalizeLoadedConfig(_config, parsed);
       } catch (e) {
         // En caso de corrupción, respaldar y restaurar de fábrica
         await _createBackupSnapshot('corrupted_recovery');
@@ -333,6 +360,22 @@ class ConfigService {
     }
   }
 
+  /// Normaliza alias canónicos entre claves de `templates` (`welcome` <-> `trial_welcome`, etc.).
+  static String canonicalTemplateKey(String key) {
+    switch (key.trim()) {
+      case 'welcome':
+        return 'trial_welcome';
+      case 'expiring':
+        return 'expiring_reminder';
+      case 'license':
+        return 'license_issued';
+      case 'update':
+        return 'apk_update_eligible';
+      default:
+        return key.trim();
+    }
+  }
+
   /// Retorna la configuración oficial de fábrica completa
   static Map<String, dynamic> getDefaultConfig() {
     return {
@@ -341,6 +384,7 @@ class ConfigService {
         'theme': 'dark',
         'table_density': 'comfortable',
         'version': '1.0.0',
+        'commercial_sync_revision': 0,
         'apk_library_dir': r'C:\Users\vjuli\Documents\v-app-offline apks',
       },
       'legal_identity': {
@@ -367,61 +411,101 @@ class ConfigService {
           'price': 0.0,
           'days': 30,
           'ai_credits': 50,
+          'updates_window_months': 0,
+          'updates_months': 0,
           'label': 'Prueba Gratuita',
+          'description':
+              'Evaluación gratuita de 30 días con funciones POS completas e IA.',
         },
         'MENSUAL': {
           'price': 35.0,
           'days': 30,
           'ai_credits': 50,
+          'updates_window_months': 0,
+          'updates_months': 0,
           'label': 'Plan Mensual',
+          'description':
+              'Suscripción mensual flexible 100% offline con respaldo de base local.',
         },
         'TRIMESTRAL': {
           'price': 90.0,
           'days': 90,
           'ai_credits': 180,
+          'updates_window_months': 0,
+          'updates_months': 0,
           'label': 'Plan Trimestral',
+          'description':
+              'Suscripción trimestral de 90 días con bolsa IA ampliada (+180 escaneos).',
         },
         'SEMESTRAL': {
           'price': 160.0,
           'days': 180,
           'ai_credits': 450,
+          'updates_window_months': 0,
+          'updates_months': 0,
           'label': 'Plan Semestral',
+          'description':
+              'Suscripción semestral de 180 días con +450 escaneos IA acumulados.',
         },
         'ANUAL': {
           'price': 280.0,
           'days': 365,
           'ai_credits': 1200,
+          'updates_window_months': 0,
+          'updates_months': 0,
           'label': 'Plan Anual',
+          'description':
+              'Suscripción anual prioritaria con +1,200 escaneos IA vitalicios incluidos.',
         },
         'PERPETUO_LIBERADO': {
           'price': 850.0,
           'days': 99999,
           'ai_credits': 200,
+          'updates_window_months': 12,
           'updates_months': 12,
           'label': 'Perpetuo Liberado',
+          'description':
+              'Licencia vitalicia para tu negocio con 12 meses de actualizaciones incluidos.',
         },
         'PASE_ACTUALIZACION_ANUAL': {
           'price': 150.0,
           'days': 0,
+          'updates_window_months': 12,
           'updates_months': 12,
           'ai_credits': 100,
           'label': 'Pase Anual de Updates',
+          'description':
+              'Renovación anual de versiones APK (+12 meses de actualizaciones y +100 IA).',
         },
         'RECARGA_IA_150': {
           'price': 20.0,
           'days': 0,
           'ai_credits': 150,
+          'updates_window_months': 0,
+          'updates_months': 0,
           'label': 'Recarga Extra IA (+150)',
+          'description':
+              'Bolsa adicional de +150 escaneos de IA acumulativos sin vencimiento.',
         },
         'EXTENSION_CORTESIA': {
           'price': 0.0,
           'days': 7,
           'ai_credits': 0,
+          'updates_window_months': 0,
+          'updates_months': 0,
           'label': 'Extensión de Cortesía',
+          'description':
+              'Extensión temporal de gracia sin costo (S/ 0.00) por 7 días.',
         },
         'HARDWARE_MIGRATION_FEE': {
           'price': 40.0,
+          'days': 0,
+          'ai_credits': 0,
+          'updates_window_months': 0,
+          'updates_months': 0,
           'label': 'Tarifa Técnica de Migración',
+          'description':
+              'Servicio técnico de traslado y re-emisión de licencia a un nuevo celular.',
         },
       },
       'templates': {
@@ -453,6 +537,29 @@ class ConfigService {
             '🔑 *Tu Código de Activación:*\n'
             '{codigo}\n\n'
             '¡Comienza a registrar tus ventas e inventario hoy mismo!',
+        'prospect':
+            'Hola {titular}, te saluda {autor} de MochilaLista.\n\n'
+            'Nos comunicamos para hacer seguimiento a la evaluación del sistema de punto de venta en tu negocio *{negocio}*.\n\n'
+            '¿Has tenido oportunidad de revisar las funciones de cobro rápido, inventario e IA offline?\n'
+            'Con gusto podemos coordinar una breve demostración o habilitarte una activación personalizada adaptada al ritmo de tu negocio.\n\n'
+            'Quedamos a tu orden.',
+        'ai_bonus':
+            'Hola {titular}, te saluda {autor} de MochilaLista.\n\n'
+            'Tu recarga de escaneos de Inteligencia Artificial para *{negocio}* ha sido acreditada con éxito.\n\n'
+            '*Detalle de la Recarga:*\n'
+            '• Créditos IA Otorgados: +{creditos_ia} escaneos vitalicios\n'
+            '• Hardware ID Vinculado: `{device_id}`\n\n'
+            '*Token de Activación IA:*\n'
+            '{codigo}\n\n'
+            'Ingresa este código o escanea el QR en tu app para sumarlos de inmediato a tu saldo disponible.',
+        'courtesy_extension':
+            'Estimado(a) {titular}, te saluda {autor} de MochilaLista.\n\n'
+            'Te confirmamos la habilitación de una extensión de cortesía por *{dias} día(s)* adicionales para *{negocio}*.\n\n'
+            '• Nueva vigencia temporal: *{vencimiento}*\n'
+            '• Hardware ID: `{device_id}`\n\n'
+            '*Código de Activación:*\n'
+            '{codigo}\n\n'
+            'Ingresa este código en tu aplicación para continuar operando sin interrupciones.',
         'apk_update_eligible':
             'Hola {titular}, te saluda {autor} de MochilaLista.\n\n'
             '¡Tenemos lista una nueva actualización oficial para *{negocio}*!\n\n'
@@ -595,9 +702,34 @@ class ConfigService {
     return fallback;
   }
 
+  /// Retorna los meses de ventana de actualizaciones configurados para un plan
+  int getPlanUpdatesMonths(String planSlug, {int fallback = 0}) {
+    final conf = getPlanConfig(planSlug);
+    if (conf != null) {
+      final raw = conf['updates_window_months'] ?? conf['updates_months'];
+      if (raw is num) {
+        return raw.toInt() < 0 ? 0 : raw.toInt();
+      }
+    }
+    return fallback;
+  }
+
   /// Recarga en memoria la configuración desde el archivo en disco
   Future<void> reloadFromDisk() async {
     await init();
+  }
+
+  /// Recarga la configuración desde disco tras restaurar un respaldo GLOBAL y notifica oyentes si [notify] es true.
+  Future<void> reload({bool notify = true}) async {
+    await init();
+    if (notify && onConfigChanged != null) {
+      try {
+        await onConfigChanged!();
+      } catch (e) {
+        stderr.writeln(
+            'Warning: Error al ejecutar onConfigChanged tras reload: $e');
+      }
+    }
   }
 
   /// Valida, respalda automáticamente en `backups/` y persiste los cambios de configuración
@@ -621,17 +753,103 @@ class ConfigService {
   }
 
   /// Restaura la configuración a los valores de fábrica de MochilaLista
-  /// creando un snapshot de respaldo del estado previo.
-  Future<Map<String, dynamic>> resetToDefaults() async {
+  /// según [scope] (`all`, `pricing`, `templates`, `payment`, `preferences`),
+  /// creando un snapshot de respaldo `pre_reset` del estado previo y preservando
+  /// `system.apk_library_dir` y `system.apk_search_dirs`.
+  Future<Map<String, dynamic>> resetToDefaults({String scope = 'all'}) async {
+    final normScope = scope.trim().toLowerCase();
+    const allowedScopes = {
+      'all',
+      'pricing',
+      'templates',
+      'payment',
+      'preferences',
+    };
+    if (!allowedScopes.contains(normScope)) {
+      throw ArgumentError.value(scope, 'scope', 'Alcance de reset inválido');
+    }
+
     await _createBackupSnapshot('pre_reset');
-    _config = getDefaultConfig();
+
+    final defaults = getDefaultConfig();
+    final currentCopy = _config.isNotEmpty
+        ? jsonDecode(jsonEncode(_config)) as Map<String, dynamic>
+        : jsonDecode(jsonEncode(defaults)) as Map<String, dynamic>;
+    final prevLegal = Map<String, dynamic>.from(
+        (currentCopy['legal_identity'] as Map?) ?? {});
+    final curSystem =
+        Map<String, dynamic>.from((currentCopy['system'] as Map?) ?? {});
+    final preservedApkLib = curSystem['apk_library_dir'];
+    final preservedSearchDirs = curSystem['apk_search_dirs'];
+    final preservedSyncRevision = commercialSyncRevision;
+
+    if (normScope == 'all') {
+      _config = jsonDecode(jsonEncode(defaults)) as Map<String, dynamic>;
+      final nextSys = Map<String, dynamic>.from(_config['system'] as Map);
+      nextSys['commercial_sync_revision'] = preservedSyncRevision;
+      if (preservedApkLib is String && preservedApkLib.trim().isNotEmpty) {
+        nextSys['apk_library_dir'] = preservedApkLib;
+      }
+      if (preservedSearchDirs is List && preservedSearchDirs.isNotEmpty) {
+        nextSys['apk_search_dirs'] = preservedSearchDirs;
+      }
+      _config['system'] = nextSys;
+    } else if (normScope == 'pricing') {
+      currentCopy['catalog'] = defaults['catalog'];
+      currentCopy['migration_fee'] =
+          (defaults['catalog']['HARDWARE_MIGRATION_FEE']['price'] as num)
+              .toDouble();
+      _config = _sanitizeConfig(currentCopy);
+    } else if (normScope == 'templates') {
+      currentCopy['templates'] = defaults['templates'];
+      _config = _sanitizeConfig(currentCopy);
+    } else if (normScope == 'payment') {
+      currentCopy['legal_identity'] = defaults['legal_identity'];
+      currentCopy['payment_methods'] = defaults['payment_methods'];
+      _propagateLegalIdentityToReceiptConfig(
+        currentCopy,
+        prevLegal: prevLegal,
+      );
+      _config = _sanitizeConfig(currentCopy);
+    } else if (normScope == 'preferences') {
+      final defSys = Map<String, dynamic>.from(defaults['system'] as Map);
+      curSystem['default_mode'] = defSys['default_mode'];
+      curSystem['theme'] = defSys['theme'];
+      curSystem['table_density'] = defSys['table_density'];
+      curSystem['commercial_sync_revision'] = preservedSyncRevision;
+      if (preservedApkLib is String && preservedApkLib.trim().isNotEmpty) {
+        curSystem['apk_library_dir'] = preservedApkLib;
+      }
+      if (preservedSearchDirs is List && preservedSearchDirs.isNotEmpty) {
+        curSystem['apk_search_dirs'] = preservedSearchDirs;
+      }
+      currentCopy['system'] = curSystem;
+      currentCopy['preferences'] = {
+        'default_environment': defSys['default_mode'],
+        'default_theme': defSys['theme'],
+        'table_density': defSys['table_density'],
+      };
+      _config = _sanitizeConfig(currentCopy);
+    }
+
+    // Doble garantía anti-downgrade en todos los alcances de reset
+    final finalSys =
+        Map<String, dynamic>.from((_config['system'] as Map?) ?? {});
+    final currentRevAfter =
+        (finalSys['commercial_sync_revision'] as num?)?.toInt() ?? 0;
+    if (preservedSyncRevision > currentRevAfter) {
+      finalSys['commercial_sync_revision'] = preservedSyncRevision;
+      _config['system'] = finalSys;
+    }
+
     await _persistConfig();
 
     if (onConfigChanged != null) {
       try {
         await onConfigChanged!();
       } catch (e) {
-        stderr.writeln('Warning: Error al ejecutar onConfigChanged tras resetToDefaults: $e');
+        stderr.writeln(
+            'Warning: Error al ejecutar onConfigChanged tras resetToDefaults: $e');
       }
     }
     return _config;
@@ -643,6 +861,11 @@ class ConfigService {
     String template = templateKeyOrRaw;
     if (templates.containsKey(templateKeyOrRaw)) {
       template = templates[templateKeyOrRaw] as String;
+    } else {
+      final canonKey = canonicalTemplateKey(templateKeyOrRaw);
+      if (templates.containsKey(canonKey)) {
+        template = templates[canonKey] as String;
+      }
     }
 
     final pm = paymentMethods;
@@ -687,6 +910,14 @@ class ConfigService {
       final cleanKey = key.startsWith('{') && key.endsWith('}') ? key : '{$key}';
       vars[cleanKey] = val?.toString() ?? '';
     });
+    if (vars.containsKey('{codigo}') && !vars.containsKey('{codigo_licencia}')) {
+      vars['{codigo_licencia}'] = vars['{codigo}']!;
+    } else if (vars.containsKey('{codigo_licencia}') && !vars.containsKey('{codigo}')) {
+      vars['{codigo}'] = vars['{codigo_licencia}']!;
+    }
+    if (vars.containsKey('{commercial_name}') && !vars.containsKey('{brand_name}')) {
+      vars['{brand_name}'] = vars['{commercial_name}']!;
+    }
 
     // 3. Sustitución secuencial
     String result = template;
@@ -702,7 +933,7 @@ class ConfigService {
     if (!await backupsDirectory.exists()) {
       await backupsDirectory.create(recursive: true);
     }
-    final now = DateTime.now();
+    final now = PeruTimeHelper.toLimaDateTime(DateTime.now());
     final y = now.year.toString().padLeft(4, '0');
     final m = now.month.toString().padLeft(2, '0');
     final d = now.day.toString().padLeft(2, '0');
@@ -737,11 +968,13 @@ class ConfigService {
         // Prefijo oficial de snapshot automático de configuración
         if (!filename.startsWith('owner_config_backup_')) continue;
 
-        // Excluir respaldos protegidos (manuales, bóveda, pre_restore, pre_import)
+        // Excluir respaldos protegidos (manuales, bóveda, pre_restore, before_restore, pre_import, pre_reset)
         final isProtected = lower.contains('manual') ||
             lower.contains('vault') ||
             lower.contains('pre_restore') ||
-            lower.contains('pre_import');
+            lower.contains('before_restore') ||
+            lower.contains('pre_import') ||
+            lower.contains('pre_reset');
         if (isProtected) continue;
 
         autoSnapshots.add(entity);
@@ -782,26 +1015,255 @@ class ConfigService {
     await configFile.writeAsString(const JsonEncoder.withIndent('  ').convert(_config));
   }
 
-  /// Sanitiza y valida la configuración entrante
+  /// Normaliza en memoria configuraciones históricas leídas desde disco sin sobrescribir datos del usuario.
+  void _normalizeLoadedConfig(
+    Map<String, dynamic> merged,
+    Map<String, dynamic> rawParsed,
+  ) {
+    _normalizeCatalogEntries(
+      merged,
+      rawCatalog: rawParsed['catalog'] is Map ? rawParsed['catalog'] as Map : null,
+    );
+    _normalizeTemplatesMap(merged, rawParsed['templates'] as Map?);
+    _normalizeSystemPreferences(merged);
+  }
+
+  /// Propaga cambios de `legal_identity` hacia `receipt_config` cuando los campos de boleta
+  /// aún reflejaban la identidad anterior o venían vacíos.
+  void _propagateLegalIdentityToReceiptConfig(
+    Map<String, dynamic> target, {
+    required Map<String, dynamic> prevLegal,
+  }) {
+    final newLegal =
+        (target['legal_identity'] as Map?)?.cast<String, dynamic>() ?? {};
+    final rcRaw = target['receipt_config'];
+    if (rcRaw is! Map) return;
+    final rc = Map<String, dynamic>.from(rcRaw);
+
+    final prevAuthor = (prevLegal['author_full_name'] as String? ?? '').trim();
+    final newAuthor = (newLegal['author_full_name'] as String? ?? '').trim();
+    final curIssuer = (rc['issuer_name'] as String? ?? '').trim();
+    if (newAuthor.isNotEmpty &&
+        (curIssuer.isEmpty || curIssuer == prevAuthor)) {
+      rc['issuer_name'] = newAuthor;
+    }
+
+    final prevBrand = (prevLegal['commercial_name'] as String? ??
+            prevLegal['brand_name'] as String? ??
+            '')
+        .trim();
+    final newBrand = (newLegal['commercial_name'] as String? ??
+            newLegal['brand_name'] as String? ??
+            '')
+        .trim();
+    final curComm = (rc['commercial_name'] as String? ?? '').trim();
+    if (newBrand.isNotEmpty && (curComm.isEmpty || curComm == prevBrand)) {
+      rc['commercial_name'] = newBrand;
+    }
+
+    final curSig = (rc['signature_text'] as String? ?? '').trim();
+    if (newBrand.isNotEmpty &&
+        (curSig.isEmpty || curSig == 'Administración Comercial — $prevBrand')) {
+      rc['signature_text'] = 'Administración Comercial — $newBrand';
+    }
+
+    final prevPhone = (prevLegal['support_phone'] as String? ?? '').trim();
+    final newPhone = (newLegal['support_phone'] as String? ?? '').trim();
+    final curPhone = (rc['issuer_phone'] as String? ?? '').trim();
+    if (newPhone.isNotEmpty && (curPhone.isEmpty || curPhone == prevPhone)) {
+      rc['issuer_phone'] = newPhone;
+    }
+
+    target['receipt_config'] = rc;
+  }
+
+  void _normalizeCatalogEntries(
+    Map<String, dynamic> target, {
+    Map? rawCatalog,
+  }) {
+    final defaultsCatalog =
+        (getDefaultConfig()['catalog'] as Map).cast<String, dynamic>();
+    final rawTargetCat = target['catalog'];
+    final catalogMap = rawTargetCat is Map
+        ? Map<String, dynamic>.from(rawTargetCat)
+        : <String, dynamic>{};
+
+    catalogMap.forEach((k, v) {
+      if (v is Map) {
+        final vMap = Map<String, dynamic>.from(v);
+        final rawEntry = rawCatalog != null && rawCatalog[k] is Map
+            ? rawCatalog[k] as Map
+            : null;
+        final defEntry = defaultsCatalog[k] is Map
+            ? defaultsCatalog[k] as Map
+            : null;
+
+        if (vMap.containsKey('price')) {
+          final p = (vMap['price'] as num?)?.toDouble() ?? 0.0;
+          vMap['price'] = p < 0 ? 0.0 : p;
+        }
+        if (vMap.containsKey('days')) {
+          final d = (vMap['days'] as num?)?.toInt() ?? 0;
+          vMap['days'] = d < 0 ? 0 : d;
+        }
+        if (vMap.containsKey('ai_credits')) {
+          final c = (vMap['ai_credits'] as num?)?.toInt() ?? 0;
+          vMap['ai_credits'] = c < 0 ? 0 : c;
+        }
+
+        // Unificación bidireccional updates_window_months <-> updates_months
+        int? resolvedUpdates;
+        if (rawEntry != null && rawEntry.containsKey('updates_window_months')) {
+          resolvedUpdates =
+              (rawEntry['updates_window_months'] as num?)?.toInt() ?? 0;
+        } else if (rawEntry != null && rawEntry.containsKey('updates_months')) {
+          resolvedUpdates = (rawEntry['updates_months'] as num?)?.toInt() ?? 0;
+        } else if (vMap.containsKey('updates_window_months')) {
+          resolvedUpdates =
+              (vMap['updates_window_months'] as num?)?.toInt() ?? 0;
+        } else if (vMap.containsKey('updates_months')) {
+          resolvedUpdates = (vMap['updates_months'] as num?)?.toInt() ?? 0;
+        } else if (defEntry != null) {
+          resolvedUpdates =
+              (defEntry['updates_window_months'] as num?)?.toInt() ??
+                  (defEntry['updates_months'] as num?)?.toInt() ??
+                  0;
+        }
+        final safeUpdates = (resolvedUpdates ?? 0) < 0 ? 0 : (resolvedUpdates ?? 0);
+        vMap['updates_window_months'] = safeUpdates;
+        vMap['updates_months'] = safeUpdates;
+
+        // Descripción comercial predeterminada si falta o quedó vacía
+        final curDesc = (vMap['description'] as String? ?? '').trim();
+        if (curDesc.isNotEmpty) {
+          vMap['description'] = curDesc;
+        } else if (defEntry != null && defEntry['description'] is String) {
+          vMap['description'] = defEntry['description'];
+        } else {
+          vMap['description'] = '';
+        }
+
+        catalogMap[k] = vMap;
+      }
+    });
+    target['catalog'] = catalogMap;
+  }
+
+  void _normalizeTemplatesMap(
+    Map<String, dynamic> target,
+    Map? rawTemplates,
+  ) {
+    final rawTargetTpl = target['templates'];
+    final tplMap = rawTargetTpl is Map
+        ? Map<String, dynamic>.from(rawTargetTpl)
+        : <String, dynamic>{};
+
+    const aliasToCanon = {
+      'welcome': 'trial_welcome',
+      'expiring': 'expiring_reminder',
+      'license': 'license_issued',
+      'update': 'apk_update_eligible',
+    };
+
+    aliasToCanon.forEach((alias, canon) {
+      final hasRawAlias =
+          rawTemplates != null && rawTemplates.containsKey(alias);
+      final hasRawCanon =
+          rawTemplates != null && rawTemplates.containsKey(canon);
+      final rawAliasVal = hasRawAlias ? rawTemplates[alias]?.toString() : null;
+      final rawCanonVal = hasRawCanon ? rawTemplates[canon]?.toString() : null;
+
+      if (hasRawAlias && (rawAliasVal?.trim().isNotEmpty ?? false)) {
+        // Conservar el alias explícito por retrocompatibilidad y sincronizar la clave canónica
+        tplMap[alias] = rawAliasVal;
+        if (!hasRawCanon || (rawCanonVal?.trim().isEmpty ?? true)) {
+          tplMap[canon] = rawAliasVal;
+        }
+      } else if (hasRawCanon &&
+          (rawCanonVal?.trim().isNotEmpty ?? false) &&
+          tplMap.containsKey(alias)) {
+        tplMap[alias] = rawCanonVal;
+      } else if (tplMap.containsKey(alias)) {
+        final curCanon = tplMap[canon]?.toString() ?? '';
+        final curAlias = tplMap[alias]?.toString() ?? '';
+        if (curAlias.isNotEmpty && curCanon.isEmpty) {
+          tplMap[canon] = curAlias;
+        } else if (curCanon.isNotEmpty && curAlias != curCanon) {
+          tplMap[alias] = curCanon;
+        }
+      }
+    });
+
+    target['templates'] = tplMap;
+  }
+
+  void _normalizeSystemPreferences(Map<String, dynamic> target) {
+    final sys = target['system'] is Map
+        ? Map<String, dynamic>.from(target['system'] as Map)
+        : <String, dynamic>{};
+
+    final rawMode = (sys['default_mode'] as String? ?? 'sandbox').trim().toLowerCase();
+    sys['default_mode'] = rawMode == 'prod' ? 'prod' : 'sandbox';
+
+    final rawTheme = (sys['theme'] as String? ?? 'dark').trim().toLowerCase();
+    sys['theme'] = rawTheme == 'light' ? 'light' : 'dark';
+
+    final rawDensity =
+        (sys['table_density'] as String? ?? 'comfortable').trim().toLowerCase();
+    sys['table_density'] = rawDensity == 'compact' ? 'compact' : 'comfortable';
+
+    final rawRev = (sys['commercial_sync_revision'] as num?)?.toInt() ?? 0;
+    sys['commercial_sync_revision'] = rawRev < 0 ? 0 : rawRev;
+
+    target['system'] = sys;
+  }
+
+  /// Sanitiza y valida la configuración entrante preservando `apk_library_dir` y `apk_search_dirs`
   Map<String, dynamic> _sanitizeConfig(Map<String, dynamic> raw) {
+    final prevLegal = Map<String, dynamic>.from(legalIdentity);
+    final prevSystem = Map<String, dynamic>.from(system);
+    final prevRev =
+        (prevSystem['commercial_sync_revision'] as num?)?.toInt() ?? 0;
     final merged = _deepMerge(getDefaultConfig(), raw);
 
     // Sincronizar ruta de biblioteca si vino en raíz por retrocompatibilidad
     final rawSystem = raw['system'];
-    final hasRawSystemLib =
-        rawSystem is Map && rawSystem.containsKey('apk_library_dir');
-    final hasRawSearchDirs =
-        rawSystem is Map && rawSystem.containsKey('apk_search_dirs');
+    final hasRawSystemLib = rawSystem is Map &&
+        rawSystem.containsKey('apk_library_dir') &&
+        (rawSystem['apk_library_dir']?.toString().trim().isNotEmpty ?? false);
+    final hasRawSearchDirs = rawSystem is Map &&
+        rawSystem.containsKey('apk_search_dirs') &&
+        rawSystem['apk_search_dirs'] is List &&
+        (rawSystem['apk_search_dirs'] as List).isNotEmpty;
 
     final sysMap = merged['system'] is Map
         ? Map<String, dynamic>.from(merged['system'] as Map)
         : <String, dynamic>{};
+
+    // Guardián anti-downgrade de commercial_sync_revision
+    final incomingRev =
+        (sysMap['commercial_sync_revision'] as num?)?.toInt() ?? 0;
+    final safePrevRev = prevRev < 0 ? 0 : prevRev;
+    final safeIncomingRev = incomingRev < 0 ? 0 : incomingRev;
+    sysMap['commercial_sync_revision'] =
+        safePrevRev > safeIncomingRev ? safePrevRev : safeIncomingRev;
 
     if (!hasRawSystemLib &&
         raw['apk_library_dir'] is String &&
         (raw['apk_library_dir'] as String).trim().isNotEmpty) {
       sysMap['apk_library_dir'] = (raw['apk_library_dir'] as String).trim();
       merged.remove('apk_library_dir');
+    } else if (!hasRawSystemLib &&
+        prevSystem['apk_library_dir'] is String &&
+        (prevSystem['apk_library_dir'] as String).trim().isNotEmpty) {
+      sysMap['apk_library_dir'] = (prevSystem['apk_library_dir'] as String).trim();
+    }
+
+    if (!hasRawSearchDirs &&
+        prevSystem['apk_search_dirs'] is List &&
+        (prevSystem['apk_search_dirs'] as List).isNotEmpty) {
+      sysMap['apk_search_dirs'] =
+          jsonDecode(jsonEncode(prevSystem['apk_search_dirs']));
     }
 
     // Si se actualizó apk_library_dir sin enviar apk_search_dirs explícitos,
@@ -848,29 +1310,32 @@ class ConfigService {
     }
 
     merged['system'] = sysMap;
+    _normalizeSystemPreferences(merged);
 
-    // Sanitizar catálogo
-    final rawCatalog = merged['catalog'];
-    final catalogMap = rawCatalog is Map ? Map<String, dynamic>.from(rawCatalog) : <String, dynamic>{};
-    catalogMap.forEach((k, v) {
-      if (v is Map) {
-        final vMap = Map<String, dynamic>.from(v);
-        if (vMap.containsKey('price')) {
-          final p = (vMap['price'] as num?)?.toDouble() ?? 0.0;
-          vMap['price'] = p < 0 ? 0.0 : p;
-        }
-        if (vMap.containsKey('days')) {
-          final d = (vMap['days'] as num?)?.toInt() ?? 0;
-          vMap['days'] = d < 0 ? 0 : d;
-        }
-        if (vMap.containsKey('ai_credits')) {
-          final c = (vMap['ai_credits'] as num?)?.toInt() ?? 0;
-          vMap['ai_credits'] = c < 0 ? 0 : c;
-        }
-        catalogMap[k] = vMap;
-      }
-    });
-    merged['catalog'] = catalogMap;
+    // Sanitizar catálogo (incluyendo updates_window_months / updates_months y descripciones)
+    _normalizeCatalogEntries(
+      merged,
+      rawCatalog: raw['catalog'] is Map ? raw['catalog'] as Map : null,
+    );
+
+    // Sincronizar migration_fee en raíz si existe catálogo
+    final rawCat = merged['catalog'] as Map<String, dynamic>;
+    if (rawCat['HARDWARE_MIGRATION_FEE'] is Map) {
+      merged['migration_fee'] =
+          (rawCat['HARDWARE_MIGRATION_FEE']['price'] as num?)?.toDouble() ??
+              40.0;
+    }
+
+    // Normalizar claves de plantillas WhatsApp
+    _normalizeTemplatesMap(
+      merged,
+      raw['templates'] is Map ? raw['templates'] as Map : null,
+    );
+
+    // Propagar cambios de identidad legal hacia receipt_config cuando no fueron personalizados aparte
+    if (_config.isNotEmpty) {
+      _propagateLegalIdentityToReceiptConfig(merged, prevLegal: prevLegal);
+    }
 
     // Sanitizar receipt_config
     if (merged.containsKey('receipt_config') && merged['receipt_config'] is Map) {

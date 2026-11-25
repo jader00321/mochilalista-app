@@ -3,7 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-import 'package:app_movil/core/config/owner_legal_identity.dart';
+import 'package:app_movil/core/providers/commercial_catalog_provider.dart';
 import 'package:app_movil/core/providers/license_provider.dart';
 import 'package:app_movil/core/utils/backup_manager.dart';
 import 'package:app_movil/core/widgets/custom_snackbar.dart';
@@ -88,12 +88,26 @@ class _LicenseLockedScreenState extends State<LicenseLockedScreen> {
     }
   }
 
+  EffectiveCommercialConfig _resolveEffectiveCommercialConfig({
+    bool listen = false,
+  }) {
+    try {
+      final prov = Provider.of<CommercialCatalogProvider?>(
+        context,
+        listen: listen,
+      );
+      if (prov != null) return prov.effectiveConfig;
+    } catch (_) {}
+    return EffectiveCommercialConfig.defaults();
+  }
+
   Future<void> _launchWhatsApp(
     String fingerprint, {
     required bool isMigration,
     String? boundHw,
   }) async {
-    final cleanDigits = OwnerLegalIdentity.supportPhone.replaceAll(
+    final effectiveConfig = _resolveEffectiveCommercialConfig();
+    final cleanDigits = effectiveConfig.supportPhone.replaceAll(
       RegExp(r'[^0-9]'),
       '',
     );
@@ -128,7 +142,7 @@ class _LicenseLockedScreenState extends State<LicenseLockedScreen> {
 
     final baseUri = cleanDigits.length >= 8
         ? "https://wa.me/$cleanDigits"
-        : OwnerLegalIdentity.supportWhatsAppUrl;
+        : effectiveConfig.supportWhatsAppUrl;
     final uri = Uri.parse("$baseUri?text=${Uri.encodeComponent(msg)}");
     try {
       if (await canLaunchUrl(uri)) {
@@ -137,7 +151,7 @@ class _LicenseLockedScreenState extends State<LicenseLockedScreen> {
         if (mounted) {
           CustomSnackBar.show(
             context,
-            message: "Soporte: ${OwnerLegalIdentity.supportPhone}",
+            message: "Soporte: ${effectiveConfig.supportPhone}",
             isError: false,
           );
         }
@@ -146,7 +160,7 @@ class _LicenseLockedScreenState extends State<LicenseLockedScreen> {
       if (mounted) {
         CustomSnackBar.show(
           context,
-          message: "Soporte: ${OwnerLegalIdentity.supportPhone}",
+          message: "Soporte: ${effectiveConfig.supportPhone}",
           isError: false,
         );
       }

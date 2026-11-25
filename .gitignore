@@ -44,3 +44,6 @@ backups/
 # Compilación y caché
 build/
 .dart_tool/
+data/.apk_inspection_cache.json
+mochilalista_admin/data/.apk_inspection_cache.json
+mochilalista_admin/data/*.tmp

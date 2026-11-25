@@ -7,7 +7,7 @@
   <link rel="icon" type="image/x-icon" href="/favicon.ico">
   <link rel="manifest" href="/manifest.json">
   <meta name="theme-color" content="#2563eb">
-  <link rel="stylesheet" href="css/styles.css">
+  <link rel="stylesheet" href="css/styles.css?v=23">
   <script src="js/qrcode.min.js"></script>
   <script src="js/jsqr.min.js"></script>
 </head>
@@ -773,7 +773,14 @@
             <svg class="icon-svg" style="color:var(--primary);" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
             Catálogo de Versiones Publicadas
           </h2>
+          <div class="card-header-actions">
+            <button type="button" class="btn btn-outline btn-sm" id="btnVerifyAllReleases" title="Verificar existencia física en disco y firma RSA-4096 de todo el catálogo">
+              <svg class="btn-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><polyline points="9 12 11 14 15 10"/></svg>
+              <span>Verificar Todo el Catálogo</span>
+            </button>
+          </div>
         </div>
+        <div id="catalogVerifyAllBanner" class="catalog-verify-banner" style="display:none;" role="status" aria-live="polite"></div>
         <div class="table-responsive">
           <table class="data-table" id="releasesTable">
             <thead>
@@ -908,9 +915,9 @@
 
         <!-- FILTROS CONTABLES EN VIVO -->
         <div class="finance-filters-bar">
-          <div class="finance-filter-group search-group" style="flex: 1 1 240px; min-width: 220px; position: relative;">
+          <div class="finance-filter-group search-group">
             <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" style="position: absolute; left: 10px; top: 50%; transform: translateY(-50%); width: 14px; height: 14px; color: var(--text-muted); pointer-events: none;"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-            <input type="text" id="inputFinSearch" placeholder="Buscar por N.° Comprobante (BOL/FAC), Negocio, RUC/DNI..." style="width: 100%; padding-left: 32px; padding-right: 28px;">
+            <input type="text" id="inputFinSearch" placeholder="Buscar por comprobante (BOL/FAC), negocio, titular o RUC/DNI..." style="width: 100%; padding-left: 32px; padding-right: 28px;">
             <button type="button" id="btnFinSearchClear" title="Limpiar búsqueda" style="position: absolute; right: 6px; top: 50%; transform: translateY(-50%); background: none; border: none; color: var(--text-muted); cursor: pointer; display: none; padding: 2px;">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 13px; height: 13px;"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
             </button>
@@ -934,6 +941,9 @@
               <option value="PERPETUO">PERPETUO LIBERADO</option>
               <option value="PASE">PASE UPDATES</option>
               <option value="RECARGA">BOLSA EXTRA IA</option>
+              <option value="BONO_IA">BONO IA</option>
+              <option value="MIGRACION">MIGRACIÓN</option>
+              <option value="ABONO">ABONO PARCIAL</option>
             </select>
           </div>
           <div class="finance-filter-group">
@@ -1009,26 +1019,57 @@
         </div>
 
         <div class="backups-toolbar">
-          <button class="btn btn-primary" id="btnCreateBackupNow">
-            <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-            Crear Snapshot Manual Ahora
-          </button>
-          <button class="btn btn-outline" id="btnOpenBackupsFolder" title="Abrir carpeta en el Explorador de Windows">
-            <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
-            Abrir Carpeta backups/ en Windows
+          <div class="backups-toolbar-group">
+            <button type="button" class="btn btn-primary" id="btnCreateBackupNow">
+              <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+              Crear Snapshot Manual Ahora
+            </button>
+            <button type="button" class="btn btn-outline" id="btnOpenBackupsFolder" title="Abrir carpeta en el Explorador de Windows">
+              <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+              Abrir Carpeta backups/ en Windows
+            </button>
+          </div>
+          <button type="button" class="btn btn-outline btn-purge-sandbox" id="btnPurgeSandboxBackups" title="Eliminar snapshots automáticos antiguos de Pruebas (Sandbox), conservando siempre PROD, GLOBAL y manuales">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
+            Limpiar snapshots antiguos de Pruebas (Sandbox)
           </button>
         </div>
 
-        <p style="font-size:0.85rem; color:var(--text-secondary); margin-bottom:1rem;">
-          Cada vez que emites una licencia, modificas un cliente o creas un lanzamiento, el motor crea un snapshot atómico en la carpeta <code>backups/</code>. Puedes descargar copias a tu memoria USB o restaurar el sistema con 1 clic.
+        <p style="font-size:0.85rem; color:var(--text-secondary); margin-bottom:0.85rem;">
+          Cada vez que emites una licencia, modificas un cliente o creas un lanzamiento, el motor crea un snapshot atómico en la carpeta <code>backups/</code> (mostrado en hora oficial Perú GMT-5). Puedes descargar copias a tu memoria USB o inspeccionar la vista previa antes de restaurar.
         </p>
+
+        <div class="backups-filter-bar" id="backupsFilterBar">
+          <div class="backups-filter-pills" id="backupsFilterPills">
+            <button type="button" class="backup-pill active" data-bfilter="all">Todos <span class="pill-count" id="bCountAll">0</span></button>
+            <button type="button" class="backup-pill" data-bfilter="prod">PROD <span class="pill-count" id="bCountProd">0</span></button>
+            <button type="button" class="backup-pill" data-bfilter="sandbox">SANDBOX <span class="pill-count" id="bCountSandbox">0</span></button>
+            <button type="button" class="backup-pill" data-bfilter="global">GLOBAL <span class="pill-count" id="bCountGlobal">0</span></button>
+            <button type="button" class="backup-pill" data-bfilter="manual">Manuales <span class="pill-count" id="bCountManual">0</span></button>
+          </div>
+          <div class="backups-search-wrap">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14" class="backups-search-icon"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            <input type="text" id="inputBackupsSearch" placeholder="Buscar snapshot por nombre, cliente u operación...">
+            <button type="button" id="btnBackupsSearchClear" title="Limpiar búsqueda de respaldos" style="display:none;">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+          </div>
+        </div>
+
+        <div class="backups-mode-banner" id="backupsModeBanner" style="display:none;">
+          <div class="backups-mode-banner-text">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+            <span>Estás operando en <strong>Modo Real</strong> y la vista incluye snapshots de <strong>SANDBOX</strong>. Puedes aislar solo tus copias reales para evitar mezclas visuales.</span>
+          </div>
+          <button type="button" class="btn btn-outline btn-xs" id="btnFilterOnlyProdBackups">Filtrar solo PROD</button>
+        </div>
 
         <div class="table-responsive">
           <table class="data-table" id="backupsTable">
             <thead>
               <tr>
                 <th>Archivo</th>
-                <th>Fecha y Hora</th>
+                <th>Fecha y Hora (Perú GMT-5)</th>
                 <th>Tamaño</th>
                 <th>Entorno</th>
                 <th>Acciones</th>
@@ -1039,11 +1080,19 @@
             </tbody>
           </table>
         </div>
+
+        <div class="backups-pagination-footer" id="backupsPaginationFooter" style="display:none;">
+          <span class="backups-pagination-info" id="backupsPaginationInfo">Mostrando 0 de 0 respaldos</span>
+          <button type="button" class="btn btn-outline btn-sm" id="btnLoadMoreBackups">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+            <span id="btnLoadMoreBackupsText">Cargar 20 respaldos más</span>
+          </button>
+        </div>
       </div>
 
     </section>
 
-    <!-- TAB 7: CONFIGURACIÓN Y PERSONALIZACIÓN (CENTRO TOTAL DEL PROPIETARIO — FASE 4B) -->
+    <!-- TAB 7: CONFIGURACIÓN Y PERSONALIZACIÓN (CENTRO TOTAL DEL PROPIETARIO — PLAN 23 FASE 2) -->
     <section id="tabSettings" class="tab-pane">
       <div class="content-card">
         <div class="card-header" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:1rem;">
@@ -1056,14 +1105,26 @@
               Personaliza tarifas en Soles, bolsas IA, plantillas de WhatsApp y medios de pago con persistencia directa en disco y respaldos automáticos.
             </p>
           </div>
-          <div style="display:flex; gap:0.5rem; flex-wrap:wrap;">
-            <button type="button" class="btn btn-outline" id="btnResetSettings" title="Restablecer configuración a valores oficiales de fábrica">
-              <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
-              Valores de Fábrica
+          <div class="settings-header-actions">
+            <span id="settingsDirtyBadge" class="settings-dirty-pill" style="display:none;">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+              <span id="settingsDirtyBadgeText">Cambios sin guardar</span>
+            </span>
+            <button type="button" class="btn btn-outline btn-sync-mlc1" id="btnOpenCommercialSyncModal" title="Generar ficha criptográfica declarativa MLC1 o copiar constantes Dart para app móvil">
+              <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><path d="M12 18h.01"/><path d="M9 9l2 2 4-4"/></svg>
+              Sincronizar con App Móvil (MLC1)
             </button>
-            <button type="button" class="btn btn-primary" id="btnSaveSettings" title="Guardar todos los cambios de configuración">
+            <button type="button" class="btn btn-outline" id="btnResetSettings" title="Elegir si restablecer solo la pestaña actual o toda la configuración a valores de fábrica">
+              <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+              Restablecer...
+            </button>
+            <button type="button" class="btn btn-outline" id="btnSaveSettingsTab" title="Guardar únicamente los cambios de la pestaña visible actual">
+              <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="20 6 9 17 4 12"/></svg>
+              Guardar esta pestaña
+            </button>
+            <button type="button" class="btn btn-primary" id="btnSaveSettings" title="Guardar todas las pestañas de configuración en owner_config.json">
               <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
-              Guardar Configuración
+              Guardar todo
             </button>
           </div>
         </div>
@@ -1072,19 +1133,23 @@
         <div class="settings-tab-bar">
           <button type="button" class="settings-tab-btn active" data-stab="stabPricing">
             <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
-            1. Tarifario & Bolsas IA
+            <span>1. Tarifario & Bolsas IA</span>
+            <span class="stab-dirty-dot" data-dirty-for="stabPricing" title="Cambios sin guardar en Tarifario"></span>
           </button>
           <button type="button" class="settings-tab-btn" data-stab="stabTemplates">
             <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-            2. Plantillas WhatsApp & Chat en Vivo
+            <span>2. Plantillas WhatsApp & Chat en Vivo</span>
+            <span class="stab-dirty-dot" data-dirty-for="stabTemplates" title="Cambios sin guardar en Plantillas"></span>
           </button>
           <button type="button" class="settings-tab-btn" data-stab="stabPayment">
             <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
-            3. Medios de Pago & Legal (Perú)
+            <span>3. Medios de Pago & Legal (Perú)</span>
+            <span class="stab-dirty-dot" data-dirty-for="stabPayment" title="Cambios sin guardar en Medios de Pago"></span>
           </button>
           <button type="button" class="settings-tab-btn" data-stab="stabPreferences">
             <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
-            4. Preferencias del Sistema
+            <span>4. Preferencias del Sistema</span>
+            <span class="stab-dirty-dot" data-dirty-for="stabPreferences" title="Cambios sin guardar en Preferencias"></span>
           </button>
         </div>
 
@@ -1093,14 +1158,15 @@
 
           <!-- PANE 1: TARIFARIO & BOLSAS IA -->
           <div class="settings-pane active" id="stabPricing">
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem; flex-wrap:wrap; gap:0.5rem;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem; flex-wrap:wrap; gap:0.75rem;">
               <div>
                 <h3 style="font-size:1.05rem; font-weight:700; color:var(--text-primary); margin:0;">Catálogo Oficial de Productos y Cuotas IA Acumulativas</h3>
-                <span style="font-size:0.8rem; color:var(--text-secondary);">Ajusta los precios comerciales en Soles (PEN), los días otorgados y los créditos IA transferidos.</span>
+                <span style="font-size:0.8rem; color:var(--text-secondary);">Ajusta los precios comerciales en Soles (PEN), días base, cuotas IA y ventana de updates. Se propagan al Generador, Pagos y Migración.</span>
               </div>
-              <div style="display:flex; align-items:center; gap:0.5rem; background:rgba(37,99,235,0.08); padding:0.4rem 0.8rem; border-radius:8px; border:1px solid rgba(37,99,235,0.2);">
+              <div style="display:flex; align-items:center; gap:0.55rem; background:rgba(37,99,235,0.08); padding:0.45rem 0.85rem; border-radius:8px; border:1px solid rgba(37,99,235,0.22); flex-wrap:wrap;">
                 <label for="cfgMigrationFee" style="font-size:0.85rem; font-weight:600; color:var(--primary); margin:0;">Tarifa Cambio de Celular (S/):</label>
-                <input type="number" id="cfgMigrationFee" step="0.5" min="0" style="width:90px; padding:0.25rem 0.5rem; font-weight:700; text-align:right;" value="40.00">
+                <input type="number" id="cfgMigrationFee" step="0.5" min="0" style="width:92px; padding:0.25rem 0.5rem; font-weight:700; text-align:right;" value="40.00">
+                <span class="settings-sync-pill" title="Sincronizado bidireccionalmente en vivo con la fila HARDWARE_MIGRATION_FEE">Enlace vivo</span>
               </div>
             </div>
 
@@ -1129,52 +1195,72 @@
             <div class="templates-editor-layout">
               <div class="template-editor-form">
                 <div class="form-group" style="margin-bottom:0.75rem;">
-                  <label for="cfgTemplateSelect" style="font-weight:700;">Seleccionar Plantilla Oficial de Mensaje:</label>
+                  <label for="cfgTemplateSelect" style="font-weight:700;">Seleccionar Plantilla Oficial de Mensaje (Sincronizada con Compositor CRM):</label>
                   <select id="cfgTemplateSelect">
                     <option value="license_issued">1. Emisión / Renovación de Licencia (license_issued)</option>
                     <option value="expiring_reminder">2. Recordatorio de Vencimiento Próximo (expiring_reminder)</option>
-                    <option value="trial_welcome">3. Bienvenida Trial 30 Días (trial_welcome)</option>
-                    <option value="apk_update_eligible">4. Nueva Versión Disponible - Elegible Gratis (apk_update_eligible)</option>
-                    <option value="apk_update_quote">5. Cotización de Nueva Versión / Pase Anual (apk_update_quote)</option>
-                    <option value="device_migration">6. Migración de Celular / Nuevo Hardware ID (device_migration)</option>
+                    <option value="trial_welcome">3. Bienvenida / Trial 30 Días (trial_welcome)</option>
+                    <option value="prospect">4. Seguimiento a Prospecto Comercial (prospect)</option>
+                    <option value="ai_bonus">5. Entrega de Bono / Recarga IA (ai_bonus)</option>
+                    <option value="courtesy_extension">6. Extensión de Cortesía Temporal (courtesy_extension)</option>
+                    <option value="apk_update_eligible">7. Nueva Versión APK - Elegible Gratis (apk_update_eligible)</option>
+                    <option value="apk_update_quote">8. Cotización de Nueva Versión / Pase Anual (apk_update_quote)</option>
+                    <option value="device_migration">9. Migración de Celular / Nuevo Hardware ID (device_migration)</option>
                   </select>
                 </div>
 
-                <!-- CHIPS DE VARIABLES DISPONIBLES -->
+                <!-- CHIPS DE VARIABLES DISPONIBLES CON TOOLTIPS EXPLICATIVOS -->
                 <div class="template-vars-toolbar">
-                  <span style="font-size:0.75rem; color:var(--text-secondary); font-weight:700; text-transform:uppercase;">Insertar Variable:</span>
+                  <div style="display:flex; justify-content:space-between; align-items:center; gap:0.5rem; flex-wrap:wrap;">
+                    <span style="font-size:0.75rem; color:var(--text-secondary); font-weight:700; text-transform:uppercase;">Insertar Variable Dinámica (clic en la posición del cursor):</span>
+                    <span id="templateVarTooltipText" class="template-var-hint">Pasa el cursor o haz clic sobre una variable para ver su significado</span>
+                  </div>
                   <div class="template-chips-grid">
-                    <button type="button" class="var-chip" data-var="{titular}">{titular}</button>
-                    <button type="button" class="var-chip" data-var="{negocio}">{negocio}</button>
-                    <button type="button" class="var-chip" data-var="{plan}">{plan}</button>
-                    <button type="button" class="var-chip" data-var="{dias}">{dias}</button>
-                    <button type="button" class="var-chip" data-var="{vencimiento}">{vencimiento}</button>
-                    <button type="button" class="var-chip" data-var="{creditos_ia}">{creditos_ia}</button>
-                    <button type="button" class="var-chip" data-var="{codigo}">{codigo}</button>
-                    <button type="button" class="var-chip" data-var="{version}">{version}</button>
-                    <button type="button" class="var-chip" data-var="{device_id}">{device_id}</button>
-                    <button type="button" class="var-chip" data-var="{autor}">{autor}</button>
-                    <button type="button" class="var-chip" data-var="{yape_phone}">{yape_phone}</button>
-                    <button type="button" class="var-chip" data-var="{yape_titular}">{yape_titular}</button>
-                    <button type="button" class="var-chip" data-var="{bloque_banco_bcp}">{bloque_banco_bcp}</button>
-                    <button type="button" class="var-chip" data-var="{bloque_banco_bbva}">{bloque_banco_bbva}</button>
+                    <button type="button" class="var-chip" data-var="{titular}" title="Nombre del titular o representante del negocio">{titular}</button>
+                    <button type="button" class="var-chip" data-var="{negocio}" title="Nombre comercial de la tienda o librería cliente">{negocio}</button>
+                    <button type="button" class="var-chip" data-var="{plan}" title="Nombre legible del plan comercial asignado">{plan}</button>
+                    <button type="button" class="var-chip" data-var="{dias}" title="Cantidad de días otorgados por la licencia o extensión">{dias}</button>
+                    <button type="button" class="var-chip" data-var="{dias_restantes}" title="Días calendario que restan antes del vencimiento actual">{dias_restantes}</button>
+                    <button type="button" class="var-chip" data-var="{vencimiento}" title="Fecha exacta de expiración o vigencia (YYYY-MM-DD)">{vencimiento}</button>
+                    <button type="button" class="var-chip" data-var="{creditos_ia}" title="Créditos acumulados o acreditados de escáner IA">{creditos_ia}</button>
+                    <button type="button" class="var-chip" data-var="{codigo}" title="Token oficial firmado Ed25519 listo para pegar en la app">{codigo}</button>
+                    <button type="button" class="var-chip" data-var="{version}" title="Versión destino de MochilaLista APK (ej. 9.41.0)">{version}</button>
+                    <button type="button" class="var-chip" data-var="{device_id}" title="Hardware ID único (ANDROID_ID) del celular vinculado">{device_id}</button>
+                    <button type="button" class="var-chip" data-var="{autor}" title="Nombre legal del propietario / autor configurado en Tab 3">{autor}</button>
+                    <button type="button" class="var-chip" data-var="{yape_phone}" title="Número celular oficial Yape / Plin del propietario">{yape_phone}</button>
+                    <button type="button" class="var-chip" data-var="{yape_titular}" title="Titular registrado para pagos por Yape / Plin">{yape_titular}</button>
+                    <button type="button" class="var-chip" data-var="{bloque_banco_bcp}" title="Inserta cuenta y CCI BCP solo si están configurados (auto-suprimido si vacío)">{bloque_banco_bcp}</button>
+                    <button type="button" class="var-chip" data-var="{bloque_banco_bbva}" title="Inserta cuenta y CCI BBVA solo si están configurados (auto-suprimido si vacío)">{bloque_banco_bbva}</button>
                   </div>
                 </div>
 
                 <div class="form-group" style="margin-top:0.75rem;">
-                  <label for="cfgTemplateContent">Contenido del Mensaje (Markdown WhatsApp compatible: *negrita*, _cursiva_):</label>
+                  <label for="cfgTemplateContent">Contenido del Mensaje (los cambios en otras plantillas se mantienen en borrador hasta guardar):</label>
                   <textarea id="cfgTemplateContent" rows="11" style="font-family:var(--font-mono); font-size:0.85rem; line-height:1.5;"></textarea>
+                  <div class="wa-markdown-guide">
+                    <span>Formato WhatsApp:</span>
+                    <span><code>*negrita*</code> = <strong>negrita</strong></span>
+                    <span><code>_cursiva_</code> = <em>cursiva</em></span>
+                    <span><code>~tachado~</code> = <del>tachado</del></span>
+                    <span><code>`código`</code> = monoespaciado</span>
+                  </div>
                 </div>
               </div>
 
               <!-- BURBUJA DE VISTA PREVIA CHAT WHATSAPP EN VIVO -->
               <div class="wa-preview-container">
                 <div class="wa-preview-header">
-                  <div class="wa-avatar">ML</div>
-                  <div>
-                    <div class="wa-header-name">MochilaLista Oficial</div>
-                    <div class="wa-header-status">en línea (Vista previa en vivo)</div>
+                  <div class="wa-preview-header-meta">
+                    <div class="wa-avatar">ML</div>
+                    <div>
+                      <div class="wa-header-name">MochilaLista Oficial</div>
+                      <div class="wa-header-status">en línea (Vista previa en vivo)</div>
+                    </div>
                   </div>
+                  <button type="button" class="btn-wa-copy-preview" id="btnCopyWaPreview" title="Copiar texto renderizado de la vista previa al portapapeles">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                    <span>Copiar Vista Previa</span>
+                  </button>
                 </div>
                 <div class="wa-preview-body" id="waPreviewBody">
                   <div class="wa-bubble" id="waBubbleContent">
@@ -1182,19 +1268,19 @@
                   </div>
                 </div>
                 <div class="wa-preview-footer">
-                  <span>Renderizado reactivo mediante API con supresión de cuentas vacías</span>
+                  <span>Renderizado reactivo mediante API con supresión de cuentas vacías y cambios sincronizados con el Compositor CRM</span>
                 </div>
               </div>
             </div>
           </div>
 
-          <!-- PANE 3: MEDIOS DE PAGO & IDENTIDAD LEGAL -->
+          <!-- PANE 3: MEDIOS DE PAGO & IDENTIDAD LEGAL (CUADRÍCULA EQUILIBRADA 2x2) -->
           <div class="settings-pane" id="stabPayment">
-            <div class="form-grid" style="grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap:1.5rem;">
+            <div class="settings-payment-grid">
               
               <!-- BLOQUE 1: IDENTIDAD LEGAL Y MARCA -->
               <div class="settings-subcard">
-                <h4 style="font-size:0.95rem; font-weight:700; color:var(--text-primary); margin-bottom:1rem; display:flex; align-items:center; gap:0.4rem;">
+                <h4 style="font-size:0.95rem; font-weight:700; color:var(--text-primary); margin-bottom:0.25rem; display:flex; align-items:center; gap:0.45rem;">
                   <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
                   Identidad Legal & Marca Comercial
                 </h4>
@@ -1214,7 +1300,7 @@
 
               <!-- BLOQUE 2: BILLETERAS DIGITALES (YAPE / PLIN) -->
               <div class="settings-subcard">
-                <h4 style="font-size:0.95rem; font-weight:700; color:var(--text-primary); margin-bottom:1rem; display:flex; align-items:center; gap:0.4rem;">
+                <h4 style="font-size:0.95rem; font-weight:700; color:var(--text-primary); margin-bottom:0.25rem; display:flex; align-items:center; gap:0.45rem;">
                   <svg class="btn-icon" style="color:var(--purple);" viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>
                   Billetera Digital Yape / Plin
                 </h4>
@@ -1226,14 +1312,14 @@
                   <label for="cfgYapeHolder">Titular de la Cuenta Yape / Plin:</label>
                   <input type="text" id="cfgYapeHolder" value="Julio Angello Vasquez Navarro">
                 </div>
-                <p style="font-size:0.8rem; color:var(--text-muted); margin-top:0.5rem;">
-                  Aparece automáticamente en el token <code>{yape_phone}</code> y <code>{yape_titular}</code> de WhatsApp.
+                <p style="font-size:0.8rem; color:var(--text-muted); margin-top:0.35rem;">
+                  Se propaga automáticamente a Boletas, Facturas, Credenciales PNG y tokens <code>{yape_phone}</code> / <code>{yape_titular}</code>.
                 </p>
               </div>
 
               <!-- BLOQUE 3: CUENTA BANCARIA BCP (OPCIONAL) -->
               <div class="settings-subcard">
-                <h4 style="font-size:0.95rem; font-weight:700; color:var(--text-primary); margin-bottom:1rem; display:flex; align-items:center; gap:0.4rem;">
+                <h4 style="font-size:0.95rem; font-weight:700; color:var(--text-primary); margin-bottom:0.25rem; display:flex; align-items:center; gap:0.45rem;">
                   <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 21h18M3 10h18M5 10v11M19 10v11M9 10v11M15 10v11M12 2 2 7h20L12 2z"/></svg>
                   Banco de Crédito BCP (Opcional)
                 </h4>
@@ -1253,7 +1339,7 @@
 
               <!-- BLOQUE 4: CUENTA BANCARIA BBVA (OPCIONAL) -->
               <div class="settings-subcard">
-                <h4 style="font-size:0.95rem; font-weight:700; color:var(--text-primary); margin-bottom:1rem; display:flex; align-items:center; gap:0.4rem;">
+                <h4 style="font-size:0.95rem; font-weight:700; color:var(--text-primary); margin-bottom:0.25rem; display:flex; align-items:center; gap:0.45rem;">
                   <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 21h18M3 10h18M5 10v11M19 10v11M9 10v11M15 10v11M12 2 2 7h20L12 2z"/></svg>
                   Banco BBVA Perú (Opcional)
                 </h4>
@@ -1272,51 +1358,81 @@
               </div>
 
             </div>
-            <div style="margin-top:1rem; padding:0.75rem 1rem; background:rgba(16,185,129,0.08); border:1px solid rgba(16,185,129,0.25); border-radius:8px; font-size:0.84rem; color:var(--text-secondary); display:flex; align-items:flex-start; gap:0.5rem;">
+            <div class="settings-callout-banner">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--success); flex-shrink:0; margin-top:2px;"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
-              <span><strong>Regla de Supresión Automática:</strong> Si las cuentas de BCP o BBVA se dejan vacías, los bloques bancarios correspondientes no ocuparán espacio en tus mensajes de WhatsApp y no confundirán al cliente.</span>
+              <div style="display:flex; justify-content:space-between; align-items:center; gap:0.75rem; flex-wrap:wrap; width:100%;">
+                <span><strong>Regla de Supresión Automática y Propagación Reactiva:</strong> Si las cuentas de BCP o BBVA se dejan vacías, no ocuparán espacio en WhatsApp. Los cambios de Titular, Marca o Teléfono se reflejan al instante en la cabecera, Boletas/Facturas y Credenciales PNG.</span>
+                <button type="button" class="btn btn-outline btn-sm btn-open-commercial-sync" title="Emitir ficha MLC1 o bloque Dart con tus cuentas y tarifas actualizadas">
+                  <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><path d="M9 9l2 2 4-4"/></svg>
+                  Sincronizar Cuentas a App Móvil
+                </button>
+              </div>
             </div>
           </div>
 
           <!-- PANE 4: PREFERENCIAS DEL SISTEMA -->
           <div class="settings-pane" id="stabPreferences">
-            <div class="form-grid" style="grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap:1.5rem;">
-              <div class="form-group">
-                <label for="cfgDefaultEnv">Entorno Inicial al Abrir la Plataforma:</label>
-                <select id="cfgDefaultEnv">
-                  <option value="sandbox">Modo Pruebas (Sandbox con datos demo)</option>
-                  <option value="prod">Modo Real (Base de Clientes Producción)</option>
-                </select>
+            <div class="settings-preferences-grid">
+              <div class="settings-pref-card">
+                <div class="form-group" style="margin-bottom:0;">
+                  <label for="cfgDefaultEnv" style="font-weight:700;">Entorno Inicial al Abrir la Plataforma:</label>
+                  <select id="cfgDefaultEnv">
+                    <option value="sandbox">Modo Pruebas (Sandbox con datos demo)</option>
+                    <option value="prod">Modo Real (Base de Clientes Producción)</option>
+                  </select>
+                </div>
+                <p class="settings-pref-help">
+                  Determina con qué base de datos arranca el servidor (<code>Modo Pruebas</code> o <code>Modo Real</code>) cada vez que inicias MochilaLista Admin.
+                </p>
               </div>
 
-              <div class="form-group">
-                <label for="cfgDefaultTheme">Tema Visual Predeterminado:</label>
-                <select id="cfgDefaultTheme">
-                  <option value="dark">Deep Obsidian (Oscuro Ejecutivo)</option>
-                  <option value="light">Executive Slate (Claro Nítido)</option>
-                </select>
+              <div class="settings-pref-card">
+                <div class="form-group" style="margin-bottom:0;">
+                  <label for="cfgDefaultTheme" style="font-weight:700;">Tema Visual Predeterminado:</label>
+                  <select id="cfgDefaultTheme">
+                    <option value="dark">Deep Obsidian (Oscuro Ejecutivo)</option>
+                    <option value="light">Executive Slate (Claro Nítido)</option>
+                  </select>
+                </div>
+                <p class="settings-pref-help">
+                  Define el esquema de colores aplicado automáticamente al iniciar la consola. Puedes alternarlo momentáneamente desde el botón Tema en la barra superior.
+                </p>
               </div>
 
-              <div class="form-group">
-                <label for="cfgTableDensity">Densidad Visual de Tablas:</label>
-                <select id="cfgTableDensity">
-                  <option value="comfortable">Cómoda (Espaciado estándar - Recomendado)</option>
-                  <option value="compact">Compacta (Mayor cantidad de filas por pantalla)</option>
-                </select>
+              <div class="settings-pref-card">
+                <div class="form-group" style="margin-bottom:0;">
+                  <label for="cfgTableDensity" style="font-weight:700;">Densidad Visual de Tablas:</label>
+                  <select id="cfgTableDensity">
+                    <option value="comfortable">Cómoda (Espaciado estándar - Recomendado)</option>
+                    <option value="compact">Compacta (Mayor cantidad de filas por pantalla)</option>
+                  </select>
+                </div>
+                <p class="settings-pref-help">
+                  Controla el relleno vertical de filas en Cartera CRM, Lanzamientos, Finanzas, Respaldos y Auditoría de Bóveda en tiempo real.
+                </p>
               </div>
             </div>
 
-            <div style="margin-top:2rem; padding:1.25rem; background:rgba(239,68,68,0.06); border:1px solid rgba(239,68,68,0.25); border-radius:10px;">
-              <h4 style="font-size:0.95rem; font-weight:700; color:var(--danger); margin-bottom:0.5rem; display:flex; align-items:center; gap:0.4rem;">
-                <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-                Zona de Restauración de Fábrica
-              </h4>
-              <p style="font-size:0.85rem; color:var(--text-secondary); margin-bottom:1rem;">
-                Si realizaste modificaciones no deseadas en las tarifas, mensajes o datos bancarios, puedes restablecer todos los valores al estándar de fábrica. Se creará automáticamente un snapshot de respaldo antes de aplicar la restauración.
-              </p>
-              <button type="button" class="btn btn-outline" id="btnTriggerResetSettings" style="color:var(--danger); border-color:var(--danger);">
-                Restablecer Todo a Valores de Fábrica
-              </button>
+            <!-- RESUMEN DE RUTAS DE BÚSQUEDA DE APKs (PLAN 22.5) -->
+            <div class="settings-apk-dirs-card" id="settingsApkDirsCard">
+              <div class="settings-apk-dirs-header">
+                <div>
+                  <h4 style="font-size:0.95rem; font-weight:700; color:var(--text-primary); margin:0; display:flex; align-items:center; gap:0.45rem;">
+                    <svg class="btn-icon" style="color:var(--primary);" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+                    Rutas de Búsqueda de APKs Activas (Solo Lectura)
+                  </h4>
+                  <p style="font-size:0.8rem; color:var(--text-secondary); margin:0.2rem 0 0 0;">
+                    Estas carpetas configuradas en Plan 22.5 se preservan automáticamente al guardar o restablecer preferencias.
+                  </p>
+                </div>
+                <button type="button" class="btn btn-outline btn-sm" id="btnGoToApkSearchDirs" title="Abrir el gestor de carpetas APK dentro de Versiones APK">
+                  <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+                  Administrar Rutas en Versiones APK
+                </button>
+              </div>
+              <div class="settings-apk-dirs-list" id="settingsApkDirsSummary">
+                <div style="font-size:0.82rem; color:var(--text-muted);">Cargando rutas configuradas...</div>
+              </div>
             </div>
           </div>
 
@@ -1324,7 +1440,7 @@
       </div>
     </section>
 
-    <!-- TAB 8: SEGURIDAD, BÓVEDA CIFRADA Y PORTABILIDAD (PLAN 10) -->
+    <!-- TAB 8: SEGURIDAD, BÓVEDA CIFRADA Y PORTABILIDAD (PLAN 10 + PLAN 23 FASE 5) -->
     <section id="tabSecurityVault" class="tab-pane">
       <div class="content-card">
         <div class="card-header" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:1rem;">
@@ -1338,16 +1454,16 @@
               Centro de Seguridad, Bóveda Cifrada y Portabilidad
             </h2>
             <p class="subtitle" style="margin-top:0.25rem;">
-              Persistencia blindada fuera del repositorio, espejo atómico en <code>%APPDATA%</code>, portabilidad en 1 clic y recuperación multi-llave a prueba de olvidos.
+              Resguardo cifrado en disco y espejo automático en <code>%APPDATA%</code>, portabilidad multi-PC en 1 clic y recuperación multi-llave sin depender del navegador.
             </p>
           </div>
           <div style="display:flex; gap:0.5rem; flex-wrap:wrap;">
-            <button type="button" class="btn btn-outline" id="btnRefreshVaultHealth" title="Recargar estado y auditoría de salud">
-              <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
+            <button type="button" class="btn btn-outline" id="btnRefreshVaultHealth" title="Ejecutar auditoría integral de archivos, paridad SHA-256 y factores">
+              <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
               Auditar Estado
             </button>
-            <button type="button" class="btn btn-primary" id="btnForceSyncMirrorTop" title="Forzar sincronización inmediata del espejo cifrado">
-              <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 2v4m0 12v4M4.93 4.93l2.83 2.83m8.48 8.48l2.83 2.83M2 12h4m12 0h4M4.93 19.07l2.83-2.83m8.48-8.48l2.83-2.83"/></svg>
+            <button type="button" class="btn btn-primary" id="btnForceSyncMirrorTop" title="Forzar sincronización inmediata del espejo cifrado (%APPDATA% y nube)">
+              <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/></svg>
               Sincronizar Espejo
             </button>
           </div>
@@ -1357,14 +1473,17 @@
         <div class="vault-health-banner" style="margin-top:1.25rem; padding:1.25rem; background:var(--bg-secondary); border:1px solid var(--border-color); border-radius:12px;">
           <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:1rem;">
             <div>
-              <div style="display:flex; align-items:center; gap:0.75rem;">
+              <div style="display:flex; align-items:center; gap:0.75rem; flex-wrap:wrap;">
                 <span class="badge" id="vaultHealthBadge" style="font-size:0.9rem; padding:0.35rem 0.85rem; border-radius:8px; font-weight:700;">CALCULANDO...</span>
                 <span style="font-size:1.4rem; font-weight:800;" id="vaultHealthScore">0%</span>
-                <span style="color:var(--text-muted); font-size:0.9rem;">Índice de Resguardo y Recuperabilidad</span>
+                <span style="color:var(--text-muted); font-size:0.9rem;">Índice de Resguardo y Recuperabilidad (4 Factores)</span>
               </div>
               <p style="font-size:0.85rem; color:var(--text-secondary); margin-top:0.4rem;" id="vaultHealthStatusText">
-                Evaluación integral de factores criptográficos activos, espejo local en <code>%APPDATA%</code> y replicación en nube.
+                Evaluación de los 4 factores criptográficos de acceso y recuperación.
               </p>
+              <div id="vaultSecondaryMirrorSummary" style="font-size:0.78rem; color:var(--text-muted); margin-top:0.25rem;">
+                Espejo automático (%APPDATA%): Verificando... · Nube Local: No configurada
+              </div>
             </div>
             <div id="vaultRecoveryWarning" style="display:none; padding:0.5rem 0.85rem; background:rgba(239, 68, 68, 0.15); border:1px solid var(--danger); border-radius:8px; color:var(--danger); font-size:0.85rem; font-weight:600; align-items:center; gap:0.45rem;">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0;"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
@@ -1379,31 +1498,31 @@
           <!-- REJILLA DE 4 FACTORES CRIPTOGRÁFICOS -->
           <div class="vault-factors-grid" style="display:grid; grid-template-columns:repeat(auto-fit, minmax(210px, 1fr)); gap:0.75rem; margin-top:1.25rem;">
             <div class="factor-card" style="padding:0.85rem; background:var(--bg-card); border:1px solid var(--border-color); border-radius:8px;">
-              <div style="font-size:0.75rem; text-transform:uppercase; color:var(--text-muted); font-weight:700;">Factor 1 (Hardware)</div>
+              <div style="font-size:0.75rem; text-transform:uppercase; color:var(--text-muted); font-weight:700;">Factor 1 (Hardware · 25%)</div>
               <div style="font-size:0.95rem; font-weight:600; margin-top:0.25rem;">Windows DPAPI</div>
               <div style="margin-top:0.4rem;" id="badgeFactorDpapi"><span class="badge badge-info" id="factorMirrorStatus">Verificando...</span></div>
-              <div style="font-size:0.72rem; color:var(--text-muted); margin-top:0.3rem;">Cifrado nativo del usuario de Windows</div>
+              <div style="font-size:0.72rem; color:var(--text-muted); margin-top:0.3rem;">Desbloqueo transparente en tu sesión de Windows</div>
             </div>
 
             <div class="factor-card" style="padding:0.85rem; background:var(--bg-card); border:1px solid var(--border-color); border-radius:8px;">
-              <div style="font-size:0.75rem; text-transform:uppercase; color:var(--text-muted); font-weight:700;">Factor 2 (Archivo Físico)</div>
+              <div style="font-size:0.75rem; text-transform:uppercase; color:var(--text-muted); font-weight:700;">Factor 2 (Archivo USB · 25%)</div>
               <div style="font-size:0.95rem; font-weight:600; margin-top:0.25rem;">Llave Maestra .mlkey</div>
               <div style="margin-top:0.4rem;" id="badgeFactorMlKey"><span class="badge badge-warning" id="factorKeyStatus">Pendiente</span></div>
-              <div style="font-size:0.72rem; color:var(--text-muted); margin-top:0.3rem;">Para portabilidad a otra laptop</div>
+              <div style="font-size:0.72rem; color:var(--text-muted); margin-top:0.3rem;">Llave portátil para abrir en cualquier nueva PC</div>
             </div>
 
             <div class="factor-card" style="padding:0.85rem; background:var(--bg-card); border:1px solid var(--border-color); border-radius:8px;">
-              <div style="font-size:0.75rem; text-transform:uppercase; color:var(--text-muted); font-weight:700;">Factor 3 (Rescate Frío)</div>
+              <div style="font-size:0.75rem; text-transform:uppercase; color:var(--text-muted); font-weight:700;">Factor 3 (Rescate Frío · 25%)</div>
               <div style="font-size:0.95rem; font-weight:600; margin-top:0.25rem;">Kit 8 Códigos + QR</div>
               <div style="margin-top:0.4rem;" id="badgeFactorRescueKit"><span class="badge badge-warning" id="factorRescueStatus">Pendiente</span></div>
-              <div style="font-size:0.72rem; color:var(--text-muted); margin-top:0.3rem;">Papel impreso anti-desastres</div>
+              <div style="font-size:0.72rem; color:var(--text-muted); margin-top:0.3rem;">Hoja impresa PDF para emergencias sin USB</div>
             </div>
 
             <div class="factor-card" style="padding:0.85rem; background:var(--bg-card); border:1px solid var(--border-color); border-radius:8px;">
-              <div style="font-size:0.75rem; text-transform:uppercase; color:var(--text-muted); font-weight:700;">Factor 4 (Bloqueo Local)</div>
+              <div style="font-size:0.75rem; text-transform:uppercase; color:var(--text-muted); font-weight:700;">Factor 4 (Bloqueo Local · 25%)</div>
               <div style="font-size:0.95rem; font-weight:600; margin-top:0.25rem;">PIN de Consola</div>
               <div style="margin-top:0.4rem;" id="badgeFactorPin"><span class="badge badge-secondary" id="factorPinStatus">Desactivado</span></div>
-              <div style="font-size:0.72rem; color:var(--text-muted); margin-top:0.3rem;">Protección contra accesos físicos</div>
+              <div style="font-size:0.72rem; color:var(--text-muted); margin-top:0.3rem;">Protección ante accesos físicos al navegador</div>
             </div>
           </div>
         </div>
@@ -1416,38 +1535,38 @@
           </h3>
 
           <div style="padding:0.85rem 1rem; margin-top:0.75rem; background:rgba(37, 99, 235, 0.08); border-left:4px solid var(--primary); border-radius:4px; font-size:0.85rem; line-height:1.5;">
-            <strong>Seguridad Verificable:</strong> Toda tu información vive 100% en archivos físicos de tu disco duro (<code>.json</code>, <code>.key</code> y <code>.mlvault</code>). <strong>Jamás depende de cookies, LocalStorage ni de la caché del navegador</strong>. Limpiar el historial o usar otra ventana de incógnito jamás afectará tus licencias, clientes ni balances.
+            <strong>Seguridad Verificable:</strong> Toda tu información vive 100% en archivos físicos de tu disco duro (<code>.json</code>, <code>.key</code> y <code>.mlvault</code>). <strong>Tu información de negocio nunca depende de cookies, LocalStorage ni caché del navegador</strong>; limpiar el historial de Chrome jamás afectará tus licencias, clientes ni balances. <em>(Si activas el PIN opcional, solo tu sesión temporal usa una cookie HttpOnly segura).</em>
           </div>
 
           <!-- TARJETAS DE RUTAS FÍSICAS COPIABLES -->
           <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(280px, 1fr)); gap:0.75rem; margin-top:1rem;">
-            <div style="padding:0.75rem; background:var(--bg-secondary); border:1px solid var(--border-color); border-radius:8px;">
+            <div class="vault-path-card">
               <div style="font-size:0.75rem; color:var(--text-muted); font-weight:700;">CARPETA DEL PROYECTO (LOCAL)</div>
-              <div style="display:flex; justify-content:space-between; align-items:center; margin-top:0.3rem;">
-                <input type="text" id="txtLocalPath" readonly value="data/ y private_keys/" style="font-size:0.8rem; background:transparent; border:none; color:var(--text-primary); font-family:var(--font-mono); width:100%;">
+              <div class="vault-path-row">
+                <input type="text" id="txtLocalPath" readonly value="data/ y private_keys/" style="background:transparent; border:none; color:var(--text-primary);">
                 <button type="button" class="btn btn-outline btn-sm" id="btnCopyLocalPath" title="Copiar ruta">Copiar</button>
               </div>
             </div>
 
-            <div style="padding:0.75rem; background:var(--bg-secondary); border:1px solid var(--border-color); border-radius:8px;">
+            <div class="vault-path-card">
               <div style="font-size:0.75rem; color:var(--text-muted); font-weight:700;">BÓVEDA ESPEJO CIFRADA (%APPDATA%)</div>
-              <div style="display:flex; justify-content:space-between; align-items:center; margin-top:0.3rem;">
-                <input type="text" id="txtMirrorPath" readonly value="%APPDATA%\MochilaListaAdminVault" style="font-size:0.8rem; background:transparent; border:none; color:var(--text-primary); font-family:var(--font-mono); width:100%;">
+              <div class="vault-path-row">
+                <input type="text" id="txtMirrorPath" readonly value="%APPDATA%\MochilaListaAdminVault" style="background:transparent; border:none; color:var(--text-primary);">
                 <button type="button" class="btn btn-outline btn-sm" id="btnCopyMirrorPath" title="Copiar ruta">Copiar</button>
               </div>
             </div>
 
-            <div style="padding:0.75rem; background:var(--bg-secondary); border:1px solid var(--border-color); border-radius:8px;">
+            <div class="vault-path-card">
               <div style="font-size:0.75rem; color:var(--text-muted); font-weight:700;">ESPEJO DE NUBE LOCAL</div>
-              <div style="display:flex; justify-content:space-between; align-items:center; margin-top:0.3rem;">
-                <code id="pathCloudDir" style="font-size:0.8rem; word-break:break-all; color:var(--text-muted);">No configurada</code>
-                <button type="button" class="btn btn-outline btn-sm" id="btnCopyCloudPath" title="Copiar ruta">Copiar</button>
+              <div class="vault-path-row">
+                <code id="pathCloudDir" style="color:var(--text-muted);">No configurada</code>
+                <button type="button" class="btn btn-outline btn-sm" id="btnCopyCloudPath" title="Copiar ruta configurada" disabled>Copiar</button>
               </div>
             </div>
           </div>
 
           <!-- TABLA DE ARCHIVOS FÍSICOS REALES -->
-          <div class="table-responsive" style="margin-top:1rem; border:1px solid var(--border-color); border-radius:8px; overflow:hidden;">
+          <div class="table-responsive" style="margin-top:1rem; border:1px solid var(--border-color); border-radius:8px;">
             <table class="data-table" style="width:100%; font-size:0.83rem;">
               <thead>
                 <tr>
@@ -1473,30 +1592,35 @@
             Asistente Visual de Blindaje en 3 Pasos
           </h3>
           <p class="subtitle" style="margin-top:0.25rem;">
-            Completa estos 3 pasos recomendados para alcanzar el 100% de protección y asegurar recuperación ante cualquier eventualidad.
+            Sigue estos 3 pasos ordenados para blindar tu base de datos y garantizar recuperación inmediata si cambias de laptop o ocurre un fallo de disco.
           </p>
 
           <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(320px, 1fr)); gap:1rem; margin-top:1rem;">
             <!-- PASO 1 -->
             <div class="vault-card" style="padding:1.25rem; background:var(--bg-secondary); border:1px solid var(--border-color); border-radius:10px; display:flex; flex-direction:column; justify-content:space-between;">
               <div>
-                <div style="display:flex; justify-content:space-between; align-items:center;">
+                <div style="display:flex; justify-content:space-between; align-items:center; gap:0.5rem;">
                   <span class="badge badge-primary" style="font-weight:700;">PASO 1</span>
                   <span class="badge badge-success" id="badgeStep1Status">Bóveda Espejo Activa</span>
                 </div>
-                <h4 style="margin-top:0.75rem; font-size:1rem;">Bóveda Externa & Espejo Automático</h4>
+                <h4 style="margin-top:0.75rem; font-size:1rem;">Bóveda Externa &amp; Espejo Automático</h4>
                 <p style="font-size:0.83rem; color:var(--text-secondary); margin-top:0.4rem; line-height:1.45;">
-                  Resguardo cifrado automático en <code>%APPDATA%</code> cada vez que emites o modificas datos. Configura opcionalmente una carpeta de nube local (Dropbox, GDrive, OneDrive) para replicación simultánea.
+                  <strong>Qué hace:</strong> Guarda una copia cifrada en <code>%APPDATA%</code> tras cada venta, licencia o cambio.<br>
+                  <strong>Cómo mejorarlo:</strong> Elige una carpeta de Dropbox, Google Drive u OneDrive para tener copia externa automática ante robo o rotura del disco.
                 </p>
                 <div style="margin-top:0.75rem;">
-                  <label for="inputCloudSyncPath" style="font-size:0.78rem; font-weight:600; color:var(--text-muted); display:block; margin-bottom:0.25rem;">Ruta Local de Nube (Opcional):</label>
-                  <div style="display:flex; gap:0.5rem;">
-                    <input type="text" id="inputCloudSyncPath" placeholder="C:\Users\...\Dropbox" style="flex:1; font-size:0.8rem; padding:0.4rem 0.6rem; background:var(--bg-card); border:1px solid var(--border-color); border-radius:6px; color:var(--text-primary);">
+                  <label for="inputCloudSyncPath" style="font-size:0.78rem; font-weight:600; color:var(--text-muted); display:block; margin-bottom:0.25rem;">Carpeta Local de Nube (Opcional):</label>
+                  <div style="display:flex; gap:0.4rem; flex-wrap:wrap;">
+                    <input type="text" id="inputCloudSyncPath" placeholder="Ej: C:\Users\...\Dropbox\MochilaLista" style="flex:1; min-width:160px; font-size:0.8rem; padding:0.4rem 0.6rem; background:var(--bg-card); border:1px solid var(--border-color); border-radius:6px; color:var(--text-primary);">
+                    <button type="button" class="btn btn-outline btn-sm" id="btnBrowseCloudSyncPath" title="Abrir selector nativo de carpetas de Windows">
+                      <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" style="width:14px; height:14px;"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+                      Examinar...
+                    </button>
                     <button type="button" class="btn btn-outline btn-sm" id="btnSaveCloudSyncPath">Guardar</button>
                   </div>
                 </div>
               </div>
-              <div style="margin-top:1rem; border-top:1px solid var(--border-color); padding-top:0.75rem; display:flex; justify-content:space-between; align-items:center;">
+              <div style="margin-top:1rem; border-top:1px solid var(--border-color); padding-top:0.75rem; display:flex; justify-content:space-between; align-items:center; gap:0.5rem; flex-wrap:wrap;">
                 <span id="mirrorLastSyncLabel" style="font-size:0.75rem; color:var(--text-muted);">Última sinc: Verificando...</span>
                 <button type="button" class="btn btn-primary btn-sm" id="btnSyncMirrorNow">Forzar Sincronización</button>
               </div>
@@ -1505,20 +1629,21 @@
             <!-- PASO 2 -->
             <div class="vault-card" style="padding:1.25rem; background:var(--bg-secondary); border:1px solid var(--border-color); border-radius:10px; display:flex; flex-direction:column; justify-content:space-between;">
               <div>
-                <div style="display:flex; justify-content:space-between; align-items:center;">
+                <div style="display:flex; justify-content:space-between; align-items:center; gap:0.5rem;">
                   <span class="badge badge-primary" style="font-weight:700;">PASO 2</span>
                   <span class="badge" id="badgeStep2Status">Pendiente</span>
                 </div>
                 <h4 style="margin-top:0.75rem; font-size:1rem;">Archivo Llave Física (.mlkey)</h4>
                 <p style="font-size:0.83rem; color:var(--text-secondary); margin-top:0.4rem; line-height:1.45;">
-                  Descarga el archivo <code>llave_maestra_mochilalista.mlkey</code> para llevarlo en un USB o en tu celular. Es <strong>invariante</strong> y te permite abrir tu bóveda en cualquier laptop nueva sin recordar contraseñas.
+                  <strong>Qué es:</strong> Tu llave digital invariante <code>llave_maestra_mochilalista.mlkey</code>.<br>
+                  <strong>Cuándo usarla:</strong> Guárdala en un USB o en tu celular. Permite abrir cualquier archivo <code>.mlvault</code> en una laptop nueva o recuperar tu PIN si lo olvidas. <em>(Regenerarla invalida la anterior).</em>
                 </p>
                 <div style="padding:0.6rem 0.8rem; margin-top:0.75rem; background:var(--bg-card); border:1px dashed var(--border-color); border-radius:6px; font-size:0.78rem; color:var(--text-muted); display:flex; align-items:center; gap:0.45rem;">
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0;"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-                  <span>Permite mudanza completa o desbloqueo de emergencia en 1 clic.</span>
+                  <span>Llave USB portátil independiente de la sesión de Windows.</span>
                 </div>
               </div>
-              <div style="margin-top:1rem; border-top:1px solid var(--border-color); padding-top:0.75rem; display:flex; justify-content:space-between; align-items:center;">
+              <div style="margin-top:1rem; border-top:1px solid var(--border-color); padding-top:0.75rem; display:flex; justify-content:space-between; align-items:center; gap:0.5rem;">
                 <span style="font-size:0.75rem; color:var(--text-muted);">Formato MLKEY v1.0.0</span>
                 <button type="button" class="btn btn-success btn-sm" id="btnDownloadMlKey">
                   <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
@@ -1530,20 +1655,21 @@
             <!-- PASO 3 -->
             <div class="vault-card" style="padding:1.25rem; background:var(--bg-secondary); border:1px solid var(--border-color); border-radius:10px; display:flex; flex-direction:column; justify-content:space-between;">
               <div>
-                <div style="display:flex; justify-content:space-between; align-items:center;">
+                <div style="display:flex; justify-content:space-between; align-items:center; gap:0.5rem;">
                   <span class="badge badge-primary" style="font-weight:700;">PASO 3</span>
                   <span class="badge" id="badgeStep3Status">Pendiente</span>
                 </div>
                 <h4 style="margin-top:0.75rem; font-size:1rem;">Kit de Rescate Imprimible / PDF</h4>
                 <p style="font-size:0.83rem; color:var(--text-secondary); margin-top:0.4rem; line-height:1.45;">
-                  Genera una hoja con <strong>8 Códigos Cortos de Rescate</strong> (ej. <code>ML-7492-XKPQ-3815</code>) y Código QR. Imprímela o guárdala en PDF. Cada código es de un solo uso para recuperar acceso si pierdes tu laptop y tu USB.
+                  <strong>Qué es:</strong> Hoja A4 con <strong>8 Códigos de Rescate</strong> y QR de emergencia.<br>
+                  <strong>Para emergencias:</strong> Imprímela o guárdala en PDF fuera de tu laptop. Cualquiera de los 8 códigos recupera el acceso si pierdes el equipo y tu USB. <em>(Regenerar invalida la hoja anterior).</em>
                 </p>
                 <div style="padding:0.6rem 0.8rem; margin-top:0.75rem; background:var(--bg-card); border:1px dashed var(--border-color); border-radius:6px; font-size:0.78rem; color:var(--text-muted); display:flex; align-items:center; gap:0.45rem;">
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0;"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-                  <span>Custodia fría desconectada de internet (D.L. 822 / INDECOPI).</span>
+                  <span>Custodia fría offline en papel o PDF (D.L. 822 / INDECOPI).</span>
                 </div>
               </div>
-              <div style="margin-top:1rem; border-top:1px solid var(--border-color); padding-top:0.75rem; display:flex; justify-content:space-between; align-items:center;">
+              <div style="margin-top:1rem; border-top:1px solid var(--border-color); padding-top:0.75rem; display:flex; justify-content:space-between; align-items:center; gap:0.5rem;">
                 <span style="font-size:0.75rem; color:var(--text-muted);">8 Códigos + QR Vectorial</span>
                 <button type="button" class="btn btn-outline btn-sm" id="btnOpenRescueKitModal" style="color:var(--primary); border-color:var(--primary);">
                   <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
@@ -1561,18 +1687,18 @@
             Mudanza Rápida y Portabilidad Multi-PC (.mlvault)
           </h3>
           <p class="subtitle" style="margin-top:0.25rem;">
-            Empaqueta o restaura la plataforma completa en otra PC/laptop en 5 segundos. Tus archivos .mlkey y códigos impresos permanecen invariantes.
+            Exporta todo tu entorno cifrado en un archivo único <code>.mlvault</code> o impórtalo en otra computadora sin reiniciar el servidor.
           </p>
 
           <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(320px, 1fr)); gap:1rem; margin-top:1rem;">
             <!-- EXPORTAR BÓVEDA -->
-            <div style="padding:1.25rem; background:var(--bg-secondary); border:1px solid var(--border-color); border-radius:10px;">
+            <div class="vault-card" style="padding:1.25rem; background:var(--bg-secondary); border:1px solid var(--border-color); border-radius:10px;">
               <h4 style="font-size:1rem; display:flex; align-items:center; gap:0.5rem;">
                 <svg class="btn-icon" style="color:var(--primary);" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
                 Exportar Bóveda Portable
               </h4>
               <p style="font-size:0.83rem; color:var(--text-secondary); margin-top:0.4rem; line-height:1.45;">
-                Genera un archivo cifrado <code>.mlvault</code> que contiene clientes, historial de pagos, versiones y configuraciones.
+                Genera un archivo cifrado <code>.mlvault</code> con clientes, cobranzas, catálogo de versiones y configuración comercial.
               </p>
               <div style="margin-top:0.75rem;">
                 <label style="display:flex; align-items:center; gap:0.5rem; font-size:0.83rem; cursor:pointer;">
@@ -1587,16 +1713,16 @@
             </div>
 
             <!-- IMPORTAR BÓVEDA -->
-            <div style="padding:1.25rem; background:var(--bg-secondary); border:1px solid var(--border-color); border-radius:10px;">
+            <div class="vault-card" style="padding:1.25rem; background:var(--bg-secondary); border:1px solid var(--border-color); border-radius:10px;">
               <h4 style="font-size:1rem; display:flex; align-items:center; gap:0.5rem;">
                 <svg class="btn-icon" style="color:var(--success);" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
                 Importar Bóveda Portable
               </h4>
               <p style="font-size:0.83rem; color:var(--text-secondary); margin-top:0.4rem; line-height:1.45;">
-                ¿Estás en una PC nueva? Carga un archivo <code>.mlvault</code> para restaurar clientes, firmas y configuraciones en caliente sin reiniciar el servidor.
+                Carga un archivo <code>.mlvault</code> en una PC nueva para restaurar clientes, firmas y tarifas en caliente y vincularlos al DPAPI local.
               </p>
               <div style="padding:0.75rem; margin-top:0.75rem; background:var(--bg-card); border:1px solid var(--border-color); border-radius:6px; font-size:0.8rem; color:var(--text-muted);">
-                Acepta desbloqueo vía archivo <code>.mlkey</code>, 1 Código de Rescate o PIN personal.
+                Compatible con desbloqueo por <code>.mlkey</code>, 1 Código de Rescate o PIN personal.
               </div>
               <button type="button" class="btn btn-success" id="btnOpenImportVaultModal" style="margin-top:1rem; width:100%; justify-content:center;">
                 <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4 16v1a3 3 0 0 0 3 3h10a3 3 0 0 0 3-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
@@ -1613,10 +1739,10 @@
             Bloqueo Local de Consola con PIN Opcional
           </h3>
           <p class="subtitle" style="margin-top:0.25rem;">
-            Impide que personas no autorizadas miren tu CRM si dejas tu laptop encendida. Protegido por backoff exponencial anti-fuerza bruta y desbloqueable con tu archivo .mlkey o Códigos de Rescate si lo olvidas.
+            Exige PIN antes de consultar clientes, emitir licencias o descargar respaldos si dejas la consola abierta. Incluye protección anti-fuerza bruta y recuperación con <code>.mlkey</code>, Códigos de Rescate o DPAPI.
           </p>
 
-          <div style="padding:1.25rem; margin-top:1rem; background:var(--bg-secondary); border:1px solid var(--border-color); border-radius:10px;">
+          <div class="vault-card" style="padding:1.25rem; margin-top:1rem; background:var(--bg-secondary); border:1px solid var(--border-color); border-radius:10px;">
             <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:1rem;">
               <div>
                 <label style="display:flex; align-items:center; gap:0.6rem; cursor:pointer; font-weight:700; font-size:0.95rem;">
@@ -1624,7 +1750,7 @@
                   <span>Activar Bloqueo por PIN de Consola en este equipo</span>
                 </label>
                 <div style="font-size:0.8rem; color:var(--text-muted); margin-top:0.25rem; margin-left:1.75rem;">
-                  Al activar, cualquier pestaña requerirá el PIN para acceder a los datos.
+                  Protege todas las rutas de datos y descargas con token de sesión + cookie HttpOnly.
                 </div>
               </div>
               <div id="pinLockActionsContainer">
@@ -3501,7 +3627,9 @@
           <svg class="btn-icon" style="color:var(--success); width:20px; height:20px;" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4 16v1a3 3 0 0 0 3 3h10a3 3 0 0 0 3-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
           <h3>Importar Bóveda Portable (.mlvault)</h3>
         </div>
-        <button class="btn btn-outline btn-sm" onclick="closeModal('modalImportVault')">✕</button>
+        <button type="button" class="btn btn-outline btn-sm" onclick="closeModal('modalImportVault')" title="Cerrar">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
       </div>
       <div class="modal-body">
         <p style="font-size:0.85rem; color:var(--text-secondary); margin-bottom:1rem;">
@@ -3707,7 +3835,9 @@
           <svg class="btn-icon" style="color:var(--danger); width:20px; height:20px;" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
           <h3>Kit Criptográfico de Rescate de Emergencia</h3>
         </div>
-        <button class="btn btn-outline btn-sm" onclick="closeModal('printableEmergencyKit')">✕</button>
+        <button type="button" class="btn btn-outline btn-sm" onclick="closeModal('printableEmergencyKit')" title="Cerrar">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
       </div>
       <div class="modal-body" style="padding:1.5rem;">
 
@@ -3717,7 +3847,7 @@
             <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:2px solid #2563eb; padding-bottom:0.75rem;">
               <div>
                 <h2 style="font-size:1.35rem; font-weight:900; color:#1e3a8a; margin:0; letter-spacing:0.5px;">MOCHILALISTA ADMIN</h2>
-                <div style="font-size:0.85rem; font-weight:700; color:#475569; text-transform:uppercase; margin-top:2px;">Kit de Emergencia & Hoja de Rescate Físico</div>
+                <div style="font-size:0.85rem; font-weight:700; color:#475569; text-transform:uppercase; margin-top:2px;">Kit de Emergencia &amp; Hoja de Rescate Físico</div>
               </div>
               <div style="text-align:right; font-size:0.75rem; color:#64748b;">
                 <div>Emisión: <span id="kitGeneratedDate" style="font-weight:600;">-</span></div>
@@ -3769,6 +3899,75 @@
             Imprimir Kit / Guardar PDF
           </button>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL EJECUTIVO: AUDITORÍA INTEGRAL DE BÓVEDA Y PARIDAD SHA-256 -->
+  <div class="modal-overlay" id="modalVaultAuditReport">
+    <div class="modal-dialog" style="max-width: 820px;">
+      <div class="modal-header">
+        <div style="display:flex; align-items:center; gap:0.5rem;">
+          <svg class="btn-icon" style="color:var(--primary); width:20px; height:20px;" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9 12l2 2 4-4"/></svg>
+          <h3>Dictamen de Auditoría e Integridad de Bóveda</h3>
+        </div>
+        <button type="button" class="btn btn-outline btn-sm" onclick="closeModal('modalVaultAuditReport')" title="Cerrar">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      <div class="modal-body" style="padding:1.25rem 1.5rem;">
+        <div class="vault-audit-summary-grid">
+          <div class="vault-audit-kpi">
+            <div style="font-size:0.72rem; color:var(--text-muted); font-weight:700; text-transform:uppercase;">Blindaje Global</div>
+            <div style="margin-top:0.25rem; display:flex; align-items:center; gap:0.5rem;">
+              <span class="badge" id="vaultAuditScoreBadge">-</span>
+            </div>
+            <div id="vaultAuditTimestamp" style="font-size:0.72rem; color:var(--text-muted); margin-top:0.25rem;">-</div>
+          </div>
+          <div class="vault-audit-kpi">
+            <div style="font-size:0.72rem; color:var(--text-muted); font-weight:700; text-transform:uppercase;">DPAPI y Llavero</div>
+            <div id="vaultAuditDpapiStatus" style="font-size:0.84rem; font-weight:700; margin-top:0.25rem;">-</div>
+            <div id="vaultAuditKeyringStatus" style="font-size:0.72rem; color:var(--text-muted); margin-top:0.2rem;">-</div>
+          </div>
+          <div class="vault-audit-kpi">
+            <div style="font-size:0.72rem; color:var(--text-muted); font-weight:700; text-transform:uppercase;">Espejo (%APPDATA%)</div>
+            <div id="vaultAuditMirrorStatus" style="font-size:0.84rem; font-weight:700; margin-top:0.25rem;">-</div>
+            <div id="vaultAuditMirrorTime" style="font-size:0.72rem; color:var(--text-muted); margin-top:0.2rem;">-</div>
+          </div>
+          <div class="vault-audit-kpi">
+            <div style="font-size:0.72rem; color:var(--text-muted); font-weight:700; text-transform:uppercase;">Nube Local</div>
+            <div id="vaultAuditCloudStatus" style="font-size:0.84rem; font-weight:700; margin-top:0.25rem;">-</div>
+            <div id="vaultAuditCloudPath" style="font-size:0.72rem; color:var(--text-muted); margin-top:0.2rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">-</div>
+          </div>
+        </div>
+
+        <h4 style="font-size:0.9rem; font-weight:700; margin-bottom:0.5rem;">Verificación Archivo por Archivo (Disco Local vs Espejo Cifrado)</h4>
+        <div class="table-responsive" style="border:1px solid var(--border-color); border-radius:8px; margin-bottom:1rem;">
+          <table class="data-table" style="width:100%; font-size:0.8rem;">
+            <thead>
+              <tr>
+                <th>Archivo</th>
+                <th>Tamaño</th>
+                <th>Modificado (Lima)</th>
+                <th>SHA-256 Local vs Espejo</th>
+                <th>Paridad</th>
+              </tr>
+            </thead>
+            <tbody id="tbodyVaultAuditFiles">
+              <tr><td colspan="5" style="text-align:center; padding:1rem;">Ejecutando auditoría...</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h4 style="font-size:0.9rem; font-weight:700; margin-bottom:0.45rem;">Recomendaciones Operativas</h4>
+        <ul id="vaultAuditRecommendations" style="margin:0; padding-left:1.2rem; font-size:0.82rem; color:var(--text-secondary); line-height:1.5;"></ul>
+      </div>
+      <div class="modal-footer" style="display:flex; justify-content:space-between; width:100%;">
+        <button type="button" class="btn btn-outline" id="btnVaultAuditSyncNow">
+          <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/></svg>
+          Sincronizar Espejo Ahora
+        </button>
+        <button type="button" class="btn btn-primary" onclick="closeModal('modalVaultAuditReport')">Cerrar Dictamen</button>
       </div>
     </div>
   </div>
@@ -4163,6 +4362,263 @@
   <!-- TOOLTIP FLOTANTE NATIVO PARA SIDEBAR COLAPSADO (FASE 2) -->
   <div id="sidebarFloatingTooltip" class="sidebar-floating-tooltip"></div>
 
-  <script src="js/admin_app.js"></script>
+  <!-- MODAL EJECUTIVO: VISTA PREVIA ANTES DE RESTAURAR RESPALDO (PLAN 23 - FASE 1) -->
+  <div class="modal-overlay" id="modalBackupPreview">
+    <div class="modal-dialog modal-backup-preview-dialog">
+      <div class="modal-header">
+        <div style="display:flex; align-items:center; gap:0.55rem;">
+          <svg class="icon-svg" style="color:var(--warning);" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><polyline points="3 3 3 8 8 8"/><polyline points="12 7 12 12 15 14"/></svg>
+          <h3>Vista Previa antes de Restaurar Respaldo</h3>
+        </div>
+        <button type="button" class="btn btn-outline btn-sm" id="btnCloseBackupPreview" title="Cerrar vista previa">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div class="backup-preview-meta-card">
+          <div class="backup-preview-file-row">
+            <code id="bpFilename" class="backup-preview-filename">-</code>
+            <div style="display:flex; gap:0.4rem; flex-wrap:wrap;">
+              <span id="bpEnvironmentBadge" class="badge badge-mono">-</span>
+              <span id="bpScopeBadge" class="badge badge-blue">-</span>
+            </div>
+          </div>
+          <div class="backup-preview-meta-grid">
+            <div>
+              <span class="bp-meta-label">Fecha (Perú GMT-5)</span>
+              <span class="bp-meta-value" id="bpModifiedLima">-</span>
+            </div>
+            <div>
+              <span class="bp-meta-label">Tamaño en disco</span>
+              <span class="bp-meta-value" id="bpSizeKb">-</span>
+            </div>
+            <div>
+              <span class="bp-meta-label">Marca UTC original</span>
+              <span class="bp-meta-value bp-mono" id="bpModifiedUtc">-</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="backup-preview-compare-wrap">
+          <h4 class="bp-section-title">Comparativa del Respaldo frente al Estado Actual</h4>
+          <table class="data-table backup-preview-compare-table">
+            <thead>
+              <tr>
+                <th>Métrica / Alcance</th>
+                <th>Contenido del Snapshot</th>
+                <th>Estado Actual en Disco</th>
+              </tr>
+            </thead>
+            <tbody id="bpComparisonBody">
+              <tr><td colspan="3" style="text-align:center;">Analizando respaldo...</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="backup-preview-callout" id="bpSafetyNotice">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          <div>
+            <strong>Resguardo Atómico Garantizado:</strong> Antes de aplicar este snapshot, el servidor creará automáticamente un respaldo protegido <code>pre_restore</code> del estado actual en <code>backups/</code> para que puedas revertir en cualquier momento.
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer" style="display:flex; justify-content:flex-end; gap:0.65rem;">
+        <button type="button" class="btn btn-outline" id="btnCancelBackupPreview">Cancelar</button>
+        <button type="button" class="btn btn-primary" id="btnConfirmBackupPreview">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
+          Confirmar y Restaurar Sistema
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: CAMBIOS SIN GUARDAR EN CONFIGURACIÓN (DIRTY GUARD — PLAN 23 FASE 2) -->
+  <div class="modal-overlay" id="modalUnsavedSettings">
+    <div class="modal-dialog" style="max-width: 500px;">
+      <div class="modal-header">
+        <div style="display:flex; align-items:center; gap:0.5rem;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:20px; height:20px; color:var(--warning);"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+          <h3 style="margin:0;">Cambios sin guardar en Configuración</h3>
+        </div>
+        <button type="button" class="btn btn-outline btn-sm" id="btnCloseUnsavedSettingsModal">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <p style="font-size:0.88rem; color:var(--text-secondary); line-height:1.5; margin:0;">
+          Tienes modificaciones pendientes de guardar en el Centro de Personalización. Si sales o cambias de entorno ahora sin guardar, se perderán los cambios en:
+        </p>
+        <div class="settings-dirty-list" id="unsavedSettingsList"></div>
+      </div>
+      <div class="modal-footer" style="display:flex; justify-content:flex-end; gap:0.5rem; flex-wrap:wrap;">
+        <button type="button" class="btn btn-outline" id="btnUnsavedKeepEditing">Seguir editando</button>
+        <button type="button" class="btn btn-outline" id="btnUnsavedDiscardAndContinue" style="color:var(--danger); border-color:var(--danger);">Descartar cambios y salir</button>
+        <button type="button" class="btn btn-primary" id="btnUnsavedSaveAndContinue">Guardar cambios y salir</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: ALCANCE DE RESTAURACIÓN A FÁBRICA (PLAN 23 FASE 2) -->
+  <div class="modal-overlay" id="modalResetSettingsScope">
+    <div class="modal-dialog" style="max-width: 520px;">
+      <div class="modal-header">
+        <div style="display:flex; align-items:center; gap:0.5rem;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:20px; height:20px; color:var(--danger);"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+          <h3 style="margin:0;">Restablecer Valores de Fábrica</h3>
+        </div>
+        <button type="button" class="btn btn-outline btn-sm" id="btnCloseResetScopeModal">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <p style="font-size:0.88rem; color:var(--text-secondary); line-height:1.5; margin:0;">
+          Elige qué alcance deseas restaurar a los valores oficiales de MochilaLista. En todos los casos se creará primero un snapshot protegido <code>pre_reset</code> en <code>backups/</code> y tus rutas APK quedarán intactas.
+        </p>
+        <div class="settings-reset-options">
+          <button type="button" class="btn btn-outline settings-reset-option-btn" id="btnResetScopeCurrentTab">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+            <span>Restablecer solo la pestaña actual (<strong id="resetCurrentTabLabel">Tarifario & Bolsas IA</strong>)</span>
+          </button>
+          <button type="button" class="btn btn-danger settings-reset-option-btn" id="btnResetScopeAll">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+            <span>Restablecer TODA la configuración a fábrica</span>
+          </button>
+        </div>
+      </div>
+      <div class="modal-footer" style="display:flex; justify-content:flex-end;">
+        <button type="button" class="btn btn-outline" id="btnResetScopeCancel">Cancelar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: SINCRONIZACIÓN COMERCIAL SEGURA MLC1 HACIA APP MÓVIL (PLAN 23 FASE 3) -->
+  <div class="modal-overlay" id="modalCommercialConfigSync">
+    <div class="modal-dialog" style="max-width: 900px;">
+      <div class="modal-header">
+        <div style="display:flex; align-items:center; gap:0.55rem;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:20px; height:20px; color:var(--primary);"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><polyline points="9 12 11 14 15 10"/></svg>
+          <h3 style="margin:0;">Sincronización Comercial Segura hacia App Móvil (MLC1)</h3>
+        </div>
+        <button type="button" class="btn btn-outline btn-sm" id="btnCloseCommercialSyncModal" title="Cerrar">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      <div class="modal-body" style="display:flex; flex-direction:column; gap:1rem;">
+        <div class="mlc1-security-banner">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--success); flex-shrink:0; margin-top:2px;"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+          <div>
+            <strong>Protocolo Declarativo Verificado con Ed25519 (Cero Código Ejecutable):</strong> La ficha <code>MLC1-...</code> transporta únicamente datos tipados de tarifas en Soles, cuotas IA, teléfono de soporte y cuentas Yape/BCP/BBVA firmados con separación de dominio <code>MLC1-</code>. Cualquier alteración de 1 bit es rechazada matemáticamente por la app móvil.
+          </div>
+        </div>
+
+        <div class="mlc1-tabs-bar">
+          <button type="button" class="mlc1-tab-btn active" data-mlc1-tab="mlc1PaneToken">
+            <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+            <span>Vía 1: Ficha Firmada MLC1 (Actualización Offline Instantánea)</span>
+          </button>
+          <button type="button" class="mlc1-tab-btn" data-mlc1-tab="mlc1PaneDart">
+            <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+            <span>Vía 2: Constantes Dart (Futuras Compilaciones APK)</span>
+          </button>
+        </div>
+
+        <!-- PANE VÍA 1: EMISIÓN MLC1 + QR + WHATSAPP -->
+        <div class="mlc1-tab-pane active" id="mlc1PaneToken">
+          <div class="mlc1-control-strip">
+            <div class="mlc1-meta-pills">
+              <span class="badge badge-mono" id="mlc1RevisionBadge">Revisión #0</span>
+              <span class="badge badge-outline" id="mlc1IssuedAtLimaBadge">Pendiente de emitir</span>
+              <span class="badge badge-outline" id="mlc1PayloadSizeBadge">0 B / 8192 B</span>
+            </div>
+            <button type="button" class="btn btn-primary" id="btnGenerateMlc1Token">
+              <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>
+              <span>Generar Ficha Firmada MLC1</span>
+            </button>
+          </div>
+
+          <div class="mlc1-summary-card" id="mlc1SummaryBox">
+            <div class="mlc1-summary-accounts" id="mlc1AccountsSummary">
+              Cargando resumen comercial guardado en disco...
+            </div>
+            <div class="table-responsive" style="max-height: 185px; overflow-y:auto;">
+              <table class="data-table table-compact mlc1-plans-mini-table">
+                <thead>
+                  <tr>
+                    <th>Plan / Producto</th>
+                    <th style="text-align:right;">Tarifa</th>
+                    <th style="text-align:right;">Días</th>
+                    <th style="text-align:right;">Bolsa IA</th>
+                    <th style="text-align:right;">Updates</th>
+                  </tr>
+                </thead>
+                <tbody id="mlc1PlansSummaryBody">
+                  <tr><td colspan="5" style="text-align:center;">Cargando catálogo...</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div id="mlc1EmptyResultHint" class="mlc1-empty-hint">
+            Haz clic en <strong>Generar Ficha Firmada MLC1</strong> para incrementar la revisión monotónica y emitir una ficha verificable con QR y texto listo para compartir por WhatsApp.
+          </div>
+
+          <div class="mlc1-result-grid" id="mlc1TokenResultContainer" style="display:none;">
+            <div class="mlc1-token-col">
+              <label for="mlc1TokenOutput" style="font-weight:700; font-size:0.85rem;">Código Criptográfico Declarativo <code>MLC1-...</code>:</label>
+              <textarea id="mlc1TokenOutput" readonly rows="5" class="mlc1-code-textarea" placeholder="MLC1-..."></textarea>
+              <div class="mlc1-action-row">
+                <button type="button" class="btn btn-outline btn-sm" id="btnCopyMlc1Token">
+                  <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                  <span>Copiar Código MLC1</span>
+                </button>
+                <button type="button" class="btn btn-wa btn-sm" id="btnSendMlc1Whatsapp">
+                  <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+                  <span>Enviar / Compartir por WhatsApp</span>
+                </button>
+              </div>
+            </div>
+
+            <div class="mlc1-qr-card">
+              <div class="mlc1-qr-white-box">
+                <div id="mlc1QrContainer"></div>
+              </div>
+              <span style="font-size:0.75rem; color:var(--text-secondary); text-align:center;">
+                Escaneable offline desde Perfil &gt; Licencia en la app móvil
+              </span>
+              <div class="mlc1-action-row" style="justify-content:center;">
+                <button type="button" class="btn btn-outline btn-xs" id="btnDownloadMlc1Qr">
+                  <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                  <span>Descargar QR PNG</span>
+                </button>
+                <button type="button" class="btn btn-outline btn-xs" id="btnCopyMlc1Qr">
+                  <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                  <span>Copiar QR</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- PANE VÍA 2: CONSTANTES DART PARA COMPILACIONES FUTURAS -->
+        <div class="mlc1-tab-pane" id="mlc1PaneDart">
+          <p style="font-size:0.84rem; color:var(--text-secondary); margin:0 0 0.65rem 0; line-height:1.45;">
+            Este bloque refleja las tarifas, cuotas IA, soporte y cuentas guardadas actualmente en <code>owner_config.json</code>. Pégalo en <code>app_movil/lib/core/config/owner_legal_identity.dart</code> para embeber estos defaults al compilar nuevos APKs (consultar esta pestaña no altera la revisión <code>ver</code>).
+          </p>
+          <textarea id="mlc1DartSnippetOutput" readonly rows="15" class="mlc1-code-textarea" style="min-height:280px;"></textarea>
+          <div style="display:flex; justify-content:flex-end; margin-top:0.65rem;">
+            <button type="button" class="btn btn-primary btn-sm" id="btnCopyMlc1Dart">
+              <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+              <span>Copiar Bloque Dart</span>
+            </button>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer" style="display:flex; justify-content:flex-end;">
+        <button type="button" class="btn btn-outline" id="btnDismissCommercialSyncModal">Cerrar</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/admin_app.js?v=23"></script>
 </body>
 </html>

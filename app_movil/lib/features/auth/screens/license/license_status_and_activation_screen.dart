@@ -11,6 +11,8 @@ import 'package:app_movil/core/config/owner_legal_identity.dart';
 import 'package:app_movil/core/config/app_changelog_registry.dart';
 import 'package:app_movil/core/models/license_model.dart';
 import 'package:app_movil/core/providers/license_provider.dart';
+import 'package:app_movil/core/providers/commercial_catalog_provider.dart';
+import 'package:app_movil/core/services/license/commercial_config_sync_service.dart';
 import 'package:app_movil/core/services/license/ed25519_license_validator.dart';
 import 'package:app_movil/core/widgets/custom_snackbar.dart';
 import 'package:app_movil/core/services/scanner/qr_gallery_decoder_service.dart';
@@ -31,8 +33,107 @@ class LicenseStatusAndActivationScreen extends StatefulWidget {
   const LicenseStatusAndActivationScreen({super.key, this.welcomeTrialNotice});
 
   /// Helper puro para construir la URI oficial de WhatsApp a partir de un mensaje personalizado
-  static Uri buildCustomWhatsAppOrderUri(String customMessage) {
-    return OwnerLegalIdentity.buildCustomWhatsAppOrderUri(customMessage);
+  static Uri buildCustomWhatsAppOrderUri(
+    String customMessage, {
+    String? supportPhoneOverride,
+  }) {
+    return OwnerLegalIdentity.buildCustomWhatsAppOrderUri(
+      customMessage,
+      supportPhoneOverride: supportPhoneOverride,
+    );
+  }
+
+  /// Combina los textos compilados de cada plan comercial con los precios, días, cuotas IA
+  /// y vigencias de updates vigentes desde [EffectiveCommercialConfig].
+  static List<CommercialPlanDetail> buildEffectiveOfficialPlans(
+    EffectiveCommercialConfig config,
+  ) {
+    if (!config.hasSyncedOverride) {
+      return _LicenseStatusAndActivationScreenState.officialPlans;
+    }
+
+    final numFmt = NumberFormat('#,##0', 'en_US');
+    return _LicenseStatusAndActivationScreenState.officialPlans
+        .map((base) {
+          final spec = config.productById(base.id);
+          final defSpec =
+              EffectiveCommercialConfig.defaultPlansMap[base.id] ?? spec;
+
+          final formattedAiCount = numFmt.format(spec.aiCredits);
+          final effectiveAiBadge = spec.aiCredits > 0
+              ? '+$formattedAiCount IA'
+              : 'Sin bono IA';
+
+          final durationChanged =
+              spec.days != defSpec.days ||
+              spec.updatesMonths != defSpec.updatesMonths;
+          final String effectiveDuration;
+          if (!durationChanged) {
+            effectiveDuration = base.duration;
+          } else if (base.isPerpetual) {
+            effectiveDuration =
+                'Vitalicia (De por vida, ${spec.updatesMonths} meses de updates)';
+          } else if (base.isUpdatePass) {
+            effectiveDuration =
+                '${spec.updatesMonths} meses de actualizaciones de versión';
+          } else if (spec.days > 0) {
+            effectiveDuration = '${spec.days} días continuos';
+          } else {
+            effectiveDuration = 'Permanente (No expira nunca)';
+          }
+
+          final aiChanged = spec.aiCredits != defSpec.aiCredits;
+          final String effectiveAiQuota;
+          if (!aiChanged) {
+            effectiveAiQuota = base.aiQuota;
+          } else if (base.isExtraAi) {
+            effectiveAiQuota = '+$formattedAiCount escaneos IA acumulativos';
+          } else {
+            effectiveAiQuota =
+                '$formattedAiCount escaneos inteligentes IA incluidos';
+          }
+
+          final priceChanged = (spec.price - defSpec.price).abs() > 0.001;
+          final effectiveSavings = priceChanged
+              ? 'Tarifa comercial oficial actualizada: ${spec.formattedPrice}'
+              : base.savings;
+
+          final effectiveBenefits = (!aiChanged && !durationChanged)
+              ? base.benefits
+              : <String>[
+                  if (base.isPerpetual)
+                    'Licencia de por vida para el dispositivo vinculado (${spec.updatesMonths} meses de updates incluidos)'
+                  else if (base.isUpdatePass)
+                    '${spec.updatesMonths} meses adicionales de acceso a nuevas funciones y mejoras'
+                  else if (base.isExtraAi)
+                    'Recarga inmediata de $formattedAiCount escaneos acumulativos que nunca vencen'
+                  else
+                    'Acceso total comercial durante ${spec.days} días continuos',
+                  if (!base.isExtraAi)
+                    '$formattedAiCount escaneos IA incluidos para digitalizar listas y facturas',
+                  'Operación 100% offline garantizada y soporte técnico directo vía WhatsApp',
+                ];
+
+          return CommercialPlanDetail(
+            id: base.id,
+            name: spec.label.trim().isNotEmpty ? spec.label.trim() : base.name,
+            price: spec.formattedPrice,
+            desc: spec.description.trim().isNotEmpty
+                ? spec.description.trim()
+                : base.desc,
+            badge: base.badge,
+            aiBadge: effectiveAiBadge,
+            duration: effectiveDuration,
+            aiQuota: effectiveAiQuota,
+            savings: effectiveSavings,
+            idealFor: base.idealFor,
+            benefits: effectiveBenefits,
+            isPerpetual: base.isPerpetual,
+            isExtraAi: base.isExtraAi,
+            isUpdatePass: base.isUpdatePass,
+          );
+        })
+        .toList(growable: false);
   }
 
   @override
@@ -44,20 +145,51 @@ class _LicenseStatusAndActivationScreenState
     extends State<LicenseStatusAndActivationScreen> {
   final TextEditingController _codeController = TextEditingController();
   final _tourKeys = LicenseStatusTourKeys();
+  final CommercialConfigSyncService _commercialSyncService =
+      CommercialConfigSyncService();
   String? _detectedClipboardCode;
   bool _isCheckingClipboard = false;
+  bool _isVerifyingMlc1 = false;
   bool? _isPlansExpanded;
+  EffectiveCommercialConfig? _fallbackSyncedConfig;
+
+  CommercialCatalogProvider? _tryCatalogProvider({bool listen = false}) {
+    try {
+      return Provider.of<CommercialCatalogProvider?>(context, listen: listen);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  EffectiveCommercialConfig _resolveEffectiveConfig({bool listen = false}) {
+    final prov = _tryCatalogProvider(listen: listen);
+    if (prov != null) return prov.effectiveConfig;
+    return _fallbackSyncedConfig ?? EffectiveCommercialConfig.defaults();
+  }
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _checkClipboardForCode();
+      _loadFallbackCommercialConfigIfNeeded();
       InteractiveTourService.maybeStartAutomaticTour(
         context,
         LicenseStatusTour.buildConfig(keys: _tourKeys),
       );
     });
+  }
+
+  Future<void> _loadFallbackCommercialConfigIfNeeded() async {
+    if (!mounted) return;
+    if (_tryCatalogProvider(listen: false) != null) return;
+    final saved = await _commercialSyncService.getSavedConfig();
+    if (!mounted) return;
+    if (saved != null) {
+      setState(() {
+        _fallbackSyncedConfig = EffectiveCommercialConfig.fromSaved(saved);
+      });
+    }
   }
 
   @override
@@ -66,13 +198,22 @@ class _LicenseStatusAndActivationScreenState
     super.dispose();
   }
 
-  /// Revisa si el portapapeles contiene un código válido (formato ML9- con estructura Ed25519)
+  /// Revisa si el portapapeles contiene un código válido (`ML9-` o ficha declarativa `MLC1-`).
   Future<void> _checkClipboardForCode() async {
     if (!mounted || _isCheckingClipboard) return;
     _isCheckingClipboard = true;
     try {
       final data = await Clipboard.getData(Clipboard.kTextPlain);
       final text = data?.text?.trim() ?? '';
+      final mlc1 = CommercialConfigSyncService.extractMlc1Token(text);
+      if (mlc1.isNotEmpty) {
+        if (mounted) {
+          setState(() {
+            _detectedClipboardCode = mlc1;
+          });
+        }
+        return;
+      }
       if (_isValidCandidateCode(text)) {
         final extracted = Ed25519LicenseValidator.extractClipboardLicenseToken(
           text,
@@ -97,6 +238,9 @@ class _LicenseStatusAndActivationScreenState
 
   bool _isValidCandidateCode(String text) {
     if (text.isEmpty) return false;
+    if (CommercialConfigSyncService.extractMlc1Token(text).isNotEmpty) {
+      return true;
+    }
     return Ed25519LicenseValidator.extractClipboardLicenseToken(
       text,
     ).isNotEmpty;
@@ -120,6 +264,11 @@ class _LicenseStatusAndActivationScreenState
   }
 
   Future<void> _activateCode(String code) async {
+    if (CommercialConfigSyncService.looksLikeMlc1Input(code)) {
+      await _handleMlc1TokenFlow(code);
+      return;
+    }
+
     final extracted = Ed25519LicenseValidator.extractLicenseToken(code);
     final clean = extracted.isNotEmpty ? extracted : code.trim();
     if (clean.isEmpty) {
@@ -149,7 +298,352 @@ class _LicenseStatusAndActivationScreenState
     );
   }
 
+  Future<void> _handleMlc1TokenFlow(String rawCode) async {
+    if (_isVerifyingMlc1) return;
+    setState(() => _isVerifyingMlc1 = true);
+
+    final catalogProv = _tryCatalogProvider(listen: false);
+    final CommercialConfigVerificationResult verification;
+    try {
+      verification = catalogProv != null
+          ? await catalogProv.previewToken(rawCode)
+          : await _commercialSyncService.parseAndVerifyToken(rawCode);
+    } finally {
+      if (mounted) setState(() => _isVerifyingMlc1 = false);
+    }
+
+    if (!mounted) return;
+    if (!verification.isValid || verification.payload == null) {
+      CustomSnackBar.show(
+        context,
+        message:
+            verification.error ??
+            'No se pudo validar la ficha comercial MLC1.',
+        isError: true,
+      );
+      return;
+    }
+
+    final confirmed = await _showMlc1ConfirmationDialog(verification);
+    if (!mounted || confirmed != true) return;
+
+    setState(() => _isVerifyingMlc1 = true);
+    try {
+      final applyResult = catalogProv != null
+          ? await catalogProv.applyToken(verification.cleanToken ?? rawCode)
+          : await _commercialSyncService.applyVerifiedToken(
+              verification.cleanToken ?? rawCode,
+            );
+
+      if (!mounted) return;
+      if (!applyResult.isValid) {
+        CustomSnackBar.show(
+          context,
+          message:
+              applyResult.error ?? 'No se pudo aplicar la configuración MLC1.',
+          isError: true,
+        );
+        return;
+      }
+
+      if (catalogProv == null && applyResult.payload != null) {
+        final saved = await _commercialSyncService.getSavedConfig();
+        if (mounted) {
+          setState(() {
+            _fallbackSyncedConfig = saved != null
+                ? EffectiveCommercialConfig.fromSaved(saved)
+                : EffectiveCommercialConfig.fromPayload(
+                    applyResult.payload!,
+                    hasSyncedOverride: true,
+                    issuedAtLimaLabel: applyResult.issuedAtLima,
+                    appliedAtLimaLabel: applyResult.appliedAtLima,
+                  );
+          });
+        }
+      }
+
+      if (!mounted) return;
+      _codeController.clear();
+      setState(() => _detectedClipboardCode = null);
+
+      CustomSnackBar.show(
+        context,
+        message:
+            'Tarifas y medios de pago actualizados (Rev. #${applyResult.revision}).',
+        isError: false,
+      );
+    } finally {
+      if (mounted) setState(() => _isVerifyingMlc1 = false);
+    }
+  }
+
+  Future<bool?> _showMlc1ConfirmationDialog(
+    CommercialConfigVerificationResult verification,
+  ) {
+    final previewConfig = EffectiveCommercialConfig.fromPayload(
+      verification.payload!,
+      hasSyncedOverride: true,
+      issuedAtLimaLabel: verification.issuedAtLima,
+    );
+    final orderedSpecs = <CommercialSyncProductSpec>[
+      previewConfig.mensual,
+      previewConfig.trimestral,
+      previewConfig.semestral,
+      previewConfig.anual,
+      previewConfig.perpetua,
+      previewConfig.bolsaExtraIa,
+      previewConfig.paseAnualUpdates,
+      previewConfig.migracion,
+    ];
+
+    return showDialog<bool>(
+      context: context,
+      builder: (ctx) {
+        final isDark = Theme.of(ctx).brightness == Brightness.dark;
+        return AlertDialog(
+          key: const ValueKey('dialog_mlc1_confirm_apply'),
+          insetPadding: const EdgeInsets.symmetric(
+            horizontal: 16,
+            vertical: 24,
+          ),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(18),
+          ),
+          title: Row(
+            children: [
+              const Icon(
+                Icons.verified_user_outlined,
+                color: Colors.teal,
+                size: 22,
+              ),
+              const SizedBox(width: 8),
+              const Expanded(
+                child: Text(
+                  'Actualizar Tarifas y Cuentas',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                ),
+              ),
+            ],
+          ),
+          content: SizedBox(
+            width: 380,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: Colors.teal.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(
+                        color: Colors.teal.withValues(alpha: 0.3),
+                      ),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Ficha oficial verificada · Rev. #${previewConfig.revision}',
+                          style: const TextStyle(
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.teal,
+                          ),
+                        ),
+                        if (previewConfig.issuedAtLimaLabel != null) ...[
+                          const SizedBox(height: 2),
+                          Text(
+                            'Emitida el ${previewConfig.issuedAtLimaLabel} (Hora Perú)',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: isDark
+                                  ? Colors.grey[300]
+                                  : Colors.grey[700],
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  const Text(
+                    'Resumen de tarifas:',
+                    style: TextStyle(
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  ...orderedSpecs.map((spec) {
+                    final details = <String>[];
+                    if (spec.days > 0 && spec.id != 'perpetua') {
+                      details.add('${spec.days} días');
+                    }
+                    if (spec.aiCredits > 0) {
+                      details.add('+${spec.aiCredits} IA');
+                    }
+                    if (spec.updatesMonths > 0) {
+                      details.add('${spec.updatesMonths}m updates');
+                    }
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 3),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: Text(
+                              details.isNotEmpty
+                                  ? '${spec.label} (${details.join(' · ')})'
+                                  : spec.label,
+                              style: const TextStyle(fontSize: 12),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            spec.formattedPrice,
+                            style: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  }),
+                  const Divider(height: 16),
+                  const Text(
+                    'Canales de soporte y pago:',
+                    style: TextStyle(
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    'Soporte WhatsApp: ${previewConfig.supportPhone}',
+                    style: const TextStyle(fontSize: 11.5),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    'Yape / Plin: ${previewConfig.yapePhone} (${previewConfig.yapeHolder})',
+                    style: const TextStyle(fontSize: 11.5),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    previewConfig.hasBcpConfigured
+                        ? 'BCP: ${previewConfig.bcpAccount}${previewConfig.bcpHolder.isNotEmpty ? ' · ${previewConfig.bcpHolder}' : ''}'
+                        : 'BCP: No configurada (oculta)',
+                    style: const TextStyle(fontSize: 11.5),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    previewConfig.hasBbvaConfigured
+                        ? 'BBVA: ${previewConfig.bbvaAccount}${previewConfig.bbvaHolder.isNotEmpty ? ' · ${previewConfig.bbvaHolder}' : ''}'
+                        : 'BBVA: No configurada (oculta)',
+                    style: const TextStyle(fontSize: 11.5),
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    'Esta actualización es 100 % declarativa y firmada con clave oficial. Puedes volver a los valores de fábrica en cualquier momento.',
+                    style: TextStyle(
+                      fontSize: 10.5,
+                      color: isDark ? Colors.grey[400] : Colors.grey[600],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          actionsAlignment: MainAxisAlignment.end,
+          actionsOverflowButtonSpacing: 8,
+          actions: [
+            TextButton(
+              key: const ValueKey('btn_mlc1_dialog_cancel'),
+              onPressed: () => Navigator.of(ctx).pop(false),
+              child: const Text('Cancelar'),
+            ),
+            ElevatedButton.icon(
+              key: const ValueKey('btn_mlc1_dialog_apply'),
+              onPressed: () => Navigator.of(ctx).pop(true),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.teal,
+                foregroundColor: Colors.white,
+              ),
+              icon: const Icon(Icons.check_circle_outline_rounded, size: 17),
+              label: const Text('Aplicar Tarifas Oficiales'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _confirmResetCommercialCatalog() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        key: const ValueKey('dialog_mlc1_reset_confirm'),
+        insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Row(
+          children: [
+            Icon(Icons.restore_rounded, color: Colors.orange, size: 22),
+            SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                'Restaurar valores de fábrica',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              ),
+            ),
+          ],
+        ),
+        content: const Text(
+          '¿Deseas eliminar las tarifas sincronizadas y restaurar los precios y cuentas compilados originalmente en esta versión de la aplicación?',
+          style: TextStyle(fontSize: 13),
+        ),
+        actions: [
+          TextButton(
+            key: const ValueKey('btn_mlc1_confirm_reset_cancel'),
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancelar'),
+          ),
+          ElevatedButton(
+            key: const ValueKey('btn_mlc1_confirm_reset_ok'),
+            onPressed: () => Navigator.of(ctx).pop(true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.orange[700],
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Restaurar defaults'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+    final catalogProv = _tryCatalogProvider(listen: false);
+    if (catalogProv != null) {
+      await catalogProv.resetToCompiledDefaults();
+    } else {
+      await _commercialSyncService.resetToCompiledDefaults();
+      if (mounted) {
+        setState(() => _fallbackSyncedConfig = null);
+      }
+    }
+
+    if (!mounted) return;
+    CustomSnackBar.show(
+      context,
+      message: 'Catálogo restaurado a los valores de fábrica.',
+      isError: false,
+    );
+  }
+
   Future<void> _launchRawWhatsAppUrl(String url) async {
+    final effectiveSupportPhone = _resolveEffectiveConfig().supportPhone;
     final uri = Uri.parse(url);
     try {
       if (await canLaunchUrl(uri)) {
@@ -159,7 +653,7 @@ class _LicenseStatusAndActivationScreenState
           CustomSnackBar.show(
             context,
             message:
-                "No se pudo abrir WhatsApp. Contacta al ${OwnerLegalIdentity.supportPhone}",
+                "No se pudo abrir WhatsApp. Contacta al $effectiveSupportPhone",
             isError: true,
           );
         }
@@ -168,7 +662,7 @@ class _LicenseStatusAndActivationScreenState
       if (mounted) {
         CustomSnackBar.show(
           context,
-          message: "Número de soporte: ${OwnerLegalIdentity.supportPhone}",
+          message: "Número de soporte: $effectiveSupportPhone",
           isError: false,
         );
       }
@@ -176,13 +670,14 @@ class _LicenseStatusAndActivationScreenState
   }
 
   Future<void> _launchWhatsAppMessage(String message) async {
-    final cleanDigits = OwnerLegalIdentity.supportPhone.replaceAll(
+    final effectiveConfig = _resolveEffectiveConfig();
+    final cleanDigits = effectiveConfig.supportPhone.replaceAll(
       RegExp(r'[^0-9]'),
       '',
     );
     final baseUri = cleanDigits.length >= 8
         ? "https://wa.me/$cleanDigits"
-        : OwnerLegalIdentity.supportWhatsAppUrl;
+        : effectiveConfig.supportWhatsAppUrl;
     final uri = Uri.parse("$baseUri?text=${Uri.encodeComponent(message)}");
     try {
       if (await canLaunchUrl(uri)) {
@@ -192,7 +687,7 @@ class _LicenseStatusAndActivationScreenState
           CustomSnackBar.show(
             context,
             message:
-                "No se pudo abrir WhatsApp. Contacta al ${OwnerLegalIdentity.supportPhone}",
+                "No se pudo abrir WhatsApp. Contacta al ${effectiveConfig.supportPhone}",
             isError: true,
           );
         }
@@ -201,7 +696,7 @@ class _LicenseStatusAndActivationScreenState
       if (mounted) {
         CustomSnackBar.show(
           context,
-          message: "Número de soporte: ${OwnerLegalIdentity.supportPhone}",
+          message: "Número de soporte: ${effectiveConfig.supportPhone}",
           isError: false,
         );
       }
@@ -329,6 +824,7 @@ class _LicenseStatusAndActivationScreenState
     final licenseProv = Provider.of<LicenseProvider?>(context);
     final license = licenseProv?.license;
     final fingerprint = licenseProv?.deviceFingerprint ?? 'ML-INIT';
+    final effectiveConfig = _resolveEffectiveConfig(listen: true);
 
     return Scaffold(
       appBar: AppBar(
@@ -436,7 +932,12 @@ class _LicenseStatusAndActivationScreenState
               const SizedBox(height: 16),
 
               // Catálogo de Planes y Medios de Pago Peruanos
-              _buildPricingAndPaymentCatalog(license, fingerprint, isDark),
+              _buildPricingAndPaymentCatalog(
+                license,
+                fingerprint,
+                isDark,
+                effectiveConfig,
+              ),
               const SizedBox(height: 24),
             ],
           ),
@@ -446,18 +947,25 @@ class _LicenseStatusAndActivationScreenState
   }
 
   Widget _buildClipboardDetectedBanner(bool isDark) {
+    final isMlc1 =
+        _detectedClipboardCode != null &&
+        CommercialConfigSyncService.looksLikeMlc1Input(_detectedClipboardCode!);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
-        color: Colors.green.withValues(alpha: 0.15),
+        color: (isMlc1 ? Colors.teal : Colors.green).withValues(alpha: 0.15),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.green.withValues(alpha: 0.5)),
+        border: Border.all(
+          color: (isMlc1 ? Colors.teal : Colors.green).withValues(alpha: 0.5),
+        ),
       ),
       child: Row(
         children: [
-          const Icon(
-            Icons.content_paste_go_rounded,
-            color: Colors.green,
+          Icon(
+            isMlc1
+                ? Icons.verified_user_outlined
+                : Icons.content_paste_go_rounded,
+            color: isMlc1 ? Colors.teal : Colors.green,
             size: 22,
           ),
           const SizedBox(width: 10),
@@ -465,9 +973,14 @@ class _LicenseStatusAndActivationScreenState
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  "Código detectado en portapapeles",
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12.5),
+                Text(
+                  isMlc1
+                      ? "Ficha de tarifas detectada en portapapeles"
+                      : "Código detectado en portapapeles",
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 12.5,
+                  ),
                 ),
                 Text(
                   _detectedClipboardCode!,
@@ -490,7 +1003,7 @@ class _LicenseStatusAndActivationScreenState
               _activateCode(codeToUse);
             },
             style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.green[700],
+              backgroundColor: isMlc1 ? Colors.teal : Colors.green[700],
               foregroundColor: Colors.white,
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
               elevation: 0,
@@ -498,9 +1011,12 @@ class _LicenseStatusAndActivationScreenState
                 borderRadius: BorderRadius.circular(8),
               ),
             ),
-            child: const Text(
-              "Pegar y Activar",
-              style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold),
+            child: Text(
+              isMlc1 ? "Revisar y Aplicar" : "Pegar y Activar",
+              style: const TextStyle(
+                fontSize: 11.5,
+                fontWeight: FontWeight.bold,
+              ),
             ),
           ),
         ],
@@ -957,7 +1473,7 @@ class _LicenseStatusAndActivationScreenState
   }
 
   Widget _buildActivationCard(LicenseProvider? licenseProv, bool isDark) {
-    final isLoading = licenseProv?.isLoading ?? false;
+    final isLoading = (licenseProv?.isLoading ?? false) || _isVerifyingMlc1;
 
     return Card(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -996,10 +1512,11 @@ class _LicenseStatusAndActivationScreenState
 
             // Input de código con botón rápido de pegado
             TextField(
+              key: const ValueKey('input_license_activation_code'),
               controller: _codeController,
               onTapOutside: (_) => FocusScope.of(context).unfocus(),
               decoration: InputDecoration(
-                hintText: "Ejemplo: ML9-...",
+                hintText: "Ejemplo: ML9-... o MLC1-...",
                 hintStyle: TextStyle(
                   fontSize: 13,
                   color: isDark ? Colors.grey[600] : Colors.grey[400],
@@ -1012,6 +1529,13 @@ class _LicenseStatusAndActivationScreenState
                     final data = await Clipboard.getData(Clipboard.kTextPlain);
                     if (data?.text != null) {
                       final raw = data!.text!.trim();
+                      final mlc1 = CommercialConfigSyncService.extractMlc1Token(
+                        raw,
+                      );
+                      if (mlc1.isNotEmpty) {
+                        _codeController.text = mlc1;
+                        return;
+                      }
                       final extracted =
                           Ed25519LicenseValidator.extractLicenseToken(raw);
                       _codeController.text = extracted.isNotEmpty
@@ -1043,6 +1567,7 @@ class _LicenseStatusAndActivationScreenState
             SizedBox(
               width: double.infinity,
               child: ElevatedButton.icon(
+                key: const ValueKey('btn_activate_license_code'),
                 onPressed: isLoading
                     ? null
                     : () => _activateCode(_codeController.text),
@@ -1157,11 +1682,16 @@ class _LicenseStatusAndActivationScreenState
     LicenseModel? license,
     String fingerprint,
     bool isDark,
+    EffectiveCommercialConfig effectiveConfig,
   ) {
     final hasPaidCommercialLicense =
         license != null && license.isActive && !license.isTrial;
     _isPlansExpanded ??= !hasPaidCommercialLicense;
     final isExpanded = _isPlansExpanded!;
+    final activePlans =
+        LicenseStatusAndActivationScreen.buildEffectiveOfficialPlans(
+          effectiveConfig,
+        );
 
     return Card(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -1267,9 +1797,7 @@ class _LicenseStatusAndActivationScreenState
                   ),
                   style: OutlinedButton.styleFrom(
                     foregroundColor: Colors.blue[700],
-                    side: BorderSide(
-                      color: Colors.blue.withValues(alpha: 0.3),
-                    ),
+                    side: BorderSide(color: Colors.blue.withValues(alpha: 0.3)),
                     padding: const EdgeInsets.symmetric(vertical: 10),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(10),
@@ -1287,6 +1815,87 @@ class _LicenseStatusAndActivationScreenState
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         const SizedBox(height: 10),
+
+                        // Indicador compacto cuando hay tarifas MLC1 sincronizadas
+                        if (effectiveConfig.hasSyncedOverride) ...[
+                          Container(
+                            key: const ValueKey('badge_mlc1_synced_catalog'),
+                            width: double.infinity,
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 8,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.teal.withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(
+                                color: Colors.teal.withValues(alpha: 0.35),
+                              ),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Icon(
+                                      Icons.verified_rounded,
+                                      size: 16,
+                                      color: Colors.teal,
+                                    ),
+                                    const SizedBox(width: 6),
+                                    Expanded(
+                                      child: Text(
+                                        'Tarifas sincronizadas (Rev. #${effectiveConfig.revision} · ${effectiveConfig.issuedAtLimaLabel ?? effectiveConfig.appliedAtLimaLabel ?? ''})',
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.bold,
+                                          color: isDark
+                                              ? Colors.tealAccent[200]
+                                              : Colors.teal[900],
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 4),
+                                Align(
+                                  alignment: Alignment.centerRight,
+                                  child: TextButton.icon(
+                                    key: const ValueKey(
+                                      'btn_mlc1_reset_defaults',
+                                    ),
+                                    onPressed: _confirmResetCommercialCatalog,
+                                    style: TextButton.styleFrom(
+                                      foregroundColor: isDark
+                                          ? Colors.orange[300]
+                                          : Colors.orange[900],
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 8,
+                                        vertical: 4,
+                                      ),
+                                      minimumSize: Size.zero,
+                                      tapTargetSize:
+                                          MaterialTapTargetSize.shrinkWrap,
+                                    ),
+                                    icon: const Icon(
+                                      Icons.restore_rounded,
+                                      size: 14,
+                                    ),
+                                    label: const Text(
+                                      'Restaurar defaults',
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                        ],
 
                         // Aviso de Renovación Acumulativa
                         Container(
@@ -1361,8 +1970,49 @@ class _LicenseStatusAndActivationScreenState
                         const SizedBox(height: 12),
 
                         // Lista de los 7 Productos del Catálogo Oficial
-                        ...officialPlans.map(
+                        ...activePlans.map(
                           (p) => _buildPlanTile(p, fingerprint, isDark),
+                        ),
+                        const SizedBox(height: 4),
+                        Container(
+                          key: const ValueKey('tile_migration_fee_info'),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 8,
+                          ),
+                          decoration: BoxDecoration(
+                            color: isDark
+                                ? const Color(0xFF14141C)
+                                : const Color(0xFFF8FAFC),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                              color: isDark ? Colors.white10 : Colors.black12,
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.swap_horiz_rounded,
+                                size: 16,
+                                color: isDark
+                                    ? Colors.indigo[300]
+                                    : Colors.indigo[700],
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  '${effectiveConfig.migracion.label}: ${effectiveConfig.migracion.formattedPrice}',
+                                  style: TextStyle(
+                                    fontSize: 11.5,
+                                    fontWeight: FontWeight.w600,
+                                    color: isDark
+                                        ? Colors.grey[300]
+                                        : Colors.grey[800],
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                         const SizedBox(height: 14),
 
@@ -1400,8 +2050,9 @@ class _LicenseStatusAndActivationScreenState
                               Container(
                                 padding: const EdgeInsets.all(8),
                                 decoration: BoxDecoration(
-                                  color: const Color(0xFF6B1D90)
-                                      .withValues(alpha: 0.15),
+                                  color: const Color(
+                                    0xFF6B1D90,
+                                  ).withValues(alpha: 0.15),
                                   shape: BoxShape.circle,
                                 ),
                                 child: const Icon(
@@ -1423,7 +2074,7 @@ class _LicenseStatusAndActivationScreenState
                                       ),
                                     ),
                                     Text(
-                                      "${OwnerLegalIdentity.supportPhone} • ${OwnerLegalIdentity.yapePlinHolder}",
+                                      "${effectiveConfig.yapePhone} • ${effectiveConfig.yapeHolder}",
                                       style: TextStyle(
                                         fontSize: 11.5,
                                         color: isDark
@@ -1439,13 +2090,13 @@ class _LicenseStatusAndActivationScreenState
                                 onPressed: () {
                                   Clipboard.setData(
                                     ClipboardData(
-                                      text: OwnerLegalIdentity.supportPhone,
+                                      text: effectiveConfig.yapePhone,
                                     ),
                                   );
                                   CustomSnackBar.show(
                                     context,
                                     message:
-                                        "Número Yape/Plin copiado: ${OwnerLegalIdentity.supportPhone}",
+                                        "Número Yape/Plin copiado: ${effectiveConfig.yapePhone}",
                                     isError: false,
                                   );
                                 },
@@ -1475,7 +2126,7 @@ class _LicenseStatusAndActivationScreenState
                         const SizedBox(height: 8),
 
                         // Tarjetas Bancarias Opcionales BCP / BBVA
-                        _buildBankAccountsSection(isDark),
+                        _buildBankAccountsSection(isDark, effectiveConfig),
                         const SizedBox(height: 14),
 
                         SizedBox(
@@ -1514,9 +2165,12 @@ class _LicenseStatusAndActivationScreenState
     );
   }
 
-  Widget _buildBankAccountsSection(bool isDark) {
-    final hasBcp = OwnerLegalIdentity.bcpAccountNumber.isNotEmpty;
-    final hasBbva = OwnerLegalIdentity.bbvaAccountNumber.isNotEmpty;
+  Widget _buildBankAccountsSection(
+    bool isDark,
+    EffectiveCommercialConfig effectiveConfig,
+  ) {
+    final hasBcp = effectiveConfig.hasBcpConfigured;
+    final hasBbva = effectiveConfig.hasBbvaConfigured;
 
     if (!hasBcp && !hasBbva) {
       return Container(
@@ -1553,15 +2207,17 @@ class _LicenseStatusAndActivationScreenState
         if (hasBcp)
           _buildBankCard(
             bankName: "Banco de Crédito (BCP)",
-            accountNumber: OwnerLegalIdentity.bcpAccountNumber,
-            cciNumber: OwnerLegalIdentity.bcpCciNumber,
+            holderName: effectiveConfig.bcpHolder,
+            accountNumber: effectiveConfig.bcpAccount,
+            cciNumber: effectiveConfig.bcpCci,
             isDark: isDark,
           ),
         if (hasBbva)
           _buildBankCard(
             bankName: "BBVA Perú",
-            accountNumber: OwnerLegalIdentity.bbvaAccountNumber,
-            cciNumber: OwnerLegalIdentity.bbvaCciNumber,
+            holderName: effectiveConfig.bbvaHolder,
+            accountNumber: effectiveConfig.bbvaAccount,
+            cciNumber: effectiveConfig.bbvaCci,
             isDark: isDark,
           ),
       ],
@@ -1570,6 +2226,7 @@ class _LicenseStatusAndActivationScreenState
 
   Widget _buildBankCard({
     required String bankName,
+    String holderName = '',
     required String accountNumber,
     required String cciNumber,
     required bool isDark,
@@ -1589,6 +2246,16 @@ class _LicenseStatusAndActivationScreenState
             bankName,
             style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
           ),
+          if (holderName.trim().isNotEmpty) ...[
+            const SizedBox(height: 2),
+            Text(
+              "Titular: ${holderName.trim()}",
+              style: TextStyle(
+                fontSize: 11,
+                color: isDark ? Colors.grey[300] : Colors.grey[700],
+              ),
+            ),
+          ],
           const SizedBox(height: 4),
           Row(
             children: [
@@ -1607,6 +2274,14 @@ class _LicenseStatusAndActivationScreenState
                     isError: false,
                   );
                 },
+                style: TextButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
+                  minimumSize: Size.zero,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
                 child: const Text("Copiar Cta", style: TextStyle(fontSize: 11)),
               ),
             ],
@@ -1632,6 +2307,14 @@ class _LicenseStatusAndActivationScreenState
                       isError: false,
                     );
                   },
+                  style: TextButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
+                    minimumSize: Size.zero,
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
                   child: const Text(
                     "Copiar CCI",
                     style: TextStyle(fontSize: 11),
@@ -1769,8 +2452,9 @@ class _LicenseStatusAndActivationScreenState
                               style: TextStyle(
                                 fontSize: 10.5,
                                 fontWeight: FontWeight.w600,
-                                color:
-                                    isDark ? Colors.blue[300] : Colors.blue[700],
+                                color: isDark
+                                    ? Colors.blue[300]
+                                    : Colors.blue[700],
                               ),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
@@ -1780,8 +2464,7 @@ class _LicenseStatusAndActivationScreenState
                           Icon(
                             Icons.chevron_right_rounded,
                             size: 13,
-                            color:
-                                isDark ? Colors.blue[300] : Colors.blue[700],
+                            color: isDark ? Colors.blue[300] : Colors.blue[700],
                           ),
                         ],
                       ),
@@ -1924,6 +2607,7 @@ class _LicenseStatusAndActivationScreenState
       syncToken = syncService.generateSyncToken(snapshot);
     } catch (_) {}
 
+    final effectiveConfig = _resolveEffectiveConfig();
     final defaultMessage = OwnerLegalIdentity.buildPlanOrderMessage(
       planName: planName,
       price: price,
@@ -1949,7 +2633,10 @@ class _LicenseStatusAndActivationScreenState
         onSendWhatsApp: (msg) {
           Navigator.of(ctx).pop();
           final uri =
-              LicenseStatusAndActivationScreen.buildCustomWhatsAppOrderUri(msg);
+              LicenseStatusAndActivationScreen.buildCustomWhatsAppOrderUri(
+                msg,
+                supportPhoneOverride: effectiveConfig.supportPhone,
+              );
           _launchRawWhatsAppUrl(uri.toString());
         },
       ),
@@ -2305,7 +2992,9 @@ class PlanDetailBottomSheet extends StatelessWidget {
                                       vertical: 2,
                                     ),
                                     decoration: BoxDecoration(
-                                      color: Colors.blue.withValues(alpha: 0.15),
+                                      color: Colors.blue.withValues(
+                                        alpha: 0.15,
+                                      ),
                                       borderRadius: BorderRadius.circular(6),
                                     ),
                                     child: Text(
@@ -2480,8 +3169,9 @@ class PlanDetailBottomSheet extends StatelessWidget {
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(10),
                         ),
-                        foregroundColor:
-                            isDark ? Colors.white70 : Colors.black87,
+                        foregroundColor: isDark
+                            ? Colors.white70
+                            : Colors.black87,
                         side: BorderSide(
                           color: isDark ? Colors.white24 : Colors.black26,
                         ),
@@ -2624,9 +3314,7 @@ class OrderPlanBottomSheet extends StatefulWidget {
       '',
     );
     body = body.replaceAll(
-      RegExp(
-        r'•\s*Requerimiento:\s*Solicito emisión de Factura con RUC\.?',
-      ),
+      RegExp(r'•\s*Requerimiento:\s*Solicito emisión de Factura con RUC\.?'),
       '',
     );
 

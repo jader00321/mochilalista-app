@@ -232,17 +232,134 @@ class ApkInspectorService {
   /// Directorio opcional de compilación local (anula ../app_movil/build/... para pruebas unitarias)
   final Directory? defaultBuildOutputDir;
 
-  static const int _maxLiveCacheEntries = 256;
+  /// Ruta opcional del archivo JSON de caché persistente en disco (`data/.apk_inspection_cache.json`).
+  /// Si es `null`, no lee ni escribe ningún archivo de caché en disco (aislamiento total en pruebas).
+  final String? cacheFilePath;
+
+  static const int cacheVersion = 1;
+  static const int maxDiskCacheEntries = 200;
+  static const int _maxLiveCacheEntries = maxDiskCacheEntries;
+
   final Map<String, _CachedApkMetadata> _liveInspectionCache = {};
+  bool _diskCacheLoaded = false;
+  Future<void> _diskWriteQueue = Future<void>.value();
 
   /// Limpia la caché en memoria de inspecciones APK por archivo
   void clearInspectionCache() => _liveInspectionCache.clear();
+
+  /// Número de entradas activas actualmente en la caché en memoria
+  int get liveCacheCount => _liveInspectionCache.length;
 
   ApkInspectorService({
     this.processRunnerOverride,
     this.sdkSearchRootsOverride,
     this.defaultBuildOutputDir,
+    this.cacheFilePath,
   });
+
+  static String _cacheKeyForPath(String canonicalApkPath) =>
+      Platform.isWindows ? canonicalApkPath.toLowerCase() : canonicalApkPath;
+
+  /// Precarga de forma segura la caché persistente desde `cacheFilePath`.
+  /// Si el archivo no existe o está corrupto, falla en silencio sin interrumpir el arranque.
+  Future<void> loadDiskCache({bool force = false}) async {
+    final rawPath = cacheFilePath?.trim() ?? '';
+    if (rawPath.isEmpty) {
+      _diskCacheLoaded = true;
+      return;
+    }
+    if (_diskCacheLoaded && !force) return;
+    _diskCacheLoaded = true;
+    if (force) {
+      _liveInspectionCache.clear();
+    }
+
+    try {
+      final cacheFile = File(canonicalizePath(rawPath));
+      if (!await cacheFile.exists()) return;
+      final content = await cacheFile.readAsString();
+      if (content.trim().isEmpty) return;
+      final decoded = jsonDecode(content);
+      if (decoded is! Map<String, dynamic>) return;
+      final version = (decoded['cache_version'] as num?)?.toInt();
+      if (version != cacheVersion) return;
+      final entries = decoded['entries'];
+      if (entries is! Map) return;
+
+      for (final item in entries.entries) {
+        if (item.value is! Map) continue;
+        final meta = _CachedApkMetadata.fromJson(
+          Map<String, dynamic>.from(item.value as Map),
+          fallbackPath: item.key.toString(),
+        );
+        if (meta == null) continue;
+        final key = _cacheKeyForPath(meta.canonicalPath);
+        _liveInspectionCache.remove(key);
+        _liveInspectionCache[key] = meta;
+      }
+
+      while (_liveInspectionCache.length > _maxLiveCacheEntries) {
+        _liveInspectionCache.remove(_liveInspectionCache.keys.first);
+      }
+    } catch (_) {
+      // Silencio seguro ante JSON corrupto o ilegible; se reconstruirá en la próxima inspección.
+      _liveInspectionCache.clear();
+    }
+  }
+
+  Future<void> _persistDiskCache() {
+    final rawPath = cacheFilePath?.trim() ?? '';
+    if (rawPath.isEmpty) return Future<void>.value();
+
+    _diskWriteQueue = _diskWriteQueue.catchError((_) {}).then((_) async {
+      File? tmpFile;
+      try {
+        // Depurar entradas cuyos APKs físicos ya no existen en disco
+        final staleKeys = <String>[];
+        for (final entry in _liveInspectionCache.entries) {
+          if (!File(entry.value.canonicalPath).existsSync()) {
+            staleKeys.add(entry.key);
+          }
+        }
+        for (final k in staleKeys) {
+          _liveInspectionCache.remove(k);
+        }
+
+        // Aplicar cota máxima conservando los registros más recientes (orden LRU)
+        while (_liveInspectionCache.length > maxDiskCacheEntries) {
+          _liveInspectionCache.remove(_liveInspectionCache.keys.first);
+        }
+
+        final cacheFile = File(canonicalizePath(rawPath));
+        await cacheFile.parent.create(recursive: true);
+
+        final serializedEntries = <String, dynamic>{
+          for (final meta in _liveInspectionCache.values)
+            meta.canonicalPath: meta.toJson(),
+        };
+        final payload = {
+          'cache_version': cacheVersion,
+          'updated_at': DateTime.now().toUtc().toIso8601String(),
+          'entries': serializedEntries,
+        };
+
+        final stamp = DateTime.now().microsecondsSinceEpoch;
+        tmpFile = File('${cacheFile.path}.$pid.$stamp.tmp');
+        await tmpFile.writeAsString(jsonEncode(payload), flush: true);
+        await tmpFile.rename(cacheFile.path);
+        tmpFile = null;
+      } catch (_) {
+        // Nunca interrumpir flujos de inspección por error transitorio de I/O en caché.
+      } finally {
+        if (tmpFile != null && tmpFile.existsSync()) {
+          try {
+            tmpFile.deleteSync();
+          } catch (_) {}
+        }
+      }
+    });
+    return _diskWriteQueue;
+  }
 
   /// Normaliza una ruta eliminando segmentos `..`, unificando separadores y resolviendo enlaces
   static String canonicalizePath(String rawPath) {
@@ -369,14 +486,37 @@ class ApkInspectorService {
     String? sourceLabel,
     String? apkLibraryDir,
     List<Object> extraSearchDirs = const [],
+    bool forceRefresh = false,
+  }) =>
+      _inspectApkInternal(
+        apkFile,
+        sourceLabel: sourceLabel,
+        apkLibraryDir: apkLibraryDir,
+        extraSearchDirs: extraSearchDirs,
+        forceRefresh: forceRefresh,
+      );
+
+  Future<ApkInspectionResult> _inspectApkInternal(
+    File apkFile, {
+    String? sourceLabel,
+    String? apkLibraryDir,
+    List<Object> extraSearchDirs = const [],
+    bool forceRefresh = false,
+    _TransientBatchNotesContext? batchContext,
   }) async {
+    if (!_diskCacheLoaded && (cacheFilePath?.trim().isNotEmpty ?? false)) {
+      await loadDiskCache();
+    }
+
     final canonicalApkPath = canonicalizePath(apkFile.path);
     final canonicalFile = File(canonicalApkPath);
-    final cacheKey =
-        Platform.isWindows ? canonicalApkPath.toLowerCase() : canonicalApkPath;
+    final cacheKey = _cacheKeyForPath(canonicalApkPath);
 
     if (!await canonicalFile.exists()) {
-      _liveInspectionCache.remove(cacheKey);
+      final removed = _liveInspectionCache.remove(cacheKey);
+      if (removed != null && (cacheFilePath?.trim().isNotEmpty ?? false)) {
+        await _persistDiskCache();
+      }
       return ApkInspectionResult(
         success: false,
         errorMessage: 'El archivo APK no existe en disco: $canonicalApkPath',
@@ -402,12 +542,13 @@ class ApkInspectorService {
         : 'app-release.apk';
 
     Future<ApkInspectionResult> materializeWithNotes(_CachedApkMetadata meta) async {
-      final notes = await readCompanionNotesForVersion(
+      final notes = await _readCompanionNotesInternal(
         meta.versionName ?? '',
         apkPath: canonicalApkPath,
         apkLibraryDir: apkLibraryDir,
         extraSearchDirs: extraSearchDirs,
         fallbackRegistryChangelog: true,
+        batchContext: batchContext,
       );
       return ApkInspectionResult(
         success: true,
@@ -438,11 +579,16 @@ class ApkInspectorService {
       );
     }
 
-    final cachedMeta = _liveInspectionCache[cacheKey];
-    if (cachedMeta != null &&
-        cachedMeta.sizeBytes == stat.size &&
-        cachedMeta.modifiedMicros == modifiedMicros) {
-      return materializeWithNotes(cachedMeta);
+    if (!forceRefresh) {
+      final cachedMeta = _liveInspectionCache[cacheKey];
+      if (cachedMeta != null &&
+          cachedMeta.sizeBytes == stat.size &&
+          cachedMeta.modifiedMicros == modifiedMicros) {
+        // Promover al final (orden LRU) sin re-escribir disco en hits de lectura
+        _liveInspectionCache.remove(cacheKey);
+        _liveInspectionCache[cacheKey] = cachedMeta;
+        return materializeWithNotes(cachedMeta);
+      }
     }
 
     // 1. Capa 1: Tamaño y Hash Criptográfico SHA-256 determinista
@@ -463,7 +609,11 @@ class ApkInspectorService {
     final nameInference = _inferVersionFromName(fileName);
 
     // Inferencia de esquema SQLite desde el código fuente si está disponible
-    final dbSchemaVersion = await _inferDbSchemaVersion();
+    final dbSchemaVersion =
+        batchContext?.dbSchemaVersion ?? await _inferDbSchemaVersion();
+    if (batchContext != null) {
+      batchContext.dbSchemaVersion ??= dbSchemaVersion;
+    }
 
     // 3. Capa 2: Extracción profunda con aapt2 si está disponible
     String? packageName;
@@ -472,7 +622,14 @@ class ApkInspectorService {
     String? minSdk;
     String? targetSdk;
 
-    final aapt2Exe = await _findBuildTool('aapt2');
+    final aapt2Exe = batchContext != null
+        ? (batchContext.resolvedAapt2Checked
+            ? batchContext.resolvedAapt2
+            : (batchContext
+                  ..resolvedAapt2 = await _findBuildTool('aapt2')
+                  ..resolvedAapt2Checked = true)
+                .resolvedAapt2)
+        : await _findBuildTool('aapt2');
     if (aapt2Exe != null) {
       final aaptRes =
           await _runProcess(aapt2Exe, ['dump', 'badging', canonicalApkPath]);
@@ -501,7 +658,14 @@ class ApkInspectorService {
     String? signerSha256;
     String? signerDn;
 
-    final apksignerBin = await _findBuildTool('apksigner');
+    final apksignerBin = batchContext != null
+        ? (batchContext.resolvedApksignerChecked
+            ? batchContext.resolvedApksigner
+            : (batchContext
+                  ..resolvedApksigner = await _findBuildTool('apksigner')
+                  ..resolvedApksignerChecked = true)
+                .resolvedApksigner)
+        : await _findBuildTool('apksigner');
     if (apksignerBin == null) {
       signatureVerified = null;
       signatureStatus = 'UNVERIFIED';
@@ -544,8 +708,10 @@ class ApkInspectorService {
     }
 
     final meta = _CachedApkMetadata(
+      canonicalPath: canonicalApkPath,
       sizeBytes: fileLength,
       modifiedMicros: modifiedMicros,
+      inspectedAt: DateTime.now().toUtc().toIso8601String(),
       sizeMb: sizeMbStr,
       sha256: sha256Digest,
       packageName: packageName ?? 'com.mochilalista.app',
@@ -563,11 +729,14 @@ class ApkInspectorService {
       signerDn: signerDn,
       suggestedReleaseType: inferReleaseTypeFromVersion(versionName),
     );
-    if (_liveInspectionCache.length >= _maxLiveCacheEntries &&
-        !_liveInspectionCache.containsKey(cacheKey)) {
+    _liveInspectionCache.remove(cacheKey);
+    while (_liveInspectionCache.length >= _maxLiveCacheEntries) {
       _liveInspectionCache.remove(_liveInspectionCache.keys.first);
     }
     _liveInspectionCache[cacheKey] = meta;
+    if (cacheFilePath?.trim().isNotEmpty ?? false) {
+      await _persistDiskCache();
+    }
 
     return materializeWithNotes(meta);
   }
@@ -703,7 +872,12 @@ class ApkInspectorService {
     String query = '',
     int? limit,
   }) async {
-    final effectiveLimit = (limit ?? maxCandidates).clamp(1, 50);
+    if (!_diskCacheLoaded && (cacheFilePath?.trim().isNotEmpty ?? false)) {
+      await loadDiskCache();
+    }
+    final batchContext = _TransientBatchNotesContext();
+
+    final effectiveLimit = (limit ?? maxCandidates).clamp(1, 200);
     final configuredDirs = searchDirs ??
         [
           ApkSearchDirConfig(
@@ -778,7 +952,7 @@ class ApkInspectorService {
     }
 
     // Selección equilibrada entre todas las rutas activas (evita que una carpeta antigua eclipse builds nuevos)
-    final inspectLimit = (effectiveLimit * 4).clamp(24, 36);
+    final inspectLimit = (effectiveLimit * 4).clamp(24, 200);
     final selectedCandidates = <_ApkCandidate>[];
     final selectedKeys = <String>{};
 
@@ -833,11 +1007,12 @@ class ApkInspectorService {
     final indexBySha = <String, int>{};
 
     for (final c in selectedCandidates) {
-      final res = await inspectApk(
+      final res = await _inspectApkInternal(
         c.file,
         sourceLabel: c.sourceLabel,
         apkLibraryDir: libPath,
         extraSearchDirs: activeSearchDirPaths,
+        batchContext: batchContext,
       );
       if (res.sha256.isEmpty) {
         uniqueItems.add(_InspectedCandidateItem(res, c.priority));
@@ -1128,22 +1303,38 @@ class ApkInspectorService {
     String? apkLibraryDir,
     List<Object> extraSearchDirs = const [],
     bool fallbackRegistryChangelog = false,
-  }) async {
-    final searchDirs = <Directory>[];
-    final seenDirs = <String>{};
+  }) =>
+      _readCompanionNotesInternal(
+        versionName,
+        apkPath: apkPath,
+        apkLibraryDir: apkLibraryDir,
+        extraSearchDirs: extraSearchDirs,
+        fallbackRegistryChangelog: fallbackRegistryChangelog,
+      );
 
-    void addDir(Directory d) {
+  Future<Map<String, dynamic>> _readCompanionNotesInternal(
+    String versionName, {
+    String? apkPath,
+    String? apkLibraryDir,
+    List<Object> extraSearchDirs = const [],
+    bool fallbackRegistryChangelog = false,
+    _TransientBatchNotesContext? batchContext,
+  }) async {
+    final baseDirs = <Directory>[];
+    final seenBaseKeys = <String>{};
+
+    void addBaseDir(Directory d) {
       final canon = canonicalizePath(d.path);
-      final key = Platform.isWindows ? canon.toLowerCase() : canon;
-      if (canon.isNotEmpty && seenDirs.add(key)) {
-        searchDirs.add(Directory(canon));
+      final key = _cacheKeyForPath(canon);
+      if (canon.isNotEmpty && seenBaseKeys.add(key)) {
+        baseDirs.add(Directory(canon));
       }
     }
 
     String? apkBaseName;
     if (apkPath != null && apkPath.trim().isNotEmpty) {
       final f = File(canonicalizePath(apkPath));
-      addDir(f.parent);
+      addBaseDir(f.parent);
       if (f.uri.pathSegments.isNotEmpty) {
         apkBaseName = f.uri.pathSegments.last
             .replaceAll(RegExp(r'\.apk$', caseSensitive: false), '');
@@ -1151,36 +1342,71 @@ class ApkInspectorService {
     }
     for (final entry in extraSearchDirs) {
       if (entry is Directory) {
-        addDir(entry);
+        addBaseDir(entry);
       } else if (entry is String && entry.trim().isNotEmpty) {
-        addDir(Directory(entry.trim()));
+        addBaseDir(Directory(entry.trim()));
       }
     }
     if (apkLibraryDir != null && apkLibraryDir.trim().isNotEmpty) {
-      addDir(Directory(apkLibraryDir));
+      addBaseDir(Directory(apkLibraryDir));
     }
 
-    // Incluir subcarpetas inmediatas (nivel 1 acotado) para carpetas organizadas por versión
-    final baseDirsSnapshot = List<Directory>.from(searchDirs);
-    for (final baseDir in baseDirsSnapshot) {
-      if (!baseDir.existsSync()) continue;
-      try {
-        int subCount = 0;
-        for (final entity in baseDir.listSync(followLinks: false)) {
-          if (subCount >= 30) break;
-          if (entity is Directory) {
-            final segs =
-                entity.uri.pathSegments.where((s) => s.isNotEmpty).toList();
-            final name = segs.isNotEmpty ? segs.last.toLowerCase() : '';
-            if (name.isNotEmpty &&
-                !name.startsWith('.') &&
-                !ignoredScanDirNames.contains(name)) {
-              addDir(entity);
-              subCount++;
+    // Indexar `.txt` y subcarpetas inmediatas una sola vez por directorio en esta llamada/lote
+    final dirTxtIndex = batchContext?.dirTxtByDirKey ?? <String, Map<String, File>>{};
+    final subDirsByBase = batchContext?.subDirsByBaseKey ?? <String, List<Directory>>{};
+
+    Map<String, File> ensureTxtIndex(Directory dir) {
+      final dirKey = _cacheKeyForPath(canonicalizePath(dir.path));
+      final existing = dirTxtIndex[dirKey];
+      if (existing != null) return existing;
+
+      final txtFiles = <String, File>{};
+      final immediateSubs = <Directory>[];
+      if (dir.existsSync()) {
+        try {
+          int subCount = 0;
+          for (final entity in dir.listSync(followLinks: false)) {
+            if (entity is File) {
+              final segs = entity.uri.pathSegments.where((s) => s.isNotEmpty).toList();
+              final fname = segs.isNotEmpty ? segs.last : '';
+              if (fname.toLowerCase().endsWith('.txt')) {
+                txtFiles[fname.toLowerCase()] = entity;
+              }
+            } else if (entity is Directory && subCount < 30) {
+              final segs = entity.uri.pathSegments.where((s) => s.isNotEmpty).toList();
+              final name = segs.isNotEmpty ? segs.last.toLowerCase() : '';
+              if (name.isNotEmpty &&
+                  !name.startsWith('.') &&
+                  !ignoredScanDirNames.contains(name)) {
+                immediateSubs.add(Directory(canonicalizePath(entity.path)));
+                subCount++;
+              }
             }
           }
-        }
-      } catch (_) {}
+        } catch (_) {}
+      }
+      dirTxtIndex[dirKey] = txtFiles;
+      subDirsByBase[dirKey] = immediateSubs;
+      return txtFiles;
+    }
+
+    final searchDirs = <Directory>[];
+    final seenSearchKeys = <String>{};
+    void addSearchDir(Directory d) {
+      final canon = canonicalizePath(d.path);
+      final k = _cacheKeyForPath(canon);
+      if (canon.isNotEmpty && seenSearchKeys.add(k)) {
+        searchDirs.add(Directory(canon));
+      }
+    }
+
+    for (final baseDir in baseDirs) {
+      addSearchDir(baseDir);
+      ensureTxtIndex(baseDir);
+      final baseKey = _cacheKeyForPath(canonicalizePath(baseDir.path));
+      for (final sub in subDirsByBase[baseKey] ?? const <Directory>[]) {
+        addSearchDir(sub);
+      }
     }
 
     final cleanVer = versionName.trim().replaceFirst(RegExp(r'^[vV]'), '');
@@ -1191,7 +1417,6 @@ class ApkInspectorService {
     ];
 
     Future<String?> safeReadTxt(File f) async {
-      if (!await f.exists()) return null;
       try {
         final bytes = await f.readAsBytes();
         final decoded = utf8.decode(bytes, allowMalformed: true);
@@ -1220,9 +1445,11 @@ class ApkInspectorService {
 
     outerChangelog:
     for (final dir in searchDirs) {
+      final txtMap = ensureTxtIndex(dir);
+      if (txtMap.isEmpty) continue;
       for (final name in changelogNames) {
-        final candidate =
-            File(canonicalizePath('${dir.path}${Platform.pathSeparator}$name'));
+        final candidate = txtMap[name.toLowerCase()];
+        if (candidate == null) continue;
         final text = await safeReadTxt(candidate);
         if (text != null) {
           changelog = text;
@@ -1233,31 +1460,41 @@ class ApkInspectorService {
     }
 
     if (changelog.isEmpty && fallbackRegistryChangelog) {
-      try {
-        final registryFile =
-            File('../app_movil/lib/core/config/app_changelog_registry.dart');
-        if (await registryFile.exists()) {
-          final content = await registryFile.readAsString();
-          final matches = RegExp(
-            r'title:\s*["\x27](.+?)["\x27],\s*description:\s*["\x27](.+?)["\x27]',
-            dotAll: true,
-          ).allMatches(content);
+      if (batchContext != null && batchContext.registryFallbackChecked) {
+        changelog = batchContext.registryFallbackChangelog;
+      } else {
+        String fallbackVal = '';
+        try {
+          final registryFile =
+              File('../app_movil/lib/core/config/app_changelog_registry.dart');
+          if (await registryFile.exists()) {
+            final content = await registryFile.readAsString();
+            final matches = RegExp(
+              r'title:\s*["\x27](.+?)["\x27],\s*description:\s*["\x27](.+?)["\x27]',
+              dotAll: true,
+            ).allMatches(content);
 
-          final bullets = <String>[];
-          for (final m in matches) {
-            final title = m.group(1)?.trim() ?? '';
-            final desc =
-                m.group(2)?.replaceAll(RegExp(r'\s+'), ' ').trim() ?? '';
-            if (title.isNotEmpty) {
-              bullets.add('• $title: $desc');
+            final bullets = <String>[];
+            for (final m in matches) {
+              final title = m.group(1)?.trim() ?? '';
+              final desc =
+                  m.group(2)?.replaceAll(RegExp(r'\s+'), ' ').trim() ?? '';
+              if (title.isNotEmpty) {
+                bullets.add('• $title: $desc');
+              }
+              if (bullets.length >= 4) break;
             }
-            if (bullets.length >= 4) break;
+            if (bullets.isNotEmpty) {
+              fallbackVal = bullets.join('\n');
+            }
           }
-          if (bullets.isNotEmpty) {
-            changelog = bullets.join('\n');
-          }
+        } catch (_) {}
+        if (batchContext != null) {
+          batchContext.registryFallbackChecked = true;
+          batchContext.registryFallbackChangelog = fallbackVal;
         }
-      } catch (_) {}
+        changelog = fallbackVal;
+      }
     }
 
     String internalNotes = '';
@@ -1275,14 +1512,16 @@ class ApkInspectorService {
 
     outerNotes:
     for (final dir in searchDirs) {
+      final txtMap = ensureTxtIndex(dir);
+      if (txtMap.isEmpty) continue;
       for (final name in notesNames) {
         final lower = name.toLowerCase();
         if (lower.endsWith('_cambios.txt') ||
             lower.endsWith('_changelog.txt')) {
           continue;
         }
-        final candidate =
-            File(canonicalizePath('${dir.path}${Platform.pathSeparator}$name'));
+        final candidate = txtMap[lower];
+        if (candidate == null) continue;
         final text = await safeReadTxt(candidate);
         if (text != null) {
           internalNotes = text;
@@ -1496,9 +1735,23 @@ class _ApkSignerResult {
   const _ApkSignerResult({this.signerSha256, this.signerDn});
 }
 
+class _TransientBatchNotesContext {
+  final Map<String, Map<String, File>> dirTxtByDirKey = {};
+  final Map<String, List<Directory>> subDirsByBaseKey = {};
+  int? dbSchemaVersion;
+  bool registryFallbackChecked = false;
+  String registryFallbackChangelog = '';
+  String? resolvedAapt2;
+  bool resolvedAapt2Checked = false;
+  String? resolvedApksigner;
+  bool resolvedApksignerChecked = false;
+}
+
 class _CachedApkMetadata {
+  final String canonicalPath;
   final int sizeBytes;
   final int modifiedMicros;
+  final String inspectedAt;
   final String sizeMb;
   final String sha256;
   final String? packageName;
@@ -1517,8 +1770,10 @@ class _CachedApkMetadata {
   final String suggestedReleaseType;
 
   const _CachedApkMetadata({
+    required this.canonicalPath,
     required this.sizeBytes,
     required this.modifiedMicros,
+    required this.inspectedAt,
     required this.sizeMb,
     required this.sha256,
     required this.packageName,
@@ -1536,4 +1791,81 @@ class _CachedApkMetadata {
     required this.signerDn,
     required this.suggestedReleaseType,
   });
+
+  Map<String, dynamic> toJson() => {
+        'canonical_path': canonicalPath,
+        'size_bytes': sizeBytes,
+        'modified_micros': modifiedMicros,
+        'inspected_at': inspectedAt,
+        'package_name': packageName,
+        'version_name': versionName,
+        'version_code': versionCode,
+        'abi_variant': abiVariant,
+        'sha256': sha256,
+        'signature_status': signatureStatus,
+        'signature_verified': signatureVerified,
+        'signer_sha256': signerSha256,
+        'signer_dn': signerDn,
+        'signature_detail': signatureDetail,
+        'db_schema_version': dbSchemaVersion,
+        'min_required_version': minRequiredVersion,
+        'min_sdk': minSdk,
+        'target_sdk': targetSdk,
+        'size_mb': sizeMb,
+        'suggested_release_type': suggestedReleaseType,
+      };
+
+  static _CachedApkMetadata? fromJson(
+    Map<String, dynamic> json, {
+    String? fallbackPath,
+  }) {
+    final rawCanon = (json['canonical_path'] as String? ?? fallbackPath ?? '')
+        .trim();
+    final sizeBytes = (json['size_bytes'] as num?)?.toInt();
+    final modifiedMicros = (json['modified_micros'] as num?)?.toInt();
+    final sha256 = (json['sha256'] as String? ?? '').trim();
+    final sizeMb = (json['size_mb'] as String? ?? '').trim();
+    final rawAbi = (json['abi_variant'] as String? ?? 'UNIVERSAL').trim().toUpperCase();
+    final abiVariant = rawAbi == 'ARM64' ? 'ARM64' : 'UNIVERSAL';
+    final sigStatus = (json['signature_status'] as String? ?? 'UNVERIFIED').trim();
+
+    if (rawCanon.isEmpty ||
+        sizeBytes == null ||
+        sizeBytes < 0 ||
+        modifiedMicros == null ||
+        modifiedMicros <= 0 ||
+        sha256.isEmpty ||
+        sizeMb.isEmpty ||
+        sigStatus.isEmpty) {
+      return null;
+    }
+
+    return _CachedApkMetadata(
+      canonicalPath: ApkInspectorService.canonicalizePath(rawCanon),
+      sizeBytes: sizeBytes,
+      modifiedMicros: modifiedMicros,
+      inspectedAt: (json['inspected_at'] as String? ?? '').trim(),
+      sizeMb: sizeMb,
+      sha256: sha256,
+      packageName: json['package_name'] as String?,
+      versionName: json['version_name'] as String?,
+      versionCode: (json['version_code'] as num?)?.toInt(),
+      abiVariant: abiVariant,
+      dbSchemaVersion: (json['db_schema_version'] as num?)?.toInt() ?? 36,
+      minRequiredVersion:
+          (json['min_required_version'] as String? ?? '9.0.0').trim(),
+      minSdk: json['min_sdk'] as String?,
+      targetSdk: json['target_sdk'] as String?,
+      signatureVerified: json['signature_verified'] is bool
+          ? json['signature_verified'] as bool
+          : null,
+      signatureStatus: sigStatus,
+      signatureDetail: json['signature_detail'] as String?,
+      signerSha256: json['signer_sha256'] as String?,
+      signerDn: json['signer_dn'] as String?,
+      suggestedReleaseType:
+          (json['suggested_release_type'] as String? ?? 'FEATURE_RELEASE')
+              .trim(),
+    );
+  }
 }

@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:math' as math;
 import 'license_signer.dart';
 import 'config_service.dart';
+import 'time_utils.dart';
 
 /// Excepción de protección anti-sobreescritura para fichas de sincronización cronológicamente desfasadas
 class StaleSyncException implements Exception {
@@ -71,7 +72,8 @@ class DatabaseService {
         await legacyClients.copy(sandboxClientsFile.path);
       } else {
         await sandboxClientsFile.writeAsString(
-          const JsonEncoder.withIndent('  ').convert(_getInitialSandboxClients()),
+          const JsonEncoder.withIndent('  ')
+              .convert(_getInitialSandboxClients()),
         );
       }
     }
@@ -82,7 +84,8 @@ class DatabaseService {
         await legacyReleases.copy(sandboxReleasesFile.path);
       } else {
         await sandboxReleasesFile.writeAsString(
-          const JsonEncoder.withIndent('  ').convert(_getInitialSandboxReleases()),
+          const JsonEncoder.withIndent('  ')
+              .convert(_getInitialSandboxReleases()),
         );
       }
     }
@@ -109,7 +112,8 @@ class DatabaseService {
         const JsonEncoder.withIndent('  ').convert(_getInitialSandboxClients()),
       );
       await _releasesFile.writeAsString(
-        const JsonEncoder.withIndent('  ').convert(_getInitialSandboxReleases()),
+        const JsonEncoder.withIndent('  ')
+            .convert(_getInitialSandboxReleases()),
       );
       await _createSnapshot('after_reset_sandbox');
     } finally {
@@ -117,23 +121,57 @@ class DatabaseService {
     }
   }
 
-  /// Crea un snapshot de seguridad en disco con timestamp y prefijo de modo
-  Future<void> _createSnapshot(String reason) async {
-    final timestamp = DateTime.now().toIso8601String().replaceAll(':', '-').replaceAll('.', '-');
-    final clientSnapshot = File('$backupDir/${_mode}_clients_${reason}_$timestamp.json');
-    final releaseSnapshot = File('$backupDir/${_mode}_releases_${reason}_$timestamp.json');
+  static final RegExp _safeBackupFilenameRegex =
+      RegExp(r'^[A-Za-z0-9._-]+\.json$');
 
-    if (await _clientsFile.exists()) {
-      await _clientsFile.copy(clientSnapshot.path);
+  /// Valida estrictamente el nombre de archivo de respaldo contra path traversal y secuencias inseguras
+  static bool isSafeBackupFilename(String? rawFilename) {
+    if (rawFilename == null) return false;
+    final filename = rawFilename.trim();
+    if (filename.isEmpty) return false;
+    if (filename.contains('/') ||
+        filename.contains(r'\') ||
+        filename.contains('..') ||
+        filename.contains('\x00')) {
+      return false;
     }
-    if (await _releasesFile.exists()) {
-      await _releasesFile.copy(releaseSnapshot.path);
+    return _safeBackupFilenameRegex.hasMatch(filename);
+  }
+
+  /// Determina si un archivo de respaldo está protegido contra purgas y rotaciones automáticas
+  static bool isProtectedBackupFilename(String filename) {
+    final lower = filename.toLowerCase();
+    return lower.contains('manual') ||
+        lower.contains('vault') ||
+        lower.contains('pre_restore') ||
+        lower.contains('before_restore') ||
+        lower.contains('pre_import') ||
+        lower.contains('pre_save') ||
+        lower.contains('pre_reset');
+  }
+
+  /// Crea un snapshot de seguridad en disco con timestamp en hora Perú (GMT-5) y prefijo de modo
+  Future<void> _createSnapshot(String reason, {String? targetMode}) async {
+    final effectiveMode = targetMode ?? _mode;
+    final clientsFile = File('$dataDir/${effectiveMode}_clients_db.json');
+    final releasesFile = File('$dataDir/${effectiveMode}_releases_db.json');
+    final timestamp = PeruTimeHelper.formatLimaFilenameTimestamp();
+    final clientSnapshot =
+        File('$backupDir/${effectiveMode}_clients_${reason}_$timestamp.json');
+    final releaseSnapshot =
+        File('$backupDir/${effectiveMode}_releases_${reason}_$timestamp.json');
+
+    if (await clientsFile.exists()) {
+      await clientsFile.copy(clientSnapshot.path);
+    }
+    if (await releasesFile.exists()) {
+      await releasesFile.copy(releaseSnapshot.path);
     }
     await _cleanOldSnapshots();
   }
 
   /// Limpia los snapshots automáticos antiguos en `backups/`, conservando los últimos [maxAutoSnapshots] (default: 30).
-  /// Excluye explícitamente cualquier respaldo manual, de bóveda o de pre-restauración/importación.
+  /// Excluye explícitamente cualquier respaldo manual, de bóveda, pre_restore, before_restore, pre_import o pre_reset.
   Future<void> _cleanOldSnapshots({int? maxAutoSnapshots}) async {
     final limit = maxAutoSnapshots ?? this.maxAutoSnapshots;
     final dir = Directory(backupDir);
@@ -148,14 +186,17 @@ class DatabaseService {
         final lower = filename.toLowerCase();
 
         // Prefijos automáticos válidos: sandbox_ o prod_
-        final isDbSnapshot = filename.startsWith('sandbox_') || filename.startsWith('prod_');
+        final isDbSnapshot =
+            filename.startsWith('sandbox_') || filename.startsWith('prod_');
         if (!isDbSnapshot) continue;
 
-        // Excluir respaldos protegidos (manuales, bóveda, pre_restore, pre_import)
+        // Excluir respaldos protegidos (manuales, bóveda, pre_restore, before_restore, pre_import, pre_reset)
         final isProtected = lower.contains('manual') ||
             lower.contains('vault') ||
             lower.contains('pre_restore') ||
-            lower.contains('pre_import');
+            lower.contains('before_restore') ||
+            lower.contains('pre_import') ||
+            lower.contains('pre_reset');
         if (isProtected) continue;
 
         autoSnapshots.add(entity);
@@ -183,7 +224,8 @@ class DatabaseService {
       try {
         await file.delete();
       } catch (e) {
-        stderr.writeln('Warning: Error eliminando snapshot antiguo ${file.path}: $e');
+        stderr.writeln(
+            'Warning: Error eliminando snapshot antiguo ${file.path}: $e');
       }
     }
   }
@@ -209,14 +251,17 @@ class DatabaseService {
     return list.cast<Map<String, dynamic>>();
   }
 
-  Future<void> saveClients(List<Map<String, dynamic>> clients, {String reason = 'update_clients'}) async {
-    await _clientsFile.writeAsString(const JsonEncoder.withIndent('  ').convert(clients));
+  Future<void> saveClients(List<Map<String, dynamic>> clients,
+      {String reason = 'update_clients'}) async {
+    await _clientsFile
+        .writeAsString(const JsonEncoder.withIndent('  ').convert(clients));
     await _createSnapshot(reason);
     if (_mode == 'prod' && onProductionDataChanged != null) {
       try {
         await onProductionDataChanged!();
       } catch (e) {
-        stderr.writeln('Warning: Error al ejecutar onProductionDataChanged tras saveClients: $e');
+        stderr.writeln(
+            'Warning: Error al ejecutar onProductionDataChanged tras saveClients: $e');
       }
     }
   }
@@ -254,7 +299,8 @@ class DatabaseService {
   static int getCumulativeScansForPlan(String planName) =>
       LicenseSigner.getCumulativeScansForPlan(planName);
 
-  Future<Map<String, dynamic>> createClient(Map<String, dynamic> clientData) async {
+  Future<Map<String, dynamic>> createClient(
+      Map<String, dynamic> clientData) async {
     final clients = await getClients();
     int maxNum = 0;
     for (final c in clients) {
@@ -267,28 +313,35 @@ class DatabaseService {
     final id = 'CLI-${(maxNum + 1).toString().padLeft(3, '0')}';
     final now = DateTime.now().toUtc();
 
-    final rawPlan = (clientData['license_type'] as String? ?? 'TRIAL').toUpperCase().trim();
-    final rawStatus = (clientData['license_status'] as String? ?? '').toUpperCase().trim();
+    final rawPlan =
+        (clientData['license_type'] as String? ?? 'TRIAL').toUpperCase().trim();
+    final rawStatus =
+        (clientData['license_status'] as String? ?? '').toUpperCase().trim();
     final isProspect = rawPlan == 'PROSPECTO' || rawStatus == 'PROSPECTO';
-    final plan = isProspect ? 'PROSPECTO' : LicenseSigner.normalizePlanSlug(rawPlan);
+    final plan =
+        isProspect ? 'PROSPECTO' : LicenseSigner.normalizePlanSlug(rawPlan);
 
     // 1. Manejo y validación anti-colisión de Hardware ID
-    var rawDeviceId = (clientData['current_device_id'] ?? '').toString().trim().toUpperCase();
+    var rawDeviceId =
+        (clientData['current_device_id'] ?? '').toString().trim().toUpperCase();
     if (rawDeviceId.isEmpty || rawDeviceId == 'PENDIENTE') {
       rawDeviceId = isProspect ? 'PENDIENTE' : 'ML-0000';
     }
 
     if (rawDeviceId != 'PENDIENTE' && rawDeviceId != 'ML-0000') {
       final exists = clients.any((c) =>
-          (c['current_device_id'] as String? ?? '').toUpperCase() == rawDeviceId);
+          (c['current_device_id'] as String? ?? '').toUpperCase() ==
+          rawDeviceId);
       if (exists) {
-        throw ArgumentError('El Hardware ID $rawDeviceId ya está asignado a otro cliente.');
+        throw ArgumentError(
+            'El Hardware ID $rawDeviceId ya está asignado a otro cliente.');
       }
     }
 
     // 2. Duración y Expiración según Modo (Soporta días reales de Trial)
     int trialDays = 30;
-    if (clientData.containsKey('trial_days_remaining') && clientData['trial_days_remaining'] != null) {
+    if (clientData.containsKey('trial_days_remaining') &&
+        clientData['trial_days_remaining'] != null) {
       final customDays = (clientData['trial_days_remaining'] as num).toInt();
       if (customDays > 0 && customDays <= 365) {
         trialDays = customDays;
@@ -315,12 +368,14 @@ class DatabaseService {
     } else if (plan.contains('PERPETU')) {
       expiresAt = DateTime(2299, 12, 31).toUtc().toIso8601String();
     } else {
-      expiresAt = clientData['license_expires'] ?? now.add(Duration(days: trialDays)).toIso8601String();
+      expiresAt = clientData['license_expires'] ??
+          now.add(Duration(days: trialDays)).toIso8601String();
     }
 
     // 3. Ventana de Actualización (updates_until)
     String? updatesUntil;
-    if (clientData.containsKey('updates_until') && clientData['updates_until'] != null) {
+    if (clientData.containsKey('updates_until') &&
+        clientData['updates_until'] != null) {
       updatesUntil = clientData['updates_until'] as String?;
     } else if (plan.contains('PERPETU') || plan == 'PASE_ACTUALIZACION_ANUAL') {
       updatesUntil = now.add(const Duration(days: 365)).toIso8601String();
@@ -329,11 +384,13 @@ class DatabaseService {
     }
 
     // 4. Créditos IA: saldo reportado en celular vs bono pendiente en token
-    final hasReportedBalance = clientData.containsKey('ai_reported_balance') && clientData['ai_reported_balance'] != null;
+    final hasReportedBalance = clientData.containsKey('ai_reported_balance') &&
+        clientData['ai_reported_balance'] != null;
     final reportedAi = hasReportedBalance
         ? (clientData['ai_reported_balance'] as num).toInt()
         : (isProspect ? 0 : 50);
-    final pendingBonusAi = (clientData['ai_pending_bonus'] as num?)?.toInt() ?? 0;
+    final pendingBonusAi =
+        (clientData['ai_pending_bonus'] as num?)?.toInt() ?? 0;
     final baseAi = isProspect ? 0 : getCumulativeScansForPlan(plan);
 
     int finalExtraAi;
@@ -347,34 +404,41 @@ class DatabaseService {
         // Alta con datos reales desde UI / móvil:
         // ai_extra_credits es 0 porque aún no se emite el token
         // ai_accumulated_credits es reportedAi (lo que realmente tiene el celular, ej. 49)
-        finalExtraAi = (clientData.containsKey('ai_extra_credits') && clientData['ai_extra_credits'] != null && pendingBonusAi == 0)
+        finalExtraAi = (clientData.containsKey('ai_extra_credits') &&
+                clientData['ai_extra_credits'] != null &&
+                pendingBonusAi == 0)
             ? (clientData['ai_extra_credits'] as num).toInt()
             : 0;
         accumulatedAi = reportedAi;
       } else {
         // Alta legacy sin especificar reported_balance ni pending_bonus:
-        finalExtraAi = (clientData['ai_extra_credits'] as num?)?.toInt() ?? baseAi;
+        finalExtraAi =
+            (clientData['ai_extra_credits'] as num?)?.toInt() ?? baseAi;
         accumulatedAi = finalExtraAi;
       }
     } else {
       // Clientes comerciales
       final explicitExtra = (clientData['ai_extra_credits'] as num?)?.toInt();
       finalExtraAi = explicitExtra ?? baseAi;
-      accumulatedAi = hasReportedBalance ? reportedAi : (baseAi + (explicitExtra ?? 0));
+      accumulatedAi =
+          hasReportedBalance ? reportedAi : (baseAi + (explicitExtra ?? 0));
     }
 
     final phone = normalizePeruPhone(clientData['phone'] as String? ?? '');
     final rawFollowup = clientData['next_followup_date'] as String?;
-    final String? nextFollowup = (rawFollowup != null && rawFollowup.trim().isNotEmpty)
-        ? rawFollowup.trim()
-        : null;
+    final String? nextFollowup =
+        (rawFollowup != null && rawFollowup.trim().isNotEmpty)
+            ? rawFollowup.trim()
+            : null;
 
     final newClient = {
       'id': id,
       'business_name': clientData['business_name'] ?? 'Negocio Sin Nombre',
       'owner_name': clientData['owner_name'] ?? 'Propietario',
-      'document_id': clientData['document_id'] ?? clientData['document_number'] ?? '',
-      'document_number': clientData['document_number'] ?? clientData['document_id'] ?? '',
+      'document_id':
+          clientData['document_id'] ?? clientData['document_number'] ?? '',
+      'document_number':
+          clientData['document_number'] ?? clientData['document_id'] ?? '',
       'phone': phone,
       'current_device_id': rawDeviceId,
       'device_model': (clientData['device_model'] as String?)?.trim() ?? '',
@@ -387,7 +451,8 @@ class DatabaseService {
       'license_expires': expiresAt,
       'expected_subscription_date': clientData['expected_subscription_date'],
       'next_followup_date': nextFollowup,
-      'trial_days_remaining': (!isProspect && plan == 'TRIAL') ? trialDays : null,
+      'trial_days_remaining':
+          (!isProspect && plan == 'TRIAL') ? trialDays : null,
       'next_nonce': 1,
       'updates_until': updatesUntil,
       'ai_reported_balance': reportedAi,
@@ -405,7 +470,8 @@ class DatabaseService {
     return newClient;
   }
 
-  Future<Map<String, dynamic>?> updateClient(String id, Map<String, dynamic> updates) async {
+  Future<Map<String, dynamic>?> updateClient(
+      String id, Map<String, dynamic> updates) async {
     final clients = await getClients();
     final index = clients.indexWhere((c) => c['id'] == id);
     if (index == -1) return null;
@@ -420,19 +486,26 @@ class DatabaseService {
     // Normalizar fecha de próximo seguimiento si viene en updates
     if (updates.containsKey('next_followup_date')) {
       final rawFollowup = updates['next_followup_date'] as String?;
-      updates['next_followup_date'] = (rawFollowup != null && rawFollowup.trim().isNotEmpty)
-          ? rawFollowup.trim()
-          : null;
+      updates['next_followup_date'] =
+          (rawFollowup != null && rawFollowup.trim().isNotEmpty)
+              ? rawFollowup.trim()
+              : null;
     }
 
     // Si viene current_device_id, validar unicidad
     if (updates.containsKey('current_device_id')) {
-      final cleanDev = (updates['current_device_id'] as String? ?? '').trim().toUpperCase();
-      if (cleanDev.isNotEmpty && cleanDev != 'PENDIENTE' && cleanDev != 'ML-0000') {
-        final exists = clients.any((c) => c['id'] != id &&
-            (c['current_device_id'] as String? ?? '').toUpperCase() == cleanDev);
+      final cleanDev =
+          (updates['current_device_id'] as String? ?? '').trim().toUpperCase();
+      if (cleanDev.isNotEmpty &&
+          cleanDev != 'PENDIENTE' &&
+          cleanDev != 'ML-0000') {
+        final exists = clients.any((c) =>
+            c['id'] != id &&
+            (c['current_device_id'] as String? ?? '').toUpperCase() ==
+                cleanDev);
         if (exists) {
-          throw ArgumentError('El Hardware ID $cleanDev ya está asignado a otro cliente.');
+          throw ArgumentError(
+              'El Hardware ID $cleanDev ya está asignado a otro cliente.');
         }
       }
       updates['current_device_id'] = cleanDev.isEmpty ? 'PENDIENTE' : cleanDev;
@@ -468,12 +541,17 @@ class DatabaseService {
 
     if (deviceId != null && deviceId.trim().isNotEmpty) {
       final cleanDev = deviceId.trim().toUpperCase();
-      if (cleanDev != 'PENDIENTE' && cleanDev != (client['current_device_id'] as String? ?? '')) {
-        final exists = clients.any((c) => c['id'] != clientId &&
-            (c['current_device_id'] as String? ?? '').toUpperCase() == cleanDev &&
-            cleanDev != 'PENDIENTE' && cleanDev != 'ML-0000');
+      if (cleanDev != 'PENDIENTE' &&
+          cleanDev != (client['current_device_id'] as String? ?? '')) {
+        final exists = clients.any((c) =>
+            c['id'] != clientId &&
+            (c['current_device_id'] as String? ?? '').toUpperCase() ==
+                cleanDev &&
+            cleanDev != 'PENDIENTE' &&
+            cleanDev != 'ML-0000');
         if (exists) {
-          throw ArgumentError('El Hardware ID $cleanDev ya está asignado a otro cliente.');
+          throw ArgumentError(
+              'El Hardware ID $cleanDev ya está asignado a otro cliente.');
         }
       }
       client['current_device_id'] = cleanDev;
@@ -489,7 +567,10 @@ class DatabaseService {
 
     if (trialDaysRemaining != null && trialDaysRemaining > 0) {
       client['trial_days_remaining'] = trialDaysRemaining;
-      client['license_expires'] = DateTime.now().toUtc().add(Duration(days: trialDaysRemaining)).toIso8601String();
+      client['license_expires'] = DateTime.now()
+          .toUtc()
+          .add(Duration(days: trialDaysRemaining))
+          .toIso8601String();
     } else if (expirationDate != null && expirationDate.trim().isNotEmpty) {
       client['license_expires'] = expirationDate.trim();
     }
@@ -526,7 +607,8 @@ class DatabaseService {
     final client = clients[index];
 
     final tsEpoch = payload['ts'] as int? ?? 0;
-    final syncDateTime = DateTime.fromMillisecondsSinceEpoch(tsEpoch, isUtc: true);
+    final syncDateTime =
+        DateTime.fromMillisecondsSinceEpoch(tsEpoch, isUtc: true);
 
     if (client['last_sync_at'] != null && !forceOlder) {
       final lastSync = DateTime.tryParse(client['last_sync_at'].toString());
@@ -556,13 +638,16 @@ class DatabaseService {
     if (payload.containsKey('byok')) {
       client['uses_byok'] = payload['byok'] == true;
     }
-    if (payload.containsKey('av') && (payload['av'] as String? ?? '').isNotEmpty) {
+    if (payload.containsKey('av') &&
+        (payload['av'] as String? ?? '').isNotEmpty) {
       client['installed_version'] = (payload['av'] as String).trim();
     }
-    if (payload.containsKey('mod') && (payload['mod'] as String? ?? '').isNotEmpty) {
+    if (payload.containsKey('mod') &&
+        (payload['mod'] as String? ?? '').isNotEmpty) {
       client['device_model'] = (payload['mod'] as String).trim();
     }
-    if (payload.containsKey('os') && (payload['os'] as String? ?? '').isNotEmpty) {
+    if (payload.containsKey('os') &&
+        (payload['os'] as String? ?? '').isNotEmpty) {
       client['android_version'] = (payload['os'] as String).trim();
     }
     if (payload.containsKey('pc') && payload['pc'] != null) {
@@ -574,7 +659,8 @@ class DatabaseService {
     if (payload.containsKey('drv')) {
       client['backup_drive_linked'] = payload['drv'] == true;
     }
-    if (payload.containsKey('bh') && (payload['bh'] as String? ?? '').isNotEmpty) {
+    if (payload.containsKey('bh') &&
+        (payload['bh'] as String? ?? '').isNotEmpty) {
       client['backup_health_status'] = (payload['bh'] as String).trim();
     }
     if (payload.containsKey('lb')) {
@@ -650,7 +736,8 @@ class DatabaseService {
     }
 
     final isFreeMigration = feeAmount <= 0;
-    final effectiveMethod = isFreeMigration ? 'Gratuito / Cortesía' : paymentMethod;
+    final effectiveMethod =
+        isFreeMigration ? 'Gratuito / Cortesía' : paymentMethod;
     final effectiveReason = reason?.trim().isNotEmpty == true
         ? reason!.trim()
         : (isFreeMigration
@@ -658,7 +745,8 @@ class DatabaseService {
             : 'Cambio o pérdida de teléfono');
 
     // Guardar en historial de hardware
-    final history = (client['device_history'] as List? ?? []).cast<Map<String, dynamic>>();
+    final history =
+        (client['device_history'] as List? ?? []).cast<Map<String, dynamic>>();
     history.add({
       'old_device_id': oldDeviceId,
       'new_device_id': cleanNewId,
@@ -682,7 +770,8 @@ class DatabaseService {
     String? generatedPaymentId;
     if (feeAmount > 0) {
       generatedPaymentId = 'MIG-${DateTime.now().millisecondsSinceEpoch}';
-      final payments = (client['payment_history'] as List? ?? []).cast<Map<String, dynamic>>();
+      final payments = (client['payment_history'] as List? ?? [])
+          .cast<Map<String, dynamic>>();
       payments.add({
         'id': generatedPaymentId,
         'date': DateTime.now().toUtc().toIso8601String(),
@@ -702,7 +791,8 @@ class DatabaseService {
       final plan = client['license_type'] as String? ?? 'MENSUAL';
       final isPerpetual = plan.toUpperCase().contains('PERPETU');
       final currentExpStr = client['license_expires'] as String?;
-      final currentExp = currentExpStr != null ? DateTime.tryParse(currentExpStr) : null;
+      final currentExp =
+          currentExpStr != null ? DateTime.tryParse(currentExpStr) : null;
       final now = DateTime.now();
 
       int daysToAdd = 0;
@@ -738,7 +828,8 @@ class DatabaseService {
         isMigration: true,
       );
 
-      final codes = (client['generated_codes_history'] as List? ?? []).cast<Map<String, dynamic>>();
+      final codes = (client['generated_codes_history'] as List? ?? [])
+          .cast<Map<String, dynamic>>();
       codes.add({
         'token': emittedToken,
         'plan': plan,
@@ -795,14 +886,16 @@ class DatabaseService {
     if (index == -1) return null;
 
     final client = clients[index];
-    final history = (client['device_history'] as List? ?? []).cast<Map<String, dynamic>>();
+    final history =
+        (client['device_history'] as List? ?? []).cast<Map<String, dynamic>>();
     if (historyIndex < 0 || historyIndex >= history.length) return null;
 
     history[historyIndex]['reason'] = reason.trim();
     client['device_history'] = history;
     clients[index] = client;
 
-    await saveClients(clients, reason: 'update_migration_reason_${clientId}_$historyIndex');
+    await saveClients(clients,
+        reason: 'update_migration_reason_${clientId}_$historyIndex');
     return client;
   }
 
@@ -831,9 +924,13 @@ class DatabaseService {
     // Regla de Renovación Acumulativa vs Reinicio
     DateTime baseDate;
     final currentExpStr = client['license_expires'] as String?;
-    final currentExp = currentExpStr != null ? DateTime.tryParse(currentExpStr) : null;
+    final currentExp =
+        currentExpStr != null ? DateTime.tryParse(currentExpStr) : null;
 
-    if (!resetFromToday && currentExp != null && currentExp.isAfter(now) && client['license_type'] != 'TRIAL_VENCIDO') {
+    if (!resetFromToday &&
+        currentExp != null &&
+        currentExp.isAfter(now) &&
+        client['license_type'] != 'TRIAL_VENCIDO') {
       baseDate = currentExp;
     } else {
       baseDate = now;
@@ -841,7 +938,9 @@ class DatabaseService {
 
     final basePlanCredits = (normPlan == 'RECARGA_IA_150')
         ? 150
-        : (normPlan == 'BONO_IA_PERSONALIZADO' ? 0 : getCumulativeScansForPlan(normPlan));
+        : (normPlan == 'BONO_IA_PERSONALIZADO'
+            ? 0
+            : getCumulativeScansForPlan(normPlan));
     final totalCreditsToAdd = (normPlan == 'BONO_IA_PERSONALIZADO')
         ? aiExtraCredits
         : (basePlanCredits + aiExtraCredits);
@@ -849,7 +948,8 @@ class DatabaseService {
     DateTime newExpiration;
     if (customExactExpiration != null) {
       newExpiration = customExactExpiration;
-    } else if (normPlan == 'RECARGA_IA_150' || normPlan == 'BONO_IA_PERSONALIZADO') {
+    } else if (normPlan == 'RECARGA_IA_150' ||
+        normPlan == 'BONO_IA_PERSONALIZADO') {
       newExpiration = currentExp ?? now;
     } else if (normPlan == 'PERPETUO_LIBERADO') {
       newExpiration = DateTime(2299, 12, 31);
@@ -868,17 +968,22 @@ class DatabaseService {
       final updatedCredits = currentCredits + totalCreditsToAdd;
       client['ai_extra_credits'] = updatedCredits;
 
-      final curReported = (client['ai_reported_balance'] as num?)?.toInt() ?? 50;
+      final curReported =
+          (client['ai_reported_balance'] as num?)?.toInt() ?? 50;
       client['ai_reported_balance'] = curReported + totalCreditsToAdd;
-      client['ai_accumulated_credits'] = (client['ai_reported_balance'] as num).toInt();
+      client['ai_accumulated_credits'] =
+          (client['ai_reported_balance'] as num).toInt();
     }
 
     // Descontar bono pendiente de emitir si se entregaron créditos adicionales
     if (aiExtraCredits > 0 || normPlan == 'BONO_IA_PERSONALIZADO') {
-      final creditsDiscounted = (normPlan == 'BONO_IA_PERSONALIZADO') ? totalCreditsToAdd : aiExtraCredits;
+      final creditsDiscounted = (normPlan == 'BONO_IA_PERSONALIZADO')
+          ? totalCreditsToAdd
+          : aiExtraCredits;
       final currentPending = (client['ai_pending_bonus'] as num?)?.toInt() ?? 0;
       if (currentPending > 0) {
-        final remainingPending = (currentPending - creditsDiscounted).clamp(0, 99999);
+        final remainingPending =
+            (currentPending - creditsDiscounted).clamp(0, 99999);
         client['ai_pending_bonus'] = remainingPending;
       }
     }
@@ -894,7 +999,8 @@ class DatabaseService {
     String? newPaymentId;
     if (paymentAmount > 0) {
       newPaymentId = 'PAY-${DateTime.now().millisecondsSinceEpoch}';
-      final payments = (client['payment_history'] as List? ?? []).cast<Map<String, dynamic>>();
+      final payments = (client['payment_history'] as List? ?? [])
+          .cast<Map<String, dynamic>>();
       payments.add({
         'id': newPaymentId,
         'date': now.toUtc().toIso8601String(),
@@ -907,7 +1013,8 @@ class DatabaseService {
     }
 
     // Historial de códigos
-    final codes = (client['generated_codes_history'] as List? ?? []).cast<Map<String, dynamic>>();
+    final codes = (client['generated_codes_history'] as List? ?? [])
+        .cast<Map<String, dynamic>>();
     codes.add({
       'token': token,
       'plan': normPlan,
@@ -933,11 +1040,14 @@ class DatabaseService {
   }
 
   /// Marcar que el cliente actualizó su versión de app instalada con blindaje anti-degradación
-  Future<Map<String, dynamic>?> markClientUpdated(String clientId, String versionName, {bool force = false}) async {
+  Future<Map<String, dynamic>?> markClientUpdated(
+      String clientId, String versionName,
+      {bool force = false}) async {
     final client = await getClientById(clientId);
     if (client == null) return null;
     final cleanTarget = versionName.trim();
-    final currentInstalled = (client['installed_version'] as String? ?? '9.0.0').trim();
+    final currentInstalled =
+        (client['installed_version'] as String? ?? '9.0.0').trim();
     if (!force && compareSemVer(currentInstalled, cleanTarget) > 0) {
       // Blindaje: No degradar a un cliente que ya tiene una versión superior instalada
       return client;
@@ -945,13 +1055,16 @@ class DatabaseService {
     final updates = <String, dynamic>{'installed_version': cleanTarget};
     if (currentInstalled != cleanTarget) {
       updates['previous_installed_version'] = currentInstalled;
-      updates['installed_version_updated_at'] = DateTime.now().toUtc().toIso8601String();
+      updates['installed_version_updated_at'] =
+          DateTime.now().toUtc().toIso8601String();
     }
     return updateClient(clientId, updates);
   }
 
   /// Registra la trazabilidad del APK enviado por WhatsApp
-  Future<Map<String, dynamic>?> recordApkDispatched(String clientId, String version, {String? variant}) async {
+  Future<Map<String, dynamic>?> recordApkDispatched(
+      String clientId, String version,
+      {String? variant}) async {
     final nowIso = DateTime.now().toUtc().toIso8601String();
     return updateClient(clientId, {
       'last_apk_sent_version': version,
@@ -961,13 +1074,15 @@ class DatabaseService {
   }
 
   /// Eliminar un pago o anular transacción del historial de un cliente
-  Future<Map<String, dynamic>?> deletePayment(String clientId, String paymentId) async {
+  Future<Map<String, dynamic>?> deletePayment(
+      String clientId, String paymentId) async {
     final clients = await getClients();
     final index = clients.indexWhere((c) => c['id'] == clientId);
     if (index == -1) return null;
 
     final client = clients[index];
-    final payments = (client['payment_history'] as List? ?? []).cast<Map<String, dynamic>>();
+    final payments =
+        (client['payment_history'] as List? ?? []).cast<Map<String, dynamic>>();
     payments.removeWhere((p) => p['id'] == paymentId);
     client['payment_history'] = payments;
     client['total_paid'] = payments.fold<double>(
@@ -981,8 +1096,8 @@ class DatabaseService {
   }
 
   /// Editar un pago existente en el historial del cliente (Plan Maestro 18 - Fase 4)
-  Future<Map<String, dynamic>?> updatePayment(
-      String clientId, String paymentId, Map<String, dynamic> paymentData) async {
+  Future<Map<String, dynamic>?> updatePayment(String clientId, String paymentId,
+      Map<String, dynamic> paymentData) async {
     final clients = await getClients();
     final index = clients.indexWhere((c) => c['id'] == clientId);
     if (index == -1) return null;
@@ -999,9 +1114,11 @@ class DatabaseService {
     // 1. Validación estricta de monto (número válido >= 0)
     if (paymentData.containsKey('amount')) {
       final rawAmt = paymentData['amount'];
-      final num? parsedAmt = (rawAmt is num) ? rawAmt : num.tryParse(rawAmt.toString());
+      final num? parsedAmt =
+          (rawAmt is num) ? rawAmt : num.tryParse(rawAmt.toString());
       if (parsedAmt == null || parsedAmt.isNaN || parsedAmt < 0) {
-        throw ArgumentError('El monto del pago debe ser un número válido mayor o igual a cero.');
+        throw ArgumentError(
+            'El monto del pago debe ser un número válido mayor o igual a cero.');
       }
       oldPayment['amount'] = parsedAmt.toDouble();
     }
@@ -1014,20 +1131,27 @@ class DatabaseService {
           DateTime.parse(rawDate);
           oldPayment['date'] = rawDate;
         } catch (_) {
-          throw ArgumentError('La fecha del pago no tiene un formato ISO válido (YYYY-MM-DD).');
+          throw ArgumentError(
+              'La fecha del pago no tiene un formato ISO válido (YYYY-MM-DD).');
         }
       }
     }
 
     // 3. Concepto / Plan Oficial
-    if (paymentData.containsKey('plan')) oldPayment['plan'] = paymentData['plan'];
-    if (paymentData.containsKey('concept')) oldPayment['plan'] = paymentData['concept'];
+    if (paymentData.containsKey('plan'))
+      oldPayment['plan'] = paymentData['plan'];
+    if (paymentData.containsKey('concept'))
+      oldPayment['plan'] = paymentData['concept'];
 
     // 4. Medio de pago, referencia y notas
-    if (paymentData.containsKey('method')) oldPayment['method'] = paymentData['method'];
-    if (paymentData.containsKey('payment_method')) oldPayment['method'] = paymentData['payment_method'];
-    if (paymentData.containsKey('reference')) oldPayment['reference'] = paymentData['reference'];
-    if (paymentData.containsKey('notes')) oldPayment['notes'] = paymentData['notes'];
+    if (paymentData.containsKey('method'))
+      oldPayment['method'] = paymentData['method'];
+    if (paymentData.containsKey('payment_method'))
+      oldPayment['method'] = paymentData['payment_method'];
+    if (paymentData.containsKey('reference'))
+      oldPayment['reference'] = paymentData['reference'];
+    if (paymentData.containsKey('notes'))
+      oldPayment['notes'] = paymentData['notes'];
 
     // 5. Blindaje de comprobantes: ID y datos de comprobante emitido son estrictamente inmutables
     oldPayment['id'] = paymentId;
@@ -1052,13 +1176,15 @@ class DatabaseService {
   }
 
   /// Agregar un pago manual al historial del cliente
-  Future<Map<String, dynamic>?> addManualPayment(String clientId, Map<String, dynamic> paymentData) async {
+  Future<Map<String, dynamic>?> addManualPayment(
+      String clientId, Map<String, dynamic> paymentData) async {
     final clients = await getClients();
     final index = clients.indexWhere((c) => c['id'] == clientId);
     if (index == -1) return null;
 
     final client = clients[index];
-    final payments = (client['payment_history'] as List? ?? []).cast<Map<String, dynamic>>();
+    final payments =
+        (client['payment_history'] as List? ?? []).cast<Map<String, dynamic>>();
     payments.add({
       'id': 'PAY-${DateTime.now().millisecondsSinceEpoch}',
       'date': paymentData['date'] ?? DateTime.now().toUtc().toIso8601String(),
@@ -1066,6 +1192,9 @@ class DatabaseService {
       'plan': paymentData['plan'] ?? 'PAGO_MANUAL',
       'method': paymentData['method'] ?? 'Efectivo',
       'reference': paymentData['reference'] ?? 'Registro Manual',
+      if (paymentData['notes'] != null &&
+          paymentData['notes'].toString().isNotEmpty)
+        'notes': paymentData['notes'].toString(),
     });
     client['payment_history'] = payments;
     client['total_paid'] = payments.fold<double>(
@@ -1079,7 +1208,8 @@ class DatabaseService {
   }
 
   /// Alias de addManualPayment
-  Future<Map<String, dynamic>?> addPayment(String clientId, Map<String, dynamic> paymentData) =>
+  Future<Map<String, dynamic>?> addPayment(
+          String clientId, Map<String, dynamic> paymentData) =>
       addManualPayment(clientId, paymentData);
 
   /// Emite o recupera la boleta (BOL-XXXX) o factura (FAC-XXXX) oficial de forma atómica e idempotente
@@ -1110,18 +1240,21 @@ class DatabaseService {
     // Retrocompatibilidad con pagos legados que solo tienen receipt_number
     final legacyReceiptNum = payment['receipt_number'] as String?;
     if (legacyReceiptNum != null && legacyReceiptNum.trim().isNotEmpty) {
-      if (legacyReceiptNum.startsWith('BOL-') && payment['receipt_bol_number'] == null) {
+      if (legacyReceiptNum.startsWith('BOL-') &&
+          payment['receipt_bol_number'] == null) {
         payment['receipt_bol_number'] = legacyReceiptNum;
-      } else if (legacyReceiptNum.startsWith('FAC-') && payment['receipt_fac_number'] == null) {
+      } else if (legacyReceiptNum.startsWith('FAC-') &&
+          payment['receipt_fac_number'] == null) {
         payment['receipt_fac_number'] = legacyReceiptNum;
       }
     }
 
     // Determinar tipo de comprobante solicitado ('BOL' o 'FAC')
-    final String requestedType = (voucherType ?? payment['receipt_type'] ?? 'BOL')
-        .toString()
-        .trim()
-        .toUpperCase();
+    final String requestedType =
+        (voucherType ?? payment['receipt_type'] ?? 'BOL')
+            .toString()
+            .trim()
+            .toUpperCase();
     final String vType = (requestedType == 'FAC') ? 'FAC' : 'BOL';
 
     // Verificar si ya existe correlativo para este tipo en este pago
@@ -1129,8 +1262,8 @@ class DatabaseService {
         ? (payment['receipt_fac_number'] as String?)
         : (payment['receipt_bol_number'] as String?);
 
-    final bool alreadyIssuedForType =
-        existingTypedCorrelative != null && existingTypedCorrelative.trim().isNotEmpty;
+    final bool alreadyIssuedForType = existingTypedCorrelative != null &&
+        existingTypedCorrelative.trim().isNotEmpty;
 
     bool needsSave = false;
 
@@ -1164,7 +1297,8 @@ class DatabaseService {
         isSandbox: isSandbox,
         voucherType: vType,
       );
-      final safeNum = (configNum <= maxExisting) ? (maxExisting + 1) : configNum;
+      final safeNum =
+          (configNum <= maxExisting) ? (maxExisting + 1) : configNum;
       if (safeNum > configNum) {
         await configService.syncReceiptCorrelativeMin(
           isSandbox: isSandbox,
@@ -1184,7 +1318,8 @@ class DatabaseService {
       needsSave = true;
     } else {
       // Reutilizar exactamente el correlativo previo de ese tipo (idempotencia pura)
-      if (payment['receipt_number'] != existingTypedCorrelative || payment['receipt_type'] != vType) {
+      if (payment['receipt_number'] != existingTypedCorrelative ||
+          payment['receipt_type'] != vType) {
         payment['receipt_number'] = existingTypedCorrelative;
         payment['receipt_type'] = vType;
         needsSave = true;
@@ -1192,23 +1327,30 @@ class DatabaseService {
     }
 
     // Actualizar campos fiscales y notas opcionales si vienen definidos
-    if (customNote != null && customNote.trim() != (payment['receipt_custom_note'] ?? '')) {
+    if (customNote != null &&
+        customNote.trim() != (payment['receipt_custom_note'] ?? '')) {
       payment['receipt_custom_note'] = customNote.trim();
       needsSave = true;
     }
-    if (invoiceRuc != null && invoiceRuc.trim() != (payment['invoice_ruc'] ?? '')) {
+    if (invoiceRuc != null &&
+        invoiceRuc.trim() != (payment['invoice_ruc'] ?? '')) {
       payment['invoice_ruc'] = invoiceRuc.trim();
       needsSave = true;
     }
-    if (invoiceBusinessName != null && invoiceBusinessName.trim() != (payment['invoice_business_name'] ?? '')) {
+    if (invoiceBusinessName != null &&
+        invoiceBusinessName.trim() !=
+            (payment['invoice_business_name'] ?? '')) {
       payment['invoice_business_name'] = invoiceBusinessName.trim();
       needsSave = true;
     }
-    if (invoiceFiscalAddress != null && invoiceFiscalAddress.trim() != (payment['invoice_fiscal_address'] ?? '')) {
+    if (invoiceFiscalAddress != null &&
+        invoiceFiscalAddress.trim() !=
+            (payment['invoice_fiscal_address'] ?? '')) {
       payment['invoice_fiscal_address'] = invoiceFiscalAddress.trim();
       needsSave = true;
     }
-    if (showIgvBreakdown != null && showIgvBreakdown != payment['show_igv_breakdown']) {
+    if (showIgvBreakdown != null &&
+        showIgvBreakdown != payment['show_igv_breakdown']) {
       payment['show_igv_breakdown'] = showIgvBreakdown;
       needsSave = true;
     }
@@ -1217,7 +1359,8 @@ class DatabaseService {
       payments[pIndex] = payment;
       client['payment_history'] = payments;
       clients[index] = client;
-      await saveClients(clients, reason: 'issue_receipt_${payment['receipt_number']}_$paymentId');
+      await saveClients(clients,
+          reason: 'issue_receipt_${payment['receipt_number']}_$paymentId');
     }
 
     return {
@@ -1238,7 +1381,10 @@ class DatabaseService {
         'id': client['id'],
         'business_name': client['business_name'] ?? '',
         'owner_name': client['owner_name'] ?? '',
-        'document_number': client['document_id'] ?? client['document_number'] ?? client['ruc_dni'] ?? '',
+        'document_number': client['document_id'] ??
+            client['document_number'] ??
+            client['ruc_dni'] ??
+            '',
         'phone': client['phone'] ?? '',
         'current_device_id': client['current_device_id'] ?? '',
         'license_type': client['license_type'] ?? '',
@@ -1251,18 +1397,93 @@ class DatabaseService {
 
   // =================== FINANZAS Y LIBRO CONTABLE ===================
 
+  /// Infiere días otorgados coherentes por plan/concepto cuando un pago histórico no registra `days_added` explícito
+  static int inferDefaultDaysForPlan(String? rawPlan) {
+    final norm = (rawPlan ?? '').toUpperCase().trim();
+    if (norm.isEmpty || norm == '-') return 0;
+    if (norm == 'SERVICIO_MIGRACION' ||
+        norm == 'HARDWARE_MIGRATION_FEE' ||
+        norm == 'ABONO_PARCIAL' ||
+        norm == 'RECARGA_IA_150' ||
+        norm == 'PASE_ACTUALIZACION_ANUAL' ||
+        norm == 'PASE_ANUAL_UPDATES' ||
+        norm == 'PASE_UPDATES_12M' ||
+        norm == 'BONO_IA_PERSONALIZADO' ||
+        norm == 'PAGO_MANUAL') {
+      return 0;
+    }
+    if (norm == 'EXTENSION_CORTESIA') return 7;
+    if (norm == 'TRIAL' || norm == 'MENSUAL') return 30;
+    if (norm == 'TRIMESTRAL') return 90;
+    if (norm == 'SEMESTRAL') return 180;
+    if (norm == 'ANUAL') return 365;
+    if (norm.contains('PERPETU')) return 99999;
+    return 0;
+  }
+
+  /// Infiere créditos IA otorgados por plan/concepto cuando un pago histórico no registra `ai_extra_credits` explícito
+  static int inferDefaultAiForPlan(String? rawPlan) {
+    final norm = (rawPlan ?? '').toUpperCase().trim();
+    if (norm.isEmpty ||
+        norm == 'SERVICIO_MIGRACION' ||
+        norm == 'HARDWARE_MIGRATION_FEE' ||
+        norm == 'ABONO_PARCIAL' ||
+        norm == 'EXTENSION_CORTESIA' ||
+        norm == 'PAGO_MANUAL' ||
+        norm == 'BONO_IA_PERSONALIZADO') {
+      return 0;
+    }
+    return LicenseSigner.getCumulativeScansForPlan(norm);
+  }
+
+  /// Escapa una celda bajo RFC-4180 normalizando saltos de línea para CSV estable en Microsoft Excel
+  static String _escapeCsvCell(dynamic value) {
+    final clean = (value ?? '')
+        .toString()
+        .replaceAll('\r\n', ' ')
+        .replaceAll('\r', ' ')
+        .replaceAll('\n', ' ')
+        .replaceAll('"', '""');
+    return '"$clean"';
+  }
+
   /// Obtiene la lista consolidada de cobros/transacciones financieras del entorno activo
   Future<List<Map<String, dynamic>>> getConsolidatedFinances() async {
     final clients = await getClients();
     final List<Map<String, dynamic>> result = [];
     for (final c in clients) {
-      final payments = (c['payment_history'] as List? ?? []).cast<Map<String, dynamic>>();
+      final payments =
+          (c['payment_history'] as List? ?? []).cast<Map<String, dynamic>>();
+      final codes = (c['generated_codes_history'] as List? ?? [])
+          .cast<Map<String, dynamic>>();
+      final codeByPaymentId = <String, Map<String, dynamic>>{};
+      for (final code in codes) {
+        final payId = code['payment_id']?.toString();
+        if (payId != null && payId.isNotEmpty) {
+          codeByPaymentId[payId] = code;
+        }
+      }
+
       for (final p in payments) {
+        final paymentId = (p['id'] ?? 'PAY-${p['date']}').toString();
+        final linkedCode = codeByPaymentId[paymentId];
+        final plan = p['plan']?.toString() ?? '-';
+
+        final daysAdded = (p['days_added'] as num?)?.toInt() ??
+            (linkedCode?['days_added'] as num?)?.toInt() ??
+            inferDefaultDaysForPlan(plan);
+        final aiCredits = (p['ai_extra_credits'] as num?)?.toInt() ??
+            (linkedCode?['total_ai_credited'] as num?)?.toInt() ??
+            (linkedCode?['ai_credits'] as num?)?.toInt() ??
+            inferDefaultAiForPlan(plan);
+
         result.add({
-          'id': p['id'] ?? 'PAY-${p['date']}',
+          'id': paymentId,
           'date': p['date'] ?? '',
           'amount': (p['amount'] as num?)?.toDouble() ?? 0.0,
-          'plan': p['plan'] ?? '-',
+          'plan': plan,
+          'days_added': daysAdded,
+          'ai_extra_credits': aiCredits,
           'method': p['method'] ?? '-',
           'reference': p['reference'] ?? '-',
           'receipt_number': p['receipt_number'] ?? '',
@@ -1276,6 +1497,7 @@ class DatabaseService {
           'document_number': c['document_number'] ?? c['document_id'] ?? '',
           'phone': c['phone'] ?? '',
           'device_id': c['current_device_id'] ?? '',
+          'next_followup_date': c['next_followup_date'] ?? '',
           'notes': p['notes'] ?? '',
           'updated_at': p['updated_at'] ?? '',
         });
@@ -1285,35 +1507,79 @@ class DatabaseService {
     return result;
   }
 
-  /// Exporta el libro contable consolidado a CSV con BOM UTF-8
+  /// Exporta el libro contable consolidado a CSV con BOM UTF-8, hora Perú GMT-5 y escape RFC-4180
   Future<String> exportFinancesToCsv() async {
     final finances = await getConsolidatedFinances();
     final buffer = StringBuffer();
     buffer.write('\uFEFF'); // BOM UTF-8 para Excel
-    buffer.writeln('FECHA,ID_CLIENTE,NEGOCIO,TITULAR,RUC_DNI,TELEFONO,DEVICE_ID,MONTO_PEN,PLAN,MEDIO_PAGO,REFERENCIA,TIPO_COMPROBANTE,N_COMPROBANTE');
+    buffer.writeln(
+        'FECHA,ID_CLIENTE,NEGOCIO,TITULAR,RUC_DNI,TELEFONO,DEVICE_ID,MONTO_PEN,PLAN,MEDIO_PAGO,REFERENCIA,TIPO_COMPROBANTE,N_COMPROBANTE,NOTAS');
     for (final f in finances) {
-      final dateStr = (f['date'] as String).isNotEmpty ? (f['date'] as String).substring(0, 10) : '';
+      final rawDate = (f['date'] as String? ?? '').trim();
+      final dateStr = rawDate.isNotEmpty
+          ? PeruTimeHelper.formatLimaDateTime(rawDate, fallback: rawDate)
+          : '';
       final clientId = f['client_id'] ?? '';
-      final biz = (f['business_name'] ?? '').toString().replaceAll('"', '""');
-      final owner = (f['owner_name'] ?? '').toString().replaceAll('"', '""');
-      final docId = (f['document_number'] ?? '').toString().replaceAll('"', '""');
+      final biz = f['business_name'] ?? '';
+      final owner = f['owner_name'] ?? '';
+      final docId = f['document_number'] ?? '';
       final phone = f['phone'] ?? '';
       final devId = f['device_id'] ?? '';
-      final amount = ((f['amount'] as num?)?.toDouble() ?? 0.0).toStringAsFixed(2);
+      final amount =
+          ((f['amount'] as num?)?.toDouble() ?? 0.0).toStringAsFixed(2);
       final plan = f['plan'] ?? '';
       final method = f['method'] ?? '';
-      final ref = (f['reference'] ?? '').toString().replaceAll('"', '""');
+      final ref = f['reference'] ?? '';
       final recNum = (f['receipt_number'] as String? ?? '').trim();
       final recType = (f['receipt_type'] as String? ?? '').trim().toUpperCase();
-      final tipoComp = recType.isNotEmpty ? recType : (recNum.startsWith('FAC') ? 'FAC' : (recNum.startsWith('BOL') ? 'BOL' : ''));
-      buffer.writeln('$dateStr,$clientId,"$biz","$owner","$docId",$phone,$devId,$amount,$plan,"$method","$ref","$tipoComp","$recNum"');
+      final tipoComp = recType.isNotEmpty
+          ? recType
+          : (recNum.startsWith('FAC')
+              ? 'FAC'
+              : (recNum.startsWith('BOL') ? 'BOL' : ''));
+      final notes = f['notes'] ?? '';
+
+      final cols = [
+        dateStr,
+        clientId,
+        biz,
+        owner,
+        docId,
+        phone,
+        devId,
+        amount,
+        plan,
+        method,
+        ref,
+        tipoComp,
+        recNum,
+        notes,
+      ].map(_escapeCsvCell).join(',');
+      buffer.writeln(cols);
     }
     return buffer.toString();
   }
 
   // =================== CENTRO DE GESTIÓN DE RESPALDOS (BACKUPS) ===================
 
-  /// Lista los respaldos físicos en disco duro (carpeta backups/)
+  static String _detectBackupMode(String filename) {
+    final isProd = filename.startsWith('prod_') || filename.contains('_prod_');
+    final isSandbox =
+        filename.startsWith('sandbox_') || filename.contains('_sandbox_');
+    return isProd ? 'prod' : (isSandbox ? 'sandbox' : 'global');
+  }
+
+  static String _detectBackupScope(String filename) {
+    final lower = filename.toLowerCase();
+    if (lower.startsWith('owner_config') || lower.contains('config')) {
+      return 'config';
+    }
+    if (lower.contains('releases')) return 'releases';
+    if (lower.contains('clients')) return 'clients';
+    return 'unknown';
+  }
+
+  /// Lista los respaldos físicos en disco duro (carpeta backups/) con hora Lima GMT-5 y metadatos
   Future<List<Map<String, dynamic>>> listBackups() async {
     final dir = Directory(backupDir);
     if (!await dir.exists()) return [];
@@ -1324,9 +1590,11 @@ class DatabaseService {
       if (entity is File && entity.path.endsWith('.json')) {
         final stat = await entity.stat();
         final name = entity.uri.pathSegments.last;
-        final isProd = name.startsWith('prod_') || name.contains('_prod_');
-        final isSandbox = name.startsWith('sandbox_') || name.contains('_sandbox_');
-        final mode = isProd ? 'prod' : (isSandbox ? 'sandbox' : 'global');
+        final mode = _detectBackupMode(name);
+        final scope = _detectBackupScope(name);
+        final lower = name.toLowerCase();
+        final isManual = lower.contains('manual');
+        final isProtected = isProtectedBackupFilename(name);
 
         result.add({
           'filename': name,
@@ -1334,18 +1602,27 @@ class DatabaseService {
           'size_kb': (stat.size / 1024).toStringAsFixed(1),
           'size_bytes': stat.size,
           'modified_at': stat.modified.toUtc().toIso8601String(),
+          'modified_lima': PeruTimeHelper.formatLimaDateTime(stat.modified),
           'mode': mode,
+          'target_scope': scope,
+          'is_manual': isManual,
+          'is_protected': isProtected,
         });
       }
     }
-    result.sort((a, b) => (b['modified_at'] as String).compareTo(a['modified_at'] as String));
+    result.sort((a, b) {
+      final cmp =
+          (b['modified_at'] as String).compareTo(a['modified_at'] as String);
+      if (cmp != 0) return cmp;
+      return (b['filename'] as String).compareTo(a['filename'] as String);
+    });
     return result;
   }
 
   /// Crea un snapshot manual inmediato en disco
   Future<Map<String, dynamic>> createManualBackup() async {
     final now = DateTime.now();
-    final timestamp = now.toIso8601String().replaceAll(':', '-').replaceAll('.', '-');
+    final timestamp = PeruTimeHelper.formatLimaFilenameTimestamp(now);
     final filenameClients = '${_mode}_clients_manual_$timestamp.json';
     final filenameReleases = '${_mode}_releases_manual_$timestamp.json';
 
@@ -1361,29 +1638,410 @@ class DatabaseService {
 
     return {
       'ok': true,
-      'timestamp': now.toIso8601String(),
+      'timestamp': now.toUtc().toIso8601String(),
+      'timestamp_lima': PeruTimeHelper.formatLimaDateTime(now),
       'mode': _mode,
       'files': [filenameClients, filenameReleases],
       'message': 'Snapshot manual creado en disco exitosamente.',
     };
   }
 
-  /// Restaura la base de datos a partir de un archivo de backup
-  Future<bool> restoreFromBackup(String filename) async {
-    final file = File('$backupDir/$filename');
-    if (!await file.exists()) return false;
-
-    // Crear snapshot de seguridad del estado actual antes de sobrescribir
-    await _createSnapshot('before_restore_${filename.replaceAll('.json', '')}');
-
-    if (filename.contains('clients')) {
-      await file.copy(_clientsFile.path);
-      return true;
-    } else if (filename.contains('releases')) {
-      await file.copy(_releasesFile.path);
-      return true;
+  /// Inspecciona un snapshot antes de restaurar comparándolo contra el estado actual en disco
+  Future<Map<String, dynamic>?> previewBackup(
+    String filename, {
+    ConfigService? configService,
+  }) async {
+    if (!isSafeBackupFilename(filename)) {
+      throw ArgumentError('Nombre de archivo de respaldo inválido.');
     }
-    return false;
+
+    final file = File('$backupDir/$filename');
+    if (!await file.exists()) return null;
+
+    final stat = await file.stat();
+    final raw = await file.readAsString();
+    final decoded = jsonDecode(raw);
+
+    final environment = _detectBackupMode(filename);
+    var scope = _detectBackupScope(filename);
+    if (scope == 'unknown') {
+      if (decoded is Map<String, dynamic> &&
+          (decoded.containsKey('catalog') ||
+              decoded.containsKey('templates') ||
+              decoded.containsKey('system'))) {
+        scope = 'config';
+      } else if (decoded is List &&
+          decoded.isNotEmpty &&
+          decoded.first is Map &&
+          (decoded.first as Map).containsKey('version_name')) {
+        scope = 'releases';
+      } else if (decoded is List) {
+        scope = 'clients';
+      }
+    }
+
+    final targetMode = (environment == 'prod' || environment == 'sandbox')
+        ? environment
+        : _mode;
+
+    Map<String, dynamic> snapshotSummary = {};
+    Map<String, dynamic> currentSummary = {};
+
+    if (scope == 'config') {
+      if (decoded is! Map<String, dynamic>) {
+        throw const FormatException(
+            'El respaldo de configuración no contiene un objeto JSON válido.');
+      }
+      final snapCatalog = (decoded['catalog'] as Map?) ?? {};
+      final snapTemplates = (decoded['templates'] as Map?) ?? {};
+      final snapSystem = (decoded['system'] as Map?) ?? {};
+      snapshotSummary = {
+        'catalog_plans_count': snapCatalog.length,
+        'templates_count': snapTemplates.length,
+        'default_mode': snapSystem['default_mode'] ?? 'sandbox',
+        'theme': snapSystem['theme'] ?? 'dark',
+        'table_density': snapSystem['table_density'] ?? 'comfortable',
+      };
+
+      final cfg = configService ??
+          ConfigService(
+            dataDirectory: Directory(dataDir),
+            backupsDirectory: Directory(backupDir),
+          );
+      if (cfg.config.isEmpty) {
+        await cfg.init();
+      }
+      currentSummary = {
+        'catalog_plans_count': cfg.catalog.length,
+        'templates_count': cfg.templates.length,
+        'default_mode': cfg.system['default_mode'] ?? 'sandbox',
+        'theme': cfg.system['theme'] ?? 'dark',
+        'table_density': cfg.system['table_density'] ?? 'comfortable',
+      };
+    } else if (scope == 'releases') {
+      if (decoded is! List) {
+        throw const FormatException(
+            'El respaldo de lanzamientos no contiene una lista JSON válida.');
+      }
+      final snapReleases = decoded.cast<Map<String, dynamic>>();
+      snapshotSummary = {
+        'releases_count': snapReleases.length,
+        'latest_version': snapReleases.isNotEmpty
+            ? (snapReleases.first['version_name'] ?? '-')
+            : '-',
+      };
+
+      final curReleasesFile = File('$dataDir/${targetMode}_releases_db.json');
+      List<Map<String, dynamic>> curReleases = [];
+      if (await curReleasesFile.exists()) {
+        curReleases = (jsonDecode(await curReleasesFile.readAsString()) as List)
+            .cast<Map<String, dynamic>>();
+      }
+      currentSummary = {
+        'releases_count': curReleases.length,
+        'latest_version': curReleases.isNotEmpty
+            ? (curReleases.first['version_name'] ?? '-')
+            : '-',
+      };
+    } else {
+      if (decoded is! List) {
+        throw const FormatException(
+            'El respaldo de clientes no contiene una lista JSON válida.');
+      }
+      final snapClients = decoded.cast<Map<String, dynamic>>();
+      snapshotSummary = _summarizeClientsSnapshot(snapClients);
+
+      final curClientsFile = File('$dataDir/${targetMode}_clients_db.json');
+      List<Map<String, dynamic>> curClients = [];
+      if (await curClientsFile.exists()) {
+        curClients = (jsonDecode(await curClientsFile.readAsString()) as List)
+            .cast<Map<String, dynamic>>();
+      }
+      currentSummary = _summarizeClientsSnapshot(curClients);
+    }
+
+    return {
+      'ok': true,
+      'filename': filename,
+      'environment': environment,
+      'target_mode': environment == 'global' ? 'global' : targetMode,
+      'target_scope': scope,
+      'is_protected': isProtectedBackupFilename(filename),
+      'size_bytes': stat.size,
+      'size_kb': (stat.size / 1024).toStringAsFixed(1),
+      'modified_at': stat.modified.toUtc().toIso8601String(),
+      'modified_lima': PeruTimeHelper.formatLimaDateTime(stat.modified),
+      'snapshot_summary': snapshotSummary,
+      'current_summary': currentSummary,
+    };
+  }
+
+  static Map<String, dynamic> _summarizeClientsSnapshot(
+    List<Map<String, dynamic>> clients,
+  ) {
+    int paymentsCount = 0;
+    double totalRevenue = 0.0;
+    int perpetualCount = 0;
+
+    for (final c in clients) {
+      final status = (c['license_status'] as String? ?? '').toUpperCase();
+      final plan = (c['license_type'] as String? ?? '').toUpperCase();
+      if (status == 'PERPETUA' || plan.contains('PERPETU')) {
+        perpetualCount++;
+      }
+      final payments = (c['payment_history'] as List? ?? []);
+      paymentsCount += payments.length;
+      for (final p in payments) {
+        if (p is Map) {
+          totalRevenue += (p['amount'] as num?)?.toDouble() ?? 0.0;
+        }
+      }
+    }
+
+    return {
+      'clients_count': clients.length,
+      'payments_count': paymentsCount,
+      'total_revenue_pen': double.parse(totalRevenue.toStringAsFixed(2)),
+      'perpetual_count': perpetualCount,
+    };
+  }
+
+  /// Restaura de forma segura clientes, releases o `owner_config_backup_*.json`,
+  /// creando previamente un snapshot protegido `pre_restore_` y recargando memoria en caliente.
+  Future<Map<String, dynamic>> restoreFromBackupWithDetails(
+    String filename, {
+    ConfigService? configService,
+  }) async {
+    if (!isSafeBackupFilename(filename)) {
+      throw ArgumentError('Nombre de archivo de respaldo inválido.');
+    }
+
+    final file = File('$backupDir/$filename');
+    if (!await file.exists()) {
+      return {
+        'ok': false,
+        'error': 'Archivo de respaldo no encontrado en backups/.',
+      };
+    }
+
+    final rawContent = await file.readAsString();
+    final dynamic decoded = jsonDecode(rawContent);
+
+    final environment = _detectBackupMode(filename);
+    var scope = _detectBackupScope(filename);
+    if (scope == 'unknown') {
+      if (decoded is Map<String, dynamic> &&
+          (decoded.containsKey('catalog') ||
+              decoded.containsKey('templates') ||
+              decoded.containsKey('system'))) {
+        scope = 'config';
+      } else if (decoded is List &&
+          decoded.isNotEmpty &&
+          decoded.first is Map &&
+          (decoded.first as Map).containsKey('version_name')) {
+        scope = 'releases';
+      } else if (decoded is List) {
+        scope = 'clients';
+      }
+    }
+
+    final baseName = filename.replaceAll('.json', '');
+
+    // 1. Restauración de configuración GLOBAL (owner_config.json)
+    if (scope == 'config') {
+      if (decoded is! Map<String, dynamic> ||
+          (!decoded.containsKey('catalog') &&
+              !decoded.containsKey('templates') &&
+              !decoded.containsKey('system'))) {
+        throw const FormatException(
+            'El respaldo de configuración no tiene la estructura esperada.');
+      }
+
+      final cfg = configService ??
+          ConfigService(
+            dataDirectory: Directory(dataDir),
+            backupsDirectory: Directory(backupDir),
+          );
+      if (cfg.config.isEmpty) {
+        await cfg.init();
+      }
+
+      // Crear snapshot protegido pre_restore de la configuración actual antes de sobrescribir
+      final ts = PeruTimeHelper.formatLimaFilenameTimestamp()
+          .replaceAll('-', '')
+          .replaceAll('T', '_');
+      final preRestoreFile =
+          File('$backupDir/owner_config_backup_${ts}_pre_restore.json');
+      if (await cfg.configFile.exists()) {
+        await cfg.configFile.copy(preRestoreFile.path);
+      } else {
+        await preRestoreFile.writeAsString(
+          const JsonEncoder.withIndent('  ').convert(cfg.config),
+        );
+      }
+
+      await cfg.configFile.writeAsString(
+        const JsonEncoder.withIndent('  ').convert(decoded),
+      );
+      await cfg.reload(notify: true);
+
+      return {
+        'ok': true,
+        'restored_scope': 'config',
+        'restored_mode': 'global',
+        'filename': filename,
+        'pre_restore_snapshot': preRestoreFile.uri.pathSegments.last,
+        'message':
+            'Configuración GLOBAL restaurada y recargada en caliente exitosamente.',
+      };
+    }
+
+    // 2. Restauración de Base de Datos (clientes o releases)
+    if (decoded is! List) {
+      throw const FormatException(
+          'El archivo de respaldo no contiene una lista JSON válida.');
+    }
+
+    final targetMode = (environment == 'prod' || environment == 'sandbox')
+        ? environment
+        : _mode;
+
+    await _createSnapshot(
+      'pre_restore_$baseName',
+      targetMode: targetMode,
+    );
+
+    if (scope == 'clients') {
+      final destFile = File('$dataDir/${targetMode}_clients_db.json');
+      await file.copy(destFile.path);
+      await reloadFromDisk();
+      if (targetMode == 'prod' && onProductionDataChanged != null) {
+        try {
+          await onProductionDataChanged!();
+        } catch (e) {
+          stderr.writeln(
+              'Warning: Error al ejecutar onProductionDataChanged tras restore clients: $e');
+        }
+      }
+      return {
+        'ok': true,
+        'restored_scope': 'clients',
+        'restored_mode': targetMode,
+        'active_mode': _mode,
+        'filename': filename,
+        'message':
+            'Cartera de clientes ($targetMode) restaurada y recargada exitosamente.',
+      };
+    }
+
+    if (scope == 'releases') {
+      final destFile = File('$dataDir/${targetMode}_releases_db.json');
+      await file.copy(destFile.path);
+      await reloadFromDisk();
+      if (targetMode == 'prod' && onProductionDataChanged != null) {
+        try {
+          await onProductionDataChanged!();
+        } catch (e) {
+          stderr.writeln(
+              'Warning: Error al ejecutar onProductionDataChanged tras restore releases: $e');
+        }
+      }
+      return {
+        'ok': true,
+        'restored_scope': 'releases',
+        'restored_mode': targetMode,
+        'active_mode': _mode,
+        'filename': filename,
+        'message':
+            'Catálogo de versiones ($targetMode) restaurado y recargado exitosamente.',
+      };
+    }
+
+    return {
+      'ok': false,
+      'error': 'Tipo de archivo de respaldo no reconocido.',
+    };
+  }
+
+  /// Alias compatible booleano de restauración segura de respaldos
+  Future<bool> restoreFromBackup(
+    String filename, {
+    ConfigService? configService,
+  }) async {
+    final res = await restoreFromBackupWithDetails(
+      filename,
+      configService: configService,
+    );
+    return res['ok'] == true;
+  }
+
+  /// Purga de snapshots automáticos antiguos del entorno SANDBOX conservando los últimos [keepRecent].
+  /// Jamás toca archivos `prod_*`, `owner_config_*`, `manual`, `vault`, `pre_restore`, `before_restore`, `pre_import`, `pre_save` ni `pre_reset`.
+  Future<Map<String, dynamic>> purgeSandboxBackups(
+      {int keepRecent = 10}) async {
+    final keep = keepRecent < 0 ? 0 : keepRecent;
+    final dir = Directory(backupDir);
+    if (!await dir.exists()) {
+      return {
+        'ok': true,
+        'deleted_count': 0,
+        'preserved_count': 0,
+        'protected_count': 0,
+        'freed_bytes': 0,
+      };
+    }
+
+    final entities = await dir.list().toList();
+    final List<File> candidateSandbox = [];
+    int protectedCount = 0;
+
+    for (final entity in entities) {
+      if (entity is! File || !entity.path.endsWith('.json')) continue;
+      final name = entity.uri.pathSegments.last;
+      if (!name.startsWith('sandbox_') || isProtectedBackupFilename(name)) {
+        protectedCount++;
+        continue;
+      }
+      candidateSandbox.add(entity);
+    }
+
+    final stats = <String, FileStat>{};
+    for (final f in candidateSandbox) {
+      stats[f.path] = await f.stat();
+    }
+
+    candidateSandbox.sort((a, b) {
+      final cmp = stats[b.path]!.modified.compareTo(stats[a.path]!.modified);
+      if (cmp != 0) return cmp;
+      return b.path.compareTo(a.path);
+    });
+
+    final preserved = candidateSandbox.take(keep).toList();
+    final toDelete = candidateSandbox.length > keep
+        ? candidateSandbox.sublist(keep)
+        : <File>[];
+
+    int deletedCount = 0;
+    int freedBytes = 0;
+    for (final f in toDelete) {
+      try {
+        final sz = stats[f.path]?.size ?? 0;
+        await f.delete();
+        deletedCount++;
+        freedBytes += sz;
+      } catch (e) {
+        stderr.writeln(
+            'Warning: No se pudo purgar snapshot sandbox ${f.path}: $e');
+      }
+    }
+
+    return {
+      'ok': true,
+      'deleted_count': deletedCount,
+      'preserved_count': preserved.length,
+      'protected_count': protectedCount,
+      'freed_bytes': freedBytes,
+    };
   }
 
   // =================== LANZAMIENTOS (RELEASES) Y SEMVER ===================
@@ -1401,7 +2059,9 @@ class DatabaseService {
     if (pa.minor != pb.minor) return pa.minor.compareTo(pb.minor);
     if (pa.patch != pb.patch) return pa.patch.compareTo(pb.patch);
 
-    if (pa.buildCode != null && pb.buildCode != null && pa.buildCode != pb.buildCode) {
+    if (pa.buildCode != null &&
+        pb.buildCode != null &&
+        pa.buildCode != pb.buildCode) {
       return pa.buildCode!.compareTo(pb.buildCode!);
     }
 
@@ -1413,14 +2073,16 @@ class DatabaseService {
     final withoutSuffix = clean.split('-')[0];
     final buildSplit = withoutSuffix.split('+');
     final mainPart = buildSplit[0];
-    final buildCode = buildSplit.length > 1 ? int.tryParse(buildSplit[1]) : null;
+    final buildCode =
+        buildSplit.length > 1 ? int.tryParse(buildSplit[1]) : null;
 
     final segments = mainPart.split('.');
     final major = segments.isNotEmpty ? (int.tryParse(segments[0]) ?? 0) : 0;
     final minor = segments.length > 1 ? (int.tryParse(segments[1]) ?? 0) : 0;
     final patch = segments.length > 2 ? (int.tryParse(segments[2]) ?? 0) : 0;
 
-    return _SemVerParts(major: major, minor: minor, patch: patch, buildCode: buildCode);
+    return _SemVerParts(
+        major: major, minor: minor, patch: patch, buildCode: buildCode);
   }
 
   Future<List<Map<String, dynamic>>> getReleases() async {
@@ -1455,14 +2117,17 @@ class DatabaseService {
     return releases;
   }
 
-  Future<void> saveReleases(List<Map<String, dynamic>> releases, {String reason = 'update_releases'}) async {
-    await _releasesFile.writeAsString(const JsonEncoder.withIndent('  ').convert(releases));
+  Future<void> saveReleases(List<Map<String, dynamic>> releases,
+      {String reason = 'update_releases'}) async {
+    await _releasesFile
+        .writeAsString(const JsonEncoder.withIndent('  ').convert(releases));
     await _createSnapshot(reason);
     if (_mode == 'prod' && onProductionDataChanged != null) {
       try {
         await onProductionDataChanged!();
       } catch (e) {
-        stderr.writeln('Warning: Error al ejecutar onProductionDataChanged tras saveReleases: $e');
+        stderr.writeln(
+            'Warning: Error al ejecutar onProductionDataChanged tras saveReleases: $e');
       }
     }
   }
@@ -1476,7 +2141,8 @@ class DatabaseService {
     }
   }
 
-  Future<Map<String, dynamic>> createRelease(Map<String, dynamic> releaseData) async {
+  Future<Map<String, dynamic>> createRelease(
+      Map<String, dynamic> releaseData) async {
     final releases = await getReleases();
     final versionName = releaseData['version_name'] ?? '9.24.0';
 
@@ -1484,9 +2150,11 @@ class DatabaseService {
     releases.removeWhere((r) => r['version_name'] == versionName);
 
     final apkFilePath = (releaseData['apk_file_path'] ?? '').toString().trim();
-    final rawAbi = (releaseData['abi_variant'] as String? ?? '').trim().toUpperCase();
+    final rawAbi =
+        (releaseData['abi_variant'] as String? ?? '').trim().toUpperCase();
     final abiVariant = rawAbi == 'ARM64' ? 'ARM64' : 'UNIVERSAL';
-    final sha256Str = (releaseData['apk_sha256'] ?? '').toString().toLowerCase();
+    final sha256Str =
+        (releaseData['apk_sha256'] ?? '').toString().toLowerCase();
     final sizeMbStr = (releaseData['file_size_mb'] ?? '').toString();
     final sigStatus = releaseData['signature_status'] ?? 'UNVERIFIED';
     final sigVerified = releaseData['signature_verified'];
@@ -1522,8 +2190,10 @@ class DatabaseService {
     final newRelease = {
       'version_name': versionName,
       'version_code': (releaseData['version_code'] as num?)?.toInt() ?? 82,
-      'db_schema_version': (releaseData['db_schema_version'] as num?)?.toInt() ?? 36,
-      'release_date': releaseData['release_date'] ?? DateTime.now().toUtc().toIso8601String(),
+      'db_schema_version':
+          (releaseData['db_schema_version'] as num?)?.toInt() ?? 36,
+      'release_date': releaseData['release_date'] ??
+          DateTime.now().toUtc().toIso8601String(),
       'type': releaseData['type'] == 'HOTFIX' ? 'HOTFIX' : 'FEATURE_RELEASE',
       'abi_variant': abiVariant,
       'apk_file_path': apkFilePath,
@@ -1542,16 +2212,17 @@ class DatabaseService {
     };
 
     releases.insert(0, newRelease); // Más recientes primero
-    await saveReleases(releases, reason: 'create_release_${newRelease['version_name']}');
+    await saveReleases(releases,
+        reason: 'create_release_${newRelease['version_name']}');
     return newRelease;
   }
 
-  Future<Map<String, dynamic>?> updateRelease(String versionName, Map<String, dynamic> updates) async {
-    final releases = await getReleases();
-    final index = releases.indexWhere((r) => r['version_name'] == versionName);
-    if (index == -1) return null;
-
-    final release = releases[index];
+  /// Aplica actualizaciones de metadatos/variantes sobre un registro de release en memoria
+  /// reconciliando campos raíz al desvincular variantes opcionales.
+  void applyReleaseUpdatesToMap(
+    Map<String, dynamic> release,
+    Map<String, dynamic> updates,
+  ) {
     updates.forEach((key, value) {
       if (key == 'version_name') return;
       if ((key == 'arm64_apk' || key == 'universal_apk') && value == null) {
@@ -1572,8 +2243,10 @@ class DatabaseService {
     });
 
     // Reconciliar campos raíz al desvincular variantes opcionales
-    final unlinkedUniv = updates.containsKey('universal_apk') && updates['universal_apk'] == null;
-    final unlinkedArm = updates.containsKey('arm64_apk') && updates['arm64_apk'] == null;
+    final unlinkedUniv = updates.containsKey('universal_apk') &&
+        updates['universal_apk'] == null;
+    final unlinkedArm =
+        updates.containsKey('arm64_apk') && updates['arm64_apk'] == null;
     if (unlinkedUniv || unlinkedArm) {
       final remainingUniv = release['universal_apk'] as Map<String, dynamic>?;
       final remainingArm = release['arm64_apk'] as Map<String, dynamic>?;
@@ -1584,12 +2257,15 @@ class DatabaseService {
         release['abi_variant'] = remainingUniv != null ? 'UNIVERSAL' : 'ARM64';
         release['apk_file_path'] = promotedPath;
         release['file_size_mb'] = promoted['file_size_mb'] ?? '';
-        release['apk_sha256'] = (promoted['sha256'] ?? '').toString().toLowerCase();
-        release['signature_status'] = promoted['signature_status'] ?? 'UNVERIFIED';
+        release['apk_sha256'] =
+            (promoted['sha256'] ?? '').toString().toLowerCase();
+        release['signature_status'] =
+            promoted['signature_status'] ?? 'UNVERIFIED';
         release['signature_verified'] = promoted['signature_verified'];
         release['signer_sha256'] = promoted['signer_sha256'];
         release['signer_dn'] = promoted['signer_dn'];
-        release['file_exists'] = promotedPath.isNotEmpty && File(promotedPath).existsSync();
+        release['file_exists'] =
+            promotedPath.isNotEmpty && File(promotedPath).existsSync();
       } else {
         release['apk_file_path'] = '';
         release['file_size_mb'] = '';
@@ -1601,10 +2277,51 @@ class DatabaseService {
         release['file_exists'] = false;
       }
     }
+  }
 
+  Future<Map<String, dynamic>?> updateRelease(
+      String versionName, Map<String, dynamic> updates) async {
+    final releases = await getReleases();
+    final index = releases.indexWhere((r) => r['version_name'] == versionName);
+    if (index == -1) return null;
+
+    final release = releases[index];
+    applyReleaseUpdatesToMap(release, updates);
     releases[index] = release;
     await saveReleases(releases, reason: 'update_release_$versionName');
     return release;
+  }
+
+  /// Aplica actualizaciones en lote sobre el catálogo y guarda un único snapshot consolidado
+  /// en disco solo si los datos persistidos cambiaron realmente.
+  Future<List<Map<String, dynamic>>> applyBatchReleaseUpdates(
+    Map<String, Map<String, dynamic>> updatesByVersion, {
+    String reason = 'verify_all_releases',
+  }) async {
+    if (!await _releasesFile.exists()) return [];
+    final rawBeforeContent = await _releasesFile.readAsString();
+    final decoded = jsonDecode(rawBeforeContent) as List;
+    final releases = decoded.cast<Map<String, dynamic>>();
+
+    bool anyDiskChange = false;
+    const encoder = JsonEncoder.withIndent('  ');
+    for (int i = 0; i < releases.length; i++) {
+      final ver = releases[i]['version_name'] as String?;
+      if (ver == null) continue;
+      final patch = updatesByVersion[ver];
+      if (patch == null || patch.isEmpty) continue;
+      final beforeItemJson = jsonEncode(releases[i]);
+      applyReleaseUpdatesToMap(releases[i], patch);
+      if (jsonEncode(releases[i]) != beforeItemJson) {
+        anyDiskChange = true;
+      }
+    }
+
+    if (anyDiskChange || encoder.convert(releases) != rawBeforeContent) {
+      await saveReleases(releases, reason: reason);
+    }
+
+    return await getReleases();
   }
 
   Future<bool> deleteRelease(String versionName) async {
@@ -1649,23 +2366,29 @@ class DatabaseService {
     final List<Map<String, dynamic>> matrix = [];
 
     for (final client in clients) {
-      final installedVersion = (client['installed_version'] as String? ?? '9.0.0');
+      final installedVersion =
+          (client['installed_version'] as String? ?? '9.0.0');
       final cmp = compareSemVer(installedVersion, latestVersion);
       final lastSentVersion = client['last_apk_sent_version'] as String?;
-      final isSentForLatest = lastSentVersion != null && lastSentVersion == latestVersion;
+      final isSentForLatest =
+          lastSentVersion != null && lastSentVersion == latestVersion;
 
-      final licenseType = (client['license_type'] as String? ?? 'MENSUAL').toUpperCase();
+      final licenseType =
+          (client['license_type'] as String? ?? 'MENSUAL').toUpperCase();
       final situation = (client['situation'] as String? ?? '').toUpperCase();
       final isProspect = situation == 'PROSPECTO' || licenseType == 'PROSPECTO';
-      final isPerpetual = licenseType == 'PERPETUO_LIBERADO' || licenseType == 'PERPETUO';
+      final isPerpetual =
+          licenseType == 'PERPETUO_LIBERADO' || licenseType == 'PERPETUO';
 
       final expiresStr = client['license_expires'] as String?;
       final expires = expiresStr != null ? DateTime.tryParse(expiresStr) : null;
       final isSubscriptionActive = expires != null && expires.isAfter(now);
 
       final updatesUntilStr = client['updates_until'] as String?;
-      final updatesUntil = updatesUntilStr != null ? DateTime.tryParse(updatesUntilStr) : null;
-      final hasActiveUpdatePass = updatesUntil != null && updatesUntil.isAfter(now);
+      final updatesUntil =
+          updatesUntilStr != null ? DateTime.tryParse(updatesUntilStr) : null;
+      final hasActiveUpdatePass =
+          updatesUntil != null && updatesUntil.isAfter(now);
 
       String updateStatus;
       bool isUpToDate;
@@ -1685,7 +2408,8 @@ class DatabaseService {
         updateStatus = 'AHEAD';
         isUpToDate = true;
         isEligibleForFree = true;
-        eligibilityReason = 'Tiene instalada una versión superior a la publicada en este catálogo.';
+        eligibilityReason =
+            'Tiene instalada una versión superior a la publicada en este catálogo.';
         requiredAction = 'Versión Superior (Al día)';
         canDowngrade = false;
       } else if (cmp == 0) {
@@ -1700,37 +2424,47 @@ class DatabaseService {
         if (isSentForLatest) {
           updateStatus = 'SENT';
           isUpToDate = false;
-          isEligibleForFree = isSubscriptionActive || hasActiveUpdatePass || latestRelease['type'] == 'HOTFIX';
-          final sentDate = client['last_apk_sent_at'] != null ? client['last_apk_sent_at'].toString().substring(0, 10) : '';
-          eligibilityReason = 'APK ya enviado${sentDate.isNotEmpty ? " el $sentDate" : ""}. Pendiente de instalación por el cliente.';
+          isEligibleForFree = isSubscriptionActive ||
+              hasActiveUpdatePass ||
+              latestRelease['type'] == 'HOTFIX';
+          final sentDate = client['last_apk_sent_at'] != null
+              ? client['last_apk_sent_at'].toString().substring(0, 10)
+              : '';
+          eligibilityReason =
+              'APK ya enviado${sentDate.isNotEmpty ? " el $sentDate" : ""}. Pendiente de instalación por el cliente.';
           requiredAction = 'APK Enviado (Esperando instalación)';
         } else {
           updateStatus = 'OUTDATED';
           isUpToDate = false;
           if (latestRelease['type'] == 'HOTFIX') {
             isEligibleForFree = true;
-            eligibilityReason = 'Hotfix / Parche de estabilidad (Gratuito vitalicio).';
+            eligibilityReason =
+                'Hotfix / Parche de estabilidad (Gratuito vitalicio).';
             requiredAction = 'Enviar Actualización Gratuita';
           } else {
             // FEATURE_RELEASE
             if (isPerpetual) {
               if (hasActiveUpdatePass) {
                 isEligibleForFree = true;
-                eligibilityReason = 'Licencia Perpetua con Pase de Actualizaciones vigente.';
+                eligibilityReason =
+                    'Licencia Perpetua con Pase de Actualizaciones vigente.';
                 requiredAction = 'Enviar Nueva Versión';
               } else {
                 isEligibleForFree = false;
-                eligibilityReason = 'Licencia Perpetua: Periodo de 1 año de updates vencido.';
+                eligibilityReason =
+                    'Licencia Perpetua: Periodo de 1 año de updates vencido.';
                 requiredAction = 'Ofrecer Pase Anual de Updates (S/ 150.00)';
               }
             } else {
               if (isSubscriptionActive) {
                 isEligibleForFree = true;
-                eligibilityReason = 'Suscripción activa incluye todas las actualizaciones.';
+                eligibilityReason =
+                    'Suscripción activa incluye todas las actualizaciones.';
                 requiredAction = 'Enviar Nueva Versión';
               } else {
                 isEligibleForFree = false;
-                eligibilityReason = 'Suscripción vencida. Requiere renovar el plan.';
+                eligibilityReason =
+                    'Suscripción vencida. Requiere renovar el plan.';
                 requiredAction = 'Renovar Suscripción para Actualizar';
               }
             }
@@ -1755,9 +2489,10 @@ class DatabaseService {
         'required_action': requiredAction,
         'download_url': latestRelease['apk_download_url'],
         'changelog': latestRelease['changelog'],
-        'has_local_apk': (latestRelease['apk_file_path'] as String? ?? '').isNotEmpty ||
-            latestRelease['universal_apk'] != null ||
-            latestRelease['arm64_apk'] != null,
+        'has_local_apk':
+            (latestRelease['apk_file_path'] as String? ?? '').isNotEmpty ||
+                latestRelease['universal_apk'] != null ||
+                latestRelease['arm64_apk'] != null,
         'last_apk_sent_version': client['last_apk_sent_version'],
         'last_apk_sent_at': client['last_apk_sent_at'],
         'universal_apk': latestRelease['universal_apk'],
@@ -1775,9 +2510,12 @@ class DatabaseService {
     final client = await getClientById(id);
     if (client == null) return null;
 
-    final payments = (client['payment_history'] as List? ?? []).cast<Map<String, dynamic>>();
-    final codes = (client['generated_codes_history'] as List? ?? []).cast<Map<String, dynamic>>();
-    final devices = (client['device_history'] as List? ?? []).cast<Map<String, dynamic>>();
+    final payments =
+        (client['payment_history'] as List? ?? []).cast<Map<String, dynamic>>();
+    final codes = (client['generated_codes_history'] as List? ?? [])
+        .cast<Map<String, dynamic>>();
+    final devices =
+        (client['device_history'] as List? ?? []).cast<Map<String, dynamic>>();
 
     double totalPaid = 0.0;
     for (final p in payments) {
@@ -1805,12 +2543,14 @@ class DatabaseService {
     );
 
     for (final c in clients) {
-      final payments = (c['payment_history'] as List? ?? []).cast<Map<String, dynamic>>();
+      final payments =
+          (c['payment_history'] as List? ?? []).cast<Map<String, dynamic>>();
       double totalPaid = 0.0;
       for (final p in payments) {
         totalPaid += (p['amount'] as num?)?.toDouble() ?? 0.0;
       }
-      final codes = (c['generated_codes_history'] as List? ?? []).cast<Map<String, dynamic>>();
+      final codes = (c['generated_codes_history'] as List? ?? [])
+          .cast<Map<String, dynamic>>();
       final lastCode = codes.isNotEmpty ? codes.last['token'] ?? '' : '';
 
       buffer.writeln(
@@ -1865,7 +2605,10 @@ class DatabaseService {
         'installed_version': '9.34.0',
         'license_type': 'TRIMESTRAL',
         'license_status': 'POR_VENCER',
-        'license_expires': DateTime.now().add(const Duration(days: 4)).toUtc().toIso8601String(),
+        'license_expires': DateTime.now()
+            .add(const Duration(days: 4))
+            .toUtc()
+            .toIso8601String(),
         'next_nonce': 2,
         'updates_until': '2027-02-14T23:59:59.000Z',
         'ai_extra_credits': 230,
@@ -1897,7 +2640,10 @@ class DatabaseService {
         'license_status': 'PERPETUA',
         'license_expires': '2299-12-31T23:59:59.000Z',
         'next_nonce': 2,
-        'updates_until': DateTime.now().add(const Duration(days: 280)).toUtc().toIso8601String(),
+        'updates_until': DateTime.now()
+            .add(const Duration(days: 280))
+            .toUtc()
+            .toIso8601String(),
         'ai_extra_credits': 350,
         'ai_accumulated_credits': 350,
         'notes': 'Licencia Perpetua de por vida con updates vigentes.',
@@ -1925,12 +2671,16 @@ class DatabaseService {
         'installed_version': '9.29.0',
         'license_type': 'MENSUAL',
         'license_status': 'BLOQUEO_ESTRICTO',
-        'license_expires': DateTime.now().subtract(const Duration(days: 12)).toUtc().toIso8601String(),
+        'license_expires': DateTime.now()
+            .subtract(const Duration(days: 12))
+            .toUtc()
+            .toIso8601String(),
         'next_nonce': 2,
         'updates_until': '2026-10-01T23:59:59.000Z',
         'ai_extra_credits': 50,
         'ai_accumulated_credits': 50,
-        'notes': 'Licencia vencida hace 12 días. Enviar oferta de reactivación.',
+        'notes':
+            'Licencia vencida hace 12 días. Enviar oferta de reactivación.',
         'created_at': '2026-08-10T14:00:00.000Z',
         'payment_history': [
           {
@@ -1956,10 +2706,13 @@ class DatabaseService {
         'release_date': '2026-11-20T10:00:00.000Z',
         'type': 'FEATURE_RELEASE',
         'apk_file_path': '',
-        'apk_download_url': 'https://drive.google.com/file/d/mochilalista-v9.34.0/view',
-        'apk_sha256': '4a5b6c7d8e9f0123456789abcdef0123456789abcdef0123456789abcdef0123',
+        'apk_download_url':
+            'https://drive.google.com/file/d/mochilalista-v9.34.0/view',
+        'apk_sha256':
+            '4a5b6c7d8e9f0123456789abcdef0123456789abcdef0123456789abcdef0123',
         'file_size_mb': '28.40 MB',
-        'changelog': '• Activación 100% Offline con Hardware ID (Settings.Secure.ANDROID_ID) y EULA oficial.\n• Cuota IA 100% Acumulativa sin reseteo mensual y arquitectura Multi-Perfil con bolsa compartida.\n• Bóveda de Claves BYOK (Google Gemini) y Respaldo Blindado en Google Drive (.mlbg).\n• Esquema SQLite v36 con sincronización de perfiles y trazabilidad de inventario.',
+        'changelog':
+            '• Activación 100% Offline con Hardware ID (Settings.Secure.ANDROID_ID) y EULA oficial.\n• Cuota IA 100% Acumulativa sin reseteo mensual y arquitectura Multi-Perfil con bolsa compartida.\n• Bóveda de Claves BYOK (Google Gemini) y Respaldo Blindado en Google Drive (.mlbg).\n• Esquema SQLite v36 con sincronización de perfiles y trazabilidad de inventario.',
         'min_required_version': '9.0.0',
       },
       {
@@ -1969,10 +2722,13 @@ class DatabaseService {
         'release_date': '2026-11-01T15:00:00.000Z',
         'type': 'HOTFIX',
         'apk_file_path': '',
-        'apk_download_url': 'https://drive.google.com/file/d/mochilalista-v9.29.0/view',
-        'apk_sha256': '1a2b3c4d5e6f7890abcdef1234567890abcdef1234567890abcdef1234567890',
+        'apk_download_url':
+            'https://drive.google.com/file/d/mochilalista-v9.29.0/view',
+        'apk_sha256':
+            '1a2b3c4d5e6f7890abcdef1234567890abcdef1234567890abcdef1234567890',
         'file_size_mb': '26.85 MB',
-        'changelog': '• Parche correctivo: Optimización de impresión Bluetooth térmica de 80mm.\n• Corrección menor en cálculo de vuelto en ventas mixtas.',
+        'changelog':
+            '• Parche correctivo: Optimización de impresión Bluetooth térmica de 80mm.\n• Corrección menor en cálculo de vuelto en ventas mixtas.',
         'min_required_version': '9.0.0',
       },
     ];
@@ -1992,4 +2748,3 @@ class _SemVerParts {
     this.buildCode,
   });
 }
-

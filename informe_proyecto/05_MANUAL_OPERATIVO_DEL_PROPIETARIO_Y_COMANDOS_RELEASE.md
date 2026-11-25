@@ -45,7 +45,7 @@ Aquí se detallan todos los procedimientos paso a paso, comandos de terminal, pr
    - 3.4. Matriz Inteligente SemVer, Corrección Segura y Reenvío en 1 Clic
    - 3.5. Despacho Asistido de APK por WhatsApp (`#modalWaComposer`) y Portapapeles Windows Endurecido
    - 3.6. Protocolo Dual de Sincronización Offline (`.mlsync` / `MLS1-...`) y Rescate 1-Clic
-   - 3.7. Comportamiento en la App Móvil: Snapshot `.bak` y Novedades v9.40.0
+   - 3.7. Comportamiento en la App Móvil: Snapshot `.bak`, Sincronización `MLC1` y Novedades v9.41.0+85
 4. [GUÍA 4: Protocolo de Respuesta ante Incidentes y Seguridad Adversarial](#guía-4-protocolo-de-respuesta-ante-incidentes-y-seguridad-adversarial)
    - 4.1. Incidente: Pantalla de "Reloj Desajustado / Manipulación Temporal"
    - 4.2. Incidente: Pantalla de "Licencia Pendiente de Migración" (Doble Candado Anti-Clonación)
@@ -136,17 +136,14 @@ Abre tu navegador web en `http://localhost:8080`. Dispones de **8 módulos de co
 3. **🔑 Generador de Licencias Ed25519 (`#tabGenerator`):** Firma criptográfica asimétrica con **Tarjeta de Resumen Ejecutivo en tiempo real**, **Panel de Ajustes Comerciales Personalizados** (días libres, bonos IA, regla acumulativa vs. reinicio y fecha exacta), **Credencial PNG @2x de alta resolución**, descarga/copiado de QR y botón **`[Auditar en Inspector]`**.
 4. **🚀 Gestor de Versiones / Release Manager (`#tabReleases`):** Matriz inteligente de distribución de versiones, soporte para APK universal y ligero ARM64, zona Drag & Drop a `releases_apks/`, botones de descarga directa, apertura de carpeta en Windows (`explorer.exe /select,...`) y botón **`[Autorizar Envío de Cortesía]`**.
 5. **🔍 Inspector Forense de Tokens ML9 (`#tabInspector`):** Auditoría forense Ed25519 con **Lector Óptico de Imagen QR** (drag & drop de capturas de WhatsApp decodificadas offline con `jsQR`), **Tabla Unificada de Claims** (`d, p, y, n, v, iat, u, b, c`) y verificación de correlativo `nonce` contra el CRM.
-6. **📈 Finanzas & Respaldos (`#tabFinances`):**
-   - **Submódulo 1:** Libro contable consolidado con filtros en vivo (rango de fechas, plan, medio de pago), KPIs dinámicos y exportación a Excel (.CSV) con BOM UTF-8 (`\uFEFF`).
-   - **Submódulo 2:** Centro de gestión de respaldos físicos en `backups/` con creación de snapshots manuales en 1 clic, descarga y restauración segura con punto de recuperación previo.
-7. **⚙️ Centro de Personalización y Libros Excel Multi-Hoja (`#tabSettings`):**
-   - Editor en caliente de identidad corporativa (`data/owner_config.json`): Titularidad INDECOPI, tarifas oficiales, números Yape/Plin, plantillas WhatsApp reactivas y temas visuales (Oscuro/Claro).
-   - **Motor Exportador a Microsoft Excel Profesional Multi-Hoja (`.xlsx`):** Generador binario de 5 hojas oficiales con estilos visuales ejecutivos, totales con fórmulas reales seguras (`SUM`, `COUNTA`) y filtros sin macros.
-8. **🛡️ Bóveda de Seguridad, Persistencia y Multi-Llave (`#tabSecurityVault`):**
-   - Centro neurálgico de persistencia fuera del repositorio: Bóveda Espejo Cifrada con DPAPI de Windows en `%APPDATA%\MochilaListaAdminVault\`.
-   - Asistente Guiado de Blindaje en 3 Pasos (Espejo/Nube, Llave `.mlkey` y Kit de Emergencia PDF con 8 Códigos de Rescate y QR).
-   - Exportación e Importación Drag & Drop de Bóvedas Portables Cifradas (`.mlvault`) para mudar de PC en 5 segundos.
-   - Protección de Acceso mediante PIN local (Middleware `HTTP 423 Locked`), backoff anti-fuerza bruta y recuperación en 1 clic ante borrado accidental o extravío de contraseña.
+6. **Finanzas & Respaldos (`#tabFinancesAndBackups`):**
+   - **Submódulo 1:** Libro contable consolidado en hora `America/Lima (GMT-5)` con filtros en vivo (buscador omnicanal sin recortes, rango de fechas Lima, plan, medio de pago), KPIs dinámicos, exportación `.csv` con BOM UTF-8 / escape RFC-4180 y libro Excel Contable `.xlsx` de 5 hojas.
+   - **Submódulo 2:** Centro de gestión de respaldos físicos en `backups/` en hora `America/Lima`, paginación `20` en `20`, filtros por entorno, modal de vista previa `#modalBackupPreview` (incluyendo restauración en caliente de `GLOBAL` `owner_config`) y limpieza segura de snapshots `SANDBOX`.
+7. **Configuración (`#tabSettings`):**
+   - Editor en caliente de identidad corporativa (`data/owner_config.json`) en 4 sub-pestañas (*Tarifario & Bolsas IA*, *Plantillas WhatsApp unificadas con `#modalWaComposer`*, *Medios de Pago & Legal `2x2`*, *Preferencias del Sistema* aplicadas al arranque), *Dirty Guard* anti-pérdida, guardado/reseteo por alcance y **Sincronización Criptográfica `MLC1-...`** hacia la app móvil.
+8. **Seguridad y Portabilidad (`#tabSecurityVault`):**
+   - Centro neurálgico de persistencia fuera del repositorio: Bóveda Espejo Cifrada con Windows DPAPI en `%APPDATA%\MochilaListaAdminVault\`, auditoría integral `GET /api/vault/audit` (`#modalVaultAuditReport`) con paridad SHA-256 sobre 5 archivos críticos y selector nativo de carpeta nube.
+   - Asistente Guiado en 3 Pasos sincronizado con los **4 Factores de Seguridad (`25 % c/u`)**, confirmación protectora para `.mlkey` y Kit PDF de 8 Códigos + QR, portabilidad `.mlvault` y bloqueo PIN local con cookie `HttpOnly` sin auto-bloqueo `423`.
 
 ---
 
@@ -166,7 +163,7 @@ Abre tu navegador web en `http://localhost:8080`. Dispones de **8 módulos de co
      - **`PROSPECTO`:** Contacto comercial en prospección sin licencia generada ni expiración ficticia (`license_expires = null`).
      - **`TRIAL GRATUITO (Días Reales)`:** Permite ingresar los días exactos que le restan al comerciante en su teléfono (`trial_days_remaining`, ej. `17 días`). No impone ventana artificial de actualización (`updates_until = null`), respetando la naturaleza Offline-First de la app móvil.
      - **`CON LICENCIA ACTIVA`:** Planes comerciales tarifados (`MENSUAL`, `TRIMESTRAL`, `SEMESTRAL`, `ANUAL`, `PERPETUO`).
-   * **Versión de App Instalada:** (por defecto: `9.40.0` — Esquema SQLite `v36`).
+   * **Versión de App Instalada:** (por defecto: `9.41.0` — Esquema SQLite `v36`).
    * **Gestión de Créditos IA:**
      - **Saldo IA Reportado en Celular:** Créditos que el cliente indica tener disponibles en su app móvil (ej. `49 IA`).
      - **Bonos IA Pendientes por Emitir:** Escaneos adicionales que se incorporarán en la próxima emisión de token criptográfico Ed25519 (ej. `+20 IA`). Ambos valores se muestran desacoplados de forma transparente, previniendo falsas sumas anticipadas en el CRM.
@@ -226,22 +223,22 @@ En la pestaña **Inspector Forense (`#tabInspector`)**:
 
 ---
 
-### 1.7. Pestaña Finanzas & Respaldos: Libro Contable y Respaldos en Disco
+### 1.7. Pestaña Finanzas & Respaldos (`#tabFinancesAndBackups`): Libro Contable y Respaldos en Disco
 
-#### Submódulo 1: Libro Contable de Cobranzas
-- Consolida todos los pagos registrados en el entorno activo.
-- **Filtros en Vivo:** Rango de fechas (`Desde` / `Hasta`), selector de Plan y selector de Medio de Pago (`Yape`, `Plin`, `BCP`, `BBVA`, `Efectivo`).
+#### Submódulo 1: Libro Contable de Cobranzas (Hora `America/Lima` GMT-5)
+- Consolida todos los pagos registrados en el entorno activo con fechas y horas normalizadas a **`America/Lima (GMT-5)`**.
+- **Filtros en Vivo y Buscador Omnicanal (`#inputFinSearch`):** Buscador predictivo en fila dedicada con botón de limpieza SVG (para filtrar sin recortes por `BOL-XXXX`, `FAC-XXXX`, negocio, titular, RUC/DNI, referencia, plan o notas contables), rango de fechas (`Desde` / `Hasta` inclusivo en día local Lima GMT-5), selector de Plan y Medio de Pago (`Yape`, `Plin`, `BCP`, `BBVA`, `Efectivo`).
 - **KPIs Dinámicos:** Total Recaudado (S/), Ticket Promedio (S/), N.° de Transacciones y Canal de Pago Principal.
-- **Exportación:** Botón **`[📥 Exportar a Excel (.csv)]`** con BOM UTF-8 (`\uFEFF`) para abrir directamente en Microsoft Excel sin caracteres extraños.
+- **Exportación Contable Exacta:** Botón **`Exportar CSV`** (`GET /api/clients/export-finances-csv`) con BOM UTF-8 (`\uFEFF`), escape RFC-4180 completo en todas las columnas y horas en `America/Lima (GMT-5)`; y botón **`Exportar Excel Contable (.xlsx)`** de 5 hojas con desglose completo incluyendo `RECARGA_IA_150`, `EXTENSION_CORTESIA`, `ABONO_PARCIAL`, `SERVICIO_MIGRACION`, métricas reales de `days_added`/`ai_extra_credits` y sub-resumen por medio de pago.
 
 #### Submódulo 2: Centro de Gestión de Respaldos en Disco (`backups/`)
-- Muestra la lista física de copias de seguridad generadas en `mochilalista_admin/backups/`.
-- **Política de Retención Automática (Últimos 30 Snapshots):** El motor (`DatabaseService` y `ConfigService`) aplica una política automática de retención que mantiene estrictamente los **30 snapshots automáticos más recientes** (`maxAutoSnapshots = 30`), purgando los excedentes más antiguos de forma desatendida tras cada modificación para evitar la saturación de disco.
-- **Preservación Indefinida de Backups Manuales y Bóveda:** Cualquier archivo de respaldo que contenga `manual`, `vault`, `pre_restore` o `pre_import` está explícitamente blindado y **jamás es eliminado automáticamente**.
-- **`[📸 Crear Snapshot Manual Ahora]`:** Guarda una copia atómica instantánea con marca de tiempo.
-- **`[📂 Abrir Carpeta backups/ en Windows]`:** Abre la carpeta en el Explorador de Windows con 1 clic.
-- **`[⬇️ Descargar]`:** Descarga el archivo JSON para resguardo en memoria USB.
-- **`[⏪ Restaurar]`:** Revierte la base de datos a ese punto (generando antes un snapshot de seguridad del estado previo para evitar cualquier pérdida accidental).
+- Muestra la lista física de copias de seguridad generadas en `mochilalista_admin/backups/` con marcas temporales en **`America/Lima (GMT-5)`**, paginación dinámica de **`20` en `20`** (`Cargar 20 respaldos más (Mostrando X de Y)`), buscador rápido y píldoras de filtro (**`Todos`**, **`PROD`**, **`SANDBOX`**, **`GLOBAL`**, **`Manuales`**) con aviso discreto si visualizas respaldos `SANDBOX` operando en **`Modo Real`**.
+- **Política de Retención Automática (Últimos 30 Snapshots):** El motor (`DatabaseService` y `ConfigService`) mantiene estrictamente los **30 snapshots automáticos más recientes** (`maxAutoSnapshots = 30`), purgando excedentes antiguos tras cada escritura.
+- **Preservación Indefinida de Backups Protegidos:** Cualquier archivo de respaldo que contenga `manual`, `vault`, `pre_restore`, `before_restore`, `pre_import`, `pre_save` o `pre_reset` está blindado y **jamás se elimina automáticamente**.
+- **`Crear Snapshot Manual Ahora`:** Guarda una copia atómica instantánea con timestamp en hora Perú.
+- **`Abrir Carpeta backups/ en Windows`:** Abre la carpeta en el Explorador de Windows con 1 clic.
+- **`Descargar`** y **`Restaurar` con Vista Previa (`#modalBackupPreview`):** Todos los controles usan iconos `<svg>` acotados (cero emojis crudos). Al pulsar `Restaurar`, `GET /api/backups/preview/:filename` muestra la comparativa **Snapshot vs Estado Actual** (clientes, pagos, releases o secciones de configuración), valida estrictamente el nombre contra *path traversal*, crea un respaldo previo `pre_restore_` y, si es un backup **`GLOBAL` (`owner_config_backup_*.json`)**, recarga `ConfigService` e interfaz en caliente (`restored_scope: 'config'`).
+- **Limpieza Segura Sandbox (`POST /api/backups/purge-sandbox`):** Permite depurar snapshots automáticos `sandbox_*` conservando intactos al 100 % los respaldos `prod_*`, `owner_config_*`, `manual`, `vault`, `pre_restore`, `before_restore`, `pre_import`, `pre_save` y `pre_reset`.
 
 ---
 
@@ -323,41 +320,38 @@ Accesible desde los botones de comprobante en la Ficha 360°, la tabla de Finanz
 
 ---
 
-### 1.11. Centro de Finanzas, Búsqueda de Comprobantes y Exportación Excel Multi-Hoja (`#tabFinancesAndBackups` & `#tabSettings`)
-1. **Búsqueda en Tiempo Real en Finanzas (`#tabFinancesAndBackups`):**
-   - Buscador predictivo omnicanal (`#inputFinSearch` con botón de limpieza SVG) que filtra instantáneamente por número de comprobante (`BOL-XXXX`, `FAC-XXXX`), nombre de negocio, titular, RUC/DNI, referencia, medio de pago, plan oficial o notas contables.
-   - Columna interactiva **`Comprobante`** con distintivos visuales de alto contraste:
-     - **Píldora Verde (`.badge-receipt-bol`):** Boleta oficial emitida (ej. `BOL-0001`). Al hacer clic, abre de inmediato el comprobante para visualizarlo, copiarlo o descargarlo.
-     - **Píldora Índigo (`.badge-receipt-fac`):** Factura oficial emitida (ej. `FAC-0001`).
-     - **Botón `Emitir` (`.btn-fin-emit`):** Para transacciones registradas sin comprobante previo. Al pulsar, genera y abre el documento en 1 clic.
-2. **Exportador Contable a CSV con BOM UTF-8:**
-   - Botón **`[Exportar CSV]`** que descarga el historial completo de cobranzas compatible con Excel, LibreOffice y Google Sheets, incluyendo cabeceras `RUC_DNI`, `TIPO_COMPROBANTE` y `N_COMPROBANTE` con encoding `\uFEFF`.
-3. **Motor de Exportación a Libros Microsoft Excel Oficiales (`.xlsx` multi-hoja):**
-   - Generación de libros de cálculo de 5 hojas oficiales sin `Sheet1`:
-     - **Hoja 1 (`Resumen Ejecutivo`):** Métricas de recaudación, ticket promedio y desgloses computados con fórmulas reales de Excel (`SUM`, `AVERAGE`, `COUNT`, `SUMIF`).
-     - **Hoja 2 (`Cartera CRM`):** 18 columnas exactas (A..R), incorporando la columna 17 (R) **`Próximo Seguimiento`** vinculada al campo `next_followup_date`.
-     - **Hoja 3 (`Libro de Pagos`):** 14 columnas exactas (A..N), manteniendo el importe cobrado en la columna 10 (K) para proteger el 100% de las fórmulas dinámicas e incorporando las columnas 11 (L) **`Tipo Comprobante`**, 12 (M) **`N.° Comprobante`** y 13 (N) **`Última Edición`**.
-     - **Hoja 4 (`Equipos y Licencias`):** Registro técnico de dispositivos, tokens Ed25519 y hardware vinculado.
-     - **Hoja 5 (`Guia y Glosario`):** Guía de uso contable y glosario de términos.
+### 1.11. Centro de Configuración, Exportación Excel y Sincronización Segura `MLC1` (`#tabSettings`)
+1. **Motor de Exportación Excel Contable (`.xlsx` multi-hoja) y Comprobantes:**
+   - Buscador omnicanal `#inputFinSearch`, píldoras interactivas `BOL-XXXX` / `FAC-XXXX` / `Emitir` en `#tabFinancesAndBackups` y descarga directa `.xlsx` de 5 hojas oficiales sin `Sheet1`: `Resumen Ejecutivo` (con desglose completo de planes y medios de pago en hora Lima GMT-5), `Cartera CRM` (18 columnas A..R), `Libro de Pagos` (14 columnas A..N), `Equipos y Licencias` y `Guia y Glosario`, todas con fórmulas dinámicas seguras (`SUM`, `AVERAGE`, `COUNT`, `SUMIF`, `COUNTIF`).
+2. **Las 4 Sub-Pestañas de `#tabSettings` (Configuración Total del Propietario):**
+   - **Tab 1 (`Tarifario & Bolsas IA`):** Claves unificadas `updates_window_months` / `updates_months` (`12` meses predeterminados en `PERPETUO_LIBERADO` y `PASE_ACTUALIZACION_ANUAL`), descripciones comerciales editables en los 10 ítems y sincronización bidireccional viva entre el control superior de migración y `HARDWARE_MIGRATION_FEE` (propagándose al Generador, Pagos Manuales, Drawer 360° y Migración). Preserva invariantes `apk_library_dir` y `apk_search_dirs`.
+   - **Tab 2 (`Plantillas WhatsApp & Chat en Vivo`):** Registro unificado bidireccional con `#modalWaComposer` (`license_issued` ↔ `license`, `expiring_reminder` ↔ `expiring`, `trial_welcome` ↔ `welcome`, `apk_update_eligible` ↔ `update`, `prospect`, `ai_bonus`, `courtesy_extension`), borrador multi-plantilla en memoria (`settingsDraftTemplates`) sin pérdida al alternar plantilla, tooltips por variable `{...}`, botón **`Copiar Vista Previa`** y guía de formato Markdown.
+   - **Tab 3 (`Medios de Pago & Legal Perú`):** Cuadrícula `2x2` equilibrada con soporte oscuro y claro (`[data-theme="light"]`), propagación reactiva de titular, marca, soporte, Yape/Plin, BCP y BBVA hacia Boletas/Facturas, Credenciales PNG (@2x con iconografía Canvas2D vectorial) y compositor WhatsApp, con activos `?v=23`.
+   - **Tab 4 (`Preferencias del Sistema`):** Aplicación real de `system.default_mode` al iniciar `server.dart` (`prod` vs `sandbox`), aplicación inicial de tema (`Deep Obsidian` / `Executive Slate`), densidad compacta `.table-compact` en todas las tablas dinámicas y resumen/atajo directo a **Rutas de búsqueda de APKs**.
+3. **Guardián de Cambios Sin Guardar (*Dirty Guard*) y Alcance Explícito:**
+   - Detecta diferencias reales por sub-pestaña (`pricing`, `templates`, `payment`, `preferences`) mostrando indicador ámbar e interceptando salidas desde el Sidebar o conmutador Sandbox/Prod con `#modalUnsavedSettings` (`Guardar cambios y salir`, `Descartar cambios y salir`, `Seguir editando`).
+   - Botones explícitos **`Guardar esta pestaña`** vs **`Guardar todo`** y restablecimiento controlado vía `#modalResetSettingsScope` (**`Solo pestaña actual`** vs **`TODA la configuración`** -> `POST /api/config/reset` con `scope` y snapshot `pre_reset`).
+4. **Sincronización Segura `MLC1-...` hacia la App Móvil (`#modalCommercialConfigSync`):**
+   - **Vía 1 (`MLC1-...` Declarativa Offline):** `POST /api/config/generate-sync-token` firma un JSON canónico tipado (`v == 1`, <= 8 KB, 8 productos, soporte y cuentas) usando **Ed25519** con separación de dominio (`utf8.encode('MLC1-$payloadB64')`), incrementa la revisión monotónica `system.commercial_sync_revision`, autoverifica antes de responder y entrega token copiable, QR vectorial con *quiet zone* blanca de `32px` y envío por WhatsApp (cero código ejecutable).
+   - **Vía 2 (Constantes Dart para Compilación):** `GET /api/config/dart-defaults-snippet` exporta el bloque listo para actualizar defaults compilados en `OwnerLegalIdentity` sin incrementar `ver`.
 
 ---
 
-### 1.12. Bóveda de Seguridad, Persistencia y Multi-Llave (`#tabSecurityVault`)
-En el Sidebar, accede a la pestaña **Seguridad & Bóveda (`#tabSecurityVault`)**:
-1. **Tarjeta de Estado de Protección:**
-   - Indica el estado de la sincronización espejo (`%APPDATA%\MochilaListaAdminVault\`), última fecha de sincronización, existencia de la clave maestra Ed25519 y estado del PIN de acceso.
-2. **Asistente Guiado de Blindaje (3 Pasos):**
-   - **Paso 1 (Espejo y Nube):** Fuerza la sincronización inmediata hacia la bóveda en `%APPDATA%` y permite enlazar una carpeta de nube personal (Google Drive, Dropbox, OneDrive).
-   - **Paso 2 (Llave Criptográfica `.mlkey`):** Genera y descarga el archivo llave de recuperación de 256 bits para resguardar en una memoria USB o bóveda externa de contraseñas.
-   - **Paso 3 (Kit de Emergencia Imprimible/PDF):** Despliega una hoja de alta seguridad lista para imprimir o guardar en PDF con **8 Códigos de Rescate unívocos (`ML-XXXX-YYYY-ZZZZ`)** y un código QR criptográfico vectorial.
-3. **Bloqueo Local con PIN (`HTTP 423 Locked`):**
-   - Permite establecer un PIN numérico de 4 a 8 dígitos para bloquear la interfaz administrativa cuando te alejes de la laptop.
-   - Todas las llamadas al backend quedan bloqueadas con código `HTTP 423` hasta desbloquear con el PIN o el flujo de emergencia `"¿Olvidaste tu PIN?"`.
-4. **Portabilidad Multi-PC en 1 Clic (`.mlvault`):**
-   - **Exportar:** Empaqueta en un único archivo cifrado (`MochilaLista_Vault_Backup_...mlvault`) todas tus bases de datos, claves privadas y configuraciones con cifrado de sobre (AES-256-GCM).
-   - **Importar / Mudar de PC:** Arrastra el archivo `.mlvault` en tu nueva laptop, ingresa tu factor de desbloqueo (llave `.mlkey`, código de rescate o PIN) y marca "Re-cifrar con DPAPI de esta PC". La nueva máquina queda lista para emitir licencias en 5 segundos.
-5. **Auto-Recuperación en 1 Clic:**
-   - Si por error eliminas la carpeta del proyecto o sufres una corrupción en `data/`, el sistema detecta automáticamente la bóveda espejo y te permite restaurar el 100% de tus datos con un solo clic.
+### 1.12. Seguridad y Portabilidad (`#tabSecurityVault`)
+En el Sidebar, accede a **Seguridad y Portabilidad (`#tabSecurityVault`)**:
+1. **Cabecera Funcional y Auditoría Integral:**
+   - Botón **`Auditar Estado`** (`#btnRefreshVaultHealth` -> `GET /api/vault/audit`): abre `#modalVaultAuditReport` inspeccionando salud Windows DPAPI, llavero, paridad SHA-256 real disco vs espejo `%APPDATA%\MochilaListaAdminVault\` sobre los **5 archivos críticos** (`clients_db`, `releases_db`, `owner_config`, `master_key`, `vault_keyring`) con fechas en `America/Lima (GMT-5)`, estado de nube y recomendaciones accionables.
+   - Botón **`Sincronizar Espejo`** (`#btnForceSyncMirrorTop`): icono SVG de sincronización que rota únicamente mientras la petición está en curso (`.is-spinning`).
+2. **Transparencia Física de Almacenamiento (`6/6` Columnas Reales):**
+   - Tabla `#tbodyVaultFiles` alineada exactamente con 6 columnas (`Archivo Físico`, `Propósito Crítico`, `Estado` disco/espejo, `Tamaño` real formateado desde `size_bytes`, `Última Modificación` en Lima GMT-5 y `Huella SHA-256` con botón copiar hash completo).
+   - Rutas `#txtMirrorPath` y `#pathCloudDir` con truncado elegante, botón **`Copiar`** de nube deshabilitado cuando no hay carpeta configurada y botón **`Examinar...`** (`POST /api/vault/cloud-path/browse`) en Paso 1 con rechazo de raíces y carpetas internas sensibles.
+3. **Coherencia `4 Factores (25 % c/u)` ↔ `Asistente 3 Pasos` y Custodia Segura:**
+   - Índice unificado `security_score` (`25%` × DPAPI, `.mlkey`, Kit Rescate y PIN) reflejado en badges reales `#badgeStep1Status..3` y timestamp `#mirrorLastSyncLabel` en hora Lima (nube local como respaldo redundante independiente).
+   - Confirmación protectora anti-sobrescritura antes de regenerar `.mlkey` o Kit 8 Códigos + QR (evitando invalidar copias físicas previas), identificador público seguro `MLVAULT-...` en `#kitVaultId` e impresión A4 limpia (`@media print`).
+4. **Bloqueo Local con PIN (`HTTP 423 Locked`), Cookie `HttpOnly` y Portabilidad `.mlvault`:**
+   - Al activar PIN (`configurePin`), emite `session_token` inmediato sin auto-423 y entrega cookie `Set-Cookie: vault_session_token=...; Path=/; SameSite=Lax; HttpOnly` en `configure`/`verify`/`recover` (limpiada en `lock` / desactivación), permitiendo descargas directas bajo sesión PIN mientras mantiene `HTTP 423` en peticiones y apagado sin autenticar.
+   - Desbloquear o recuperar ejecuta `bootstrapAuthenticatedWorkspace()` para poblar vistas en caliente; cancelar desactivación revierte `#chkEnablePin` a activo.
+   - **Portabilidad (`.mlvault`):** Inspección precisa de metadatos (`version`, `created_at_lima`, `stats.clients_count`, `stats.releases_count`, `appVersion = '9.41.0+85'`) y auto-recuperación en 1 clic si falta la carpeta `data/`.
 
 ---
 
@@ -403,7 +397,7 @@ El script ejecuta el análisis estático, compila con ofuscación completa (`--o
 ---
 
 ### 2.4. Compilación del APK Release Ligero ARM64 para WhatsApp (`compilar_apk_arm64.bat`)
-Para clientes que solicitan un archivo ultraligero y rápido de transferir por WhatsApp (pesa solo **~25 a 35 MB** en comparación con los 114 MB del universal):
+Para clientes que solicitan un archivo ligero y rápido de transferir por WhatsApp Web (pesa **`~38.66 MB`** en `v9.41.0+85`, frente a los **`107.73 MB`** del Universal, muy por debajo del tope de `100 MB` de WhatsApp Web):
 Haz doble clic sobre:
 ```cmd
 C:\Users\vjuli\Documents\mochilalista-app\compilar_apk_arm64.bat
@@ -411,7 +405,7 @@ C:\Users\vjuli\Documents\mochilalista-app\compilar_apk_arm64.bat
 El script compila con `--split-per-abi`, ofuscación y símbolos debug protegidos, generando:
 - **Ruta:** `app_movil/build/app/outputs/flutter-apk/app-arm64-v8a-release.apk`
 - **Compatibilidad:** 99% de teléfonos Android modernos de 64 bits (Xiaomi, Samsung, Motorola, Realme, Honor).
-- **Ventaja:** Transferencia instantánea sin límites de peso en WhatsApp.
+- **Ventaja:** Transferencia directa sin superar el límite de 100 MB en WhatsApp Web.
 
 ---
 
@@ -428,47 +422,43 @@ flutter build appbundle --release --obfuscate --split-debug-info=build/app_symbo
 ```bash
 apksigner verify --verbose C:\Users\vjuli\Documents\mochilalista-app\app_movil\build\app\outputs\flutter-apk\app-release.apk
 ```
-Certifica que las firmas v1, v2 y v3 corresponden exclusivamente al certificado emitido a nombre de **Julio Angello Vasquez Navarro**.
+Certifica que la firma v2 corresponde exclusivamente al certificado RSA-4096 emitido a nombre de **Julio Angello Vasquez Navarro** (`7c43addc34776f3974eac23fdacc47599efd5393a4dbb28672d06899833ffd20`).
 
 ---
 
-## GUÍA 3: PUBLICACIÓN Y NOTIFICACIÓN DE ACTUALIZACIONES (RELEASE MANAGER — PLANES 19, 22 y 22.5)
+## GUÍA 3: PUBLICACIÓN Y NOTIFICACIÓN DE ACTUALIZACIONES (RELEASE MANAGER — PLANES 19, 22, 22.5 Y 23)
 
 ### 3.1. Diferenciación Estricta: `HOTFIX` vs. `FEATURE_RELEASE`
 
 | Categoría | Ejemplos | ¿Quién tiene derecho a instalarla? | Vigencia |
 | :--- | :--- | :--- | :--- |
 | **HOTFIX** (Estabilidad) | `9.23.1`, `9.24.1` | **TODOS los clientes**, tanto con suscripción como con **Licencia Perpetua vitalicia**. | **Vitalicio** (Garantía de software funcional). |
-| **FEATURE_RELEASE** (Nuevas Funciones) | `9.40.0`, `10.0.0` | Clientes con **suscripción activa** o Licencia Perpetua con pase vigente (`updates_until`). | Requiere suscripción o Pase Anual de Updates (S/ 150.00). |
+| **FEATURE_RELEASE** (Nuevas Funciones) | `9.41.0`, `10.0.0` | Clientes con **suscripción activa** o Licencia Perpetua con pase vigente (`updates_until`). | Requiere suscripción o Pase Anual de Updates (S/ 150.00). |
 
 ---
 
-### 3.2. Alta Determinista (`#modalCreateRelease`), Escudo de Firma 3 Estados y Autodetección con Rutas Configurables
-En la pestaña **Versiones APK (`#tabReleaseManager`)**, el modal **Subir y Registrar Nueva Versión del APK (`#modalCreateRelease`)** garantiza control inequívoco del binario a publicar (Plan Maestro 22.5):
+### 3.2. Alta Determinista (`#modalCreateRelease`), Caché Persistente en Disco e Higiene Git
+En la pestaña **Versiones APK (`#tabReleaseManager`)**, el modal **Subir y Registrar Nueva Versión del APK (`#modalCreateRelease`)** y el servidor `server.dart` operan sobre un motor optimizado (Planes 22.5 y 23):
 1. **Limpieza Determinista & Tarjeta Unívoca de APK Activo (`#activeCreateApkCard`):**
-   * Al abrir, cancelar/cerrar (`X`, `Cancelar`, fondo o `Escape`) o publicar una versión, `resetCreateReleaseModalState()` limpia barra de progreso, dropzone manual, selección de tarjeta, campos ocultos, contadores y rutas abiertas para que el siguiente alta arranque 100% limpio.
-   * **Exclusión Mutua Manual vs Autodetección:** Tras subir un binario por `#apkDropZone` (`has-manual-apk`) o seleccionar un build en `#localBuildsGrid` (`.is-selected` animado / `.is-dimmed` en no seleccionados), se renderiza **`#activeCreateApkCard`** identificando inequívocamente el origen (**`Subido manualmente desde PC`** vs **`Seleccionado desde Autodetección`**) con botón **`Cambiar / Quitar APK`** (`clearSelectedCreateApk`).
-2. **Inspección Forense y Escudo Anti-debug.apk (`ApkInspectorService`):**
-   * **Metadatos Deterministas:** Lee `version_name`, `version_code`, esquema SQLite, tamaño normalizado en `MB`, `ARM64` vs `Universal` y huella SHA-256 en minúsculas; sugiere `HOTFIX` (`patch > 0`) vs `FEATURE_RELEASE` (`patch == 0`) y precarga por separado `*_cambios.txt` (Changelog Comercial) y `*_atp.txt` (Notas Internas de Ingeniería).
-   * **Escudo de Firma Criptográfica con 3 Estados Honestos (SDK `37.0.0+` y `<= 36.x`):** Compatible con `V2 Signer:` y `Signer #1` (excluyendo `SourceStamp Signer:`): **`Oficial RSA-4096`** (`7c43addc34776f3974eac23fdacc47599efd5393a4dbb28672d06899833ffd20`), **`No Oficial / posible debug.apk`** (`UNOFFICIAL_SIGNATURE`, con bloqueo preventivo) o **`Sin Verificar`** (`UNVERIFIED`, si `apksigner` no está disponible).
-3. **Autodetección Recursiva Inteligente con Rutas Configurables y Caché en Vivo:**
-   * **Escaneo Acotado, Ranking Híbrido y Deduplicación:** `GET /api/releases/detect-local-build` recorre hasta `maxDepth = 3` (excluyendo `.git`, `intermediates`, `backups`, `data`, `private_keys`, etc.), aplica caché en memoria **`_liveInspectionCache`** (invalidada por tamaño y `mtime` exacto en microsegundos), ordena por **SemVer descendente + `versionCode` + fecha** y deduplica por SHA-256 priorizando `Biblioteca Oficial` > carpetas personalizadas > `app_movil/build`.
-   * **Barra Rápida & Mini-Panel `Rutas de búsqueda` (`#createSearchDirsPanel`):** Permite filtrar en caliente en `#localBuildsToolbar` (**`Todos`** / **`Universal`** / **`ARM64`**, búsqueda por texto/SHA y límite **`6` / `12` / `24`**) y gestionar rutas múltiples persistidas en `system.apk_search_dirs` (`GET/PUT /api/releases/search-dirs`, **`Examinar carpeta...`** nativo en Windows vía PowerShell `-STA`, habilitar/deshabilitar con conteo por carpeta, agregar/eliminar y **`Restablecer predeterminadas`** con bloqueo automático de carpetas de sistema/secretos y unidades raíz como `C:\` o `/`).
+   * Al abrir, cancelar/cerrar (`X`, `Cancelar`, fondo o `Escape`) o publicar una versión, `resetCreateReleaseModalState()` limpia barra de progreso, dropzone manual, selección de tarjeta, campos ocultos, contadores y rutas abiertas.
+   * **Exclusión Mutua Manual vs Autodetección:** Tras subir un binario por `#apkDropZone` (`has-manual-apk`) o seleccionar un build en `#localBuildsGrid` (`.is-selected` animado / `.is-dimmed` en no seleccionados), se renderiza **`#activeCreateApkCard`** identificando inequívocamente el origen con botón **`Cambiar / Quitar APK`** (`clearSelectedCreateApk`).
+2. **Singleton `ApkInspectorService` + Caché Persistente (`data/.apk_inspection_cache.json`):**
+   * Al arrancar `server.dart`, una instancia singleton de `ApkInspectorService` precarga `data/.apk_inspection_cache.json` (`cache_version: 1`, máx. 200 entradas LRU, escritura atómica `.tmp` + `rename` e ignorada por `.gitignore`).
+   * Invalida de inmediato si cambian `size_bytes`, `modified_micros` o se solicita `forceRefresh`, depura rutas ausentes y **lee siempre frescas desde disco** las notas compañeras `*_cambios.txt` y `*_atp.txt`, reduciendo el primer escaneo tras reiniciar el servidor de **~193.7 s a ~272 ms** sobre 86 APKs únicos.
+   * **Escudo de Firma 3 Estados (SDK `37.0.0+` y `<= 36.x`):** Distingue `Oficial RSA-4096` (`7c43addc...3ffd20`), `No Oficial / posible debug.apk` (`UNOFFICIAL_SIGNATURE`) y `Sin Verificar` (`UNVERIFIED`).
+3. **Autodetección Recursiva y Barras de Rutas Configurables:**
+   * `GET /api/releases/detect-local-build` recorre hasta `maxDepth = 3`, ordena por SemVer descendente + `versionCode` + fecha y deduplica por SHA-256 priorizando `Biblioteca Oficial` > carpetas personalizadas > `app_movil/build`.
+   * `#localBuildsToolbar` y `#createSearchDirsPanel` gestionan rutas persistidas en `system.apk_search_dirs` con selector nativo Windows PowerShell `-STA` y bloqueo estricto de raíces/secretos.
+4. **Higiene Git del Catálogo Local:**
+   * `mochilalista_admin/data/prod_releases_db.json` permanece desindexado de Git (`git rm --cached`) e ignorado junto con `data/.apk_inspection_cache.json`, conservando íntegros los registros locales de producción en tu disco sin riesgo de fugas en commits.
 
 ---
 
-### 3.3. Catálogo, Campos Expandibles y Gestión Segura de Variantes ABI en `#modalEditRelease`
+### 3.3. Catálogo, Verificación Masiva en 1 Clic (`#btnVerifyAllReleases`) y `#modalEditRelease`
 En la tabla del catálogo y dentro del modal **Editar Versión Publicada & Changelog (`#modalEditRelease`)**:
+* **Auditoría Completa en 1 Clic (`Verificar Todo el Catálogo`):** El botón **`#btnVerifyAllReleases`** ejecuta `POST /api/releases/verify-all` (con soporte `?force=true`), auditando todas las variantes registradas contra disco duro y `apksigner` en un único guardado consolidado en `backups/` y mostrando el banner descartable **`#catalogVerifyAllBanner`** con conteos de `Oficiales RSA-4096`, `No Oficiales`, `Sin Verificar` y `Extraviados en disco`, sincronizando al instante Catálogo, Matriz SemVer y `#modalWaComposer`.
 * **Acciones Compactas del Catálogo:** Fila única horizontal SVG con **`Verificar`** (`POST /api/releases/:version/verify`), **`APK`**, **`Copiar`**, **`Carpeta`**, **`Editar`** y **`Eliminar`**, métricas en `MB` y píldora de adopción (`N clientes`).
-* **Campos Expandibles con Contadores en Vivo:** Tanto en `#modalCreateRelease` (`#relChangelog`, `#relInternalNotes`) como en `#modalEditRelease` (`#editRelChangelog`, `#editRelInternalNotes`), los textareas mantienen altura compacta por defecto y disponen de botones independientes **`Expandir` / `Contraer`** más contador en vivo de líneas y caracteres (`0 lín. · 0 car.`) actualizado al escribir o cargar `*_cambios.txt` / `*_atp.txt` (`#btnEditLoadAtpTxt` corregido sobre `editRelVersionName`).
-* **Diferenciación Honesta de Variantes (`Universal` & `ARM64 Ligero`):**
-  * **No adjuntado (Opcional):** Cuando una variante opcional nunca tuvo ruta registrada (`!hasPath`), muestra **`Sin archivo adjunto`** y el badge neutro **`No adjuntado (Opcional)`**, ocultando falsas alertas `No encontrado`/`Sin Verificar` y el botón `Re-verificar`.
-  * **Archivo extraviado en disco:** Si existía ruta registrada y falta en disco (`file_exists === false`), muestra el badge rojo **`Archivo extraviado en disco`** con guía de recuperación (`Re-verificar`, `Subir desde PC`, `Vincular desde Biblioteca Local` o `Desvincular`).
-  * **Verificado en disco:** Muestra tamaño en `MB`, SHA-256 + `Copiar SHA`, firma 3 estados, ruta completa, **`Copiar`**, **`Carpeta`** y **`Desvincular`**.
-* **Filtro & Guardia Dura ABI, Selector Inline y Sincronización Inmediata:**
-  * `Vincular desde Biblioteca Local` consulta `?limit=24&abi=ARM64|UNIVERSAL` con guía específica (`compilar_apk_arm64.bat` / `compilar_apk_comercial.bat` si está vacío) y cabecera con **`Re-escanear rutas`**, **`Rutas...`** (`#editSearchDirsPanel`) y **`Cerrar`**.
-  * Tanto la vinculación local como **`Subir desde PC`** bloquean arquitecturas incompatibles (`UNIVERSAL` <-> `ARM64`) antes de modificar la base de datos.
-  * **`Desvincular`** confirma con modal seguro y envía `PUT /api/releases/:version` con `null` explícito (protegiendo el binario Universal si es el único APK sano en disco), sincronizando inmediatamente Catálogo, Matriz SemVer y **`#modalWaComposer`**.
+* **Campos Expandibles y Variantes ABI (`Universal` & `ARM64 Ligero`):** Diferencia explícitamente variantes opcionales **`No adjuntado (Opcional)`**, **`Archivo extraviado en disco`** y **`Verificado en disco`**, con guardia ABI (`UNIVERSAL` <-> `ARM64`) al vincular o subir desde PC.
 
 ---
 
@@ -482,10 +472,10 @@ La matriz evalúa la versión de cada cliente frente a la última publicada bajo
 ### 3.5. Despacho Asistido de APK por WhatsApp (`#modalWaComposer`) y Portapapeles Windows Endurecido
 Al abrir **`Enviar APK`** / **`Reenviar / Elegir APK`** desde la matriz (o seleccionar la plantilla **`Nueva Versión APK`** desde CRM / Ficha 360°):
 1. **Selector Dinámico de Versión (`<select id="waApkVersionSelect">`):** Permite elegir cualquier versión publicada sin cerrar el compositor, actualizando título, variante auto-seleccionada, badge de firma, esquema SQLite y changelog mientras preserva tus chips `Insertar:` activos.
-2. **Alerta Preventiva `> 100 MB`:** Cuando el binario seleccionado (ej. Universal `~108 MB`) supera los **100 MB**, el panel advierte del límite de adjuntos de **WhatsApp Web (100 MB)** frente a **WhatsApp Desktop (2 GB)**, sugiriendo cambiar a **ARM64 Ligero** (`~30 MB`), usar WhatsApp Desktop o compartir enlace externo.
+2. **Alerta Preventiva `> 100 MB`:** Cuando el binario Universal (`107.73 MB` en `v9.41`) supera los **100 MB**, el panel advierte del límite de adjuntos de **WhatsApp Web (100 MB)** frente a **WhatsApp Desktop (2 GB)**, sugiriendo elegir **`ARM64 Ligero`** (`38.66 MB`), usar WhatsApp Desktop o compartir enlace externo.
 3. **Acciones Flexibles de Despacho:**
-   - **`[Copiar Archivo .APK y Abrir WhatsApp]`:** Invoca `POST /api/releases/:version/copy-file`, ejecutado en backend con **`powershell -NoProfile -STA`**, construyendo un `System.Windows.Forms.DataObject` completo (`SetFileDropList` `CF_HDROP` + `Preferred DropEffect` `DROPEFFECT_COPY` + `SetDataObject(..., $true, 10, 50)` con 10 reintentos COM). Verifica estrictamente `ok === true`, muestra el toast **`Archivo .apk copiado: presiona Ctrl + V en WhatsApp`**, despliega la confirmación visual con botón **`Volver a Copiar .APK`** y mantiene el modal abierto.
-   - **`[Copiar Solo Texto]`**, **`[Abrir Carpeta]`** y **`[Solo Abrir WhatsApp]`** con registro automático de trazabilidad `APK Enviado`.
+   - **`Copiar Archivo .APK y Abrir WhatsApp`:** Invoca `POST /api/releases/:version/copy-file` (`powershell -NoProfile -STA` con `CF_HDROP` + `DROPEFFECT_COPY`), notificando **`Archivo .apk copiado: presiona Ctrl + V en WhatsApp`** y ofreciendo **`Volver a Copiar .APK`**.
+   - **`Copiar Solo Texto`**, **`Abrir Carpeta`** y **`Solo Abrir WhatsApp`** con registro automático `APK Enviado`.
 
 ---
 
@@ -493,22 +483,24 @@ Al abrir **`Enviar APK`** / **`Reenviar / Elegir APK`** desde la matriz (o selec
 Permite auditar el estado real del celular sin conexión y sin duplicar discrepancias falsas:
 1. **Separación Estricta `Plan Comercial` vs `Estado de Vigencia`:** El comparador evalúa por separado el plan contratado (`pl`, ej. `TRIAL`, `MENSUAL`, `PERPETUO_LIBERADO`) y el estado operativo real (`st`, normalizando `EXPIRADA` / `VENCIDA` y manteniendo `ACTIVA` cuando un `TRIAL` está vigente — cero bucle `TRIAL -> ACTIVA`), conservando la autoridad comercial del CRM.
 2. **Telemetría Completa, Español Natural y Hora Perú (`America/Lima` GMT-5):**
-   - Incorpora `dr` (`Días de Vigencia Restantes`), `aiu` (`Escaneos IA Consumidos (Histórico)` con cálculo de **`ai_credits_used_delta`** `+N desde última sync`) y `pc` (`Perfiles de Negocio Activos`).
-   - Traduce valores técnicos al español (`Sí`/`No`, `Óptimo`/`Requiere atención`/`Crítico`/`Sin respaldo`) y muestra timestamps en `DD/MM/YYYY HH:mm:ss (Lima GMT-5)` con UTC original en `title`.
-   - Cuando `all_unchanged == true` o coincide el timestamp (`same_timestamp`), muestra el banner verde **`La ficha coincide al 100% con el estado actual del CRM — Sin cambios por aplicar`** y adapta el botón a **`Re-confirmar Ficha`**.
+   - Incorpora `dr` (`Días de Vigencia Restantes`), `aiu` (`Escaneos IA Consumidos (Histórico)` con cálculo de `ai_credits_used_delta` `+N desde última sync`) y `pc` (`Perfiles de Negocio Activos`).
+   - Traduce valores técnicos al español y muestra timestamps en `DD/MM/YYYY HH:mm:ss (Lima GMT-5)`. Cuando coincide al 100%, muestra **`La ficha coincide al 100% con el estado actual del CRM — Sin cambios por aplicar`**.
 3. **Rescate 1-Clic de `PENDIENTE_MIGRACION`:** Identifica automáticamente al cliente origen mediante `bhw` y ofrece **`Migrar Dispositivo (Restauración — 0 días)`** sin costo extra ni duplicación de vigencia.
 
 ---
 
-### 3.7. Comportamiento en la App Móvil: Snapshot `.bak` y Novedades v9.40.0
-1. **Snapshot `.bak` Transparente:** La app crea una copia `mochilalista.db_pre_upgrade_vX.bak` antes de aplicar migraciones de esquema SQLite. Si ocurre un fallo eléctrico o de hardware durante la migración, la app restaura el `.bak` automáticamente sin perder ningún dato de venta o inventario.
-2. **Novedades Comerciales Oficiales (v9.40.0+84 — Plan Maestro 21):**
-   * **Inicio más amplio y fluido:** Encabezado superior optimizado para ver tus herramientas clave de inmediato y navegación sin parpadeos al volver desde tu Perfil.
-   * **Guías interactivas ampliadas y respetuosas:** Nuevas guías paso a paso por cada pestaña de Gestión de Negocio, Cotización Manual, Detalle Financiero de Ventas y pantallas secundarias, sin reactivarse automáticamente al actualizar la app.
-   * **Radar Comercial IA independiente por perfil de negocio:** Cada sucursal o perfil en tu celular conserva su propia ubicación y noticias guardadas.
-3. **Historial Inmediato Anterior (`v9.39.0+83` — Plan Maestro 20):**
-   * Planes Comerciales plegables con modal de detalle y mensajes WhatsApp ordenados (`Ref. soporte: MLS1-...`), Operaciones Financieras ergonómicas con tarjetas contextuales retraíbles y Radar Comercial IA renovado con noticias reales del Perú (`https://www.gob.pe/...`) y selector territorial en 3 niveles.
-   * Previo (`v9.38.0+82` — Plan Maestro 19): Protocolo dual `.mlsync` / `MLS1-...` de diagnóstico offline, switch de atención rápida en pedidos WhatsApp y rescate 1-clic de `PENDIENTE_MIGRACION`.
+### 3.7. Comportamiento en la App Móvil: Snapshot `.bak`, Sincronización `MLC1` y Novedades `v9.41.0+85`
+1. **Snapshot `.bak` Transparente e Inmutabilidad de Esquema:** La app crea `mochilalista.db_pre_upgrade_vX.bak` antes de migraciones SQLite y conserva intacto el esquema **`v36`** y la bóveda PIN (`lock_screen.dart`).
+2. **Recepción Offline Reactiva de Tarifas y Cuentas (`MLC1-...`):**
+   * En **Licencia y Activación** y en la **Pantalla de Bloqueo de Licencia**, la app detecta automáticamente tokens declarativos **`MLC1-...`** desde escáner QR, QR de galería, portapapeles o ingreso manual.
+   * Valida firma Ed25519 con separación de dominio (`utf8.encode('MLC1-$payloadB64')`) contra la clave pública fija embebida, aplica guardia anti-downgrade monotónica `(ver, iat)`, presenta un cuadro de diálogo confirmatorio mostrando revisión, fecha en hora Perú y desglose completo de tarifas/cuentas antes de aplicar, persiste exclusivamente en **`SharedPreferences`** (`ml_commercial_config_v1`) y ofrece restauración confirmada a defaults compilados (**`Restaurar defaults`**).
+3. **Novedades Comerciales Oficiales (`v9.41.0+85` — Plan Maestro 23):**
+   * **Actualización segura de tarifas y cuentas sin internet:** Aplica precios oficiales de planes, cuotas IA y cuentas bancarias verificadas en segundos desde Código o QR sin esperar una nueva compilación.
+   * **App más liviana y edición ligera ARM64:** Optimización lossless de `assets/logo.png` (`1,178,503 B` -> `73,718 B`, `-93.74 %`) y entrega dual oficial ofuscada y firmada RSA-4096: **Universal (`107.73 MB`, SHA-256 `d8597dd7...4514`)** + **ARM64 Ligero (`38.66 MB`, SHA-256 `fdb64551...0b9e`)**.
+4. **Historial Inmediato Anterior (`v9.40.0+84` — Plan Maestro 21):**
+   * Inicio más amplio sin parpadeo Perfil -> Home, 35 tours interactivos con sello anti-reactivación y Radar Comercial IA aislado por `profile_id`.
+   * Previo (`v9.39.0+83`): Planes Comerciales plegables, Operaciones Financieras cómodas y Radar Comercial IA con noticias del Perú (`https://www.gob.pe/...`).
+   * Previo (`v9.38.0+82`): Protocolo `.mlsync` / `MLS1-...` y rescate 1-clic de `PENDIENTE_MIGRACION`.
 
 ---
 
@@ -575,28 +567,24 @@ Uno de los principios de diseño fundamentales de **MochilaLista Admin** es la *
 ---
 
 ### 8.2. Checklist Inicial de Blindaje en 3 Pasos (Asistente Guiado de 60 Segundos)
-Al iniciar la plataforma por primera vez en tu laptop o al ingresar a la pestaña **Seguridad & Bóveda (`#tabSecurityVault`)**, ejecuta el **Asistente Guiado de Blindaje**:
+Al iniciar la plataforma por primera vez en tu laptop o al ingresar a la pestaña **Seguridad y Portabilidad (`#tabSecurityVault`)**, revisa el panel superior (**`4 Factores de Seguridad × 25 % c/u`** + botón **`Auditar Estado`** `GET /api/vault/audit`) y ejecuta el **Asistente Guiado de Blindaje**:
 
 ```
 [ PASO 1: Sincronizar Espejo Local / Nube ] ──> [ PASO 2: Descargar Llave .mlkey ] ──> [ PASO 3: Imprimir Kit de Emergencia PDF ]
 ```
 
-1. **Paso 1: Sincronizar Espejo Local y Nube:**
-   - Haz clic en **`[🔄 Sincronizar Bóveda Espejo Ahora]`**.
-   - El sistema empaquetará todas las bases de datos de producción y la clave privada Ed25519 en `auto_mirror_latest.mlvault`, cifrándolo con DPAPI.
-   - Si usas Google Drive o OneDrive, pega la ruta absoluta de tu carpeta de respaldo y pulsa Guardar.
-2. **Paso 2: Descargar y Resguardar tu Archivo Llave (`.mlkey`):**
-   - Presiona **`[⬇️ Descargar Llave Criptográfica (.mlkey)]`**.
-   - El sistema descargará un archivo `llave_maestra_mochilalista.mlkey` que contiene el token criptográfico de 256 bits (`MLKEY:...`).
-   - **Regla de Oro:** Copia este archivo en una **memoria USB física** y guárdala junto a tus documentos personales, o almacénalo en una bóveda de contraseñas (1Password, Bitwarden, KeePass).
-3. **Paso 3: Imprimir o Guardar en PDF el Kit de Emergencia:**
-   - Presiona **`[🖨️ Imprimir Kit de Emergencia]`**.
-   - Se abrirá la vista de impresión optimizada (`@media print` sin márgenes, con diseño ejecutivo corporativo).
-   - El documento contiene:
-     - **8 Códigos de Rescate Unívocos:** Formateados en bloques legibles de alta visibilidad (`ML-XXXX-YYYY-ZZZZ`).
-     - **Código QR Criptográfico Vectorial:** Permite escanear la llave maestra con la cámara o un lector óptico.
-     - **Sellos Legales e Instrucciones Claras:** Protocolo paso a paso en caso de olvido de contraseña.
-   - **Acción:** Imprime una copia física en papel y guárdala en un lugar seguro bajo llave, o imprímelo como "Guardar como PDF" y colócalo en un almacenamiento cifrado fuera de la PC.
+1. **Paso 1: Sincronizar Espejo Local y Nube (`#badgeStep1Status`):**
+   - Haz clic en **`Sincronizar Espejo`** o **`Sincronizar Bóveda Ahora`** y comprueba que `#mirrorLastSyncLabel` muestre la marca en `America/Lima (GMT-5)`.
+   - El sistema empaquetará bases de datos, configuración y clave Ed25519 en `auto_mirror_latest.mlvault`, cifrándolo con Windows DPAPI.
+   - Si usas Google Drive, Dropbox u OneDrive, pulsa **`Examinar...`** (`#btnBrowseCloudSyncPath`, con bloqueo automático de raíces y carpetas internas del proyecto) y guarda tu carpeta externa sincronizada.
+2. **Paso 2: Descargar y Resguardar tu Archivo Llave (`.mlkey`, `#badgeStep2Status`):**
+   - Presiona **`Descargar Llave (.mlkey)`** para obtener `llave_maestra_mochilalista.mlkey` (`MLKEY:...`).
+   - Si ya existe una llave activa en el llavero (`slot_2_file`), la plataforma solicitará **confirmación explícita anti-invalidación**, advirtiendo que regenerar la llave invalida copias físicas previas en USB.
+   - **Regla de Oro:** Copia este archivo en una **memoria USB física** y guárdala junto a tus documentos personales o gestor cifrado de contraseñas.
+3. **Paso 3: Imprimir o Guardar en PDF el Kit de Emergencia (`#badgeStep3Status`):**
+   - Presiona **`Generar Kit de Rescate`** (con confirmación protectora si ya existen 8 códigos activos en `slot_3_emergency`).
+   - Se abrirá la vista de impresión A4 optimizada (`@media print` con `height: auto` y `overflow: visible`, ID público seguro `MLVAULT-...` y márgenes limpios para Chromium `--app`), incluyendo **8 Códigos de Rescate unívocos (`ML-XXXX-YYYY-ZZZZ`)** y **Código QR vectorial**.
+   - **Acción:** Imprime una copia física en papel bajo llave o expórtala como **"Guardar como PDF"** fuera de la PC.
 
 ---
 

@@ -49,6 +49,15 @@ class LicenseSigner {
     return _publicKeyBytes!;
   }
 
+  /// Firma bytes arbitrarios usando la clave privada Ed25519 maestra (para tokens declarativos MLC1-).
+  Future<List<int>> signRawMessage(List<int> messageBytes) async {
+    if (_keyPair == null) {
+      await loadMasterKey();
+    }
+    final sig = await _ed25519.sign(messageBytes, keyPair: _keyPair!);
+    return sig.bytes;
+  }
+
   static String encodeBase64UrlSafe(List<int> bytes) {
     return base64UrlEncode(bytes).replaceAll('=', '');
   }

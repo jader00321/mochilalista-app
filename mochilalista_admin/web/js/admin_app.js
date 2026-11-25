@@ -126,13 +126,15 @@ document.addEventListener('DOMContentLoaded', async () => {
   initSettingsEvents();
   initExcelExportEvents();
   initVaultEvents();
-  await checkVaultInitialStatus();
-  await loadConfig();
-  await loadSystemMode();
-  await loadClients();
-  await loadDashboard();
-  await loadReleases();
-  await loadReleaseMatrix();
+  const isPinLocked = await checkVaultInitialStatus();
+  if (!isPinLocked) {
+    await loadConfig();
+    await loadSystemMode();
+    await loadClients();
+    await loadDashboard();
+    await loadReleases();
+    await loadReleaseMatrix();
+  }
   initLicenseStudioEvents();
   initModalEvents();
   initWaComposerEvents();
@@ -141,6 +143,20 @@ document.addEventListener('DOMContentLoaded', async () => {
   initReleaseUploadAndAutoDetect();
   initFinancesAndBackupsEvents();
 });
+
+async function bootstrapAuthenticatedWorkspace() {
+  await loadConfig();
+  await loadSystemMode();
+  await loadClients();
+  await loadDashboard();
+  await loadReleases();
+  await loadReleaseMatrix();
+  await Promise.allSettled([
+    loadFinances(),
+    loadBackups(),
+    loadVaultHealth(),
+  ]);
+}
 
 // =================== SISTEMA DE NOTIFICACIONES TOAST ===================
 function showToast(message, type = 'info', durationOrOptions = 3500) {
@@ -237,6 +253,7 @@ function showToast(message, type = 'info', durationOrOptions = 3500) {
 
 // =================== MODAL DE CONFIRMACIÓN PROFESIONAL ===================
 let confirmCallback = null;
+let confirmCancelCallback = null;
 
 function initModalConfirm() {
   const modal = document.getElementById('modalConfirm');
@@ -244,23 +261,37 @@ function initModalConfirm() {
   const btnCancel = document.getElementById('btnConfirmCancel');
   const btnClose = document.getElementById('btnConfirmClose');
 
-  const close = () => {
+  const closeWithoutConfirm = () => {
     modal?.classList.remove('open');
+    const cancelCb = confirmCancelCallback;
     confirmCallback = null;
+    confirmCancelCallback = null;
+    if (typeof cancelCb === 'function') {
+      cancelCb();
+    }
   };
 
-  btnCancel?.addEventListener('click', close);
-  btnClose?.addEventListener('click', close);
+  btnCancel?.addEventListener('click', closeWithoutConfirm);
+  btnClose?.addEventListener('click', closeWithoutConfirm);
 
   btnOk?.addEventListener('click', () => {
-    if (confirmCallback) {
-      confirmCallback();
+    const okCb = confirmCallback;
+    modal?.classList.remove('open');
+    confirmCallback = null;
+    confirmCancelCallback = null;
+    if (typeof okCb === 'function') {
+      okCb();
     }
-    close();
   });
 }
 
-function showConfirmModal(title, message, onConfirm, isDanger = false) {
+function showConfirmModal(
+  title,
+  message,
+  onConfirm,
+  isDanger = false,
+  onCancel = null
+) {
   const modal = document.getElementById('modalConfirm');
   const titleEl = document.getElementById('confirmModalTitle');
   const msgEl = document.getElementById('confirmModalMessage');
@@ -271,6 +302,7 @@ function showConfirmModal(title, message, onConfirm, isDanger = false) {
   titleEl.textContent = title;
   msgEl.innerHTML = escapeHtml(message);
   confirmCallback = onConfirm;
+  confirmCancelCallback = typeof onCancel === 'function' ? onCancel : null;
 
   if (isDanger) {
     btnOk.className = 'btn btn-outline';
@@ -352,40 +384,14 @@ function initNavigation() {
     }
 
     tab.addEventListener('click', () => {
-      tabs.forEach(t => t.classList.remove('active'));
-      document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
-
-      tab.classList.add('active');
-      const targetPane = document.getElementById(tab.dataset.tab);
-      if (targetPane) targetPane.classList.add('active');
-
-      // Actualizar Breadcrumb
-      const viewNameEl = document.getElementById('currentViewName');
-      if (viewNameEl && tabTitles[tab.dataset.tab]) {
-        viewNameEl.textContent = tabTitles[tab.dataset.tab];
+      const targetTabKey = tab.dataset.tab;
+      const activeNav = document.querySelector('.nav-tab.active');
+      const currentTabKey = activeNav?.dataset?.tab;
+      if (currentTabKey === 'tabSettings' && targetTabKey !== 'tabSettings' && typeof guardSettingsExit === 'function') {
+        const proceed = guardSettingsExit(() => navigateToSidebarTab(tab));
+        if (!proceed) return;
       }
-
-      // Cerrar sidebar en móviles tras seleccionar vista
-      sidebar?.classList.remove('mobile-open');
-      if (floatingTooltip) floatingTooltip.classList.remove('visible');
-
-      if (tab.dataset.tab === 'tabDashboard') {
-        loadDashboard();
-      }
-      if (tab.dataset.tab === 'tabClients') {
-        loadClients();
-      }
-      if (tab.dataset.tab === 'tabReleaseManager') {
-        loadReleases();
-        loadReleaseMatrix();
-      }
-      if (tab.dataset.tab === 'tabFinancesAndBackups') {
-        loadFinances();
-        loadBackups();
-      }
-      if (tab.dataset.tab === 'tabSecurityVault') {
-        loadVaultHealth();
-      }
+      navigateToSidebarTab(tab);
     });
 
     // Tooltip flotante nativo sin recorte por overflow en estado colapsado
@@ -408,6 +414,42 @@ function initNavigation() {
       if (floatingTooltip) floatingTooltip.classList.remove('visible');
     });
   });
+
+  function navigateToSidebarTab(tab) {
+    if (!tab) return;
+    tabs.forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+
+    tab.classList.add('active');
+    const targetPane = document.getElementById(tab.dataset.tab);
+    if (targetPane) targetPane.classList.add('active');
+
+    const viewNameEl = document.getElementById('currentViewName');
+    if (viewNameEl && tabTitles[tab.dataset.tab]) {
+      viewNameEl.textContent = tabTitles[tab.dataset.tab];
+    }
+
+    sidebar?.classList.remove('mobile-open');
+    if (floatingTooltip) floatingTooltip.classList.remove('visible');
+
+    if (tab.dataset.tab === 'tabDashboard') {
+      loadDashboard();
+    }
+    if (tab.dataset.tab === 'tabClients') {
+      loadClients();
+    }
+    if (tab.dataset.tab === 'tabReleaseManager') {
+      loadReleases();
+      loadReleaseMatrix();
+    }
+    if (tab.dataset.tab === 'tabFinancesAndBackups') {
+      loadFinances();
+      loadBackups();
+    }
+    if (tab.dataset.tab === 'tabSecurityVault') {
+      loadVaultHealth();
+    }
+  }
 
   // Ocultar tooltip al hacer scroll en el sidebar o redimensionar
   sidebar?.querySelector('.sidebar-body')?.addEventListener('scroll', () => {
@@ -538,13 +580,13 @@ function renderShutdownSuccessScreen() {
 
 // =================== TEMA OSCURO / CLARO & EXPORTAR ===================
 function initTheme() {
-  const savedTheme = localStorage.getItem('ml_admin_theme') || 'dark';
-  applyTheme(savedTheme);
+  const savedTheme = (typeof localStorage !== 'undefined' && localStorage.getItem('ml_admin_theme')) || 'dark';
+  applyTheme(savedTheme, { syncSelect: false });
 
   document.getElementById('btnThemeToggle')?.addEventListener('click', () => {
     const current = document.documentElement.getAttribute('data-theme');
     const next = current === 'dark' ? 'light' : 'dark';
-    applyTheme(next);
+    applyTheme(next, { syncSelect: false });
   });
 
   document.getElementById('btnExportCsv')?.addEventListener('click', () => {
@@ -553,11 +595,16 @@ function initTheme() {
   });
 }
 
-function applyTheme(theme) {
-  document.documentElement.setAttribute('data-theme', theme);
-  localStorage.setItem('ml_admin_theme', theme);
-  const cfgSel = document.getElementById('cfgDefaultTheme');
-  if (cfgSel && cfgSel.value !== theme) cfgSel.value = theme;
+function applyTheme(theme, options = {}) {
+  const safeTheme = theme === 'light' ? 'light' : 'dark';
+  document.documentElement.setAttribute('data-theme', safeTheme);
+  if (typeof localStorage !== 'undefined') {
+    localStorage.setItem('ml_admin_theme', safeTheme);
+  }
+  if (options.syncSelect !== false) {
+    const cfgSel = document.getElementById('cfgDefaultTheme');
+    if (cfgSel && cfgSel.value !== safeTheme) cfgSel.value = safeTheme;
+  }
 }
 
 // =================== FASE 1: ARQUITECTURA DE DOBLE ESTADO (SANDBOX VS PROD) ===================
@@ -609,8 +656,12 @@ async function loadSystemMode() {
   }
 }
 
-async function switchMode(newMode) {
+async function switchMode(newMode, options = {}) {
   if (newMode === currentMode || _isSwitchingMode) return;
+  if (!options.bypassDirtyGuard && typeof guardSettingsExit === 'function') {
+    const canProceed = guardSettingsExit(() => switchMode(newMode, { bypassDirtyGuard: true }));
+    if (!canProceed) return;
+  }
   _isSwitchingMode = true;
 
   const modeSwitcher = document.getElementById('modeSwitcher') || document.querySelector('.mode-switcher');
@@ -1571,6 +1622,9 @@ function renderClientsTable() {
     `;
     tbody.appendChild(tr);
   });
+  if (typeof applyTableDensity === 'function') {
+    applyTableDensity(ownerConfig?.system?.table_density);
+  }
 }
 
 function copyDeviceIdToClipboard(deviceId) {
@@ -2837,6 +2891,22 @@ async function executeConfirmedEmission() {
 
 // =================== GENERADOR DE CREDENCIAL EN CANVAS (PNG @2x / 900x520) ===================
 function renderCredentialCanvas(licenseData, client, targetCanvasId = 'credentialCanvas', qrContainerId = 'qrContainer') {
+  if (!licenseData) {
+    const licCodeVal = document.getElementById('licCode')?.value?.trim() || '';
+    const licClientId = document.getElementById('licClientSelect')?.value || '';
+    const resolvedClient = client || (Array.isArray(globalClients) ? globalClients.find(c => c.id === licClientId) : null) || null;
+    const resolvedPlan = document.getElementById('licPlanSelect')?.value || resolvedClient?.license_type || 'MENSUAL';
+    if (!licCodeVal && !currentSelectedGeneratorCode) return;
+    licenseData = (typeof currentSelectedGeneratorCode === 'object' && currentSelectedGeneratorCode)
+      ? currentSelectedGeneratorCode
+      : {
+          token: licCodeVal || currentSelectedGeneratorCode || '',
+          plan: resolvedPlan,
+          device_id: resolvedClient?.current_device_id || 'ML-0000',
+          client: resolvedClient,
+        };
+    client = resolvedClient;
+  }
   const canvas = document.getElementById(targetCanvasId);
   if (!canvas) return;
   const ctx = canvas.getContext('2d');
@@ -2871,9 +2941,10 @@ function renderCredentialCanvas(licenseData, client, targetCanvasId = 'credentia
   ctx.fillRect(8, 8, width - 16, 10);
 
   // 4. Encabezado Oficial
+  const brandHeadline = (ownerConfig?.legal_identity?.commercial_name || 'MochilaLista').toUpperCase();
   ctx.fillStyle = '#10b981';
   ctx.font = 'bold 26px -apple-system, sans-serif';
-  ctx.fillText('MOCHILALISTA POS', 36, 54);
+  ctx.fillText(`${brandHeadline} POS`, 36, 54);
 
   ctx.fillStyle = '#94a3b8';
   ctx.font = '600 13px -apple-system, sans-serif';
@@ -2943,9 +3014,24 @@ function renderCredentialCanvas(licenseData, client, targetCanvasId = 'credentia
   ctx.font = 'bold 18px -apple-system, sans-serif';
   ctx.fillText(plan.replace(/_/g, ' '), 36, 288);
 
+  // Icono vectorial de calendario en Canvas2D (sin emoji crudo)
+  ctx.save();
+  ctx.strokeStyle = '#60a5fa';
+  ctx.lineWidth = 1.6;
+  ctx.strokeRect(37, 300, 12, 11);
+  ctx.beginPath();
+  ctx.moveTo(40, 298);
+  ctx.lineTo(40, 301);
+  ctx.moveTo(46, 298);
+  ctx.lineTo(46, 301);
+  ctx.moveTo(37, 304);
+  ctx.lineTo(49, 304);
+  ctx.stroke();
+  ctx.restore();
+
   ctx.fillStyle = '#f1f5f9';
   ctx.font = '600 14px -apple-system, sans-serif';
-  ctx.fillText(`📅 ${vigencia}`, 36, 312);
+  ctx.fillText(vigencia, 56, 312);
 
   // Cuota IA Acumulativa (Regla Plan 08/09)
   const baseScansMap = {
@@ -2970,9 +3056,24 @@ function renderCredentialCanvas(licenseData, client, targetCanvasId = 'credentia
   } else if (plan === 'RECARGA_IA_150') {
     aiText = '+150 escaneos IA sin vencimiento (Bolsa Acumulativa)';
   }
+  // Icono vectorial de rayo/IA en Canvas2D (sin emoji crudo)
+  ctx.save();
+  ctx.strokeStyle = '#fbbf24';
+  ctx.lineWidth = 1.6;
+  ctx.beginPath();
+  ctx.moveTo(45, 326);
+  ctx.lineTo(39, 334);
+  ctx.lineTo(44, 334);
+  ctx.lineTo(42, 341);
+  ctx.lineTo(49, 332);
+  ctx.lineTo(44, 332);
+  ctx.closePath();
+  ctx.stroke();
+  ctx.restore();
+
   ctx.fillStyle = '#94a3b8';
   ctx.font = '12px -apple-system, sans-serif';
-  ctx.fillText(`⚡ Escáner IA: ${aiText}`, 36, 338);
+  ctx.fillText(`Escáner IA: ${aiText}`, 56, 338);
 
   // Código de Acceso (Snippet)
   const token = licenseData.token || '';
@@ -3368,10 +3469,10 @@ function renderReceiptPreviewAndCanvas() {
   const isInvoice = voucherType === 'FAC';
 
   const title = document.getElementById('rcInputTitle')?.value.trim() || (isInvoice ? 'FACTURA DE VENTA / PAGO' : 'BOLETA DE PAGO ADMINISTRATIVA');
-  const commercial = document.getElementById('rcInputCommercialName')?.value.trim() || 'MochilaLista';
-  const issuer = document.getElementById('rcInputIssuerName')?.value.trim() || 'Julio Angello Vasquez Navarro';
+  const commercial = document.getElementById('rcInputCommercialName')?.value.trim() || ownerConfig?.legal_identity?.commercial_name || 'MochilaLista';
+  const issuer = document.getElementById('rcInputIssuerName')?.value.trim() || ownerConfig?.legal_identity?.author_full_name || 'Julio Angello Vasquez Navarro';
   const issuerDoc = document.getElementById('rcInputIssuerDoc')?.value.trim() || 'D.N.I. / R.U.C. Registrado';
-  const issuerPhone = document.getElementById('rcInputIssuerPhone')?.value.trim() || '+51 922 836 879';
+  const issuerPhone = document.getElementById('rcInputIssuerPhone')?.value.trim() || ownerConfig?.legal_identity?.support_phone || '+51 922 836 879';
   const issuerCity = document.getElementById('rcInputIssuerCity')?.value.trim() || 'Piura, Perú';
 
   // Toggles de visibilidad
@@ -3559,10 +3660,10 @@ function drawReceiptOnCanvas() {
   const isInvoice = voucherType === 'FAC';
 
   const title = document.getElementById('rcInputTitle')?.value.trim() || (isInvoice ? 'FACTURA DE VENTA / PAGO' : 'BOLETA DE PAGO ADMINISTRATIVA');
-  const commercial = document.getElementById('rcInputCommercialName')?.value.trim() || 'MochilaLista';
-  const issuer = document.getElementById('rcInputIssuerName')?.value.trim() || 'Julio Angello Vasquez Navarro';
+  const commercial = document.getElementById('rcInputCommercialName')?.value.trim() || ownerConfig?.legal_identity?.commercial_name || 'MochilaLista';
+  const issuer = document.getElementById('rcInputIssuerName')?.value.trim() || ownerConfig?.legal_identity?.author_full_name || 'Julio Angello Vasquez Navarro';
   const issuerDoc = document.getElementById('rcInputIssuerDoc')?.value.trim() || 'D.N.I. / R.U.C. Registrado';
-  const issuerPhone = document.getElementById('rcInputIssuerPhone')?.value.trim() || '+51 922 836 879';
+  const issuerPhone = document.getElementById('rcInputIssuerPhone')?.value.trim() || ownerConfig?.legal_identity?.support_phone || '+51 922 836 879';
   const issuerCity = document.getElementById('rcInputIssuerCity')?.value.trim() || 'Piura, Perú';
 
   // Toggles de visibilidad
@@ -5427,6 +5528,43 @@ function formatLimaDateTime(isoOrEpoch, fallback = '-') {
 }
 
 /**
+ * Devuelve la fecha calendario YYYY-MM-DD en Zona Oficial Perú (America/Lima, GMT-5).
+ */
+function formatLimaIsoDate(isoOrEpoch, fallback = '') {
+  if (isoOrEpoch === null || isoOrEpoch === undefined || isoOrEpoch === '') return fallback;
+  const raw = String(isoOrEpoch).trim();
+  if (!raw || raw === '-') return fallback;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
+
+  let dateObj = null;
+  if (typeof isoOrEpoch === 'number') {
+    dateObj = new Date(isoOrEpoch);
+  } else if (/^\d{10,13}$/.test(raw)) {
+    const n = Number(raw);
+    dateObj = new Date(raw.length === 10 ? n * 1000 : n);
+  } else {
+    dateObj = new Date(raw);
+  }
+  if (!dateObj || Number.isNaN(dateObj.getTime())) return fallback;
+
+  try {
+    const parts = new Intl.DateTimeFormat('en-GB', {
+      timeZone: 'America/Lima',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).formatToParts(dateObj);
+    const map = {};
+    parts.forEach(p => { map[p.type] = p.value; });
+    return `${map.year}-${map.month}-${map.day}`;
+  } catch (_) {
+    const lima = new Date(dateObj.getTime() - 5 * 60 * 60 * 1000);
+    const pad = (n) => String(n).padStart(2, '0');
+    return `${lima.getUTCFullYear()}-${pad(lima.getUTCMonth() + 1)}-${pad(lima.getUTCDate())}`;
+  }
+}
+
+/**
  * Humaniza campos técnicos de sincronización .mlsync al español operativo del propietario.
  */
 function humanizeSyncFieldValue(field, val) {
@@ -6286,6 +6424,47 @@ function syncWaInsertChipsState() {
   });
 }
 
+const WA_TO_CONFIG_TEMPLATE_KEY = {
+  welcome: 'trial_welcome',
+  expiring: 'expiring_reminder',
+  license: 'license_issued',
+  update: 'apk_update_eligible',
+  prospect: 'prospect',
+  ai_bonus: 'ai_bonus',
+  courtesy_extension: 'courtesy_extension',
+};
+
+const CONFIG_TO_WA_TEMPLATE_KEY = {
+  trial_welcome: 'welcome',
+  expiring_reminder: 'expiring',
+  license_issued: 'license',
+  apk_update_eligible: 'update',
+  prospect: 'prospect',
+  ai_bonus: 'ai_bonus',
+  courtesy_extension: 'courtesy_extension',
+};
+
+function resolveConfigTemplateKeyFromWa(tplKey) {
+  return WA_TO_CONFIG_TEMPLATE_KEY[tplKey] || tplKey;
+}
+
+function resolveWaTemplateKeyFromConfig(cfgKey) {
+  return CONFIG_TO_WA_TEMPLATE_KEY[cfgKey] || cfgKey;
+}
+
+function syncWaTemplatesFromOwnerConfig(cfg) {
+  const cfgTemplates = cfg?.templates || {};
+  Object.entries(WA_TO_CONFIG_TEMPLATE_KEY).forEach(([waKey, cfgKey]) => {
+    if (!WA_TEMPLATES[waKey]) return;
+    const persistedVal = cfgTemplates[cfgKey] ?? cfgTemplates[waKey];
+    if (persistedVal !== undefined && persistedVal !== null && String(persistedVal).trim() !== '') {
+      WA_TEMPLATES[waKey].text = String(persistedVal);
+    } else if (DEFAULT_WA_TEMPLATES[waKey]) {
+      WA_TEMPLATES[waKey].text = DEFAULT_WA_TEMPLATES[waKey].text;
+    }
+  });
+}
+
 function renderWaTemplateBaseText(tplKey) {
   const client = getCurrentWaComposerClient();
   const modalEl = document.getElementById('modalWaComposer');
@@ -6295,8 +6474,11 @@ function renderWaTemplateBaseText(tplKey) {
     return buildApkDispatchMessage(currentDispatchRelease, client, currentDispatchMode);
   }
 
-  const customText = ownerConfig?.templates?.[tplKey];
-  const rawTpl = (customText !== undefined && customText !== null) ? customText : (WA_TEMPLATES[tplKey]?.text || '');
+  const canonKey = resolveConfigTemplateKeyFromWa(tplKey);
+  const customText = ownerConfig?.templates?.[canonKey] ?? ownerConfig?.templates?.[tplKey];
+  const rawTpl = (customText !== undefined && customText !== null && String(customText) !== '')
+    ? String(customText)
+    : (WA_TEMPLATES[tplKey]?.text || '');
   if (!rawTpl) return '';
 
   const now = new Date();
@@ -6309,9 +6491,25 @@ function renderWaTemplateBaseText(tplKey) {
   const yapePhone = pm.yape_plin_phone || '922836879';
   const yapeTitular = pm.yape_plin_holder || li.author_full_name || 'Julio Angello Vasquez Navarro';
   const autor = li.author_full_name || 'Julio Angello Vasquez Navarro';
+  const commercialName = li.commercial_name || li.brand_name || 'MochilaLista';
+  const supportPhone = li.support_phone || '+51 922 836 879';
   const aiCredsVal = modalEl?.dataset?.aiCredits || client.ai_reported_balance || '0';
   const diasVal = modalEl?.dataset?.diasExtension || '7';
   const lastToken = (modalEl?.dataset?.lastToken || '').trim() || `ML9-PENDIENTE-${client.current_device_id || 'DISPOSITIVO'}`;
+
+  const bcpAccount = String(pm.bcp_account_number || '').trim();
+  const bcpHolder = String(pm.bcp_account_holder || '').trim();
+  const bcpCci = String(pm.bcp_cci || '').trim();
+  const bcpBlock = bcpAccount
+    ? `\n🏦 BCP: ${bcpAccount}${bcpCci ? ` (CCI: ${bcpCci})` : ''}${bcpHolder ? ` - ${bcpHolder}` : ''}`
+    : '';
+
+  const bbvaAccount = String(pm.bbva_account_number || '').trim();
+  const bbvaHolder = String(pm.bbva_account_holder || '').trim();
+  const bbvaCci = String(pm.bbva_cci || '').trim();
+  const bbvaBlock = bbvaAccount
+    ? `\n🏦 BBVA: ${bbvaAccount}${bbvaCci ? ` (CCI: ${bbvaCci})` : ''}${bbvaHolder ? ` - ${bbvaHolder}` : ''}`
+    : '';
 
   return rawTpl
     .replace(/\{negocio\}/g, client.business_name || 'su negocio')
@@ -6327,6 +6525,10 @@ function renderWaTemplateBaseText(tplKey) {
     .replace(/\{codigo\}/g, lastToken)
     .replace(/\{yape_phone\}/g, yapePhone)
     .replace(/\{yape_titular\}/g, yapeTitular)
+    .replace(/\{bloque_banco_bcp\}/g, bcpBlock)
+    .replace(/\{bloque_banco_bbva\}/g, bbvaBlock)
+    .replace(/\{commercial_name\}/g, commercialName)
+    .replace(/\{support_phone\}/g, supportPhone)
     .replace(/\{autor\}/g, autor);
 }
 
@@ -6609,10 +6811,14 @@ async function saveCurrentWaTemplate() {
 
   const { baseText } = extractBaseAndSnippetsFromText(textarea.value || '');
   const newText = baseText;
+  const canonKey = resolveConfigTemplateKeyFromWa(tplKey);
 
   if (!ownerConfig) ownerConfig = {};
   if (!ownerConfig.templates) ownerConfig.templates = {};
-  ownerConfig.templates[tplKey] = newText;
+  ownerConfig.templates[canonKey] = newText;
+  if (canonKey !== tplKey) {
+    delete ownerConfig.templates[tplKey];
+  }
   WA_TEMPLATES[tplKey].text = newText;
 
   try {
@@ -6622,7 +6828,15 @@ async function saveCurrentWaTemplate() {
       body: JSON.stringify(ownerConfig),
     });
     if (!res.ok) throw new Error('Error al guardar plantilla');
-    showToast('Plantilla guardada exitosamente.', 'success');
+    const saved = await res.json().catch(() => null);
+    if (saved && saved.templates) {
+      ownerConfig = saved;
+    }
+    syncWaTemplatesFromOwnerConfig(ownerConfig);
+    if (typeof syncTemplateDraftFromSavedConfig === 'function') {
+      syncTemplateDraftFromSavedConfig(canonKey, newText);
+    }
+    showToast('Plantilla guardada y sincronizada con Configuración.', 'success');
   } catch (e) {
     showToast('Error al guardar plantilla: ' + e.message, 'error');
   }
@@ -6632,19 +6846,31 @@ async function resetCurrentWaTemplate() {
   const tplKey = (currentWaComposerTemplateKey && DEFAULT_WA_TEMPLATES[currentWaComposerTemplateKey])
     ? currentWaComposerTemplateKey
     : 'welcome';
+  const canonKey = resolveConfigTemplateKeyFromWa(tplKey);
   const defaultText = DEFAULT_WA_TEMPLATES[tplKey]?.text || '';
   if (WA_TEMPLATES[tplKey]) {
     WA_TEMPLATES[tplKey].text = defaultText;
   }
 
   if (ownerConfig?.templates) {
+    delete ownerConfig.templates[canonKey];
     delete ownerConfig.templates[tplKey];
     try {
-      await fetch('/api/config', {
+      const res = await fetch('/api/config', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(ownerConfig),
       });
+      if (res.ok) {
+        const saved = await res.json().catch(() => null);
+        if (saved && saved.templates) {
+          ownerConfig = saved;
+          syncWaTemplatesFromOwnerConfig(ownerConfig);
+          if (typeof syncTemplateDraftFromSavedConfig === 'function') {
+            syncTemplateDraftFromSavedConfig(canonKey, saved.templates[canonKey] || defaultText);
+          }
+        }
+      }
     } catch (_) { }
   }
 
@@ -6907,6 +7133,9 @@ async function loadReleases() {
       updateFilterCounts();
       renderClientsTable();
     }
+    if (typeof applyTableDensity === 'function') {
+      applyTableDensity(ownerConfig?.system?.table_density);
+    }
   } catch (e) {
     console.error('Error al cargar releases:', e);
   }
@@ -7118,6 +7347,151 @@ async function verifyReleaseIntegrity(versionName, fromEditModal = false) {
     }
   } catch (e) {
     showToast('Error al verificar versión: ' + e.message, 'error');
+  }
+}
+
+let isVerifyAllCatalogRunning = false;
+
+/**
+ * Cierra el resumen visual de auditoría masiva de catálogo
+ */
+function dismissCatalogVerifyAllBanner() {
+  const banner = document.getElementById('catalogVerifyAllBanner');
+  if (!banner) return;
+  banner.style.display = 'none';
+  banner.className = 'catalog-verify-banner';
+  banner.innerHTML = '';
+}
+
+function renderCatalogVerifyAllBanner(state, text, metaPills = [], dismissible = true) {
+  const banner = document.getElementById('catalogVerifyAllBanner');
+  if (!banner) return;
+
+  let iconSvg = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><polyline points="9 12 11 14 15 10"/></svg>';
+  if (state === 'running') {
+    iconSvg = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><polyline points="21 3 21 9 15 9"/></svg>';
+  } else if (state === 'warning' || state === 'error') {
+    iconSvg = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>';
+  }
+
+  const pillsHtml = Array.isArray(metaPills) && metaPills.length > 0
+    ? `<div class="catalog-verify-meta-pills">${metaPills.map((p) => `<span class="catalog-verify-pill">${escapeHtml(p)}</span>`).join('')}</div>`
+    : '';
+  const dismissHtml = dismissible
+    ? '<button type="button" class="catalog-verify-dismiss" id="btnDismissVerifyAllBanner" title="Cerrar resumen" aria-label="Cerrar resumen"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>'
+    : '';
+
+  banner.className = `catalog-verify-banner is-${state}`;
+  banner.style.display = 'flex';
+  banner.innerHTML = `
+    <div class="catalog-verify-banner-main">
+      <span class="catalog-verify-banner-icon">${iconSvg}</span>
+      <span class="catalog-verify-summary-text">${escapeHtml(text)}</span>
+      ${pillsHtml}
+    </div>
+    ${dismissHtml}
+  `;
+}
+
+/**
+ * Audita físicamente y criptográficamente todas las versiones publicadas del catálogo (1 clic)
+ */
+async function verifyAllReleasesCatalog(force = false) {
+  if (isVerifyAllCatalogRunning) return;
+  const btn = document.getElementById('btnVerifyAllReleases');
+  const originalHtml = btn ? btn.innerHTML : '';
+
+  isVerifyAllCatalogRunning = true;
+  if (btn) {
+    btn.disabled = true;
+    btn.classList.add('is-spinning');
+    btn.innerHTML = '<svg class="btn-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><polyline points="21 3 21 9 15 9"/></svg><span>Verificando catálogo...</span>';
+  }
+
+  renderCatalogVerifyAllBanner(
+    'running',
+    'Auditando archivos físicos .apk y firmas RSA-4096 de todo el catálogo...',
+    ['En curso'],
+    false,
+  );
+
+  try {
+    const query = force ? '?force=true' : '';
+    const res = await fetch(`/api/releases/verify-all${query}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-App-Mode': currentMode,
+      },
+      body: JSON.stringify({ force: Boolean(force) }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.ok) {
+      throw new Error(data.error || 'No se pudo completar la auditoría masiva del catálogo.');
+    }
+
+    if (Array.isArray(data.releases)) {
+      globalReleases = data.releases;
+    }
+
+    await loadReleases();
+    await loadReleaseMatrix();
+
+    if (typeof currentDispatchRelease !== 'undefined' && currentDispatchRelease?.version_name) {
+      const updatedDispatch = (globalReleases || []).find(
+        (r) => r.version_name === currentDispatchRelease.version_name,
+      );
+      if (updatedDispatch) {
+        currentDispatchRelease = updatedDispatch;
+        const waOpen = document.getElementById('modalWaComposer')?.classList.contains('open');
+        if (waOpen && typeof isApkDispatchMode !== 'undefined' && isApkDispatchMode && typeof syncWaApkDispatchPanel === 'function') {
+          syncWaApkDispatchPanel(updatedDispatch, { preserveCopyHint: true });
+        }
+      }
+    }
+
+    const editModalOpen = document.getElementById('modalEditRelease')?.classList.contains('open');
+    const editVer = document.getElementById('editRelVersionName')?.value;
+    if (editModalOpen && editVer) {
+      const updatedEdit = (globalReleases || []).find((r) => r.version_name === editVer);
+      if (updatedEdit && typeof renderEditReleaseVariants === 'function') {
+        renderEditReleaseVariants(updatedEdit);
+      }
+    }
+
+    const total = Number(data.total || 0);
+    const official = Number(data.official_count || 0);
+    const unofficial = Number(data.unofficial_count || 0);
+    const unverified = Number(data.unverified_count || 0);
+    const missing = Number(data.missing_count || 0);
+    const updated = Number(data.updated_count || 0);
+    const durationMs = Number(data.duration_ms || 0);
+
+    const verLabel = total === 1 ? '1 versión' : `${total} versiones`;
+    const summaryText = total === 0
+      ? 'Catálogo vacío: no hay versiones registradas en este entorno.'
+      : `Catálogo auditado (${verLabel}): ${official} Oficiales RSA-4096 · ${unofficial} No Oficiales · ${unverified} Sin Verificar · ${missing} Extraviados en disco`;
+
+    const hasWarnings = unofficial > 0 || unverified > 0 || missing > 0;
+    const bannerState = hasWarnings ? 'warning' : 'success';
+    renderCatalogVerifyAllBanner(
+      bannerState,
+      summaryText,
+      [`${updated} actualizada(s)`, `${durationMs} ms`],
+      true,
+    );
+    showToast(summaryText, hasWarnings ? 'warning' : 'success');
+  } catch (e) {
+    const errText = 'Error al verificar todo el catálogo: ' + (e.message || e);
+    renderCatalogVerifyAllBanner('error', errText, [], true);
+    showToast(errText, 'error');
+  } finally {
+    isVerifyAllCatalogRunning = false;
+    if (btn) {
+      btn.disabled = false;
+      btn.classList.remove('is-spinning');
+      btn.innerHTML = originalHtml;
+    }
   }
 }
 
@@ -7884,6 +8258,9 @@ function renderReleaseMatrix() {
     `;
     tbody.appendChild(tr);
   });
+  if (typeof applyTableDensity === 'function') {
+    applyTableDensity(ownerConfig?.system?.table_density);
+  }
 }
 
 /**
@@ -8787,6 +9164,16 @@ function initReleaseUploadAndAutoDetect() {
   // Autodetectar builds locales desde rutas configurables
   document.getElementById('btnDetectLocalBuild')?.addEventListener('click', async () => {
     await fetchAndRenderLocalBuilds({ silentToast: false });
+  });
+
+  // Verificación masiva de catálogo en 1 clic (Plan 23 Fase 6)
+  document.getElementById('btnVerifyAllReleases')?.addEventListener('click', () => {
+    verifyAllReleasesCatalog(false);
+  });
+  document.getElementById('catalogVerifyAllBanner')?.addEventListener('click', (e) => {
+    if (e.target.closest('#btnDismissVerifyAllBanner')) {
+      dismissCatalogVerifyAllBanner();
+    }
   });
 }
 
@@ -10527,6 +10914,13 @@ async function inspectToken(options = {}) {
 }
 
 // =================== 6. FINANZAS & RESPALDOS (NUEVA PESTAÑA OFICIAL) ===================
+const BACKUPS_PAGE_SIZE = 20;
+let allBackupsCache = [];
+let backupsVisibleLimit = BACKUPS_PAGE_SIZE;
+let currentBackupFilter = 'all';
+let currentBackupSearch = '';
+let pendingRestoreBackupFilename = null;
+
 function initFinancesAndBackupsEvents() {
   // Filtros de Finanzas
   document.getElementById('inputFinSearch')?.addEventListener('input', renderFinancesTable);
@@ -10575,6 +10969,60 @@ function initFinancesAndBackupsEvents() {
       showToast('Error: ' + e.message, 'error');
     }
   });
+
+  document.getElementById('btnPurgeSandboxBackups')?.addEventListener('click', confirmPurgeSandboxBackups);
+
+  document.querySelectorAll('#backupsFilterPills .backup-pill').forEach(btn => {
+    btn.addEventListener('click', () => {
+      currentBackupFilter = btn.dataset.bfilter || 'all';
+      backupsVisibleLimit = BACKUPS_PAGE_SIZE;
+      syncBackupFilterPillsUi();
+      renderBackupsTable();
+    });
+  });
+
+  document.getElementById('btnFilterOnlyProdBackups')?.addEventListener('click', () => {
+    currentBackupFilter = 'prod';
+    backupsVisibleLimit = BACKUPS_PAGE_SIZE;
+    syncBackupFilterPillsUi();
+    renderBackupsTable();
+  });
+
+  document.getElementById('inputBackupsSearch')?.addEventListener('input', (e) => {
+    currentBackupSearch = (e.target.value || '').trim().toLowerCase();
+    backupsVisibleLimit = BACKUPS_PAGE_SIZE;
+    renderBackupsTable();
+  });
+
+  document.getElementById('btnBackupsSearchClear')?.addEventListener('click', () => {
+    const inp = document.getElementById('inputBackupsSearch');
+    if (inp) inp.value = '';
+    currentBackupSearch = '';
+    backupsVisibleLimit = BACKUPS_PAGE_SIZE;
+    renderBackupsTable();
+  });
+
+  document.getElementById('btnLoadMoreBackups')?.addEventListener('click', () => {
+    backupsVisibleLimit += BACKUPS_PAGE_SIZE;
+    renderBackupsTable();
+  });
+
+  // Modal Vista Previa antes de Restaurar
+  document.getElementById('btnCloseBackupPreview')?.addEventListener('click', () => {
+    pendingRestoreBackupFilename = null;
+    closeModal('modalBackupPreview');
+  });
+  document.getElementById('btnCancelBackupPreview')?.addEventListener('click', () => {
+    pendingRestoreBackupFilename = null;
+    closeModal('modalBackupPreview');
+  });
+  document.getElementById('btnConfirmBackupPreview')?.addEventListener('click', executeConfirmedBackupRestore);
+}
+
+function syncBackupFilterPillsUi() {
+  document.querySelectorAll('#backupsFilterPills .backup-pill').forEach(btn => {
+    btn.classList.toggle('active', (btn.dataset.bfilter || 'all') === currentBackupFilter);
+  });
 }
 
 async function loadFinances() {
@@ -10607,8 +11055,9 @@ function renderFinancesTable() {
   const methodVal = document.getElementById('finFilterMethod')?.value || 'all';
 
   const filtered = globalFinances.filter(f => {
-    if (fromVal && f.date && f.date.substring(0, 10) < fromVal) return false;
-    if (toVal && f.date && f.date.substring(0, 10) > toVal) return false;
+    const dateLima = formatLimaIsoDate(f.date, '');
+    if (fromVal && dateLima && dateLima < fromVal) return false;
+    if (toVal && dateLima && dateLima > toVal) return false;
     if (planVal !== 'all' && !(f.plan || '').toUpperCase().includes(planVal.toUpperCase())) return false;
     if (methodVal !== 'all' && !(f.method || '').toUpperCase().includes(methodVal.toUpperCase())) return false;
 
@@ -10724,9 +11173,11 @@ function renderFinancesTable() {
     }
 
     const planLabel = typeof formatPlanHumanLabel === 'function' ? formatPlanHumanLabel(f.plan) : (f.plan || '-');
+    const dateLima = formatLimaIsoDate(f.date, '-');
+    const fullLimaTitle = f.date ? `${formatLimaDateTime(f.date)} | UTC: ${f.date}` : '';
 
     tr.innerHTML = `
-      <td style="white-space:nowrap;">${f.date ? f.date.substring(0, 10) : '-'}</td>
+      <td style="white-space:nowrap;" title="${escapeHtml(fullLimaTitle)}">${escapeHtml(dateLima)}</td>
       <td><strong style="font-family:var(--font-mono);">${escapeHtml(f.client_id)}</strong></td>
       <td><strong>${escapeHtml(f.business_name || '-')}</strong></td>
       <td>${escapeHtml(f.owner_name || '-')}</td>
@@ -10738,6 +11189,27 @@ function renderFinancesTable() {
     `;
     tbody.appendChild(tr);
   });
+  if (typeof applyTableDensity === 'function') {
+    applyTableDensity(ownerConfig?.system?.table_density);
+  }
+}
+
+function updateBackupFilterCounters() {
+  const counts = { all: allBackupsCache.length, prod: 0, sandbox: 0, global: 0, manual: 0 };
+  allBackupsCache.forEach(b => {
+    const m = (b.mode || '').toLowerCase();
+    if (m === 'prod') counts.prod++;
+    else if (m === 'sandbox') counts.sandbox++;
+    else counts.global++;
+    if (b.is_manual || (b.filename || '').toLowerCase().includes('manual')) counts.manual++;
+  });
+
+  const setTxt = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = String(val); };
+  setTxt('bCountAll', counts.all);
+  setTxt('bCountProd', counts.prod);
+  setTxt('bCountSandbox', counts.sandbox);
+  setTxt('bCountGlobal', counts.global);
+  setTxt('bCountManual', counts.manual);
 }
 
 async function loadBackups() {
@@ -10747,69 +11219,263 @@ async function loadBackups() {
     });
     if (!res.ok) throw new Error('Error al cargar respaldos');
     const backups = await res.json();
-
-    const tbody = document.getElementById('backupsTableBody');
-    if (!tbody) return;
-    tbody.innerHTML = '';
-
-    if (backups.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:1.5rem; color:var(--text-muted);">No hay respaldos generados en la carpeta backups/.</td></tr>';
-      return;
-    }
-
-    backups.forEach(b => {
-      const tr = document.createElement('tr');
-      const modeBadge = b.mode === 'prod'
-        ? '<span class="badge badge-green">PROD</span>'
-        : (b.mode === 'sandbox' ? '<span class="badge badge-yellow">SANDBOX</span>' : '<span class="badge badge-purple">GLOBAL</span>');
-
-      tr.innerHTML = `
-        <td><code style="font-family:var(--font-mono); font-size:0.8rem;">${escapeHtml(b.filename)}</code></td>
-        <td>${b.modified_at ? b.modified_at.replace('T', ' ').substring(0, 19) : '-'}</td>
-        <td>${b.size_kb} KB</td>
-        <td>${modeBadge}</td>
-        <td>
-          <div style="display:flex; gap:0.35rem;">
-            <a href="/api/backups/download/${encodeURIComponent(b.filename)}" class="btn btn-outline btn-sm" title="Descargar archivo JSON a PC o USB">
-              ⬇️
-            </a>
-            <button class="btn btn-outline btn-sm" style="color:var(--warning); border-color:var(--warning);" onclick="restoreBackup('${escapeHtml(b.filename)}')" title="Restaurar a este punto">
-              ⏪ Restaurar
-            </button>
-          </div>
-        </td>
-      `;
-      tbody.appendChild(tr);
-    });
+    allBackupsCache = Array.isArray(backups) ? backups : [];
+    backupsVisibleLimit = Math.max(BACKUPS_PAGE_SIZE, backupsVisibleLimit);
+    updateBackupFilterCounters();
+    renderBackupsTable();
   } catch (e) {
     console.error('Error al cargar backups:', e);
   }
 }
 
-function restoreBackup(filename) {
+function renderBackupsTable() {
+  const tbody = document.getElementById('backupsTableBody');
+  if (!tbody) return;
+  tbody.innerHTML = '';
+
+  const btnClearSearch = document.getElementById('btnBackupsSearchClear');
+  if (btnClearSearch) {
+    btnClearSearch.style.display = currentBackupSearch ? 'inline-flex' : 'none';
+  }
+
+  const filtered = allBackupsCache.filter(b => {
+    const mode = (b.mode || 'global').toLowerCase();
+    const fname = (b.filename || '').toLowerCase();
+    const isManual = !!b.is_manual || fname.includes('manual');
+
+    if (currentBackupFilter === 'prod' && mode !== 'prod') return false;
+    if (currentBackupFilter === 'sandbox' && mode !== 'sandbox') return false;
+    if (currentBackupFilter === 'global' && mode !== 'global') return false;
+    if (currentBackupFilter === 'manual' && !isManual) return false;
+
+    if (currentBackupSearch) {
+      const scope = (b.target_scope || '').toLowerCase();
+      if (!fname.includes(currentBackupSearch) && !mode.includes(currentBackupSearch) && !scope.includes(currentBackupSearch)) {
+        return false;
+      }
+    }
+    return true;
+  });
+
+  const modeBanner = document.getElementById('backupsModeBanner');
+  if (modeBanner) {
+    const hasSandboxVisible = filtered.some(b => (b.mode || '').toLowerCase() === 'sandbox');
+    const shouldWarn = currentMode === 'prod' && currentBackupFilter === 'all' && hasSandboxVisible;
+    modeBanner.style.display = shouldWarn ? 'flex' : 'none';
+  }
+
+  const footer = document.getElementById('backupsPaginationFooter');
+  const infoEl = document.getElementById('backupsPaginationInfo');
+  const btnMore = document.getElementById('btnLoadMoreBackups');
+  const btnMoreTxt = document.getElementById('btnLoadMoreBackupsText');
+
+  if (filtered.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:1.5rem; color:var(--text-muted);">No hay respaldos que coincidan con el filtro seleccionado.</td></tr>';
+    if (footer) footer.style.display = 'none';
+    return;
+  }
+
+  const visible = filtered.slice(0, backupsVisibleLimit);
+  visible.forEach(b => {
+    const tr = document.createElement('tr');
+    const modeBadge = b.mode === 'prod'
+      ? '<span class="badge badge-green">PROD</span>'
+      : (b.mode === 'sandbox' ? '<span class="badge badge-yellow">SANDBOX</span>' : '<span class="badge badge-purple">GLOBAL</span>');
+
+    const protectedHtml = b.is_protected
+      ? '<span class="backup-protected-tag" title="Respaldo protegido contra rotación automática"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>Protegido</span>'
+      : '';
+
+    const limaDisplay = b.modified_at ? formatLimaDateTime(b.modified_at, b.modified_lima || '-') : (b.modified_lima || '-');
+    const utcTitle = b.modified_at ? `UTC: ${b.modified_at}` : '';
+
+    tr.innerHTML = `
+      <td>
+        <code style="font-family:var(--font-mono); font-size:0.8rem;">${escapeHtml(b.filename)}</code>${protectedHtml}
+      </td>
+      <td title="${escapeHtml(utcTitle)}" style="white-space:nowrap;">${escapeHtml(limaDisplay)}</td>
+      <td style="white-space:nowrap;">${escapeHtml(b.size_kb)} KB</td>
+      <td>${modeBadge}</td>
+      <td>
+        <div class="backup-actions-row">
+          <a href="/api/backups/download/${encodeURIComponent(b.filename)}" class="btn btn-outline btn-sm backup-action-btn" title="Descargar archivo JSON a PC o USB">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          </a>
+          <button type="button" class="btn btn-outline btn-sm backup-action-btn" style="color:var(--warning); border-color:var(--warning);" onclick="openBackupRestorePreview('${escapeHtml(b.filename)}')" title="Ver vista previa y restaurar a este punto">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
+            <span>Restaurar</span>
+          </button>
+        </div>
+      </td>
+    `;
+    tbody.appendChild(tr);
+  });
+
+  if (footer) {
+    footer.style.display = 'flex';
+  }
+  if (infoEl) {
+    infoEl.textContent = `Mostrando ${visible.length} de ${filtered.length} respaldos`;
+  }
+  if (btnMore) {
+    const remaining = filtered.length - visible.length;
+    if (remaining > 0) {
+      btnMore.style.display = 'inline-flex';
+      if (btnMoreTxt) {
+        btnMoreTxt.textContent = `Cargar 20 respaldos más (Mostrando ${visible.length} de ${filtered.length})`;
+      }
+    } else {
+      btnMore.style.display = 'none';
+    }
+  }
+  if (typeof applyTableDensity === 'function') {
+    applyTableDensity(ownerConfig?.system?.table_density);
+  }
+}
+
+function buildBackupComparisonRows(scope, snap, cur) {
+  if (scope === 'config') {
+    return [
+      { label: 'Planes en Tarifario', snapVal: String(snap.catalog_plans_count ?? '-'), curVal: String(cur.catalog_plans_count ?? '-') },
+      { label: 'Plantillas WhatsApp', snapVal: String(snap.templates_count ?? '-'), curVal: String(cur.templates_count ?? '-') },
+      { label: 'Entorno Inicial', snapVal: String(snap.default_mode ?? '-').toUpperCase(), curVal: String(cur.default_mode ?? '-').toUpperCase() },
+      { label: 'Tema Predeterminado', snapVal: String(snap.theme ?? '-'), curVal: String(cur.theme ?? '-') },
+    ];
+  }
+  if (scope === 'releases') {
+    return [
+      { label: 'Versiones APK Registradas', snapVal: String(snap.releases_count ?? 0), curVal: String(cur.releases_count ?? 0) },
+      { label: 'Última Versión Publicada', snapVal: String(snap.latest_version ?? '-'), curVal: String(cur.latest_version ?? '-') },
+    ];
+  }
+  return [
+    { label: 'Clientes Registrados', snapVal: String(snap.clients_count ?? 0), curVal: String(cur.clients_count ?? 0) },
+    { label: 'Transacciones / Pagos', snapVal: String(snap.payments_count ?? 0), curVal: String(cur.payments_count ?? 0) },
+    { label: 'Ingresos Acumulados', snapVal: `S/ ${Number(snap.total_revenue_pen ?? 0).toFixed(2)}`, curVal: `S/ ${Number(cur.total_revenue_pen ?? 0).toFixed(2)}` },
+    { label: 'Licencias Perpetuas', snapVal: String(snap.perpetual_count ?? 0), curVal: String(cur.perpetual_count ?? 0) },
+  ];
+}
+
+async function openBackupRestorePreview(filename) {
+  try {
+    showToast('Analizando respaldo antes de restaurar...', 'info');
+    const res = await fetch(`/api/backups/preview/${encodeURIComponent(filename)}`);
+    const data = await res.json();
+    if (!res.ok) {
+      throw new Error(data.error || 'No se pudo previsualizar el respaldo');
+    }
+
+    pendingRestoreBackupFilename = filename;
+    const setEl = (id, text) => { const el = document.getElementById(id); if (el) el.textContent = text; };
+    setEl('bpFilename', data.filename || filename);
+    setEl('bpModifiedLima', formatLimaDateTime(data.modified_at, data.modified_lima || '-'));
+    setEl('bpModifiedUtc', data.modified_at || '-');
+    setEl('bpSizeKb', `${data.size_kb || '0.0'} KB`);
+
+    const envBadge = document.getElementById('bpEnvironmentBadge');
+    if (envBadge) {
+      const env = (data.environment || 'global').toLowerCase();
+      envBadge.textContent = env.toUpperCase();
+      envBadge.className = `badge ${env === 'prod' ? 'badge-green' : (env === 'sandbox' ? 'badge-yellow' : 'badge-purple')}`;
+    }
+
+    const scopeLabels = {
+      clients: 'Cartera CRM y Pagos',
+      releases: 'Catálogo de Versiones APK',
+      config: 'Configuración GLOBAL',
+    };
+    const scopeBadge = document.getElementById('bpScopeBadge');
+    if (scopeBadge) {
+      scopeBadge.textContent = scopeLabels[data.target_scope] || data.target_scope || 'Respaldo JSON';
+    }
+
+    const tbody = document.getElementById('bpComparisonBody');
+    if (tbody) {
+      const rows = buildBackupComparisonRows(data.target_scope, data.snapshot_summary || {}, data.current_summary || {});
+      tbody.innerHTML = rows.map(r => `
+        <tr>
+          <td><strong>${escapeHtml(r.label)}</strong></td>
+          <td><span style="font-family:var(--font-mono); color:var(--primary); font-weight:700;">${escapeHtml(r.snapVal)}</span></td>
+          <td><span style="font-family:var(--font-mono); color:var(--text-secondary);">${escapeHtml(r.curVal)}</span></td>
+        </tr>
+      `).join('');
+    }
+
+    const btnConfirm = document.getElementById('btnConfirmBackupPreview');
+    if (btnConfirm) btnConfirm.disabled = false;
+
+    openModal('modalBackupPreview');
+  } catch (e) {
+    showToast('Error al cargar vista previa: ' + e.message, 'error');
+  }
+}
+
+const restoreBackup = openBackupRestorePreview;
+
+async function executeConfirmedBackupRestore() {
+  if (!pendingRestoreBackupFilename) return;
+  const filename = pendingRestoreBackupFilename;
+  const btnConfirm = document.getElementById('btnConfirmBackupPreview');
+  if (btnConfirm) btnConfirm.disabled = true;
+
+  try {
+    const res = await fetch('/api/backups/restore', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ filename }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      throw new Error(data.error || 'Error al restaurar respaldo');
+    }
+
+    pendingRestoreBackupFilename = null;
+    closeModal('modalBackupPreview');
+    showToast(data.message || 'Respaldo restaurado exitosamente.', 'success');
+
+    if (data.restored_scope === 'config') {
+      await loadConfig();
+      if (typeof applyConfigToUi === 'function' && ownerConfig) {
+        applyConfigToUi(ownerConfig);
+      }
+      if (typeof renderTemplatePreview === 'function') {
+        renderTemplatePreview();
+      }
+    } else {
+      await loadDashboard();
+      await loadClients();
+      await loadReleases();
+      await loadReleaseMatrix();
+      await loadFinances();
+    }
+    await loadBackups();
+  } catch (e) {
+    if (btnConfirm) btnConfirm.disabled = false;
+    showToast('Error al restaurar: ' + e.message, 'error');
+  }
+}
+
+function confirmPurgeSandboxBackups() {
   showConfirmModal(
-    'Restaurar Base de Datos a este Punto',
-    `¿Estás seguro de restaurar el sistema a partir de "${filename}"? Se creará automáticamente un snapshot de seguridad previo.`,
+    'Limpiar Snapshots Antiguos de Pruebas (Sandbox)',
+    'Se conservarán los 10 snapshots automáticos de Sandbox más recientes y se preservará el 100% de PROD, GLOBAL y respaldos manuales o protegidos (vault/pre_restore). ¿Deseas continuar?',
     async () => {
       try {
-        const res = await fetch('/api/backups/restore', {
+        const res = await fetch('/api/backups/purge-sandbox', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ filename: filename }),
+          body: JSON.stringify({ keep_recent: 10 }),
         });
-        if (!res.ok) {
-          const err = await res.json();
-          throw new Error(err.error || 'Error al restaurar');
-        }
-        showToast('Base de datos restaurada con éxito.', 'success');
-        await loadDashboard();
-        await loadClients();
-        await loadReleases();
-        await loadReleaseMatrix();
-        await loadFinances();
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Error al limpiar snapshots Sandbox');
+        const kb = ((data.freed_bytes || 0) / 1024).toFixed(1);
+        showToast(
+          `Limpieza completada: ${data.deleted_count || 0} snapshots Sandbox eliminados (${kb} KB liberados). PROD/GLOBAL/Manuales intactos.`,
+          'success'
+        );
         await loadBackups();
       } catch (e) {
-        showToast('Error al restaurar: ' + e.message, 'error');
+        showToast('Error al limpiar Sandbox: ' + e.message, 'error');
       }
     },
     true
@@ -11943,13 +12609,272 @@ function escapeHtml(str) {
     .replace(/'/g, '&#039;');
 }
 
-// =================== 8. CENTRO DE PERSONALIZACIÓN TOTAL (FASE 4B) ===================
+// =================== 8. CENTRO DE PERSONALIZACIÓN TOTAL (FASE 4B + PLAN 23 FASE 2) ===================
+
+const SETTINGS_SUBTAB_META = {
+  stabPricing: { scope: 'pricing', label: '1. Tarifario & Bolsas IA' },
+  stabTemplates: { scope: 'templates', label: '2. Plantillas WhatsApp & Chat en Vivo' },
+  stabPayment: { scope: 'payment', label: '3. Medios de Pago & Legal (Perú)' },
+  stabPreferences: { scope: 'preferences', label: '4. Preferencias del Sistema' },
+};
+
+const SETTINGS_TEMPLATE_KEYS = [
+  'license_issued',
+  'expiring_reminder',
+  'trial_welcome',
+  'prospect',
+  'ai_bonus',
+  'courtesy_extension',
+  'apk_update_eligible',
+  'apk_update_quote',
+  'device_migration',
+];
+
+let settingsDraftTemplates = {};
+let activeSettingsTemplateKey = 'license_issued';
+let savedSettingsSnapshot = null;
+let pendingSettingsExitAction = null;
+let hasAppliedInitialConfigTheme = false;
+
+function getActiveSettingsSubTabId() {
+  return document.querySelector('.settings-tab-btn.active')?.dataset?.stab || 'stabPricing';
+}
+
+function getActiveSettingsSubTabScope() {
+  return SETTINGS_SUBTAB_META[getActiveSettingsSubTabId()]?.scope || 'pricing';
+}
+
+function resolveCanonicalTemplateFromMap(templatesMap, key) {
+  const map = templatesMap || {};
+  if (map[key] !== undefined && map[key] !== null) return String(map[key]);
+  const waAlias = typeof resolveWaTemplateKeyFromConfig === 'function'
+    ? resolveWaTemplateKeyFromConfig(key)
+    : key;
+  if (waAlias !== key && map[waAlias] !== undefined && map[waAlias] !== null) {
+    return String(map[waAlias]);
+  }
+  return '';
+}
+
+function syncDraftTemplatesFromConfig(cfg) {
+  const src = cfg?.templates || {};
+  const next = {};
+  SETTINGS_TEMPLATE_KEYS.forEach(k => {
+    const val = resolveCanonicalTemplateFromMap(src, k);
+    if (val !== '') {
+      next[k] = val;
+    } else if (typeof WA_TEMPLATES !== 'undefined') {
+      const waKey = typeof resolveWaTemplateKeyFromConfig === 'function'
+        ? resolveWaTemplateKeyFromConfig(k)
+        : k;
+      next[k] = WA_TEMPLATES[waKey]?.text || '';
+    } else {
+      next[k] = '';
+    }
+  });
+  Object.keys(src).forEach(k => {
+    const canon = typeof resolveConfigTemplateKeyFromWa === 'function'
+      ? resolveConfigTemplateKeyFromWa(k)
+      : k;
+    if (!(canon in next) && src[k] !== undefined && src[k] !== null) {
+      next[canon] = String(src[k]);
+    }
+  });
+  settingsDraftTemplates = next;
+}
+
+function syncTemplateDraftFromSavedConfig(canonKey, newText) {
+  if (!canonKey) return;
+  settingsDraftTemplates[canonKey] = String(newText || '');
+  if (savedSettingsSnapshot?.templates) {
+    savedSettingsSnapshot.templates[canonKey] = String(newText || '').replace(/\r\n/g, '\n');
+  }
+  if (activeSettingsTemplateKey === canonKey) {
+    const ta = document.getElementById('cfgTemplateContent');
+    if (ta) ta.value = String(newText || '');
+    renderTemplatePreview();
+  }
+  updateSettingsDirtyState();
+}
+
+function buildNormalizedSettingsSnapshotFromConfig(cfg) {
+  const catalogSnap = {};
+  const cat = cfg?.catalog || {};
+  Object.keys(cat).sort().forEach(slug => {
+    const item = cat[slug] || {};
+    catalogSnap[slug] = {
+      label: String(item.label || slug).trim(),
+      price: Number(item.price || 0).toFixed(2),
+      days: String(parseInt(item.days ?? 0, 10) || 0),
+      ai_credits: String(parseInt(item.ai_credits ?? 0, 10) || 0),
+      updates_window_months: String(parseInt(item.updates_window_months ?? item.updates_months ?? 0, 10) || 0),
+      description: String(item.description || '').trim(),
+    };
+  });
+  const migFeeNum = (cfg?.catalog?.HARDWARE_MIGRATION_FEE?.price !== undefined)
+    ? cfg.catalog.HARDWARE_MIGRATION_FEE.price
+    : (cfg?.migration_fee ?? 40.0);
+
+  const templatesSnap = {};
+  SETTINGS_TEMPLATE_KEYS.forEach(k => {
+    templatesSnap[k] = resolveCanonicalTemplateFromMap(cfg?.templates, k).replace(/\r\n/g, '\n');
+  });
+
+  const li = cfg?.legal_identity || {};
+  const pm = cfg?.payment_methods || {};
+  const sys = cfg?.system || cfg?.preferences || {};
+
+  return {
+    pricing: {
+      migration_fee: Number(migFeeNum || 0).toFixed(2),
+      catalog: catalogSnap,
+    },
+    templates: templatesSnap,
+    payment: {
+      author_full_name: String(li.author_full_name || '').trim(),
+      commercial_name: String(li.commercial_name || li.brand_name || '').trim(),
+      support_phone: String(li.support_phone || '').trim(),
+      yape_plin_phone: String(pm.yape_plin_phone || '').trim(),
+      yape_plin_holder: String(pm.yape_plin_holder || '').trim(),
+      bcp_account_holder: String(pm.bcp_account_holder || '').trim(),
+      bcp_account_number: String(pm.bcp_account_number || '').trim(),
+      bcp_cci: String(pm.bcp_cci || '').trim(),
+      bbva_account_holder: String(pm.bbva_account_holder || '').trim(),
+      bbva_account_number: String(pm.bbva_account_number || '').trim(),
+      bbva_cci: String(pm.bbva_cci || '').trim(),
+    },
+    preferences: {
+      default_mode: String(sys.default_mode || sys.default_environment || 'sandbox').trim(),
+      theme: String(sys.theme || sys.default_theme || 'dark').trim(),
+      table_density: String(sys.table_density || 'comfortable').trim(),
+    },
+  };
+}
+
+function readCurrentSettingsSnapshotFromDom() {
+  const rawCatalogSnap = {};
+  document.querySelectorAll('.cfg-plan-price').forEach(inp => {
+    const slug = inp.dataset.slug;
+    if (!slug) return;
+    rawCatalogSnap[slug] = {
+      label: String(document.querySelector(`.cfg-plan-label[data-slug="${slug}"]`)?.value || slug).trim(),
+      price: Number(parseFloat(inp.value) || 0).toFixed(2),
+      days: String(parseInt(document.querySelector(`.cfg-plan-days[data-slug="${slug}"]`)?.value ?? 0, 10) || 0),
+      ai_credits: String(parseInt(document.querySelector(`.cfg-plan-ai[data-slug="${slug}"]`)?.value ?? 0, 10) || 0),
+      updates_window_months: String(parseInt(document.querySelector(`.cfg-plan-updates[data-slug="${slug}"]`)?.value ?? 0, 10) || 0),
+      description: String(document.querySelector(`.cfg-plan-desc[data-slug="${slug}"]`)?.value || '').trim(),
+    };
+  });
+  const migFeeEl = document.getElementById('cfgMigrationFee');
+  const migFee = Number(parseFloat(migFeeEl?.value) || 0).toFixed(2);
+  if (rawCatalogSnap.HARDWARE_MIGRATION_FEE) {
+    rawCatalogSnap.HARDWARE_MIGRATION_FEE.price = migFee;
+  }
+  const catalogSnap = {};
+  Object.keys(rawCatalogSnap).sort().forEach(slug => {
+    catalogSnap[slug] = rawCatalogSnap[slug];
+  });
+
+  const tplTextarea = document.getElementById('cfgTemplateContent');
+  if (activeSettingsTemplateKey && tplTextarea) {
+    settingsDraftTemplates[activeSettingsTemplateKey] = tplTextarea.value || '';
+  }
+  const templatesSnap = {};
+  SETTINGS_TEMPLATE_KEYS.forEach(k => {
+    templatesSnap[k] = String(settingsDraftTemplates[k] ?? '').replace(/\r\n/g, '\n');
+  });
+
+  return {
+    pricing: {
+      migration_fee: migFee,
+      catalog: catalogSnap,
+    },
+    templates: templatesSnap,
+    payment: {
+      author_full_name: String(document.getElementById('cfgLegalOwner')?.value || '').trim(),
+      commercial_name: String(document.getElementById('cfgBrandName')?.value || '').trim(),
+      support_phone: String(document.getElementById('cfgSupportPhone')?.value || '').trim(),
+      yape_plin_phone: String(document.getElementById('cfgYapePhone')?.value || '').trim(),
+      yape_plin_holder: String(document.getElementById('cfgYapeHolder')?.value || '').trim(),
+      bcp_account_holder: String(document.getElementById('cfgBcpHolder')?.value || '').trim(),
+      bcp_account_number: String(document.getElementById('cfgBcpAccount')?.value || '').trim(),
+      bcp_cci: String(document.getElementById('cfgBcpCci')?.value || '').trim(),
+      bbva_account_holder: String(document.getElementById('cfgBbvaHolder')?.value || '').trim(),
+      bbva_account_number: String(document.getElementById('cfgBbvaAccount')?.value || '').trim(),
+      bbva_cci: String(document.getElementById('cfgBbvaCci')?.value || '').trim(),
+    },
+    preferences: {
+      default_mode: String(document.getElementById('cfgDefaultEnv')?.value || 'sandbox').trim(),
+      theme: String(document.getElementById('cfgDefaultTheme')?.value || 'dark').trim(),
+      table_density: String(document.getElementById('cfgTableDensity')?.value || 'comfortable').trim(),
+    },
+  };
+}
+
+function getDirtySettingsTabs() {
+  if (!savedSettingsSnapshot || !ownerConfig) return [];
+  const current = readCurrentSettingsSnapshotFromDom();
+  const dirty = [];
+  if (JSON.stringify(current.pricing) !== JSON.stringify(savedSettingsSnapshot.pricing)) {
+    dirty.push('stabPricing');
+  }
+  if (JSON.stringify(current.templates) !== JSON.stringify(savedSettingsSnapshot.templates)) {
+    dirty.push('stabTemplates');
+  }
+  if (JSON.stringify(current.payment) !== JSON.stringify(savedSettingsSnapshot.payment)) {
+    dirty.push('stabPayment');
+  }
+  if (JSON.stringify(current.preferences) !== JSON.stringify(savedSettingsSnapshot.preferences)) {
+    dirty.push('stabPreferences');
+  }
+  return dirty;
+}
+
+function updateSettingsDirtyState() {
+  const dirtyTabs = getDirtySettingsTabs();
+  Object.keys(SETTINGS_SUBTAB_META).forEach(stabId => {
+    const dot = document.querySelector(`.stab-dirty-dot[data-dirty-for="${stabId}"]`);
+    if (dot) dot.classList.toggle('visible', dirtyTabs.includes(stabId));
+  });
+  const badge = document.getElementById('settingsDirtyBadge');
+  const badgeTxt = document.getElementById('settingsDirtyBadgeText');
+  if (badge) {
+    badge.style.display = dirtyTabs.length > 0 ? 'inline-flex' : 'none';
+  }
+  if (badgeTxt && dirtyTabs.length > 0) {
+    badgeTxt.textContent = dirtyTabs.length === 1
+      ? 'Cambios sin guardar (1 sección)'
+      : `Cambios sin guardar (${dirtyTabs.length} secciones)`;
+  }
+  return dirtyTabs;
+}
+
+function guardSettingsExit(proceedCallback) {
+  const dirtyTabs = getDirtySettingsTabs();
+  if (!dirtyTabs || dirtyTabs.length === 0) {
+    return true;
+  }
+
+  pendingSettingsExitAction = typeof proceedCallback === 'function' ? proceedCallback : null;
+  const listEl = document.getElementById('unsavedSettingsList');
+  if (listEl) {
+    listEl.innerHTML = dirtyTabs
+      .map(id => `<div>• <strong>${escapeHtml(SETTINGS_SUBTAB_META[id]?.label || id)}</strong></div>`)
+      .join('');
+  }
+  openModal('modalUnsavedSettings');
+  return false;
+}
 
 async function loadConfig() {
   try {
     const res = await fetch('/api/config');
     if (!res.ok) throw new Error('Error al cargar configuración del propietario');
     ownerConfig = await res.json();
+    if (!hasAppliedInitialConfigTheme && ownerConfig?.system?.theme) {
+      applyTheme(ownerConfig.system.theme);
+      hasAppliedInitialConfigTheme = true;
+    }
     populateSettingsForm(ownerConfig);
     applyConfigToUi(ownerConfig);
     renderTemplatePreview();
@@ -11971,74 +12896,195 @@ function initSettingsEvents() {
     });
   });
 
-  // Selector de plantilla
+  // Selector de plantilla con preservación de borrador en memoria entre cambios
   const tplSelect = document.getElementById('cfgTemplateSelect');
   tplSelect?.addEventListener('change', () => {
-    const tplKey = tplSelect.value;
-    if (ownerConfig && ownerConfig.templates && ownerConfig.templates[tplKey]) {
-      document.getElementById('cfgTemplateContent').value = ownerConfig.templates[tplKey];
-      renderTemplatePreview();
+    const textarea = document.getElementById('cfgTemplateContent');
+    if (activeSettingsTemplateKey && textarea) {
+      settingsDraftTemplates[activeSettingsTemplateKey] = textarea.value || '';
     }
+    const nextKey = tplSelect.value || 'license_issued';
+    activeSettingsTemplateKey = nextKey;
+    const nextVal = settingsDraftTemplates[nextKey] ?? resolveCanonicalTemplateFromMap(ownerConfig?.templates, nextKey);
+    if (textarea) textarea.value = nextVal || '';
+    renderTemplatePreview();
+    updateSettingsDirtyState();
   });
 
-  // Inserción de variable en textarea
+  // Tooltips e inserción de variables en textarea
+  const varHintEl = document.getElementById('templateVarTooltipText');
   document.querySelectorAll('.var-chip').forEach(chip => {
+    chip.addEventListener('mouseenter', () => {
+      if (varHintEl && chip.title) varHintEl.textContent = `${chip.dataset.var}: ${chip.title}`;
+    });
+    chip.addEventListener('focus', () => {
+      if (varHintEl && chip.title) varHintEl.textContent = `${chip.dataset.var}: ${chip.title}`;
+    });
     chip.addEventListener('click', () => {
       const v = chip.dataset.var;
       const textarea = document.getElementById('cfgTemplateContent');
       if (!textarea || !v) return;
-      const start = textarea.selectionStart;
-      const end = textarea.selectionEnd;
+      const start = textarea.selectionStart ?? textarea.value.length;
+      const end = textarea.selectionEnd ?? textarea.value.length;
       const text = textarea.value;
       textarea.value = text.substring(0, start) + v + text.substring(end);
       textarea.selectionStart = textarea.selectionEnd = start + v.length;
-      textarea.focus();
+      textarea.focus?.();
+      settingsDraftTemplates[activeSettingsTemplateKey] = textarea.value;
       triggerTemplatePreviewDebounced();
+      updateSettingsDirtyState();
     });
   });
 
-  // Input en textarea con debounce para preview en vivo
-  document.getElementById('cfgTemplateContent')?.addEventListener('input', () => {
+  // Input en textarea con debounce y borrador en memoria
+  document.getElementById('cfgTemplateContent')?.addEventListener('input', (e) => {
+    if (activeSettingsTemplateKey) {
+      settingsDraftTemplates[activeSettingsTemplateKey] = e.target.value || '';
+    }
     triggerTemplatePreviewDebounced();
+    updateSettingsDirtyState();
   });
+
+  // Copiar Vista Previa renderizada
+  document.getElementById('btnCopyWaPreview')?.addEventListener('click', () => {
+    const bubble = document.getElementById('waBubbleContent');
+    const rawPreviewText = (bubble?.innerText || bubble?.textContent || '').trim();
+    if (!rawPreviewText || rawPreviewText === 'Cargando vista previa interactiva...') {
+      showToast('No hay vista previa disponible para copiar todavía.', 'warning');
+      return;
+    }
+    copyPlainTextToClipboard(rawPreviewText, 'Vista previa de WhatsApp copiada al portapapeles.');
+  });
+
+  // Sincronización bidireccional en vivo Tarifa de Migración (cabecera <-> HARDWARE_MIGRATION_FEE)
+  document.getElementById('cfgMigrationFee')?.addEventListener('input', (e) => {
+    const tablePriceInput = document.querySelector('.cfg-plan-price[data-slug="HARDWARE_MIGRATION_FEE"]');
+    if (tablePriceInput) {
+      tablePriceInput.value = e.target.value;
+    }
+    updateSettingsDirtyState();
+  });
+
+  document.getElementById('catalogConfigTableBody')?.addEventListener('input', (e) => {
+    const target = e.target;
+    if (target?.classList?.contains('cfg-plan-price') && target?.dataset?.slug === 'HARDWARE_MIGRATION_FEE') {
+      const topMigInput = document.getElementById('cfgMigrationFee');
+      if (topMigInput) topMigInput.value = target.value;
+    }
+    updateSettingsDirtyState();
+  });
+
+  // Tracking de dirty state global dentro de #tabSettings
+  const settingsPane = document.getElementById('tabSettings');
+  settingsPane?.addEventListener('input', () => updateSettingsDirtyState());
+  settingsPane?.addEventListener('change', () => updateSettingsDirtyState());
 
   // Cambio reactivo de tema y densidad desde preferencias
   document.getElementById('cfgDefaultTheme')?.addEventListener('change', (e) => {
     applyTheme(e.target.value);
+    updateSettingsDirtyState();
   });
 
   document.getElementById('cfgTableDensity')?.addEventListener('change', (e) => {
     applyTableDensity(e.target.value);
+    updateSettingsDirtyState();
   });
 
-  // Guardar Configuración
-  document.getElementById('btnSaveSettings')?.addEventListener('click', saveOwnerConfig);
-
-  // Restaurar Valores de Fábrica (ambos botones)
-  const triggerReset = () => {
-    showConfirmModal(
-      'Restaurar Valores de Fábrica',
-      '¿Estás seguro de restablecer todas las tarifas comerciales, plantillas de WhatsApp, datos bancarios y preferencias a los valores de fábrica oficiales? Se creará automáticamente un snapshot de respaldo antes de aplicar la restauración.',
-      async () => {
-        try {
-          const res = await fetch('/api/config/reset', { method: 'POST' });
-          if (!res.ok) throw new Error('Error al restablecer configuración');
-          const data = await res.json();
-          ownerConfig = data.config;
-          populateSettingsForm(ownerConfig);
-          applyConfigToUi(ownerConfig);
-          renderTemplatePreview();
-          showToast('Configuración restablecida a los valores oficiales de fábrica.', 'success');
-        } catch (e) {
-          showToast('Error: ' + e.message, 'error');
+  // Atajo a Rutas de Búsqueda de APKs en Tab 4
+  document.getElementById('btnGoToApkSearchDirs')?.addEventListener('click', () => {
+    const releaseNav = document.querySelector('.nav-tab[data-tab="tabReleaseManager"]');
+    if (releaseNav) {
+      releaseNav.click();
+      setTimeout(() => {
+        const targetBtn = document.getElementById('btnManageApkSearchDirs');
+        if (targetBtn && typeof targetBtn.scrollIntoView === 'function') {
+          targetBtn.scrollIntoView({ behavior: 'smooth', block: 'center' });
         }
-      },
-      true
-    );
-  };
+        targetBtn?.focus?.();
+      }, 180);
+    }
+  });
 
-  document.getElementById('btnResetSettings')?.addEventListener('click', triggerReset);
-  document.getElementById('btnTriggerResetSettings')?.addEventListener('click', triggerReset);
+  // Guardar solo esta pestaña / Guardar todo
+  document.getElementById('btnSaveSettingsTab')?.addEventListener('click', () => {
+    saveOwnerConfig({ scope: getActiveSettingsSubTabScope() });
+  });
+  document.getElementById('btnSaveSettings')?.addEventListener('click', () => {
+    saveOwnerConfig({ scope: 'all' });
+  });
+
+  // Modal de Restauración con Alcance Explícito (#btnResetSettings)
+  document.getElementById('btnResetSettings')?.addEventListener('click', () => {
+    const activeId = getActiveSettingsSubTabId();
+    const lblEl = document.getElementById('resetCurrentTabLabel');
+    if (lblEl) {
+      lblEl.textContent = SETTINGS_SUBTAB_META[activeId]?.label || 'Pestaña actual';
+    }
+    openModal('modalResetSettingsScope');
+  });
+
+  document.getElementById('btnResetScopeCurrentTab')?.addEventListener('click', async () => {
+    closeModal('modalResetSettingsScope');
+    await resetOwnerConfigByScope(getActiveSettingsSubTabScope());
+  });
+  document.getElementById('btnResetScopeAll')?.addEventListener('click', async () => {
+    closeModal('modalResetSettingsScope');
+    await resetOwnerConfigByScope('all');
+  });
+  document.getElementById('btnResetScopeCancel')?.addEventListener('click', () => closeModal('modalResetSettingsScope'));
+  document.getElementById('btnCloseResetScopeModal')?.addEventListener('click', () => closeModal('modalResetSettingsScope'));
+
+  // Modal de Dirty Guard (#modalUnsavedSettings)
+  const closeUnsaved = () => {
+    pendingSettingsExitAction = null;
+    closeModal('modalUnsavedSettings');
+  };
+  document.getElementById('btnUnsavedKeepEditing')?.addEventListener('click', closeUnsaved);
+  document.getElementById('btnCloseUnsavedSettingsModal')?.addEventListener('click', closeUnsaved);
+  document.getElementById('btnUnsavedDiscardAndContinue')?.addEventListener('click', () => {
+    const nextAction = pendingSettingsExitAction;
+    pendingSettingsExitAction = null;
+    closeModal('modalUnsavedSettings');
+    populateSettingsForm(ownerConfig);
+    applyConfigToUi(ownerConfig);
+    renderTemplatePreview();
+    if (nextAction) nextAction();
+  });
+  document.getElementById('btnUnsavedSaveAndContinue')?.addEventListener('click', async () => {
+    const nextAction = pendingSettingsExitAction;
+    const ok = await saveOwnerConfig({ scope: 'all' });
+    if (ok) {
+      pendingSettingsExitAction = null;
+      closeModal('modalUnsavedSettings');
+      if (nextAction) nextAction();
+    }
+  });
+
+  if (typeof initCommercialSyncModalEvents === 'function') {
+    initCommercialSyncModalEvents();
+  }
+}
+
+async function resetOwnerConfigByScope(scope = 'all') {
+  try {
+    const res = await fetch('/api/config/reset', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ scope }),
+    });
+    if (!res.ok) throw new Error('Error al restablecer configuración');
+    const data = await res.json();
+    ownerConfig = data.config;
+    populateSettingsForm(ownerConfig);
+    applyConfigToUi(ownerConfig);
+    if ((scope === 'all' || scope === 'preferences') && ownerConfig?.system?.theme) {
+      applyTheme(ownerConfig.system.theme);
+    }
+    renderTemplatePreview();
+    showToast(data.message || 'Configuración restablecida a los valores oficiales de fábrica.', 'success');
+  } catch (e) {
+    showToast('Error: ' + e.message, 'error');
+  }
 }
 
 function triggerTemplatePreviewDebounced() {
@@ -12066,15 +13112,16 @@ async function renderTemplatePreview() {
           negocio: 'Librería Central',
           plan: 'MENSUAL',
           dias: '30',
+          dias_restantes: '3',
           vencimiento: '2026-12-31',
           creditos_ia: '100',
           codigo: 'ML9-DEMO-ACTIVATION-TOKEN-XXXXX',
-          version: '9.35.0',
-          version_actual: '9.32.0',
+          version: '9.41.0',
+          version_actual: '9.38.0',
           device_id: 'ML-9K4B',
           changelog: 'Mejoras en el escáner IA y velocidad.',
           link_descarga: 'https://drive.google.com/file/d/demo/view (o adjunto en chat)',
-          precio_pase: '150.00',
+          precio_pase: Number(ownerConfig?.catalog?.PASE_ACTUALIZACION_ANUAL?.price ?? 150).toFixed(2),
         },
       }),
     });
@@ -12093,14 +13140,47 @@ async function renderTemplatePreview() {
 function formatWhatsAppPreview(rawText) {
   if (!rawText) return '';
   let escaped = escapeHtml(rawText);
-  // Reemplazar *negrita* con <strong>negrita</strong>
+  escaped = escaped.replace(/`([^`\n]+)`/g, '<code>$1</code>');
   escaped = escaped.replace(/\*([^*\n]+)\*/g, '<strong>$1</strong>');
-  // Reemplazar _cursiva_ con <em>cursiva</em>
   escaped = escaped.replace(/_([^_\n]+)_/g, '<em>$1</em>');
-  // Reemplazar ~tachado~ con <del>tachado</del>
   escaped = escaped.replace(/~([^~\n]+)~/g, '<del>$1</del>');
-  // Saltos de línea
   return escaped.replace(/\n/g, '<br>');
+}
+
+function renderSettingsApkDirsSummary(cfg) {
+  const container = document.getElementById('settingsApkDirsSummary');
+  if (!container) return;
+  const dirs = cfg?.system?.apk_search_dirs;
+  if (!Array.isArray(dirs) || dirs.length === 0) {
+    const fallbackLib = cfg?.system?.apk_library_dir || 'No configurada';
+    container.innerHTML = `
+      <div class="settings-apk-dir-row">
+        <div>
+          <strong>Biblioteca Oficial</strong>
+          <div class="settings-apk-dir-path">${escapeHtml(fallbackLib)}</div>
+        </div>
+        <span class="badge badge-green">Activa</span>
+      </div>
+    `;
+    return;
+  }
+
+  container.innerHTML = dirs.map(d => {
+    const label = d.label || (d.kind === 'official_library' ? 'Biblioteca Oficial' : 'Carpeta Personalizada');
+    const enabled = d.enabled !== false;
+    return `
+      <div class="settings-apk-dir-row">
+        <div>
+          <div style="font-weight:600; color:var(--text-primary);">${escapeHtml(label)}</div>
+          <div class="settings-apk-dir-path">${escapeHtml(d.path || '-')}</div>
+        </div>
+        <div style="display:flex; gap:0.35rem; align-items:center;">
+          ${d.is_default ? '<span class="badge badge-mono">Fábrica</span>' : '<span class="badge badge-purple">Personalizada</span>'}
+          <span class="badge ${enabled ? 'badge-green' : 'badge-amber'}">${enabled ? 'Activa' : 'Omitida'}</span>
+        </div>
+      </div>
+    `;
+  }).join('');
 }
 
 function populateSettingsForm(cfg) {
@@ -12112,14 +13192,15 @@ function populateSettingsForm(cfg) {
     tbody.innerHTML = '';
     const catalog = cfg.catalog;
     for (const [slug, item] of Object.entries(catalog)) {
+      const updatesVal = item.updates_window_months ?? item.updates_months ?? 0;
       const tr = document.createElement('tr');
       tr.innerHTML = `
         <td><strong style="font-family:var(--font-mono);">${slug}</strong></td>
         <td><input type="text" class="cfg-plan-label" data-slug="${slug}" value="${escapeHtml(item.label || slug)}" style="width:100%; min-width:140px; font-size:0.85rem;"></td>
-        <td><input type="number" class="cfg-plan-price" data-slug="${slug}" value="${(item.price || 0).toFixed(2)}" step="0.5" min="0" style="width:100%; font-weight:700; text-align:right;"></td>
+        <td><input type="number" class="cfg-plan-price" data-slug="${slug}" value="${Number(item.price || 0).toFixed(2)}" step="0.5" min="0" style="width:100%; font-weight:700; text-align:right;"></td>
         <td><input type="number" class="cfg-plan-days" data-slug="${slug}" value="${item.days || 0}" min="0" style="width:100%; text-align:right;"></td>
         <td><input type="number" class="cfg-plan-ai" data-slug="${slug}" value="${item.ai_credits || 0}" min="0" style="width:100%; text-align:right; color:var(--primary); font-weight:700;"></td>
-        <td><input type="number" class="cfg-plan-updates" data-slug="${slug}" value="${item.updates_window_months || 0}" min="0" style="width:100%; text-align:right;"></td>
+        <td><input type="number" class="cfg-plan-updates" data-slug="${slug}" value="${updatesVal}" min="0" style="width:100%; text-align:right;"></td>
         <td><input type="text" class="cfg-plan-desc" data-slug="${slug}" value="${escapeHtml(item.description || '')}" style="width:100%; min-width:180px; font-size:0.82rem;"></td>
       `;
       tbody.appendChild(tr);
@@ -12135,12 +13216,14 @@ function populateSettingsForm(cfg) {
     migFeeInput.value = Number(migPrice).toFixed(2);
   }
 
-  // 2. Plantillas
+  // 2. Plantillas (con borrador en memoria)
+  syncDraftTemplatesFromConfig(cfg);
   const tplSelect = document.getElementById('cfgTemplateSelect');
   const tplTextarea = document.getElementById('cfgTemplateContent');
-  if (tplSelect && tplTextarea && cfg.templates) {
+  if (tplSelect && tplTextarea) {
     const selKey = tplSelect.value || 'license_issued';
-    tplTextarea.value = cfg.templates[selKey] || '';
+    activeSettingsTemplateKey = selKey;
+    tplTextarea.value = settingsDraftTemplates[selKey] || resolveCanonicalTemplateFromMap(cfg.templates, selKey) || '';
   }
 
   // 3. Legal & Pagos
@@ -12168,6 +13251,10 @@ function populateSettingsForm(cfg) {
   setInputValue('cfgDefaultEnv', sys.default_mode || sys.default_environment || 'sandbox');
   setInputValue('cfgDefaultTheme', sys.theme || sys.default_theme || 'dark');
   setInputValue('cfgTableDensity', sys.table_density || 'comfortable');
+  renderSettingsApkDirsSummary(cfg);
+
+  savedSettingsSnapshot = buildNormalizedSettingsSnapshotFromConfig(cfg);
+  updateSettingsDirtyState();
 }
 
 function setInputValue(id, val) {
@@ -12184,24 +13271,56 @@ function applyConfigToUi(cfg) {
     if (seal) seal.textContent = cfg.legal_identity.author_full_name;
   }
 
+  // Sincronizar plantillas del compositor universal de WhatsApp
+  if (typeof syncWaTemplatesFromOwnerConfig === 'function') {
+    syncWaTemplatesFromOwnerConfig(cfg);
+  }
+
   // Aplicar densidad de tablas
   const density = cfg.system?.table_density || cfg.preferences?.table_density || 'comfortable';
   applyTableDensity(density);
 
-  // Actualizar opciones en el Generador de Licencias
+  // Actualizar resumen de Rutas APK en Tab 4
+  renderSettingsApkDirsSummary(cfg);
+
+  // Actualizar opciones en el Generador de Licencias, Modal de Pago Manual y Drawer 360
   if (cfg.catalog) {
     const planSelect = document.getElementById('licPlanSelect');
     if (planSelect) {
       for (const opt of planSelect.options) {
         const item = cfg.catalog[opt.value];
         if (item) {
-          opt.setAttribute('data-price', (item.price || 0).toFixed(2));
+          opt.setAttribute('data-price', Number(item.price || 0).toFixed(2));
           opt.setAttribute('data-days', item.days || 0);
           opt.setAttribute('data-scans', item.ai_credits || 0);
-          opt.textContent = `${item.label || opt.value} (S/ ${(item.price || 0).toFixed(2)})`;
+          opt.textContent = `${item.label || opt.value} (S/ ${Number(item.price || 0).toFixed(2)})`;
         }
       }
       updatePlanImpactAndProjection();
+    }
+
+    const manualPreset = document.getElementById('manualPayPlanPreset');
+    if (manualPreset) {
+      for (const opt of manualPreset.options) {
+        const item = opt.value === 'SERVICIO_MIGRACION'
+          ? cfg.catalog.HARDWARE_MIGRATION_FEE
+          : cfg.catalog[opt.value];
+        if (item) {
+          const p = Number(item.price || 0);
+          opt.setAttribute('data-price', p.toFixed(2));
+          opt.textContent = `${item.label || opt.value} (S/ ${p.toFixed(2)})`;
+        }
+      }
+    }
+
+    const drawerPlanSel = document.getElementById('drawerEditPlanSelect');
+    if (drawerPlanSel) {
+      for (const opt of drawerPlanSel.options) {
+        const item = cfg.catalog[opt.value];
+        if (item) {
+          opt.textContent = `${item.label || opt.value} (S/ ${Number(item.price || 0).toFixed(2)})`;
+        }
+      }
     }
   }
 
@@ -12232,94 +13351,148 @@ function applyTableDensity(density) {
   });
 }
 
-async function saveOwnerConfig() {
-  if (!ownerConfig) return;
+function collectCatalogPayloadFromDom(baseCatalog) {
+  const catalog = JSON.parse(JSON.stringify(baseCatalog || {}));
+  document.querySelectorAll('.cfg-plan-price').forEach(inp => {
+    const slug = inp.dataset.slug;
+    if (catalog[slug]) {
+      const updatesVal = Math.max(0, parseInt(document.querySelector(`.cfg-plan-updates[data-slug="${slug}"]`)?.value, 10) || 0);
+      const descInput = document.querySelector(`.cfg-plan-desc[data-slug="${slug}"]`);
+      const rawDesc = descInput ? descInput.value.trim() : (catalog[slug].description || '');
+      catalog[slug] = {
+        ...catalog[slug],
+        price: Math.max(0, parseFloat(inp.value) || 0),
+        days: Math.max(0, parseInt(document.querySelector(`.cfg-plan-days[data-slug="${slug}"]`)?.value, 10) || 0),
+        ai_credits: Math.max(0, parseInt(document.querySelector(`.cfg-plan-ai[data-slug="${slug}"]`)?.value, 10) || 0),
+        updates_window_months: updatesVal,
+        updates_months: updatesVal,
+        label: document.querySelector(`.cfg-plan-label[data-slug="${slug}"]`)?.value?.trim() || catalog[slug].label,
+        description: rawDesc || catalog[slug].description || '',
+      };
+    }
+  });
+
+  const migFeeVal = Math.max(0, parseFloat(document.getElementById('cfgMigrationFee')?.value) || 40.0);
+  const tableMigInput = document.querySelector('.cfg-plan-price[data-slug="HARDWARE_MIGRATION_FEE"]');
+  const effectiveMigPrice = tableMigInput
+    ? Math.max(0, parseFloat(document.getElementById('cfgMigrationFee')?.value ?? tableMigInput.value) || 0)
+    : migFeeVal;
+
+  catalog.HARDWARE_MIGRATION_FEE = {
+    ...(catalog.HARDWARE_MIGRATION_FEE || {}),
+    price: effectiveMigPrice,
+    label: catalog.HARDWARE_MIGRATION_FEE?.label || 'Tarifa Técnica de Migración',
+  };
+  return { catalog, migFeeVal: effectiveMigPrice };
+}
+
+function collectTemplatesPayloadFromDom(baseTemplates) {
+  const templates = JSON.parse(JSON.stringify(baseTemplates || {}));
+  const curContentEl = document.getElementById('cfgTemplateContent');
+  if (activeSettingsTemplateKey && curContentEl) {
+    settingsDraftTemplates[activeSettingsTemplateKey] = curContentEl.value ?? '';
+  }
+  Object.entries(settingsDraftTemplates).forEach(([k, val]) => {
+    const canon = typeof resolveConfigTemplateKeyFromWa === 'function'
+      ? resolveConfigTemplateKeyFromWa(k)
+      : k;
+    templates[canon] = val;
+  });
+  return templates;
+}
+
+async function saveOwnerConfig(options = {}) {
+  if (!ownerConfig) return false;
+  const scope = (options && typeof options === 'object' && typeof options.scope === 'string')
+    ? options.scope
+    : 'all';
 
   try {
-    // 1. Recoger valores del catálogo
-    const catalog = { ...ownerConfig.catalog };
-    document.querySelectorAll('.cfg-plan-price').forEach(inp => {
-      const slug = inp.dataset.slug;
-      if (catalog[slug]) {
-        catalog[slug] = {
-          ...catalog[slug],
-          price: Math.max(0, parseFloat(inp.value) || 0),
-          days: Math.max(0, parseInt(document.querySelector(`.cfg-plan-days[data-slug="${slug}"]`)?.value) || 0),
-          ai_credits: Math.max(0, parseInt(document.querySelector(`.cfg-plan-ai[data-slug="${slug}"]`)?.value) || 0),
-          updates_window_months: Math.max(0, parseInt(document.querySelector(`.cfg-plan-updates[data-slug="${slug}"]`)?.value) || 0),
-          label: document.querySelector(`.cfg-plan-label[data-slug="${slug}"]`)?.value?.trim() || catalog[slug].label,
-          description: document.querySelector(`.cfg-plan-desc[data-slug="${slug}"]`)?.value?.trim() || catalog[slug].description,
-        };
-      }
-    });
+    const baseConfig = JSON.parse(JSON.stringify(ownerConfig));
+    const newConfig = JSON.parse(JSON.stringify(baseConfig));
 
-    const migFeeVal = Math.max(0, parseFloat(document.getElementById('cfgMigrationFee')?.value) || 40.0);
-    catalog['HARDWARE_MIGRATION_FEE'] = {
-      price: migFeeVal,
-      label: 'Tarifa Técnica de Migración',
-    };
+    // Preservar siempre rutas de búsqueda APK (Plan 22.5)
+    const preservedApkLib = baseConfig?.system?.apk_library_dir;
+    const preservedSearchDirs = baseConfig?.system?.apk_search_dirs;
 
-    // 2. Plantillas
-    const templates = { ...ownerConfig.templates };
-    const curKey = document.getElementById('cfgTemplateSelect')?.value;
-    const curContent = document.getElementById('cfgTemplateContent')?.value;
-    if (curKey && curContent) {
-      templates[curKey] = curContent;
+    if (scope === 'all' || scope === 'pricing') {
+      const { catalog, migFeeVal } = collectCatalogPayloadFromDom(baseConfig.catalog);
+      newConfig.catalog = catalog;
+      newConfig.migration_fee = migFeeVal;
     }
 
-    // 3. Legal
-    const legalIdentity = {
-      author_full_name: document.getElementById('cfgLegalOwner')?.value?.trim() || 'Julio Angello Vasquez Navarro',
-      brand_name: document.getElementById('cfgBrandName')?.value?.trim() || 'MochilaLista',
-      commercial_name: document.getElementById('cfgBrandName')?.value?.trim() || 'MochilaLista',
-      support_phone: document.getElementById('cfgSupportPhone')?.value?.trim() || '+51 922 836 879',
-      support_whatsapp_url: ownerConfig?.legal_identity?.support_whatsapp_url || 'https://wa.me/51922836879',
-      official_website: ownerConfig?.legal_identity?.official_website || 'https://mochilalista.com',
-      legal_framework: ownerConfig?.legal_identity?.legal_framework || 'Protegido por el D.L. 822 (Ley de Derecho de Autor) e INDECOPI Perú',
-      personal_data_law: ownerConfig?.legal_identity?.personal_data_law || 'Ley N° 29733 (Ley de Protección de Datos Personales)',
-    };
+    if (scope === 'all' || scope === 'templates') {
+      newConfig.templates = collectTemplatesPayloadFromDom(baseConfig.templates);
+    }
 
-    // 4. Medios de pago
-    const paymentMethods = {
-      yape_plin_phone: document.getElementById('cfgYapePhone')?.value?.trim() || '922836879',
-      yape_plin_holder: document.getElementById('cfgYapeHolder')?.value?.trim() || 'Julio Angello Vasquez Navarro',
-      bcp_account_holder: document.getElementById('cfgBcpHolder')?.value?.trim() || '',
-      bcp_account_number: document.getElementById('cfgBcpAccount')?.value?.trim() || '',
-      bcp_cci: document.getElementById('cfgBcpCci')?.value?.trim() || '',
-      bbva_account_holder: document.getElementById('cfgBbvaHolder')?.value?.trim() || '',
-      bbva_account_number: document.getElementById('cfgBbvaAccount')?.value?.trim() || '',
-      bbva_cci: document.getElementById('cfgBbvaCci')?.value?.trim() || '',
-    };
+    if (scope === 'all' || scope === 'payment') {
+      const prevBrand = baseConfig?.legal_identity?.commercial_name || baseConfig?.legal_identity?.brand_name || 'MochilaLista';
+      const prevAuthor = baseConfig?.legal_identity?.author_full_name || 'Julio Angello Vasquez Navarro';
+      const prevPhone = baseConfig?.legal_identity?.support_phone || '+51 922 836 879';
 
-    // 5. Preferencias y Sistema
-    const defaultEnv = document.getElementById('cfgDefaultEnv')?.value || 'sandbox';
-    const defaultTheme = document.getElementById('cfgDefaultTheme')?.value || 'dark';
-    const tableDensity = document.getElementById('cfgTableDensity')?.value || 'comfortable';
+      const nextAuthor = document.getElementById('cfgLegalOwner')?.value?.trim() || 'Julio Angello Vasquez Navarro';
+      const nextBrand = document.getElementById('cfgBrandName')?.value?.trim() || 'MochilaLista';
+      const nextPhone = document.getElementById('cfgSupportPhone')?.value?.trim() || '+51 922 836 879';
 
-    const system = {
-      ...(ownerConfig?.system || {}),
-      default_mode: defaultEnv,
-      theme: defaultTheme,
-      table_density: tableDensity,
-      version: ownerConfig?.system?.version || '1.0.0',
-    };
+      newConfig.legal_identity = {
+        ...(baseConfig.legal_identity || {}),
+        author_full_name: nextAuthor,
+        brand_name: nextBrand,
+        commercial_name: nextBrand,
+        support_phone: nextPhone,
+        support_whatsapp_url: baseConfig?.legal_identity?.support_whatsapp_url || 'https://wa.me/51922836879',
+        official_website: baseConfig?.legal_identity?.official_website || 'https://mochilalista.com',
+        legal_framework: baseConfig?.legal_identity?.legal_framework || 'Protegido por el D.L. 822 (Ley de Derecho de Autor) e INDECOPI Perú',
+        personal_data_law: baseConfig?.legal_identity?.personal_data_law || 'Ley N° 29733 (Ley de Protección de Datos Personales)',
+      };
 
-    const preferences = {
-      default_environment: defaultEnv,
-      default_theme: defaultTheme,
-      table_density: tableDensity,
-    };
+      newConfig.payment_methods = {
+        yape_plin_phone: document.getElementById('cfgYapePhone')?.value?.trim() || '922836879',
+        yape_plin_holder: document.getElementById('cfgYapeHolder')?.value?.trim() || 'Julio Angello Vasquez Navarro',
+        bcp_account_holder: document.getElementById('cfgBcpHolder')?.value?.trim() || '',
+        bcp_account_number: document.getElementById('cfgBcpAccount')?.value?.trim() || '',
+        bcp_cci: document.getElementById('cfgBcpCci')?.value?.trim() || '',
+        bbva_account_holder: document.getElementById('cfgBbvaHolder')?.value?.trim() || '',
+        bbva_account_number: document.getElementById('cfgBbvaAccount')?.value?.trim() || '',
+        bbva_cci: document.getElementById('cfgBbvaCci')?.value?.trim() || '',
+      };
 
-    const newConfig = {
-      ...ownerConfig,
-      catalog,
-      migration_fee: migFeeVal,
-      templates,
-      legal_identity: legalIdentity,
-      payment_methods: paymentMethods,
-      system,
-      preferences,
-    };
+      if (newConfig.receipt_config) {
+        const rc = { ...newConfig.receipt_config };
+        if (!rc.issuer_name || rc.issuer_name === prevAuthor) rc.issuer_name = nextAuthor;
+        if (!rc.commercial_name || rc.commercial_name === prevBrand) rc.commercial_name = nextBrand;
+        if (!rc.issuer_phone || rc.issuer_phone === prevPhone) rc.issuer_phone = nextPhone;
+        newConfig.receipt_config = rc;
+      }
+    }
+
+    if (scope === 'all' || scope === 'preferences') {
+      const defaultEnv = document.getElementById('cfgDefaultEnv')?.value || 'sandbox';
+      const defaultTheme = document.getElementById('cfgDefaultTheme')?.value || 'dark';
+      const tableDensity = document.getElementById('cfgTableDensity')?.value || 'comfortable';
+
+      newConfig.system = {
+        ...(baseConfig.system || {}),
+        default_mode: defaultEnv,
+        theme: defaultTheme,
+        table_density: tableDensity,
+        version: baseConfig?.system?.version || '1.0.0',
+      };
+
+      newConfig.preferences = {
+        default_environment: defaultEnv,
+        default_theme: defaultTheme,
+        table_density: tableDensity,
+      };
+    }
+
+    newConfig.system = { ...(newConfig.system || {}) };
+    if (preservedApkLib && !newConfig.system.apk_library_dir) {
+      newConfig.system.apk_library_dir = preservedApkLib;
+    }
+    if (Array.isArray(preservedSearchDirs) && (!Array.isArray(newConfig.system.apk_search_dirs) || newConfig.system.apk_search_dirs.length === 0)) {
+      newConfig.system.apk_search_dirs = preservedSearchDirs;
+    }
 
     const res = await fetch('/api/config', {
       method: 'PUT',
@@ -12330,11 +13503,38 @@ async function saveOwnerConfig() {
     if (!res.ok) throw new Error('Error al guardar la configuración');
 
     ownerConfig = await res.json();
-    populateSettingsForm(ownerConfig);
+    const freshSnap = buildNormalizedSettingsSnapshotFromConfig(ownerConfig);
+
+    if (scope === 'all') {
+      populateSettingsForm(ownerConfig);
+    } else {
+      if (!savedSettingsSnapshot) savedSettingsSnapshot = freshSnap;
+      savedSettingsSnapshot[scope] = freshSnap[scope];
+      if (scope === 'templates') {
+        syncDraftTemplatesFromConfig(ownerConfig);
+      }
+      updateSettingsDirtyState();
+    }
+
+    if ((scope === 'all' || scope === 'preferences') && ownerConfig?.system?.theme) {
+      applyTheme(ownerConfig.system.theme);
+    }
+
     applyConfigToUi(ownerConfig);
-    showToast('¡Configuración guardada exitosamente! Snapshot automático creado en backups/.', 'success');
+    renderTemplatePreview();
+
+    const scopeOkMessages = {
+      all: '¡Toda la configuración guardada! Snapshot automático creado en backups/.',
+      pricing: 'Tarifario y bolsas IA guardados y propagados en el sistema.',
+      templates: 'Plantillas de WhatsApp guardadas y sincronizadas con el Compositor CRM.',
+      payment: 'Medios de pago e identidad legal guardados y propagados.',
+      preferences: 'Preferencias del sistema guardadas en disco.',
+    };
+    showToast(scopeOkMessages[scope] || scopeOkMessages.all, 'success');
+    return true;
   } catch (err) {
     showToast('Error al guardar: ' + err.message, 'error');
+    return false;
   }
 }
 
@@ -12394,6 +13594,321 @@ function renderConfigTemplate(templateKey, context = {}) {
   return template;
 }
 
+// =================== 8B. EMISOR DECLARATIVO MLC1- Y EXPORTADOR DART (PLAN 23 FASE 3) ===================
+
+let lastGeneratedMlc1Data = null;
+
+function initCommercialSyncModalEvents() {
+  document.getElementById('btnOpenCommercialSyncModal')?.addEventListener('click', () => {
+    openCommercialConfigSyncModal();
+  });
+
+  document.querySelectorAll('.btn-open-commercial-sync').forEach(btn => {
+    btn.addEventListener('click', () => {
+      openCommercialConfigSyncModal();
+    });
+  });
+
+  document.getElementById('btnCloseCommercialSyncModal')?.addEventListener('click', () => {
+    closeModal('modalCommercialConfigSync');
+  });
+  document.getElementById('btnDismissCommercialSyncModal')?.addEventListener('click', () => {
+    closeModal('modalCommercialConfigSync');
+  });
+
+  document.querySelectorAll('.mlc1-tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const targetId = btn.dataset.mlc1Tab;
+      document.querySelectorAll('.mlc1-tab-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.mlc1-tab-pane').forEach(p => p.classList.remove('active'));
+      btn.classList.add('active');
+      if (targetId) document.getElementById(targetId)?.classList.add('active');
+    });
+  });
+
+  document.getElementById('btnGenerateMlc1Token')?.addEventListener('click', () => {
+    generateMlc1SyncToken();
+  });
+
+  document.getElementById('btnCopyMlc1Token')?.addEventListener('click', () => {
+    const tok = document.getElementById('mlc1TokenOutput')?.value?.trim() || '';
+    if (!tok) {
+      showToast('Genera primero una ficha MLC1 para copiarla.', 'warning');
+      return;
+    }
+    copyPlainTextToClipboard(tok, 'Código MLC1 copiado al portapapeles.');
+  });
+
+  document.getElementById('btnDownloadMlc1Qr')?.addEventListener('click', () => {
+    const rev = lastGeneratedMlc1Data?.revision || ownerConfig?.system?.commercial_sync_revision || 1;
+    downloadQrWithQuietZone('#mlc1QrContainer', `QR_Tarifas_MochilaLista_MLC1_Rev${rev}.png`, 32);
+  });
+
+  document.getElementById('btnCopyMlc1Qr')?.addEventListener('click', () => {
+    copyMlc1QrToClipboard();
+  });
+
+  document.getElementById('btnSendMlc1Whatsapp')?.addEventListener('click', () => {
+    shareMlc1TokenViaWhatsApp();
+  });
+
+  document.getElementById('btnCopyMlc1Dart')?.addEventListener('click', () => {
+    const code = document.getElementById('mlc1DartSnippetOutput')?.value || '';
+    if (!code.trim()) {
+      showToast('No hay constantes Dart cargadas todavía.', 'warning');
+      return;
+    }
+    copyPlainTextToClipboard(code, 'Bloque de constantes Dart copiado al portapapeles.');
+  });
+}
+
+function openCommercialConfigSyncModal() {
+  const dirtyTabs = typeof getDirtySettingsTabs === 'function' ? getDirtySettingsTabs() : [];
+  if (dirtyTabs.length > 0) {
+    const labels = dirtyTabs
+      .map(id => SETTINGS_SUBTAB_META[id]?.label || id)
+      .join(', ');
+    if (typeof showConfirmModal === 'function') {
+      showConfirmModal(
+        'Cambios sin guardar en Configuración',
+        `Tienes modificaciones pendientes en: ${labels}. Para evitar emitir una ficha MLC1 con tarifas o cuentas desactualizadas, debes guardar primero. ¿Deseas guardar todos los cambios ahora y continuar?`,
+        async () => {
+          const savedOk = await saveOwnerConfig({ scope: 'all' });
+          if (savedOk) {
+            await loadAndOpenCommercialSyncModal();
+          }
+        }
+      );
+    } else {
+      showToast('Guarda primero los cambios pendientes antes de sincronizar con la app móvil.', 'warning');
+    }
+    return false;
+  }
+
+  loadAndOpenCommercialSyncModal();
+  return true;
+}
+
+function renderMlc1CommercialSummary(summary) {
+  const accEl = document.getElementById('mlc1AccountsSummary');
+  const tbody = document.getElementById('mlc1PlansSummaryBody');
+  if (!summary) return;
+
+  if (accEl) {
+    const bcpTxt = summary.bcp_configured && summary.bcp?.acc
+      ? `BCP: ${summary.bcp.acc}${summary.bcp.cci ? ` (CCI: ${summary.bcp.cci})` : ''}`
+      : 'BCP: Omitido';
+    const bbvaTxt = summary.bbva_configured && summary.bbva?.acc
+      ? `BBVA: ${summary.bbva.acc}${summary.bbva.cci ? ` (CCI: ${summary.bbva.cci})` : ''}`
+      : 'BBVA: Omitido';
+    accEl.innerHTML = `
+      <span><strong>Soporte:</strong> ${escapeHtml(summary.support_phone || '-')}</span>
+      <span><strong>Yape/Plin:</strong> ${escapeHtml(summary.yape_phone || '-')} (${escapeHtml(summary.yape_holder || '-')})</span>
+      <span><strong>${escapeHtml(bcpTxt)}</strong></span>
+      <span><strong>${escapeHtml(bbvaTxt)}</strong></span>
+    `;
+  }
+
+  if (tbody && Array.isArray(summary.plans)) {
+    tbody.innerHTML = summary.plans.map(p => {
+      const daysTxt = p.days >= 99999 ? 'Vitalicia' : `${p.days || 0} d`;
+      const updTxt = (p.updates_months || 0) > 0 ? `${p.updates_months} m` : '-';
+      return `
+        <tr>
+          <td><strong>${escapeHtml(p.label || p.id)}</strong> <code style="font-size:0.72rem; color:var(--text-muted);">${escapeHtml(p.id)}</code></td>
+          <td style="text-align:right; font-family:var(--font-mono);">S/ ${Number(p.price || 0).toFixed(2)}</td>
+          <td style="text-align:right;">${daysTxt}</td>
+          <td style="text-align:right;">+${p.ai_credits || 0} IA</td>
+          <td style="text-align:right;">${updTxt}</td>
+        </tr>
+      `;
+    }).join('');
+  }
+}
+
+async function loadAndOpenCommercialSyncModal() {
+  // Asegurar pestaña Vía 1 activa al abrir
+  document.querySelectorAll('.mlc1-tab-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.mlc1Tab === 'mlc1PaneToken');
+  });
+  document.querySelectorAll('.mlc1-tab-pane').forEach(p => {
+    p.classList.toggle('active', p.id === 'mlc1PaneToken');
+  });
+
+  openModal('modalCommercialConfigSync');
+
+  try {
+    const res = await fetch('/api/config/dart-defaults-snippet');
+    if (!res.ok) throw new Error('Error al consultar configuración comercial');
+    const data = await res.json();
+
+    const revBadge = document.getElementById('mlc1RevisionBadge');
+    if (revBadge) revBadge.textContent = `Revisión #${data.revision ?? 0}`;
+
+    const dartOut = document.getElementById('mlc1DartSnippetOutput');
+    if (dartOut) dartOut.value = data.dart_snippet || '';
+
+    if (data.summary) renderMlc1CommercialSummary(data.summary);
+
+    const hasSameToken = lastGeneratedMlc1Data &&
+      lastGeneratedMlc1Data.revision === data.revision &&
+      data.revision > 0 &&
+      lastGeneratedMlc1Data.token;
+    const resultContainer = document.getElementById('mlc1TokenResultContainer');
+    const emptyHint = document.getElementById('mlc1EmptyResultHint');
+    if (resultContainer && emptyHint) {
+      resultContainer.style.display = hasSameToken ? 'grid' : 'none';
+      emptyHint.style.display = hasSameToken ? 'none' : 'block';
+    }
+    if (!hasSameToken) {
+      const issuedBadge = document.getElementById('mlc1IssuedAtLimaBadge');
+      const sizeBadge = document.getElementById('mlc1PayloadSizeBadge');
+      const tokOut = document.getElementById('mlc1TokenOutput');
+      if (issuedBadge) issuedBadge.textContent = 'Pendiente de emitir nueva ficha';
+      if (sizeBadge) sizeBadge.textContent = '0 B / 8192 B';
+      if (tokOut) tokOut.value = '';
+    }
+  } catch (err) {
+    showToast('Error al cargar datos MLC1: ' + err.message, 'error');
+  }
+}
+
+async function generateMlc1SyncToken() {
+  const dirtyTabs = typeof getDirtySettingsTabs === 'function' ? getDirtySettingsTabs() : [];
+  if (dirtyTabs.length > 0) {
+    showToast('Tienes cambios sin guardar en Configuración. Guárdalos antes de generar la ficha MLC1.', 'warning');
+    return null;
+  }
+
+  const btn = document.getElementById('btnGenerateMlc1Token');
+  if (btn) btn.disabled = true;
+
+  try {
+    const res = await fetch('/api/config/generate-sync-token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({}),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.ok) {
+      throw new Error(data.error || `Error HTTP ${res.status}`);
+    }
+
+    lastGeneratedMlc1Data = data;
+    if (data.config) {
+      ownerConfig = data.config;
+      if (typeof buildNormalizedSettingsSnapshotFromConfig === 'function') {
+        savedSettingsSnapshot = buildNormalizedSettingsSnapshotFromConfig(ownerConfig);
+        updateSettingsDirtyState();
+      }
+    }
+
+    const tokOut = document.getElementById('mlc1TokenOutput');
+    if (tokOut) tokOut.value = data.token || '';
+
+    const revBadge = document.getElementById('mlc1RevisionBadge');
+    if (revBadge) revBadge.textContent = `Revisión #${data.revision}`;
+
+    const issuedBadge = document.getElementById('mlc1IssuedAtLimaBadge');
+    if (issuedBadge) issuedBadge.textContent = `Emitida: ${data.issued_at_lima || data.issued_at || '-'}`;
+
+    const sizeBadge = document.getElementById('mlc1PayloadSizeBadge');
+    if (sizeBadge) sizeBadge.textContent = `${data.payload_bytes || 0} B JSON (${data.token_bytes || 0} B total / 8192 B)`;
+
+    const dartOut = document.getElementById('mlc1DartSnippetOutput');
+    if (dartOut && data.dart_snippet) dartOut.value = data.dart_snippet;
+
+    if (data.summary) renderMlc1CommercialSummary(data.summary);
+
+    const resultContainer = document.getElementById('mlc1TokenResultContainer');
+    const emptyHint = document.getElementById('mlc1EmptyResultHint');
+    if (resultContainer) resultContainer.style.display = 'grid';
+    if (emptyHint) emptyHint.style.display = 'none';
+
+    const qrContainer = document.getElementById('mlc1QrContainer');
+    if (qrContainer && typeof renderSafeQrCode === 'function') {
+      renderSafeQrCode(qrContainer, data.token, 196, '#0f172a', '#ffffff');
+    }
+
+    showToast(`Ficha comercial MLC1 (Revisión #${data.revision}) emitida y verificada con Ed25519.`, 'success');
+    return data;
+  } catch (err) {
+    showToast('Error al generar ficha MLC1: ' + err.message, 'error');
+    return null;
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+function shareMlc1TokenViaWhatsApp() {
+  const tok = document.getElementById('mlc1TokenOutput')?.value?.trim() || '';
+  if (!tok) {
+    showToast('Genera primero una ficha MLC1 antes de compartir.', 'warning');
+    return;
+  }
+  const rev = lastGeneratedMlc1Data?.revision || ownerConfig?.system?.commercial_sync_revision || 1;
+  const brand = ownerConfig?.legal_identity?.commercial_name || 'MochilaLista';
+  const supportPhone = ownerConfig?.legal_identity?.support_phone || '+51 922 836 879';
+
+  const msg = [
+    `*${brand} — Actualización Oficial de Tarifas y Medios de Pago (Rev. #${rev})*`,
+    '',
+    'Para actualizar tus tarifas y cuentas oficiales al instante sin internet:',
+    '1. Abre MochilaLista en tu teléfono.',
+    '2. Ve a Menú > Estado de Licencia y Activación.',
+    '3. Pega la ficha firmada de abajo o escanea el QR adjunto.',
+    '',
+    tok,
+    '',
+    `Soporte oficial: ${supportPhone}`,
+  ].join('\n');
+
+  copyPlainTextToClipboard(msg, 'Mensaje MLC1 copiado al portapapeles; abriendo WhatsApp...');
+  window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(msg)}`, '_blank');
+}
+
+function copyMlc1QrToClipboard() {
+  const container = document.getElementById('mlc1QrContainer');
+  const sourceEl = container?.querySelector('canvas') || container?.querySelector('img');
+  if (!sourceEl) {
+    showToast('Genera primero la ficha MLC1 para copiar el QR.', 'warning');
+    return;
+  }
+
+  const marginPx = 32;
+  const w = sourceEl.width || sourceEl.naturalWidth || 196;
+  const h = sourceEl.height || sourceEl.naturalHeight || 196;
+  const offscreen = document.createElement('canvas');
+  offscreen.width = w + marginPx * 2;
+  offscreen.height = h + marginPx * 2;
+  const ctx = offscreen.getContext('2d');
+  if (!ctx) {
+    showToast('No fue posible preparar el lienzo del QR.', 'error');
+    return;
+  }
+  ctx.imageSmoothingEnabled = false;
+  ctx.fillStyle = '#FFFFFF';
+  ctx.fillRect(0, 0, offscreen.width, offscreen.height);
+  ctx.drawImage(sourceEl, marginPx, marginPx, w, h);
+
+  offscreen.toBlob(async (blob) => {
+    if (!blob) {
+      showToast('No se pudo convertir el QR a PNG.', 'error');
+      return;
+    }
+    try {
+      if (navigator?.clipboard?.write && typeof ClipboardItem !== 'undefined') {
+        await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+        showToast('Imagen QR MLC1 copiada al portapapeles con margen blanco.', 'success');
+      } else {
+        throw new Error('ClipboardItem no disponible');
+      }
+    } catch (_) {
+      showToast('Tu navegador no permite copiar imágenes directamente; usa "Descargar QR PNG".', 'warning');
+    }
+  }, 'image/png');
+}
+
 // =================== 9. EXPORTACIÓN A MICROSOFT EXCEL .XLSX (FASE 4B) ===================
 
 function initExcelExportEvents() {
@@ -12449,7 +13964,7 @@ async function downloadExcelReport(url, defaultFilename) {
 }
 
 // ==========================================================================
-// FASE 3 PLAN MAESTRO 10: CENTRO DE SEGURIDAD, BÓVEDA Y PORTABILIDAD (#tabSecurityVault)
+// FASE 3 PLAN MAESTRO 10 & PLAN MAESTRO 23 FASE 5: BÓVEDA Y PORTABILIDAD (#tabSecurityVault)
 // ==========================================================================
 
 let loadedVaultJson = null;
@@ -12457,6 +13972,33 @@ let loadedVaultMetadata = null;
 let currentRescueCodes = [];
 let recoveryMlKeySecret = null;
 let importMlKeySecret = null;
+let currentVaultHealth = null;
+let currentVaultAudit = null;
+
+function formatVaultBytes(rawBytes) {
+  if (rawBytes === null || rawBytes === undefined || Number.isNaN(Number(rawBytes))) {
+    return '-';
+  }
+  const b = Number(rawBytes);
+  if (b < 1024) return `${b} B`;
+  if (b < 1024 * 1024) return `${(b / 1024).toFixed(1)} KB`;
+  return `${(b / (1024 * 1024)).toFixed(2)} MB`;
+}
+
+function buildSafePublicKitId() {
+  const now = new Date();
+  const pad = n => String(n).padStart(2, '0');
+  const stamp = `${now.getUTCFullYear()}${pad(now.getUTCMonth() + 1)}${pad(now.getUTCDate())}`;
+  let hex = '0000';
+  if (typeof crypto !== 'undefined' && typeof crypto.getRandomValues === 'function') {
+    const arr = new Uint8Array(2);
+    crypto.getRandomValues(arr);
+    hex = Array.from(arr).map(x => x.toString(16).padStart(2, '0')).join('').toUpperCase();
+  } else {
+    hex = Math.floor(0x1000 + Math.random() * 0xefff).toString(16).toUpperCase();
+  }
+  return `MLVAULT-${stamp}-${hex}`;
+}
 
 function showVaultPinLockOverlay() {
   const overlay = document.getElementById('vaultPinLockOverlay');
@@ -12480,58 +14022,91 @@ function hideVaultPinLockOverlay() {
 }
 
 async function checkVaultInitialStatus() {
+  let isLocked = false;
   try {
     // 1. Verificar si la sesión está bloqueada por PIN
     const pinRes = await fetch('/api/vault/pin/status');
     if (pinRes.ok) {
       const pinData = await pinRes.json();
       if (pinData.locked) {
+        isLocked = true;
         showVaultPinLockOverlay();
       }
     }
 
-    // 2. Verificar si hay auto-recuperación disponible desde %APPDATA%
-    const healthRes = await fetch('/api/vault/health');
-    if (healthRes.ok) {
-      const healthData = await healthRes.json();
-      if (healthData.recovery_available) {
-        openModal('modalAutoRecovery');
+    // 2. Verificar si hay auto-recuperación disponible desde %APPDATA% (solo si no está bloqueado)
+    if (!isLocked) {
+      const healthRes = await fetch('/api/vault/health');
+      if (healthRes.ok) {
+        const healthData = await healthRes.json();
+        if (healthData.recovery_available) {
+          openModal('modalAutoRecovery');
+        }
       }
     }
   } catch (err) {
     console.error('Error al verificar estado inicial de Bóveda:', err);
   }
+  return isLocked;
 }
 
 function initVaultEvents() {
-  // 1. Sincronización Manual de Espejo
+  // 1. Cabecera: Auditoría Integral y Sincronización Manual de Espejo
+  document.getElementById('btnRefreshVaultHealth')?.addEventListener('click', runVaultAudit);
+  document.getElementById('btnForceSyncMirrorTop')?.addEventListener('click', syncMirrorManual);
   document.getElementById('btnSyncMirrorNow')?.addEventListener('click', syncMirrorManual);
+  document.getElementById('btnVaultAuditSyncNow')?.addEventListener('click', async () => {
+    closeModal('modalVaultAuditReport');
+    await syncMirrorManual();
+  });
 
   // 2. Copiar Rutas Físicas al Portapapeles
   document.getElementById('btnCopyLocalPath')?.addEventListener('click', () => {
-    const val = document.getElementById('txtLocalPath')?.value;
+    const val = document.getElementById('txtLocalPath')?.value?.trim();
     if (val) {
       navigator.clipboard.writeText(val).then(() => showToast('Ruta local copiada al portapapeles', 'success'));
     }
   });
 
   document.getElementById('btnCopyMirrorPath')?.addEventListener('click', () => {
-    const val = document.getElementById('txtMirrorPath')?.value;
+    const val = document.getElementById('txtMirrorPath')?.value?.trim();
     if (val) {
       navigator.clipboard.writeText(val).then(() => showToast('Ruta de bóveda espejo copiada al portapapeles', 'success'));
     }
   });
 
-  // 3. Guardar Ruta de Sincronización Cloud Secundaria
+  document.getElementById('btnCopyCloudPath')?.addEventListener('click', () => {
+    const val = document.getElementById('pathCloudDir')?.textContent?.trim();
+    if (!val || val === 'No configurada') {
+      showToast('Aún no hay una carpeta de Nube Local configurada.', 'info');
+      return;
+    }
+    navigator.clipboard.writeText(val).then(() => showToast('Ruta de nube local copiada al portapapeles', 'success'));
+  });
+
+  // 3. Delegado para copiar huella SHA-256 completa desde la tabla de archivos
+  document.getElementById('tbodyVaultFiles')?.addEventListener('click', e => {
+    const copyBtn = e.target.closest('.btn-copy-vault-sha');
+    if (!copyBtn) return;
+    const sha = copyBtn.getAttribute('data-sha');
+    if (sha) {
+      navigator.clipboard.writeText(sha).then(() => {
+        showToast(`Huella SHA-256 copiada (${sha.substring(0, 12)}...)`, 'success');
+      });
+    }
+  });
+
+  // 4. Selector y Guardado de Carpeta de Sincronización Cloud Secundaria
+  document.getElementById('btnBrowseCloudSyncPath')?.addEventListener('click', browseCloudSyncPath);
   document.getElementById('btnSaveCloudSyncPath')?.addEventListener('click', saveCloudSyncPath);
 
-  // 4. Descargar Llave Offline (.mlkey)
+  // 5. Descargar Llave Offline (.mlkey)
   document.getElementById('btnDownloadMlKey')?.addEventListener('click', downloadMlKey);
 
-  // 5. Abrir Generador de Kit de Rescate
+  // 6. Abrir Generador de Kit de Rescate
   document.getElementById('btnOpenRescueKitModal')?.addEventListener('click', openRescueKitModal);
 
-  // 6. Imprimir Kit y Copiar Códigos de Rescate
+  // 7. Imprimir Kit y Copiar Códigos de Rescate
   document.getElementById('btnEmergencyPrint')?.addEventListener('click', () => window.print());
   document.getElementById('btnCopyRescueCodes')?.addEventListener('click', () => {
     if (currentRescueCodes.length > 0) {
@@ -12541,28 +14116,28 @@ function initVaultEvents() {
     }
   });
 
-  // 7. Exportar Bóveda Portable (.mlvault)
+  // 8. Exportar Bóveda Portable (.mlvault)
   document.getElementById('btnExportVault')?.addEventListener('click', exportPortableVault);
 
-  // 8. Abrir Modal de Importar Bóveda
+  // 9. Abrir Modal de Importar Bóveda
   document.getElementById('btnOpenImportVaultModal')?.addEventListener('click', () => {
     resetImportVaultModal();
     openModal('modalImportVault');
   });
 
-  // 9. Drag & Drop y Selección de Archivo .mlvault
+  // 10. Drag & Drop y Selección de Archivo .mlvault
   initVaultDropZoneEvents();
 
-  // 10. Selector de Factores de Desbloqueo en Modal de Importación
+  // 11. Selector de Factores de Desbloqueo en Modal de Importación
   initImportFactorSelectorEvents();
 
-  // 11. Confirmar Importación de Bóveda
+  // 12. Confirmar Importación de Bóveda
   document.getElementById('btnSubmitImportVault')?.addEventListener('click', submitImportVault);
 
-  // 12. Auto-Recuperación en 1 Clic
+  // 13. Auto-Recuperación en 1 Clic
   document.getElementById('btnAutoRecoverNow')?.addEventListener('click', autoRecoverFromMirror);
 
-  // 13. Configuración y Bloqueo por PIN
+  // 14. Configuración y Bloqueo por PIN
   initVaultPinEvents();
 }
 
@@ -12573,29 +14148,48 @@ async function loadVaultHealth() {
       fetch('/api/vault/pin/status'),
     ]);
 
+    if (healthRes.status === 423 || pinRes.status === 423) {
+      return null;
+    }
     if (!healthRes.ok) throw new Error('No se pudo obtener el estado de salud de la bóveda');
     const health = await healthRes.json();
     const pinData = pinRes.ok ? await pinRes.json() : { pin_enabled: false };
+    currentVaultHealth = health;
 
     // Rutas Físicas
     const txtLocal = document.getElementById('txtLocalPath');
-    if (txtLocal) txtLocal.value = health.primary_storage_path || 'data/';
+    if (txtLocal) {
+      txtLocal.value = health.primary_storage_path || 'data/';
+      txtLocal.title = txtLocal.value;
+    }
     const txtMirror = document.getElementById('txtMirrorPath');
-    if (txtMirror) txtMirror.value = health.mirror_storage_path || '%APPDATA%\\MochilaListaAdminVault';
+    if (txtMirror) {
+      txtMirror.value = health.mirror_storage_path || '%APPDATA%\\MochilaListaAdminVault';
+      txtMirror.title = txtMirror.value;
+    }
+    const cloudPath = (health.cloud_sync_path || '').trim();
     const txtCloud = document.getElementById('inputCloudSyncPath');
-    if (txtCloud && health.cloud_sync_path) txtCloud.value = health.cloud_sync_path;
+    if (txtCloud) txtCloud.value = cloudPath;
 
-    // Cálculo del Score de Blindaje (0% - 100%)
-    let score = 0;
-    const factorMirror = !!health.mirror_exists;
-    const factorKey = health.keyring_info?.active_slots?.includes('mlkey') || false;
-    const factorRescue = health.keyring_info?.active_slots?.includes('rescue_code') || false;
-    const factorPin = !!pinData.pin_enabled;
+    const pathCloudEl = document.getElementById('pathCloudDir');
+    if (pathCloudEl) {
+      pathCloudEl.textContent = cloudPath || 'No configurada';
+      pathCloudEl.title = cloudPath || 'Sin carpeta de nube local configurada';
+      pathCloudEl.style.color = cloudPath ? 'var(--text-primary)' : 'var(--text-muted)';
+    }
+    const btnCopyCloud = document.getElementById('btnCopyCloudPath');
+    if (btnCopyCloud) {
+      btnCopyCloud.disabled = !cloudPath;
+    }
 
-    if (factorMirror) score += 25;
-    if (factorKey) score += 25;
-    if (factorRescue) score += 25;
-    if (factorPin) score += 25;
+    // Cálculo unificado del Score de Blindaje (0% - 100%) sobre los 4 factores (25% c/u)
+    const activeSlots = health.keyring_info?.active_slots || [];
+    const factorDpapi = health.factors?.dpapi_enrolled ?? activeSlots.includes('dpapi');
+    const factorKey = health.factors?.mlkey_enrolled ?? activeSlots.includes('mlkey');
+    const factorRescue = health.factors?.rescue_kit_enrolled ?? activeSlots.includes('rescue_code');
+    const factorPin = health.factors?.pin_enabled ?? !!pinData.pin_enabled;
+    const activeCount = (factorDpapi ? 1 : 0) + (factorKey ? 1 : 0) + (factorRescue ? 1 : 0) + (factorPin ? 1 : 0);
+    const score = typeof health.security_score === 'number' ? health.security_score : activeCount * 25;
 
     // Actualizar Score y Barra de Progreso
     const scoreEl = document.getElementById('vaultHealthScore');
@@ -12616,7 +14210,6 @@ async function loadVaultHealth() {
     const statusTextEl = document.getElementById('vaultHealthStatusText');
     const badgeEl = document.getElementById('vaultHealthBadge');
     if (statusTextEl) {
-      const activeCount = (factorMirror ? 1 : 0) + (factorKey ? 1 : 0) + (factorRescue ? 1 : 0) + (factorPin ? 1 : 0);
       if (activeCount === 4) {
         statusTextEl.textContent = '4 de 4 Factores Activos (100% BLINDADO)';
         statusTextEl.style.color = 'var(--success)';
@@ -12640,27 +14233,65 @@ async function loadVaultHealth() {
       }
     }
 
-    const recWarnEl = document.getElementById('vaultRecoveryWarning');
-    if (recWarnEl) {
-      recWarnEl.style.display = health.recovery_available ? 'block' : 'none';
+    const mirrorReady = !!(health.mirror?.mirror_exists && health.mirror?.mlvault_exists);
+    const cloudMirrorActive = !!(health.cloud_mirror_active || (health.cloud?.configured && health.cloud?.accessible));
+    const secondarySummary = document.getElementById('vaultSecondaryMirrorSummary');
+    if (secondarySummary) {
+      const mirrorLabel = mirrorReady ? 'Sincronizado' : 'Pendiente';
+      const cloudLabel = cloudMirrorActive
+        ? 'Activa'
+        : (cloudPath ? 'Ruta inaccesible' : 'No configurada');
+      secondarySummary.textContent = `Espejo automático (%APPDATA%): ${mirrorLabel} · Nube Local: ${cloudLabel}`;
     }
 
-    // Actualizar Insignias de Factores
-    updateFactorBadge('factorMirrorStatus', factorMirror ? 'Activo' : 'Inactivo', factorMirror ? 'badge-green' : 'badge-red');
+    const recWarnEl = document.getElementById('vaultRecoveryWarning');
+    if (recWarnEl) {
+      recWarnEl.style.display = health.recovery_available ? 'flex' : 'none';
+    }
+
+    // Actualizar Insignias de los 4 Factores
+    updateFactorBadge('factorMirrorStatus', factorDpapi ? 'Activo' : 'Inactivo', factorDpapi ? 'badge-green' : 'badge-red');
     updateFactorBadge('factorKeyStatus', factorKey ? 'Descargado' : 'Pendiente', factorKey ? 'badge-green' : 'badge-amber');
     updateFactorBadge('factorRescueStatus', factorRescue ? 'Generado' : 'Pendiente', factorRescue ? 'badge-green' : 'badge-amber');
     updateFactorBadge('factorPinStatus', factorPin ? 'Activado' : 'Opcional', factorPin ? 'badge-green' : 'badge-gray');
 
-    // Tabla de Archivos Físicos
-    renderVaultFilesTable(health.files, factorMirror);
+    // Sincronizar Badges y Fecha del Asistente en 3 Pasos
+    if (mirrorReady && cloudMirrorActive) {
+      updateFactorBadge('badgeStep1Status', 'Bóveda Espejo + Nube', 'badge-green');
+    } else if (mirrorReady || health.mirror_exists) {
+      updateFactorBadge('badgeStep1Status', 'Bóveda Espejo Activa', 'badge-success');
+    } else {
+      updateFactorBadge('badgeStep1Status', 'Sin Espejo', 'badge-amber');
+    }
+
+    const mirrorLastSyncEl = document.getElementById('mirrorLastSyncLabel');
+    if (mirrorLastSyncEl) {
+      const lastSyncIso = health.mirror?.last_sync;
+      if (lastSyncIso) {
+        mirrorLastSyncEl.textContent = `Última sinc: ${formatLimaDateTime(lastSyncIso, '-')}`;
+        mirrorLastSyncEl.title = lastSyncIso;
+      } else {
+        mirrorLastSyncEl.textContent = 'Última sinc: Sin sincronizaciones previas';
+        mirrorLastSyncEl.title = '';
+      }
+    }
+
+    updateFactorBadge('badgeStep2Status', factorKey ? 'Llave Generada y Activa' : 'Pendiente', factorKey ? 'badge-success' : 'badge-amber');
+    updateFactorBadge('badgeStep3Status', factorRescue ? '8 Códigos Activos' : 'Pendiente', factorRescue ? 'badge-success' : 'badge-amber');
+
+    // Tabla de Archivos Físicos (6 columnas)
+    renderVaultFilesTable(health.files, mirrorReady || !!health.mirror_exists);
 
     // Controles de PIN
     const chkPin = document.getElementById('chkEnablePin');
     if (chkPin) chkPin.checked = factorPin;
     const btnLock = document.getElementById('btnLockConsoleNow');
     if (btnLock) btnLock.style.display = factorPin ? 'inline-flex' : 'none';
+
+    return health;
   } catch (err) {
     showToast(`Error al cargar estado de la bóveda: ${err.message}`, 'error');
+    return null;
   }
 }
 
@@ -12673,57 +14304,243 @@ function updateFactorBadge(elementId, text, badgeClass) {
 
 function renderVaultFilesTable(files, mirrorExists) {
   const tbody = document.getElementById('tbodyVaultFiles');
-  if (!tbody) return;
+  if (!tbody) return '';
   tbody.innerHTML = '';
 
   const fileDefinitions = [
-    { key: 'clients_db', name: 'Cartera de Clientes', path: 'data/prod_clients_db.json' },
-    { key: 'releases_db', name: 'Catálogo de Lanzamientos', path: 'data/prod_releases_db.json' },
-    { key: 'owner_config', name: 'Centro de Personalización', path: 'data/owner_config.json' },
-    { key: 'master_key', name: 'Firma Digital Privada Ed25519', path: 'private_keys/ed25519_master.key' },
-    { key: 'vault_keyring', name: 'Llavero de Bóveda Multi-Slot', path: 'data/vault_keyring.json' },
+    {
+      key: 'clients_db',
+      name: 'Cartera de Clientes',
+      path: 'data/prod_clients_db.json',
+      purpose: 'Base comercial de clientes, hardware IDs y pagos',
+    },
+    {
+      key: 'releases_db',
+      name: 'Catálogo de Lanzamientos',
+      path: 'data/prod_releases_db.json',
+      purpose: 'Historial de versiones APK, hashes SHA-256 y notas',
+    },
+    {
+      key: 'owner_config',
+      name: 'Centro de Personalización',
+      path: 'data/owner_config.json',
+      purpose: 'Tarifario oficial, bolsas IA, plantillas WhatsApp y cuentas',
+    },
+    {
+      key: 'master_key',
+      name: 'Firma Digital Privada Ed25519',
+      path: 'private_keys/ed25519_master.key',
+      purpose: 'Clave asimétrica oficial para firmar licencias ML9 y fichas MLC1',
+    },
+    {
+      key: 'vault_keyring',
+      name: 'Llavero de Bóveda Multi-Slot',
+      path: 'data/vault_keyring.json',
+      purpose: 'Llavero AES-256-GCM con los 4 factores de desbloqueo',
+    },
   ];
 
+  const htmlRows = [];
   fileDefinitions.forEach(item => {
     const f = files ? files[item.key] : null;
-    const exists = f?.exists ?? false;
-    const bytes = f?.bytes != null ? `${f.bytes} B` : '-';
-    const sha = f?.sha256 ? `${f.sha256.substring(0, 8)}...` : '-';
+    const exists = !!(f && f.exists);
+    const purpose = f?.purpose || item.purpose;
+    const sizeText = exists ? formatVaultBytes(f?.size_bytes ?? f?.bytes) : '-';
+    const modifiedText = exists ? formatLimaDateTime(f?.modified, '-') : '-';
+    const shaFull = f?.sha256 ? String(f.sha256) : '';
+    const shaShort = shaFull ? `${shaFull.substring(0, 12)}...` : '-';
 
-    const tr = document.createElement('tr');
-    tr.innerHTML = `
+    const diskStatusHtml = exists
+      ? '<span style="color:var(--success); font-weight:600; font-size:0.78rem; display:inline-flex; align-items:center; gap:0.3rem;"><svg width="8" height="8" viewBox="0 0 8 8" fill="currentColor"><circle cx="4" cy="4" r="4"/></svg>En Disco</span>'
+      : '<span style="color:var(--danger); font-weight:600; font-size:0.78rem; display:inline-flex; align-items:center; gap:0.3rem;"><svg width="8" height="8" viewBox="0 0 8 8" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="4" cy="4" r="3"/></svg>Ausente</span>';
+
+    const mirrorBadgeHtml = (mirrorExists && exists)
+      ? '<span class="badge badge-green" style="font-size:0.72rem; margin-top:0.2rem; display:inline-flex; align-items:center; gap:0.25rem;"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>Espejo Sincronizado</span>'
+      : '<span class="badge badge-amber" style="font-size:0.72rem; margin-top:0.2rem; display:inline-block;">Pendiente</span>';
+
+    const shaCellHtml = shaFull
+      ? `<div class="vault-sha-cell">
+           <code style="font-family:var(--font-mono); font-size:0.74rem;" title="${escapeHtml(shaFull)}">${escapeHtml(shaShort)}</code>
+           <button type="button" class="btn btn-outline btn-xs btn-copy-vault-sha" data-sha="${escapeHtml(shaFull)}" title="Copiar huella SHA-256 completa">
+             <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+           </button>
+         </div>`
+      : '<span style="color:var(--text-muted);">-</span>';
+
+    const rowHtml = `
       <td>
         <div style="font-weight:600; color:var(--text-primary);">${escapeHtml(item.name)}</div>
-        <div style="font-family:var(--font-mono); font-size:0.75rem; color:var(--text-muted);">${escapeHtml(item.path)}</div>
+        <div style="font-family:var(--font-mono); font-size:0.74rem; color:var(--text-muted);">${escapeHtml(item.path)}</div>
       </td>
+      <td style="font-size:0.78rem; color:var(--text-secondary); max-width:240px;">${escapeHtml(purpose)}</td>
       <td>
-        ${exists
-        ? '<span style="color:var(--success); font-weight:600; font-size:0.8rem;">● En Disco</span>'
-        : '<span style="color:var(--danger); font-weight:600; font-size:0.8rem;">○ Ausente</span>'
-      }
+        <div>${diskStatusHtml}</div>
+        <div>${mirrorBadgeHtml}</div>
       </td>
-      <td>
-        ${(mirrorExists && exists)
-        ? '<span style="color:var(--cyan); font-weight:600; font-size:0.8rem; display:inline-flex; align-items:center; gap:0.25rem;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg> Bóveda Espejo</span>'
-        : '<span style="color:var(--text-muted); font-size:0.8rem;">-</span>'
-      }
-      </td>
-      <td>
-        <div style="font-family:var(--font-mono); font-size:0.78rem;">${bytes}</div>
-        <div style="font-family:var(--font-mono); font-size:0.72rem; color:var(--text-muted);">${sha}</div>
-      </td>
-      <td>
-        ${exists
-        ? '<span class="badge badge-green" style="font-size:0.75rem;">Sincronizado</span>'
-        : '<span class="badge badge-amber" style="font-size:0.75rem;">Pendiente</span>'
-      }
-      </td>
+      <td style="font-family:var(--font-mono); font-size:0.78rem; white-space:nowrap;">${escapeHtml(sizeText)}</td>
+      <td style="font-size:0.78rem; white-space:nowrap;" title="${escapeHtml(f?.modified || '')}">${escapeHtml(modifiedText)}</td>
+      <td>${shaCellHtml}</td>
     `;
+
+    htmlRows.push(`<tr>${rowHtml}</tr>`);
+    const tr = document.createElement('tr');
+    tr.innerHTML = rowHtml;
     tbody.appendChild(tr);
   });
+
+  if (typeof applyTableDensity === 'function') {
+    applyTableDensity(ownerConfig?.system?.table_density);
+  }
+  return htmlRows.join('');
+}
+
+async function runVaultAudit() {
+  const btnAudit = document.getElementById('btnRefreshVaultHealth');
+  btnAudit?.classList.add('is-spinning');
+  if (btnAudit) btnAudit.disabled = true;
+
+  try {
+    const res = await fetch('/api/vault/audit');
+    if (res.status === 423) return;
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || `Error HTTP ${res.status}`);
+    }
+    const audit = await res.json();
+    currentVaultAudit = audit;
+    renderVaultAuditModal(audit);
+    openModal('modalVaultAuditReport');
+    await loadVaultHealth();
+  } catch (err) {
+    showToast(`Error al ejecutar auditoría: ${err.message}`, 'error');
+  } finally {
+    btnAudit?.classList.remove('is-spinning');
+    if (btnAudit) btnAudit.disabled = false;
+  }
+}
+
+function renderVaultAuditModal(audit) {
+  if (!audit) return;
+
+  const scoreBadge = document.getElementById('vaultAuditScoreBadge');
+  if (scoreBadge) {
+    const score = audit.security_score ?? 0;
+    const count = audit.active_factors_count ?? 0;
+    scoreBadge.textContent = `${score}% · ${count}/4 Factores`;
+    scoreBadge.className = score >= 75 ? 'badge badge-green' : (score >= 50 ? 'badge badge-amber' : 'badge badge-red');
+  }
+
+  const tsEl = document.getElementById('vaultAuditTimestamp');
+  if (tsEl) {
+    tsEl.textContent = `Auditado: ${formatLimaDateTime(audit.audited_at, audit.audited_at_lima || '-')}`;
+  }
+
+  const dpapiEl = document.getElementById('vaultAuditDpapiStatus');
+  if (dpapiEl) {
+    const ok = !!audit.dpapi?.valid;
+    dpapiEl.textContent = ok ? 'DPAPI Verificado' : 'DPAPI Con Alertas';
+    dpapiEl.style.color = ok ? 'var(--success)' : 'var(--danger)';
+  }
+
+  const keyringEl = document.getElementById('vaultAuditKeyringStatus');
+  if (keyringEl) {
+    const slots = (audit.keyring?.active_slots || []).join(', ') || 'ninguno';
+    keyringEl.textContent = `Llavero ${audit.keyring?.version || '-'} (${slots})`;
+  }
+
+  const mirrorEl = document.getElementById('vaultAuditMirrorStatus');
+  if (mirrorEl) {
+    const allMatch = !!audit.mirror?.all_files_matched;
+    const matched = audit.matched_files_count ?? 0;
+    const total = audit.total_critical_files ?? 5;
+    mirrorEl.textContent = allMatch ? `Íntegro (${matched}/${total} SHA-256)` : `Parcial (${matched}/${total} SHA-256)`;
+    mirrorEl.style.color = allMatch ? 'var(--success)' : 'var(--warning)';
+  }
+
+  const mirrorTimeEl = document.getElementById('vaultAuditMirrorTime');
+  if (mirrorTimeEl) {
+    mirrorTimeEl.textContent = audit.mirror?.last_sync
+      ? formatLimaDateTime(audit.mirror.last_sync, '-')
+      : 'Sin sincronizaciones previas';
+  }
+
+  const cloudEl = document.getElementById('vaultAuditCloudStatus');
+  if (cloudEl) {
+    if (!audit.cloud?.configured) {
+      cloudEl.textContent = 'No configurada (Opcional)';
+      cloudEl.style.color = 'var(--text-muted)';
+    } else if (audit.cloud?.accessible && audit.cloud?.mlvault_exists) {
+      cloudEl.textContent = 'Nube Activa y Sincronizada';
+      cloudEl.style.color = 'var(--success)';
+    } else {
+      cloudEl.textContent = 'Nube Con Alertas';
+      cloudEl.style.color = 'var(--warning)';
+    }
+  }
+
+  const cloudPathEl = document.getElementById('vaultAuditCloudPath');
+  if (cloudPathEl) {
+    cloudPathEl.textContent = audit.cloud?.cloud_path || 'Configura en Paso 1';
+    cloudPathEl.title = audit.cloud?.cloud_path || '';
+  }
+
+  const tbody = document.getElementById('tbodyVaultAuditFiles');
+  if (tbody) {
+    tbody.innerHTML = '';
+    const filesMap = audit.files || {};
+    const orderedKeys = ['clients_db', 'releases_db', 'owner_config', 'master_key', 'vault_keyring'];
+    orderedKeys.forEach(k => {
+      const f = filesMap[k];
+      if (!f) return;
+      const parityOk = !!f.mirror_parity;
+      const localSha = f.sha256 ? `${f.sha256.substring(0, 10)}...` : '-';
+      const mirrorSha = f.mirror_sha256 ? `${f.mirror_sha256.substring(0, 10)}...` : '-';
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td>
+          <div style="font-weight:600;">${escapeHtml(f.label || k)}</div>
+          <div style="font-family:var(--font-mono); font-size:0.72rem; color:var(--text-muted);">${escapeHtml(f.relative_path || '')}</div>
+        </td>
+        <td style="font-family:var(--font-mono); white-space:nowrap;">${f.exists ? escapeHtml(formatVaultBytes(f.size_bytes)) : '-'}</td>
+        <td style="white-space:nowrap;">${f.exists ? escapeHtml(formatLimaDateTime(f.modified, '-')) : '-'}</td>
+        <td style="font-family:var(--font-mono); font-size:0.72rem;">
+          <div>Local: <span title="${escapeHtml(f.sha256 || '')}">${escapeHtml(localSha)}</span></div>
+          <div>Espejo: <span title="${escapeHtml(f.mirror_sha256 || '')}">${escapeHtml(mirrorSha)}</span></div>
+        </td>
+        <td>
+          <span class="badge ${parityOk ? 'badge-green' : 'badge-amber'}">${parityOk ? 'Paridad OK' : escapeHtml(f.parity_status || 'Revisar')}</span>
+        </td>
+      `;
+      tbody.appendChild(tr);
+    });
+  }
+
+  const recList = document.getElementById('vaultAuditRecommendations');
+  if (recList) {
+    recList.innerHTML = '';
+    const recs = Array.isArray(audit.recommendations) ? audit.recommendations : [];
+    if (recs.length === 0) {
+      const li = document.createElement('li');
+      li.style.color = 'var(--success)';
+      li.textContent = 'Todas las verificaciones criptográficas y espejos físicos están al 100% sin observaciones.';
+      recList.appendChild(li);
+    } else {
+      recs.forEach(text => {
+        const li = document.createElement('li');
+        li.textContent = text;
+        recList.appendChild(li);
+      });
+    }
+  }
 }
 
 async function syncMirrorManual() {
+  const topBtn = document.getElementById('btnForceSyncMirrorTop');
+  const stepBtn = document.getElementById('btnSyncMirrorNow');
+  topBtn?.classList.add('is-spinning');
+  if (topBtn) topBtn.disabled = true;
+  if (stepBtn) stepBtn.disabled = true;
+
   try {
     showToast('Sincronizando Bóveda Espejo en Windows (%APPDATA%)...', 'info');
     const res = await fetch('/api/vault/sync-mirror', { method: 'POST' });
@@ -12735,6 +14552,40 @@ async function syncMirrorManual() {
     await loadVaultHealth();
   } catch (err) {
     showToast(`Error al sincronizar espejo: ${err.message}`, 'error');
+  } finally {
+    topBtn?.classList.remove('is-spinning');
+    if (topBtn) topBtn.disabled = false;
+    if (stepBtn) stepBtn.disabled = false;
+  }
+}
+
+async function browseCloudSyncPath() {
+  const input = document.getElementById('inputCloudSyncPath');
+  const btn = document.getElementById('btnBrowseCloudSyncPath');
+  if (btn) btn.disabled = true;
+
+  try {
+    const initialPath = input ? input.value.trim() : '';
+    const res = await fetch('/api/vault/cloud-path/browse', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ initial_path: initialPath || null }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(data.error || `Error HTTP ${res.status}`);
+    }
+    if (data.cancelled || !data.path) {
+      return;
+    }
+    if (input) {
+      input.value = data.path;
+    }
+    await saveCloudSyncPath();
+  } catch (err) {
+    showToast(`Error al seleccionar carpeta de nube: ${err.message}`, 'error');
+  } finally {
+    if (btn) btn.disabled = false;
   }
 }
 
@@ -12761,7 +14612,7 @@ async function saveCloudSyncPath() {
   }
 }
 
-async function downloadMlKey() {
+async function executeDownloadMlKey() {
   try {
     showToast('Generando y descargando llave offline (.mlkey)...', 'info');
     const res = await fetch('/api/vault/download-mlkey');
@@ -12771,7 +14622,7 @@ async function downloadMlKey() {
     }
     const data = await res.json();
     const filename = data.filename || 'llave_maestra_mochilalista.mlkey';
-    const blob = new Blob([data.mlkey_json], { type: 'application/json' });
+    const blob = new Blob([data.mlkey_json], { type: 'application/json;charset=utf-8' });
     const downloadUrl = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = downloadUrl;
@@ -12779,7 +14630,7 @@ async function downloadMlKey() {
     document.body.appendChild(a);
     a.click();
     a.remove();
-    window.URL.revokeObjectURL(downloadUrl);
+    setTimeout(() => window.URL.revokeObjectURL(downloadUrl), 1500);
 
     showToast(`Llave offline descargada: ${filename}`, 'success');
     await loadVaultHealth();
@@ -12788,7 +14639,22 @@ async function downloadMlKey() {
   }
 }
 
-async function openRescueKitModal() {
+async function downloadMlKey() {
+  const activeSlots = currentVaultHealth?.keyring_info?.active_slots || [];
+  const alreadyEnrolled = !!(currentVaultHealth?.factors?.mlkey_enrolled || activeSlots.includes('mlkey'));
+  if (alreadyEnrolled) {
+    showConfirmModal(
+      'Regenerar Archivo Llave (.mlkey)',
+      'Ya existe una llave .mlkey activa en tu llavero. Generar una nueva invalidará permanentemente la llave .mlkey anterior guardada en USB o respaldos externos. ¿Deseas reemplazarla y descargar la nueva?',
+      () => executeDownloadMlKey(),
+      true
+    );
+    return;
+  }
+  await executeDownloadMlKey();
+}
+
+async function executeGenerateRescueKit() {
   try {
     showToast('Generando 8 Códigos de Rescate Criptográficos...', 'info');
     const res = await fetch('/api/vault/generate-rescue-kit', { method: 'POST' });
@@ -12811,12 +14677,12 @@ async function openRescueKitModal() {
       });
     }
 
-    // Fechas y metadatos
+    // Fechas y metadatos públicos (jamás exponer prefijos de qr_key)
     const dateEl = document.getElementById('kitGeneratedDate');
-    if (dateEl) dateEl.textContent = new Date().toLocaleString('es-PE');
+    if (dateEl) dateEl.textContent = formatLimaDateTime(new Date().toISOString(), '-');
     const vaultIdEl = document.getElementById('kitVaultId');
-    if (vaultIdEl && data.qr_key) {
-      vaultIdEl.textContent = `${data.qr_key.substring(0, 16)}...`;
+    if (vaultIdEl) {
+      vaultIdEl.textContent = buildSafePublicKitId();
     }
 
     // Código QR Vectorial
@@ -12830,6 +14696,21 @@ async function openRescueKitModal() {
   } catch (err) {
     showToast(`Error al generar kit de rescate: ${err.message}`, 'error');
   }
+}
+
+async function openRescueKitModal() {
+  const activeSlots = currentVaultHealth?.keyring_info?.active_slots || [];
+  const alreadyEnrolled = !!(currentVaultHealth?.factors?.rescue_kit_enrolled || activeSlots.includes('rescue_code'));
+  if (alreadyEnrolled) {
+    showConfirmModal(
+      'Regenerar Kit de Rescate (8 Códigos + QR)',
+      'Ya tienes un Kit de Rescate activo. Generar un nuevo kit invalidará permanentemente los 8 códigos y el código QR de cualquier hoja impresa anterior. ¿Deseas reemplazarlos?',
+      () => executeGenerateRescueKit(),
+      true
+    );
+    return;
+  }
+  await executeGenerateRescueKit();
 }
 
 async function exportPortableVault() {
@@ -12849,7 +14730,7 @@ async function exportPortableVault() {
     }
     const data = await res.json();
     const filename = data.filename || 'mochilalista_vault.mlvault';
-    const blob = new Blob([data.vault_json], { type: 'application/json' });
+    const blob = new Blob([data.vault_json], { type: 'application/json;charset=utf-8' });
     const downloadUrl = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = downloadUrl;
@@ -12857,7 +14738,7 @@ async function exportPortableVault() {
     document.body.appendChild(a);
     a.click();
     a.remove();
-    window.URL.revokeObjectURL(downloadUrl);
+    setTimeout(() => window.URL.revokeObjectURL(downloadUrl), 1500);
 
     showToast(`Bóveda portable descargada con éxito: ${filename}`, 'success');
   } catch (err) {
@@ -12948,6 +14829,33 @@ function handleVaultFileSelected(file) {
   reader.readAsText(file);
 }
 
+function applyVaultInspectMetadataToDom(meta) {
+  if (!meta) return;
+  const summary = document.getElementById('vaultInspectSummary');
+  if (summary) summary.style.display = 'block';
+
+  const clientsCount = meta.stats?.clients_count ?? meta.total_clients ?? 0;
+  const releasesCount = meta.stats?.releases_count ?? 0;
+
+  const vVer = document.getElementById('metaVaultVersion');
+  if (vVer) vVer.textContent = meta.version || meta.vault_version || '1.0';
+  const vDate = document.getElementById('metaVaultCreated');
+  if (vDate) vDate.textContent = meta.created_at ? formatLimaDateTime(meta.created_at, '-') : '-';
+  const vClients = document.getElementById('metaVaultClients');
+  if (vClients) vClients.textContent = `${clientsCount} clientes · ${releasesCount} lanzamientos`;
+  const vKey = document.getElementById('metaVaultHasKey');
+  if (vKey) {
+    if (meta.has_master_key || meta.includes_private_key) {
+      vKey.innerHTML = '<span style="display:inline-flex; align-items:center; gap:0.25rem; color:var(--success); font-weight:600;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> Incluida</span>';
+    } else {
+      vKey.textContent = 'No incluida';
+    }
+  }
+  const vSlots = document.getElementById('metaVaultSlots');
+  if (vSlots) vSlots.textContent = (meta.available_slots || []).join(', ');
+  return { clientsCount, releasesCount };
+}
+
 async function inspectLoadedVault() {
   if (!loadedVaultJson) return;
 
@@ -12966,27 +14874,7 @@ async function inspectLoadedVault() {
 
     const data = await res.json();
     loadedVaultMetadata = data.metadata;
-
-    // Mostrar panel de resumen
-    const summary = document.getElementById('vaultInspectSummary');
-    if (summary) summary.style.display = 'block';
-
-    const vVer = document.getElementById('metaVaultVersion');
-    if (vVer) vVer.textContent = loadedVaultMetadata.vault_version || '1.0';
-    const vDate = document.getElementById('metaVaultCreated');
-    if (vDate) vDate.textContent = loadedVaultMetadata.created_at ? loadedVaultMetadata.created_at.substring(0, 10) : '-';
-    const vClients = document.getElementById('metaVaultClients');
-    if (vClients) vClients.textContent = `${loadedVaultMetadata.total_clients ?? 0} clientes`;
-    const vKey = document.getElementById('metaVaultHasKey');
-    if (vKey) {
-      if (loadedVaultMetadata.has_master_key) {
-        vKey.innerHTML = '<span style="display:inline-flex; align-items:center; gap:0.25rem; color:var(--success); font-weight:600;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> Incluida</span>';
-      } else {
-        vKey.textContent = 'No incluida';
-      }
-    }
-    const vSlots = document.getElementById('metaVaultSlots');
-    if (vSlots) vSlots.textContent = (loadedVaultMetadata.available_slots || []).join(', ');
+    applyVaultInspectMetadataToDom(loadedVaultMetadata);
 
     // Mostrar sección de selección de factores y ajustar visibilidad según slots disponibles
     const factorSection = document.getElementById('vaultUnlockFactorSection');
@@ -13118,14 +15006,7 @@ async function submitImportVault() {
     closeModal('modalImportVault');
     showToast(data.message || 'Bóveda importada exitosamente y recargada en caliente.', 'success');
 
-    // Recargar todas las vistas
-    await Promise.all([
-      loadVaultHealth(),
-      loadClients(),
-      loadDashboard(),
-      loadReleases(),
-      loadConfig(),
-    ]);
+    await bootstrapAuthenticatedWorkspace();
   } catch (err) {
     showToast(`Error al importar bóveda: ${err.message}`, 'error');
   }
@@ -13149,13 +15030,7 @@ async function autoRecoverFromMirror() {
     closeModal('modalAutoRecovery');
     showToast(data.message || 'Bóveda recuperada automáticamente con éxito.', 'success');
 
-    await Promise.all([
-      loadVaultHealth(),
-      loadClients(),
-      loadDashboard(),
-      loadReleases(),
-      loadConfig(),
-    ]);
+    await bootstrapAuthenticatedWorkspace();
   } catch (err) {
     showToast(`Error al restaurar desde espejo: ${err.message}`, 'error');
   }
@@ -13182,13 +15057,21 @@ function initVaultPinEvents() {
               body: JSON.stringify({ enabled: false }),
             });
             if (res.ok) {
+              sessionStorage.removeItem('ml_vault_session_token');
               if (pinSetup) pinSetup.style.display = 'none';
               showToast('Bloqueo por PIN desactivado exitosamente.', 'info');
               await loadVaultHealth();
+            } else {
+              if (chkPin) chkPin.checked = true;
             }
           } catch (err) {
+            if (chkPin) chkPin.checked = true;
             showToast(`Error al desactivar PIN: ${err.message}`, 'error');
           }
+        },
+        true,
+        () => {
+          if (chkPin) chkPin.checked = true;
         }
       );
     }
@@ -13217,6 +15100,10 @@ function initVaultPinEvents() {
         const err = await res.json().catch(() => ({}));
         throw new Error(err.error || `Error HTTP ${res.status}`);
       }
+      const data = await res.json().catch(() => ({}));
+      if (data.session_token) {
+        sessionStorage.setItem('ml_vault_session_token', data.session_token);
+      }
       showToast('PIN configurado y activado exitosamente.', 'success');
       document.getElementById('inputVaultPin').value = '';
       document.getElementById('inputVaultPinConfirm').value = '';
@@ -13230,11 +15117,11 @@ function initVaultPinEvents() {
   btnLockNow?.addEventListener('click', async () => {
     try {
       await fetch('/api/vault/pin/lock', { method: 'POST' });
+    } catch (_) {
+    } finally {
       sessionStorage.removeItem('ml_vault_session_token');
       showVaultPinLockOverlay();
       showToast('Consola bloqueada por PIN.', 'info');
-    } catch (err) {
-      showVaultPinLockOverlay();
     }
   });
 
@@ -13255,6 +15142,7 @@ function initVaultPinEvents() {
         sessionStorage.setItem('ml_vault_session_token', data.session_token);
         hideVaultPinLockOverlay();
         showToast('Consola desbloqueada correctamente.', 'success');
+        await bootstrapAuthenticatedWorkspace();
       } else {
         const notice = document.getElementById('vaultPinBackoffNotice');
         if (notice) {
@@ -13324,12 +15212,14 @@ async function executePinRecovery(credType, secretVal) {
 
     const data = await res.json();
     if (data.ok) {
-      if (data.session_token) {
+      if (data.pin_enabled === false) {
+        sessionStorage.removeItem('ml_vault_session_token');
+      } else if (data.session_token) {
         sessionStorage.setItem('ml_vault_session_token', data.session_token);
       }
       hideVaultPinLockOverlay();
       showToast('Acceso recuperado y consola desbloqueada con éxito.', 'success');
-      await loadVaultHealth();
+      await bootstrapAuthenticatedWorkspace();
     } else {
       showToast(`No se pudo recuperar: ${data.error || 'Factor inválido'}`, 'error');
     }

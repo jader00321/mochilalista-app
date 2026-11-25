@@ -154,7 +154,7 @@ void main() {
     } catch (_) {}
   });
 
-  group('Pilar 3.1: Integridad Multi-Perfil de .mlbg y Versión Dinámica v9.40.0+84', () {
+  group('Pilar 3.1: Integridad Multi-Perfil de .mlbg y Versión Dinámica vigente', () {
     test('Empaquetado global .mlbg contiene toda la base SQLite con múltiples negocios y versión dinámica', () async {
       // 1. Insertar Negocio 1 y Usuario 1
       final neg1Id = await testDb.insert('negocios', {

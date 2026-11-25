@@ -9,6 +9,20 @@ import 'lib/vault_crypto_service.dart';
 import 'lib/vault_storage_service.dart';
 import 'lib/apk_inspector_service.dart';
 import 'lib/client_sync_service.dart';
+import 'lib/commercial_config_sync_service.dart';
+import 'lib/time_utils.dart';
+
+Future<String> applyStartupModeFromConfig(
+  DatabaseService dbService,
+  ConfigService configService,
+) async {
+  final rawMode = (configService.system['default_mode'] as String? ?? 'sandbox')
+      .trim()
+      .toLowerCase();
+  final targetMode = rawMode == 'prod' ? 'prod' : 'sandbox';
+  dbService.setMode(targetMode);
+  return targetMode;
+}
 
 Future<void> main(List<String> args) async {
   final port = int.tryParse(Platform.environment['PORT'] ?? '8080') ?? 8080;
@@ -19,6 +33,10 @@ Future<void> main(List<String> args) async {
   await configService.init();
   print(
       '⚙️ [ConfigService] Configuración de propietario cargada: data/owner_config.json');
+
+  final startupMode = await applyStartupModeFromConfig(dbService, configService);
+  print(
+      '⚙️ [DatabaseService] Entorno inicial aplicado desde configuración: $startupMode');
 
   final excelService = ExcelExportService(
     dbService: dbService,
@@ -51,6 +69,14 @@ Future<void> main(List<String> args) async {
         '🛡️ [VaultStorage] Bóveda Cifrada Activa. Espejo en: ${health['mirror']['mirror_dir']}');
   }
 
+  // Singleton ApkInspectorService con caché persistente en disco (data/.apk_inspection_cache.json)
+  final apkInspector = ApkInspectorService(
+    cacheFilePath: 'data/.apk_inspection_cache.json',
+  );
+  await apkInspector.loadDiskCache();
+  print(
+      '📦 [ApkInspector] Caché APK cargada desde disco (${apkInspector.liveCacheCount} entradas).');
+
   final server = await HttpServer.bind(InternetAddress.anyIPv4, port);
   print('================================================================');
   print('🚀 MOCHILALISTA ADMIN — Servidor Local de Licencias y Versiones');
@@ -62,7 +88,14 @@ Future<void> main(List<String> args) async {
 
   await for (HttpRequest request in server) {
     handleRequest(
-        request, dbService, signer, configService, excelService, vaultStorage);
+      request,
+      dbService,
+      signer,
+      configService,
+      excelService,
+      vaultStorage,
+      apkInspectorService: apkInspector,
+    );
   }
 }
 
@@ -74,8 +107,15 @@ Future<String> _readRequestBody(HttpRequest request) async {
 
 /// Construye argumentos seguros de PowerShell `-NoProfile -STA` con UTF-8 y Dispose()
 /// para abrir el selector nativo de carpetas de Windows sin ocultar ni colgar el diálogo.
-List<String> buildWindowsFolderPickerPsArgs({String? initialPath}) {
+List<String> buildWindowsFolderPickerPsArgs({
+  String? initialPath,
+  String? description,
+}) {
   final safeInitial = (initialPath ?? '').trim().replaceAll("'", "''");
+  final safeDescription = (description ??
+          'Selecciona una carpeta donde guardas tus archivos .APK de MochilaLista')
+      .trim()
+      .replaceAll("'", "''");
   final lines = <String>[
     '[Console]::OutputEncoding = [System.Text.Encoding]::UTF8',
     'Add-Type -AssemblyName System.Windows.Forms',
@@ -86,7 +126,7 @@ List<String> buildWindowsFolderPickerPsArgs({String? initialPath}) {
     r'$topForm.Size = New-Object System.Drawing.Size(1, 1)',
     r'$topForm.ShowInTaskbar = $false',
     r'$dialog = New-Object System.Windows.Forms.FolderBrowserDialog',
-    r"$dialog.Description = 'Selecciona una carpeta donde guardas tus archivos .APK de MochilaLista'",
+    "\$dialog.Description = '$safeDescription'",
     r'$dialog.ShowNewFolderButton = $false',
     if (safeInitial.isNotEmpty)
       "if (Test-Path -LiteralPath '$safeInitial') { \$dialog.SelectedPath = '$safeInitial' }",
@@ -205,6 +245,158 @@ Future<void> _launchBrowserDetached(String url) async {
   }
 }
 
+/// Verifica variantes registradas y ruta raíz de un release contra disco duro y apksigner
+Future<Map<String, dynamic>> _inspectAndComputeReleaseVerification(
+  Map<String, dynamic> release, {
+  required ApkInspectorService inspector,
+  required ConfigService configService,
+  bool forceRefresh = false,
+  bool readCompanionNotes = false,
+}) async {
+  final updates = <String, dynamic>{};
+  final verifiedVariants = <String>[];
+  ApkInspectionResult? primaryInspection;
+  bool anyFileExists = false;
+  final searchDirPaths = configService.getEffectiveApkSearchDirPaths(
+    defaultBuildOutputDir: inspector.defaultBuildOutputDir?.path,
+  );
+
+  Future<Map<String, dynamic>?> verifyVariantPath(
+    Map<String, dynamic>? existingVariant,
+    String? rawPath,
+    String label,
+  ) async {
+    if (rawPath == null || rawPath.trim().isEmpty) return null;
+    final canon = ApkInspectorService.canonicalizePath(rawPath);
+    final f = File(canon);
+    if (!await f.exists()) {
+      if (existingVariant != null) {
+        final missingMap = Map<String, dynamic>.from(existingVariant);
+        missingMap['file_path'] = canon;
+        missingMap['file_exists'] = false;
+        return missingMap;
+      }
+      return null;
+    }
+
+    anyFileExists = true;
+    final res = await inspector.inspectApk(
+      f,
+      apkLibraryDir: configService.apkLibraryDir,
+      extraSearchDirs: searchDirPaths,
+      forceRefresh: forceRefresh,
+    );
+    verifiedVariants.add(label);
+    primaryInspection ??= res;
+    return {
+      'file_path': res.filePath,
+      'file_size_mb': res.sizeMb,
+      'sha256': res.sha256,
+      'signature_status': res.signatureStatus,
+      'signature_verified': res.signatureVerified,
+      if (res.signatureDetail != null) 'signature_detail': res.signatureDetail,
+      'signer_sha256': res.signerSha256,
+      'signer_dn': res.signerDn,
+      'file_exists': true,
+    };
+  }
+
+  final existingUniv = release['universal_apk'] as Map<String, dynamic>?;
+  final existingArm = release['arm64_apk'] as Map<String, dynamic>?;
+  final rawUnivPath = existingUniv?['file_path'] as String?;
+  final rawArmPath = existingArm?['file_path'] as String?;
+  final rawMainPath = release['apk_file_path'] as String?;
+
+  final updatedUniv =
+      await verifyVariantPath(existingUniv, rawUnivPath, 'universal');
+  if (updatedUniv != null) {
+    updates['universal_apk'] = updatedUniv;
+  }
+
+  final updatedArm = await verifyVariantPath(existingArm, rawArmPath, 'arm64');
+  if (updatedArm != null) {
+    updates['arm64_apk'] = updatedArm;
+  }
+
+  if (rawMainPath != null && rawMainPath.trim().isNotEmpty) {
+    final mainCanon = ApkInspectorService.canonicalizePath(rawMainPath);
+    final mainExists = await File(mainCanon).exists();
+    if (mainExists) {
+      if (primaryInspection == null) {
+        await verifyVariantPath(null, mainCanon, 'primary');
+      } else {
+        anyFileExists = true;
+      }
+    }
+  }
+
+  if (primaryInspection != null) {
+    final p = primaryInspection!;
+    updates['apk_file_path'] = p.filePath;
+    updates['file_size_mb'] = p.sizeMb;
+    updates['apk_sha256'] = p.sha256;
+    updates['signature_verified'] = p.signatureVerified;
+    updates['signature_status'] = p.signatureStatus;
+    updates['signature_detail'] = p.signatureDetail;
+    updates['signer_sha256'] = p.signerSha256;
+    updates['signer_dn'] = p.signerDn;
+    updates['file_exists'] = true;
+    if (p.versionCode != null) updates['version_code'] = p.versionCode;
+    updates['db_schema_version'] = p.dbSchemaVersion;
+    if (p.abiVariant == 'UNIVERSAL' && updatedUniv == null) {
+      updates['universal_apk'] = {
+        'file_path': p.filePath,
+        'file_size_mb': p.sizeMb,
+        'sha256': p.sha256,
+        'signature_status': p.signatureStatus,
+        'signature_verified': p.signatureVerified,
+        if (p.signatureDetail != null) 'signature_detail': p.signatureDetail,
+        'signer_sha256': p.signerSha256,
+        'signer_dn': p.signerDn,
+        'file_exists': true,
+      };
+    } else if (p.abiVariant == 'ARM64' && updatedArm == null) {
+      updates['arm64_apk'] = {
+        'file_path': p.filePath,
+        'file_size_mb': p.sizeMb,
+        'sha256': p.sha256,
+        'signature_status': p.signatureStatus,
+        'signature_verified': p.signatureVerified,
+        if (p.signatureDetail != null) 'signature_detail': p.signatureDetail,
+        'signer_sha256': p.signerSha256,
+        'signer_dn': p.signerDn,
+        'file_exists': true,
+      };
+    }
+  } else {
+    updates['file_exists'] = false;
+    updates['signature_verified'] = null;
+    updates['signature_status'] = 'UNVERIFIED';
+    updates['signature_detail'] =
+        'No se encontró ningún archivo físico APK registrado en disco.';
+  }
+
+  Map<String, dynamic>? companionNotes;
+  if (readCompanionNotes) {
+    companionNotes = await inspector.readCompanionNotesForVersion(
+      release['version_name'] as String? ?? '',
+      apkPath: (updates['apk_file_path'] as String?) ??
+          rawMainPath ??
+          rawUnivPath ??
+          rawArmPath,
+      apkLibraryDir: configService.apkLibraryDir,
+      extraSearchDirs: searchDirPaths,
+    );
+  }
+
+  return {
+    'updates': updates,
+    'file_exists': anyFileExists,
+    'verified_variants': verifiedVariants,
+    if (companionNotes != null) 'companion_notes': companionNotes,
+  };
+}
+
 Future<void> handleRequest(
   HttpRequest request,
   DatabaseService dbService,
@@ -218,6 +410,7 @@ Future<void> handleRequest(
   Future<bool> Function(String filePath)? onCopyFileOverride,
   Future<String?> Function()? onBrowseFolderOverride,
   ClientSyncService? clientSyncService,
+  CommercialConfigSyncService? commercialSyncService,
 }) async {
   final path = request.uri.path;
   final method = request.method;
@@ -276,6 +469,39 @@ Future<void> handleRequest(
   }
 }
 
+String? _extractVaultSessionToken(HttpRequest request) {
+  final headerToken = request.headers.value('X-Vault-Session-Token')?.trim();
+  if (headerToken != null && headerToken.isNotEmpty) {
+    return headerToken;
+  }
+  final cookieToken = request.cookies
+      .cast<Cookie?>()
+      .firstWhere((c) => c?.name == 'vault_session_token', orElse: () => null)
+      ?.value
+      .trim();
+  if (cookieToken != null && cookieToken.isNotEmpty) {
+    return cookieToken;
+  }
+  return null;
+}
+
+void _setVaultSessionCookie(HttpResponse response, String token) {
+  final cookie = Cookie('vault_session_token', token)
+    ..path = '/'
+    ..httpOnly = true
+    ..sameSite = SameSite.lax;
+  response.cookies.add(cookie);
+}
+
+void _clearVaultSessionCookie(HttpResponse response) {
+  final cookie = Cookie('vault_session_token', '')
+    ..path = '/'
+    ..httpOnly = true
+    ..sameSite = SameSite.lax
+    ..maxAge = 0;
+  response.cookies.add(cookie);
+}
+
 Future<void> _handleApiRoute(
   HttpRequest request,
   String path,
@@ -291,6 +517,7 @@ Future<void> _handleApiRoute(
   Future<bool> Function(String filePath)? onCopyFileOverride,
   Future<String?> Function()? onBrowseFolderOverride,
   ClientSyncService? clientSyncService,
+  CommercialConfigSyncService? commercialSyncService,
 }) async {
   final inspector = apkInspectorService ?? ApkInspectorService();
   final syncService = clientSyncService ?? ClientSyncService();
@@ -306,12 +533,7 @@ Future<void> _handleApiRoute(
         path == '/api/system/open-browser';
 
     if (!isExempt) {
-      final token = request.headers.value('X-Vault-Session-Token') ??
-          request.cookies
-              .cast<Cookie?>()
-              .firstWhere((c) => c?.name == 'vault_session_token',
-                  orElse: () => null)
-              ?.value;
+      final token = _extractVaultSessionToken(request);
 
       if (!vaultStorage.isSessionValid(token)) {
         request.response.statusCode = 423; // Locked
@@ -333,11 +555,119 @@ Future<void> _handleApiRoute(
     return;
   }
 
+  if (path == '/api/vault/audit' && method == 'GET') {
+    final audit = await vaultStorage.runFullIntegrityAudit();
+    request.response.write(jsonEncode(audit));
+    await request.response.close();
+    return;
+  }
+
   if (path == '/api/vault/sync-mirror' && method == 'POST') {
     await vaultStorage.syncMirror();
     request.response.write(jsonEncode({
       'ok': true,
       'message': 'Espejo cifrado sincronizado exitosamente.',
+    }));
+    await request.response.close();
+    return;
+  }
+
+  if (path == '/api/vault/cloud-path/browse' && method == 'POST') {
+    String? initialPath;
+    try {
+      final bodyStr = await _readRequestBody(request);
+      if (bodyStr.trim().isNotEmpty) {
+        final body = jsonDecode(bodyStr) as Map<String, dynamic>;
+        initialPath = body['initial_path'] as String?;
+      }
+    } catch (_) {}
+
+    String? pickedPath;
+    if (onBrowseFolderOverride != null) {
+      pickedPath = await onBrowseFolderOverride();
+    } else if (Platform.isWindows) {
+      try {
+        final psArgs = buildWindowsFolderPickerPsArgs(
+          initialPath: initialPath,
+          description:
+              'Selecciona una carpeta de nube local (Dropbox, Google Drive u OneDrive) para replicar tu bóveda cifrada',
+        );
+        final proc = await Process.run(
+          'powershell',
+          psArgs,
+          stdoutEncoding: utf8,
+          stderrEncoding: utf8,
+        ).timeout(const Duration(seconds: 90));
+        if (proc.exitCode == 0) {
+          final out = proc.stdout.toString().trim();
+          if (out.isNotEmpty) {
+            pickedPath = out.split(RegExp(r'\r?\n')).first.trim();
+          }
+        } else {
+          final err = proc.stderr.toString().trim();
+          request.response.statusCode = HttpStatus.internalServerError;
+          request.response.write(jsonEncode({
+            'ok': false,
+            'supported': true,
+            'error': err.isNotEmpty
+                ? err
+                : 'No se pudo abrir el selector de carpetas de Windows.',
+          }));
+          await request.response.close();
+          return;
+        }
+      } catch (e) {
+        request.response.statusCode = HttpStatus.internalServerError;
+        request.response.write(jsonEncode({
+          'ok': false,
+          'supported': true,
+          'error': 'Error al abrir selector de carpetas: $e',
+        }));
+        await request.response.close();
+        return;
+      }
+    } else {
+      request.response.statusCode = HttpStatus.notImplemented;
+      request.response.write(jsonEncode({
+        'ok': false,
+        'supported': false,
+        'error':
+            'El selector nativo de carpetas requiere Windows. Ingresa la ruta manualmente.',
+      }));
+      await request.response.close();
+      return;
+    }
+
+    if (pickedPath == null || pickedPath.trim().isEmpty) {
+      request.response.write(jsonEncode({
+        'ok': true,
+        'cancelled': true,
+        'path': null,
+      }));
+      await request.response.close();
+      return;
+    }
+
+    final cleanPicked = pickedPath.trim();
+    final validationError = VaultStorageService.validateCloudSyncDirectoryPath(
+      cleanPicked,
+      projectRootDir: vaultStorage.projectRootDir,
+      mirrorDir: vaultStorage.mirrorDir,
+    );
+    if (validationError != null) {
+      request.response.statusCode = HttpStatus.badRequest;
+      request.response.write(jsonEncode({
+        'ok': false,
+        'error': validationError,
+      }));
+      await request.response.close();
+      return;
+    }
+
+    request.response.write(jsonEncode({
+      'ok': true,
+      'cancelled': false,
+      'path': cleanPicked,
     }));
     await request.response.close();
     return;
@@ -351,7 +681,7 @@ Future<void> _handleApiRoute(
     request.response.write(jsonEncode({
       'ok': true,
       'cloud_path': cloudPath,
-      'message': cloudPath != null && cloudPath.isNotEmpty
+      'message': cloudPath != null && cloudPath.trim().isNotEmpty
           ? 'Ruta de sincronización de nube local configurada exitosamente.'
           : 'Sincronización de nube local desactivada.',
     }));
@@ -516,12 +846,7 @@ Future<void> _handleApiRoute(
   }
 
   if (path == '/api/vault/pin/status' && method == 'GET') {
-    final token = request.headers.value('X-Vault-Session-Token') ??
-        request.cookies
-            .cast<Cookie?>()
-            .firstWhere((c) => c?.name == 'vault_session_token',
-                orElse: () => null)
-            ?.value;
+    final token = _extractVaultSessionToken(request);
     final pinEnabled = vaultStorage.isPinEnabled();
     final locked = pinEnabled && !vaultStorage.isSessionValid(token);
     request.response.write(jsonEncode({
@@ -533,13 +858,9 @@ Future<void> _handleApiRoute(
   }
 
   if (path == '/api/vault/pin/lock' && method == 'POST') {
-    final token = request.headers.value('X-Vault-Session-Token') ??
-        request.cookies
-            .cast<Cookie?>()
-            .firstWhere((c) => c?.name == 'vault_session_token',
-                orElse: () => null)
-            ?.value;
+    final token = _extractVaultSessionToken(request);
     vaultStorage.revokeSession(token);
+    _clearVaultSessionCookie(request.response);
     request.response.write(jsonEncode({
       'ok': true,
       'locked': true,
@@ -554,14 +875,14 @@ Future<void> _handleApiRoute(
     final body = jsonDecode(bodyStr) as Map<String, dynamic>;
     final enabled = body['enabled'] as bool? ?? false;
     final pin = body['pin'] as String?;
-    await vaultStorage.configurePin(pin: pin, enabled: enabled);
-    request.response.write(jsonEncode({
-      'ok': true,
-      'pin_enabled': vaultStorage.isPinEnabled(),
-      'message': enabled
-          ? 'PIN local activado exitosamente.'
-          : 'PIN local desactivado exitosamente.',
-    }));
+    final cfgRes = await vaultStorage.configurePin(pin: pin, enabled: enabled);
+    final newToken = cfgRes['session_token'] as String?;
+    if (enabled && newToken != null && newToken.isNotEmpty) {
+      _setVaultSessionCookie(request.response, newToken);
+    } else if (!enabled) {
+      _clearVaultSessionCookie(request.response);
+    }
+    request.response.write(jsonEncode(cfgRes));
     await request.response.close();
     return;
   }
@@ -571,6 +892,10 @@ Future<void> _handleApiRoute(
     final body = jsonDecode(bodyStr) as Map<String, dynamic>;
     final pin = body['pin'] as String? ?? '';
     final res = await vaultStorage.verifyPin(pin);
+    final token = res['session_token'] as String?;
+    if (token != null && token.isNotEmpty) {
+      _setVaultSessionCookie(request.response, token);
+    }
     request.response.write(jsonEncode(res));
     await request.response.close();
     return;
@@ -612,6 +937,12 @@ Future<void> _handleApiRoute(
       newPin: newPin,
       disablePin: disablePin,
     );
+    final token = res['session_token'] as String?;
+    if (disablePin) {
+      _clearVaultSessionCookie(request.response);
+    } else if (token != null && token.isNotEmpty) {
+      _setVaultSessionCookie(request.response, token);
+    }
     request.response.write(jsonEncode(res));
     await request.response.close();
     return;
@@ -1517,11 +1848,12 @@ Future<void> _handleApiRoute(
   if ((path == '/api/finances/export-csv' || path == '/api/finances/export') &&
       method == 'GET') {
     final csvData = await dbService.exportFinancesToCsv();
+    final dateStr = PeruTimeHelper.formatLimaDate(DateTime.now());
     request.response.headers.contentType =
         ContentType('text', 'csv', charset: 'utf-8');
     request.response.headers.add(
       'Content-Disposition',
-      'attachment; filename="libro_contable_${dbService.currentMode}_${DateTime.now().toIso8601String().substring(0, 10)}.csv"',
+      'attachment; filename="libro_contable_${dbService.currentMode}_$dateStr.csv"',
     );
     request.response.write(csvData);
     await request.response.close();
@@ -1533,7 +1865,7 @@ Future<void> _handleApiRoute(
   if ((path == '/api/export/excel-master' || path == '/api/export/excel') &&
       method == 'GET') {
     final bytes = await excelService.generateMasterWorkbook();
-    final dateStr = DateTime.now().toIso8601String().substring(0, 10);
+    final dateStr = PeruTimeHelper.formatLimaDate(DateTime.now());
     request.response.headers.contentType = ContentType(
         'application', 'vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     request.response.headers.add(
@@ -1553,7 +1885,7 @@ Future<void> _handleApiRoute(
     final toDate = request.uri.queryParameters['to'];
     final bytes = await excelService.generateFinancesReport(
         fromDate: fromDate, toDate: toDate);
-    final dateStr = DateTime.now().toIso8601String().substring(0, 10);
+    final dateStr = PeruTimeHelper.formatLimaDate(DateTime.now());
     request.response.headers.contentType = ContentType(
         'application', 'vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     request.response.headers.add(
@@ -1592,8 +1924,68 @@ Future<void> _handleApiRoute(
     return;
   }
 
+  if (path == '/api/backups/purge-sandbox' && method == 'POST') {
+    int keepRecent = 10;
+    try {
+      final bodyStr = await _readRequestBody(request);
+      if (bodyStr.trim().isNotEmpty) {
+        final body = jsonDecode(bodyStr);
+        if (body is Map && body['keep_recent'] is num) {
+          keepRecent = (body['keep_recent'] as num).toInt();
+        }
+      }
+    } catch (_) {}
+    final result = await dbService.purgeSandboxBackups(keepRecent: keepRecent);
+    request.response.write(jsonEncode(result));
+    await request.response.close();
+    return;
+  }
+
+  if (path.startsWith('/api/backups/preview/') && method == 'GET') {
+    final rawName = path.replaceFirst('/api/backups/preview/', '');
+    final filename = Uri.decodeComponent(rawName).trim();
+    if (!DatabaseService.isSafeBackupFilename(filename)) {
+      request.response.statusCode = HttpStatus.badRequest;
+      request.response.write(jsonEncode({
+        'error': 'Nombre de archivo de respaldo inválido o inseguro.',
+      }));
+      await request.response.close();
+      return;
+    }
+
+    try {
+      final preview = await dbService.previewBackup(
+        filename,
+        configService: configService,
+      );
+      if (preview == null) {
+        request.response.statusCode = HttpStatus.notFound;
+        request.response.write(jsonEncode({
+          'error': 'Archivo de backup no encontrado.',
+        }));
+      } else {
+        request.response.write(jsonEncode(preview));
+      }
+    } catch (e) {
+      request.response.statusCode = HttpStatus.badRequest;
+      request.response.write(jsonEncode({'error': e.toString()}));
+    }
+    await request.response.close();
+    return;
+  }
+
   if (path.startsWith('/api/backups/download/') && method == 'GET') {
-    final filename = path.replaceFirst('/api/backups/download/', '').trim();
+    final rawName = path.replaceFirst('/api/backups/download/', '');
+    final filename = Uri.decodeComponent(rawName).trim();
+    if (!DatabaseService.isSafeBackupFilename(filename)) {
+      request.response.statusCode = HttpStatus.badRequest;
+      request.response.write(jsonEncode({
+        'error': 'Nombre de archivo de respaldo inválido o inseguro.',
+      }));
+      await request.response.close();
+      return;
+    }
+
     final file = File('${dbService.backupDir}/$filename');
     if (!await file.exists()) {
       request.response.statusCode = HttpStatus.notFound;
@@ -1612,21 +2004,35 @@ Future<void> _handleApiRoute(
   }
 
   if (path == '/api/backups/restore' && method == 'POST') {
-    final bodyStr = await utf8.decodeStream(request);
+    final bodyStr = await _readRequestBody(request);
     final body = jsonDecode(bodyStr) as Map<String, dynamic>;
-    final filename = body['filename'] as String? ?? '';
-    final ok = await dbService.restoreFromBackup(filename);
-    if (ok) {
-      request.response.write(jsonEncode({
-        'ok': true,
-        'message': 'Base de datos restaurada al punto $filename exitosamente.',
-      }));
-    } else {
+    final filename = (body['filename'] as String? ?? '').trim();
+    if (!DatabaseService.isSafeBackupFilename(filename)) {
       request.response.statusCode = HttpStatus.badRequest;
       request.response.write(jsonEncode({
-        'error':
-            'No se pudo restaurar desde $filename. Verifique que el archivo exista en backups/.',
+        'error': 'Nombre de archivo de respaldo inválido o inseguro.',
       }));
+      await request.response.close();
+      return;
+    }
+
+    try {
+      final res = await dbService.restoreFromBackupWithDetails(
+        filename,
+        configService: configService,
+      );
+      if (res['ok'] == true) {
+        request.response.write(jsonEncode(res));
+      } else {
+        request.response.statusCode = HttpStatus.badRequest;
+        request.response.write(jsonEncode({
+          'error': res['error'] ??
+              'No se pudo restaurar desde $filename. Verifique que el archivo exista en backups/.',
+        }));
+      }
+    } catch (e) {
+      request.response.statusCode = HttpStatus.badRequest;
+      request.response.write(jsonEncode({'error': e.toString()}));
     }
     await request.response.close();
     return;
@@ -2156,6 +2562,107 @@ Future<void> _handleApiRoute(
     return;
   }
 
+  // Verificación masiva consolidada de todo el catálogo de versiones publicadas (Plan 23 Fase 6)
+  if (path == '/api/releases/verify-all' && method == 'POST') {
+    final sw = Stopwatch()..start();
+    bool forceRefresh =
+        (request.uri.queryParameters['force'] ?? '').trim().toLowerCase() ==
+            'true';
+    try {
+      final bodyStr = await _readRequestBody(request);
+      if (bodyStr.trim().isNotEmpty) {
+        final decoded = jsonDecode(bodyStr);
+        if (decoded is Map && decoded['force'] == true) {
+          forceRefresh = true;
+        }
+      }
+    } catch (_) {}
+
+    final releases = await dbService.getReleases();
+    final updatesByVersion = <String, Map<String, dynamic>>{};
+    final items = <Map<String, dynamic>>[];
+
+    int officialCount = 0;
+    int unofficialCount = 0;
+    int unverifiedCount = 0;
+    int missingCount = 0;
+    int updatedCount = 0;
+
+    for (final release in releases) {
+      final ver = release['version_name'] as String? ?? '';
+      if (ver.isEmpty) continue;
+
+      final verification = await _inspectAndComputeReleaseVerification(
+        release,
+        inspector: inspector,
+        configService: configService,
+        forceRefresh: forceRefresh,
+        readCompanionNotes: false,
+      );
+      final updates = verification['updates'] as Map<String, dynamic>;
+      final anyFileExists = verification['file_exists'] == true;
+      final verifiedVariants =
+          (verification['verified_variants'] as List).cast<String>();
+
+      final previewRel = Map<String, dynamic>.from(release);
+      final beforeComparable = jsonEncode(previewRel);
+      dbService.applyReleaseUpdatesToMap(previewRel, updates);
+      final releaseChanged = jsonEncode(previewRel) != beforeComparable;
+
+      if (releaseChanged) {
+        updatedCount++;
+      }
+      updatesByVersion[ver] = updates;
+
+      final sigStatus = previewRel['signature_status'] as String? ?? 'UNVERIFIED';
+      final sigVerified = previewRel['signature_verified'];
+      if (!anyFileExists) {
+        missingCount++;
+      } else if (sigStatus == 'OFFICIAL_RELEASE' || sigVerified == true) {
+        officialCount++;
+      } else if (sigStatus == 'UNOFFICIAL_SIGNATURE' ||
+          (sigVerified == false && sigStatus != 'UNVERIFIED')) {
+        unofficialCount++;
+      } else {
+        unverifiedCount++;
+      }
+
+      items.add({
+        'version_name': ver,
+        'version_code': previewRel['version_code'],
+        'file_exists': anyFileExists,
+        'signature_status': sigStatus,
+        'signature_verified': sigVerified,
+        'signature_detail': previewRel['signature_detail'],
+        'verified_variants': verifiedVariants,
+        'updated': releaseChanged,
+      });
+    }
+
+    final finalReleases = releases.isEmpty
+        ? releases
+        : await dbService.applyBatchReleaseUpdates(
+            updatesByVersion,
+            reason: 'verify_all_releases',
+          );
+    sw.stop();
+
+    request.response.write(jsonEncode({
+      'ok': true,
+      'total': releases.length,
+      'official_count': officialCount,
+      'unofficial_count': unofficialCount,
+      'unverified_count': unverifiedCount,
+      'missing_count': missingCount,
+      'updated_count': updatedCount,
+      'duration_ms': sw.elapsedMilliseconds,
+      'items': items,
+      'releases': finalReleases,
+    }));
+    await request.response.close();
+    return;
+  }
+
   // Re-verificar firma criptográfica, tamaño, SHA-256 y existencia física en disco
   final verifyReleaseMatch =
       RegExp(r'^/api/releases/([^/]+)/verify$').firstMatch(path);
@@ -2169,140 +2676,24 @@ Future<void> _handleApiRoute(
       return;
     }
 
-    final updates = <String, dynamic>{};
-    final verifiedVariants = <String>[];
-    ApkInspectionResult? primaryInspection;
-    bool anyFileExists = false;
-    final searchDirPaths = configService.getEffectiveApkSearchDirPaths(
-      defaultBuildOutputDir: inspector.defaultBuildOutputDir?.path,
+    final forceRefresh =
+        (request.uri.queryParameters['force'] ?? '').trim().toLowerCase() ==
+            'true';
+    final verification = await _inspectAndComputeReleaseVerification(
+      release,
+      inspector: inspector,
+      configService: configService,
+      forceRefresh: forceRefresh,
+      readCompanionNotes: true,
     );
-
-    Future<Map<String, dynamic>?> verifyVariantPath(
-      Map<String, dynamic>? existingVariant,
-      String? rawPath,
-      String label,
-    ) async {
-      if (rawPath == null || rawPath.trim().isEmpty) return null;
-      final canon = ApkInspectorService.canonicalizePath(rawPath);
-      final f = File(canon);
-      if (!await f.exists()) {
-        if (existingVariant != null) {
-          final missingMap = Map<String, dynamic>.from(existingVariant);
-          missingMap['file_path'] = canon;
-          missingMap['file_exists'] = false;
-          return missingMap;
-        }
-        return null;
-      }
-
-      anyFileExists = true;
-      final res = await inspector.inspectApk(
-        f,
-        apkLibraryDir: configService.apkLibraryDir,
-        extraSearchDirs: searchDirPaths,
-      );
-      verifiedVariants.add(label);
-      primaryInspection ??= res;
-      return {
-        'file_path': res.filePath,
-        'file_size_mb': res.sizeMb,
-        'sha256': res.sha256,
-        'signature_status': res.signatureStatus,
-        'signature_verified': res.signatureVerified,
-        if (res.signatureDetail != null)
-          'signature_detail': res.signatureDetail,
-        'signer_sha256': res.signerSha256,
-        'signer_dn': res.signerDn,
-        'file_exists': true,
-      };
-    }
-
-    final existingUniv = release['universal_apk'] as Map<String, dynamic>?;
-    final existingArm = release['arm64_apk'] as Map<String, dynamic>?;
-    final rawUnivPath = existingUniv?['file_path'] as String?;
-    final rawArmPath = existingArm?['file_path'] as String?;
-    final rawMainPath = release['apk_file_path'] as String?;
-
-    final updatedUniv =
-        await verifyVariantPath(existingUniv, rawUnivPath, 'universal');
-    if (updatedUniv != null) {
-      updates['universal_apk'] = updatedUniv;
-    }
-
-    final updatedArm =
-        await verifyVariantPath(existingArm, rawArmPath, 'arm64');
-    if (updatedArm != null) {
-      updates['arm64_apk'] = updatedArm;
-    }
-
-    if (rawMainPath != null && rawMainPath.trim().isNotEmpty) {
-      final mainCanon = ApkInspectorService.canonicalizePath(rawMainPath);
-      final mainExists = await File(mainCanon).exists();
-      if (mainExists) {
-        if (primaryInspection == null) {
-          await verifyVariantPath(null, mainCanon, 'primary');
-        } else {
-          anyFileExists = true;
-        }
-      }
-    }
-
-    if (primaryInspection != null) {
-      final p = primaryInspection!;
-      updates['apk_file_path'] = p.filePath;
-      updates['file_size_mb'] = p.sizeMb;
-      updates['apk_sha256'] = p.sha256;
-      updates['signature_verified'] = p.signatureVerified;
-      updates['signature_status'] = p.signatureStatus;
-      updates['signature_detail'] = p.signatureDetail;
-      updates['signer_sha256'] = p.signerSha256;
-      updates['signer_dn'] = p.signerDn;
-      updates['file_exists'] = true;
-      if (p.versionCode != null) updates['version_code'] = p.versionCode;
-      updates['db_schema_version'] = p.dbSchemaVersion;
-      if (p.abiVariant == 'UNIVERSAL' && updatedUniv == null) {
-        updates['universal_apk'] = {
-          'file_path': p.filePath,
-          'file_size_mb': p.sizeMb,
-          'sha256': p.sha256,
-          'signature_status': p.signatureStatus,
-          'signature_verified': p.signatureVerified,
-          if (p.signatureDetail != null) 'signature_detail': p.signatureDetail,
-          'signer_sha256': p.signerSha256,
-          'signer_dn': p.signerDn,
-          'file_exists': true,
-        };
-      } else if (p.abiVariant == 'ARM64' && updatedArm == null) {
-        updates['arm64_apk'] = {
-          'file_path': p.filePath,
-          'file_size_mb': p.sizeMb,
-          'sha256': p.sha256,
-          'signature_status': p.signatureStatus,
-          'signature_verified': p.signatureVerified,
-          if (p.signatureDetail != null) 'signature_detail': p.signatureDetail,
-          'signer_sha256': p.signerSha256,
-          'signer_dn': p.signerDn,
-          'file_exists': true,
-        };
-      }
-    } else {
-      updates['file_exists'] = false;
-      updates['signature_verified'] = null;
-      updates['signature_status'] = 'UNVERIFIED';
-      updates['signature_detail'] =
-          'No se encontró ningún archivo físico APK registrado en disco.';
-    }
+    final updates = verification['updates'] as Map<String, dynamic>;
+    final anyFileExists = verification['file_exists'] == true;
+    final verifiedVariants =
+        (verification['verified_variants'] as List).cast<String>();
+    final companionNotes =
+        (verification['companion_notes'] as Map<String, dynamic>?) ?? const {};
 
     final updatedRelease = await dbService.updateRelease(versionName, updates);
-    final companionNotes = await inspector.readCompanionNotesForVersion(
-      versionName,
-      apkPath: (updatedRelease?['apk_file_path'] as String?) ??
-          rawMainPath ??
-          rawUnivPath ??
-          rawArmPath,
-      apkLibraryDir: configService.apkLibraryDir,
-      extraSearchDirs: searchDirPaths,
-    );
 
     request.response.write(jsonEncode({
       'ok': true,
@@ -2517,11 +2908,42 @@ Future<void> _handleApiRoute(
 
   if ((path == '/api/config/reset' || path == '/api/config/owner/reset') &&
       method == 'POST') {
-    final restored = await configService.resetToDefaults();
+    final bodyStr = await _readRequestBody(request);
+    String scope = 'all';
+    if (bodyStr.trim().isNotEmpty) {
+      final decoded = jsonDecode(bodyStr);
+      if (decoded is Map && decoded['scope'] != null) {
+        scope = decoded['scope'].toString().trim().toLowerCase();
+      }
+    }
+    const allowedScopes = {'all', 'pricing', 'templates', 'payment', 'preferences'};
+    if (!allowedScopes.contains(scope)) {
+      request.response.statusCode = HttpStatus.badRequest;
+      request.response.write(jsonEncode({
+        'ok': false,
+        'error': 'Alcance de restauración inválido: $scope',
+      }));
+      await request.response.close();
+      return;
+    }
+
+    final restored = await configService.resetToDefaults(scope: scope);
+    final scopeMessages = {
+      'all':
+          'Configuración completa del propietario restablecida a los valores oficiales de fábrica.',
+      'pricing':
+          'Tarifario oficial y cuotas IA restablecidos a los valores de fábrica.',
+      'templates':
+          'Plantillas de WhatsApp restablecidas a los textos oficiales de fábrica.',
+      'payment':
+          'Medios de pago e identidad legal restablecidos a los valores de fábrica.',
+      'preferences':
+          'Preferencias de entorno, tema y densidad restablecidas (rutas APK preservadas).',
+    };
     request.response.write(jsonEncode({
       'ok': true,
-      'message':
-          'Configuración del propietario restablecida a los valores oficiales de fábrica.',
+      'scope': scope,
+      'message': scopeMessages[scope] ?? scopeMessages['all'],
       'config': restored,
     }));
     await request.response.close();
@@ -2544,6 +2966,110 @@ Future<void> _handleApiRoute(
       'ok': true,
       'rendered': rendered,
     }));
+    await request.response.close();
+    return;
+  }
+
+  if (path == '/api/config/generate-sync-token' && method == 'POST') {
+    final syncService = commercialSyncService ?? CommercialConfigSyncService();
+    try {
+      if (!signer.isLoaded) {
+        await signer.loadMasterKey();
+      }
+      final candidateRev = configService.commercialSyncRevision + 1;
+      syncService.buildCanonicalPayload(
+        configService.config,
+        revision: candidateRev,
+      );
+
+      final nextRev = await configService.incrementCommercialSyncRevision();
+      final issued = await syncService.generateSignedToken(
+        configService.config,
+        revision: nextRev,
+        signer: signer,
+      );
+      final verified = await syncService.verifySignedToken(
+        issued['token'] as String,
+        signer: signer,
+      );
+      if (verified['valid'] != true) {
+        request.response.statusCode = HttpStatus.internalServerError;
+        request.response.write(jsonEncode({
+          'ok': false,
+          'error':
+              'Fallo en autoverificación Ed25519 del token generado: ${verified['error']}',
+        }));
+        await request.response.close();
+        return;
+      }
+
+      final dartSnippet = syncService.generateOwnerLegalIdentityDartSnippet(
+        configService.config,
+        revision: nextRev,
+      );
+
+      request.response.write(jsonEncode({
+        'ok': true,
+        'token': issued['token'],
+        'revision': issued['revision'],
+        'issued_at': issued['issued_at'],
+        'issued_at_unix': issued['issued_at_unix'],
+        'issued_at_lima': issued['issued_at_lima'],
+        'payload_bytes': issued['payload_bytes'],
+        'token_bytes': issued['token_bytes'],
+        'payload': issued['payload'],
+        'summary': issued['summary'],
+        'dart_snippet': dartSnippet,
+        'config': configService.config,
+      }));
+    } on CommercialConfigSyncException catch (e) {
+      request.response.statusCode = HttpStatus.badRequest;
+      request.response.write(jsonEncode({
+        'ok': false,
+        'error': e.message,
+      }));
+    } catch (e) {
+      request.response.statusCode = HttpStatus.internalServerError;
+      request.response.write(jsonEncode({
+        'ok': false,
+        'error': 'Error al emitir ficha firmada MLC1: $e',
+      }));
+    }
+    await request.response.close();
+    return;
+  }
+
+  if (path == '/api/config/dart-defaults-snippet' && method == 'GET') {
+    final syncService = commercialSyncService ?? CommercialConfigSyncService();
+    try {
+      final currentRev = configService.commercialSyncRevision;
+      final dartSnippet = syncService.generateOwnerLegalIdentityDartSnippet(
+        configService.config,
+        revision: currentRev,
+      );
+      final summary = syncService.buildSummaryFromConfig(
+        configService.config,
+        revision: currentRev < 1 ? 1 : currentRev,
+      );
+      request.response.write(jsonEncode({
+        'ok': true,
+        'revision': currentRev,
+        'dart_snippet': dartSnippet,
+        'summary': summary,
+      }));
+    } on CommercialConfigSyncException catch (e) {
+      request.response.statusCode = HttpStatus.badRequest;
+      request.response.write(jsonEncode({
+        'ok': false,
+        'error': e.message,
+      }));
+    } catch (e) {
+      request.response.statusCode = HttpStatus.internalServerError;
+      request.response.write(jsonEncode({
+        'ok': false,
+        'error': 'Error al generar constantes Dart: $e',
+      }));
+    }
     await request.response.close();
     return;
   }

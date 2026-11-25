@@ -4,8 +4,8 @@ class OwnerLegalIdentity {
   // Identidad oficial del Titular y Autor
   static const String authorFullName = "Julio Angello Vasquez Navarro";
   static const String appCommercialName = "MochilaLista";
-  static const String currentAppVersion = "9.40.0";
-  static const String currentAppVersionWithBuild = "9.40.0+84";
+  static const String currentAppVersion = "9.41.0";
+  static const String currentAppVersionWithBuild = "9.41.0+85";
   static const String legalJurisdiction = "Lima, República del Perú";
   static const String legalFrameworkNotice =
       "Protegido por el D.L. 822 (Ley de Derecho de Autor) e INDECOPI";
@@ -71,8 +71,14 @@ class OwnerLegalIdentity {
   }
 
   /// Construye la URI oficial de WhatsApp a partir de un mensaje personalizado
-  static Uri buildCustomWhatsAppOrderUri(String customMessage) {
-    final cleanPhone = supportPhone.replaceAll(RegExp(r'[^0-9]'), '');
+  static Uri buildCustomWhatsAppOrderUri(
+    String customMessage, {
+    String? supportPhoneOverride,
+  }) {
+    final targetPhone = (supportPhoneOverride?.trim().isNotEmpty ?? false)
+        ? supportPhoneOverride!
+        : supportPhone;
+    final cleanPhone = targetPhone.replaceAll(RegExp(r'[^0-9]'), '');
     final encoded = Uri.encodeComponent(customMessage);
     return Uri.parse("https://wa.me/$cleanPhone?text=$encoded");
   }
@@ -82,13 +88,17 @@ class OwnerLegalIdentity {
     required String planName,
     required String price,
     required String hardwareId,
+    String? supportPhoneOverride,
   }) {
     final text = buildPlanOrderMessage(
       planName: planName,
       price: price,
       hardwareId: hardwareId,
     );
-    return buildCustomWhatsAppOrderUri(text).toString();
+    return buildCustomWhatsAppOrderUri(
+      text,
+      supportPhoneOverride: supportPhoneOverride,
+    ).toString();
   }
 
   // Leyenda Legal Estándar para Documentos y Reportes

@@ -2,6 +2,7 @@ import 'dart:math' as math;
 import 'package:excel/excel.dart';
 import 'database_service.dart';
 import 'config_service.dart';
+import 'time_utils.dart';
 
 /// Motor Exportador a Microsoft Excel Profesional Multi-Hoja (.xlsx)
 /// (Plan Maestro 09 - Pilar 4)
@@ -71,24 +72,14 @@ class ExcelExportService {
     final clients = await dbService.getClients();
     var payments = await dbService.getConsolidatedFinances();
 
-    DateTime? from;
-    DateTime? to;
-    if (fromDate != null && fromDate.isNotEmpty) {
-      from = DateTime.tryParse(fromDate);
-    }
-    if (toDate != null && toDate.isNotEmpty) {
-      to = DateTime.tryParse(toDate);
-    }
-
-    if (from != null || to != null) {
+    if ((fromDate != null && fromDate.trim().isNotEmpty) ||
+        (toDate != null && toDate.trim().isNotEmpty)) {
       payments = payments.where((p) {
-        final pDateStr = p['date'] as String?;
-        if (pDateStr == null) return false;
-        final pDate = DateTime.tryParse(pDateStr);
-        if (pDate == null) return false;
-        if (from != null && pDate.isBefore(from)) return false;
-        if (to != null && pDate.isAfter(to.add(const Duration(days: 1)))) return false;
-        return true;
+        return PeruTimeHelper.isWithinLimaDateRange(
+          p['date'],
+          fromDate: fromDate,
+          toDate: toDate,
+        );
       }).toList();
     }
 
@@ -144,7 +135,8 @@ class ExcelExportService {
 
     final author = configService.legalIdentity['author_full_name'] ?? 'Julio Angello Vasquez Navarro';
     final modeLabel = dbService.currentMode == 'prod' ? 'PRODUCCIÓN REAL' : 'MODO PRUEBAS (SANDBOX)';
-    final nowStr = DateTime.now().toLocal().toString().split('.').first;
+    final nowStr =
+        '${PeruTimeHelper.formatLimaDateTime(DateTime.now())} (GMT-5)';
 
     sheet.cell(CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: 1))
       ..value = TextCellValue('Titular: $author | Entorno: $modeLabel | Emisión: $nowStr')
@@ -333,16 +325,37 @@ class ExcelExportService {
       'ANUAL',
       'PERPETUO_LIBERADO',
       'PASE_ACTUALIZACION_ANUAL',
+      'RECARGA_IA_150',
+      'EXTENSION_CORTESIA',
       'BONO_IA_PERSONALIZADO',
+      'ABONO_PARCIAL',
+      'SERVICIO_MIGRACION',
     ];
     for (final p in plans) {
-      final price = configService.getPlanPrice(p);
       sheet.cell(CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: r))
         ..value = TextCellValue(p);
       sheet.cell(CellIndex.indexByColumnRow(columnIndex: 1, rowIndex: r))
         ..value = FormulaCellValue("COUNTIF('$sheetCrm'!G2:G$crmRangeEnd, \"$p\")");
-      sheet.cell(CellIndex.indexByColumnRow(columnIndex: 2, rowIndex: r))
-        ..value = DoubleCellValue(price);
+
+      if (p == 'BONO_IA_PERSONALIZADO' || p == 'ABONO_PARCIAL') {
+        sheet.cell(CellIndex.indexByColumnRow(columnIndex: 2, rowIndex: r))
+          ..value = TextCellValue('Variable');
+      } else {
+        final double price;
+        if (p == 'TRIAL' || p == 'EXTENSION_CORTESIA') {
+          price = configService.getPlanPrice(p, fallback: 0.0);
+        } else if (p == 'SERVICIO_MIGRACION') {
+          price = configService.getPlanPrice('HARDWARE_MIGRATION_FEE', fallback: 40.0);
+        } else if (p == 'RECARGA_IA_150') {
+          price = configService.getPlanPrice('RECARGA_IA_150', fallback: 20.0);
+        } else if (p == 'PASE_ACTUALIZACION_ANUAL') {
+          price = configService.getPlanPrice('PASE_ACTUALIZACION_ANUAL', fallback: 150.0);
+        } else {
+          price = configService.getPlanPrice(p, fallback: 0.0);
+        }
+        sheet.cell(CellIndex.indexByColumnRow(columnIndex: 2, rowIndex: r))
+          ..value = DoubleCellValue(price);
+      }
       r++;
     }
 
@@ -484,11 +497,14 @@ class ExcelExportService {
         ..value = TextCellValue(normalizedStatus)
         ..cellStyle = statusStyle;
       sheet.cell(CellIndex.indexByColumnRow(columnIndex: 8, rowIndex: row))
-        ..value = TextCellValue(expDate != null ? expDate.toLocal().toString().split(' ').first : '-');
+        ..value = TextCellValue(
+            expDate != null ? PeruTimeHelper.formatLimaDate(expDate, fallback: '-') : '-');
       sheet.cell(CellIndex.indexByColumnRow(columnIndex: 9, rowIndex: row))
         ..value = IntCellValue(daysRemaining);
       sheet.cell(CellIndex.indexByColumnRow(columnIndex: 10, rowIndex: row))
-        ..value = TextCellValue(client['updates_until'] != null ? (client['updates_until'] as String).split('T').first : '-');
+        ..value = TextCellValue(client['updates_until'] != null
+            ? PeruTimeHelper.formatLimaDate(client['updates_until'], fallback: '-')
+            : '-');
       sheet.cell(CellIndex.indexByColumnRow(columnIndex: 11, rowIndex: row))
         ..value = TextCellValue(client['installed_version'] as String? ?? '-');
       sheet.cell(CellIndex.indexByColumnRow(columnIndex: 12, rowIndex: row))
@@ -555,15 +571,18 @@ class ExcelExportService {
       final bName = (client['business_name'] as String?) ?? (p['business_name'] as String?) ?? '-';
       final oName = (client['owner_name'] as String?) ?? (p['owner_name'] as String?) ?? '-';
       final plan = p['plan'] as String? ?? 'MENSUAL';
-      final days = (p['days_added'] as num?)?.toInt() ?? configService.getPlanDays(plan, fallback: 30);
-      final ai = (p['ai_extra_credits'] as num?)?.toInt() ?? configService.getPlanAiCredits(plan, fallback: 0);
+      final days = (p['days_added'] as num?)?.toInt() ??
+          DatabaseService.inferDefaultDaysForPlan(plan);
+      final ai = (p['ai_extra_credits'] as num?)?.toInt() ??
+          DatabaseService.inferDefaultAiForPlan(plan);
       final amount = (p['amount'] as num?)?.toDouble() ?? 0.0;
       final dateStr = p['date'] as String? ?? '';
+      final dateDisplay = PeruTimeHelper.formatLimaDateTime(dateStr, fallback: '-');
 
       sheet.cell(CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: row))
         ..value = TextCellValue(p['id'] as String? ?? 'PAY-$row');
       sheet.cell(CellIndex.indexByColumnRow(columnIndex: 1, rowIndex: row))
-        ..value = TextCellValue(dateStr.isNotEmpty ? dateStr.replaceFirst('T', ' ').split('.').first : '-');
+        ..value = TextCellValue(dateDisplay);
       sheet.cell(CellIndex.indexByColumnRow(columnIndex: 2, rowIndex: row))
         ..value = TextCellValue(cid);
       sheet.cell(CellIndex.indexByColumnRow(columnIndex: 3, rowIndex: row))
@@ -594,7 +613,8 @@ class ExcelExportService {
           : (recType == 'BOL' || recNum.startsWith('BOL') ? 'Boleta' : 'Sin emitir');
       final numComprobante = recNum.isNotEmpty ? recNum : '-';
       final updatedAt = (p['updated_at'] as String? ?? '').trim();
-      final updatedDisplay = updatedAt.isNotEmpty ? updatedAt.replaceFirst('T', ' ').split('.').first : '-';
+      final updatedDisplay =
+          PeruTimeHelper.formatLimaDateTime(updatedAt, fallback: '-');
 
       sheet.cell(CellIndex.indexByColumnRow(columnIndex: 11, rowIndex: row))
         ..value = TextCellValue(tipoComprobante);
@@ -666,7 +686,8 @@ class ExcelExportService {
         final newHwDisplay = (model != null && model.isNotEmpty) ? '$newHw ($model)' : newHw;
 
         sheet.cell(CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: row))
-          ..value = TextCellValue(dateStr.isNotEmpty ? dateStr.replaceFirst('T', ' ').split('.').first : '-');
+          ..value = TextCellValue(
+              PeruTimeHelper.formatLimaDateTime(dateStr, fallback: '-'));
         sheet.cell(CellIndex.indexByColumnRow(columnIndex: 1, rowIndex: row))
           ..value = TextCellValue(client['id'] as String? ?? '');
         sheet.cell(CellIndex.indexByColumnRow(columnIndex: 2, rowIndex: row))
@@ -789,7 +810,8 @@ class ExcelExportService {
     final filterText = (fromDate != null || toDate != null)
         ? 'Filtro: ${fromDate ?? "Inicio"} hasta ${toDate ?? "Hoy"}'
         : 'Periodo: Histórico Completo';
-    final nowStr = DateTime.now().toLocal().toString().split('.').first;
+    final nowStr =
+        '${PeruTimeHelper.formatLimaDateTime(DateTime.now())} (GMT-5)';
 
     sheet.cell(CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: 1))
       ..value = TextCellValue('$filterText | Emisión: $nowStr')
@@ -838,6 +860,35 @@ class ExcelExportService {
     sheet.cell(CellIndex.indexByColumnRow(columnIndex: 2, rowIndex: r))
       ..value = TextCellValue('PEN / Operación');
     r++;
+
+    r++;
+    sheet.cell(CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: r))
+      ..value = TextCellValue('DESGLOSE POR MEDIO DE PAGO DEL PERIODO')
+      ..cellStyle = sectionStyle;
+    sheet.cell(CellIndex.indexByColumnRow(columnIndex: 1, rowIndex: r)).cellStyle = sectionStyle;
+    sheet.cell(CellIndex.indexByColumnRow(columnIndex: 2, rowIndex: r)).cellStyle = sectionStyle;
+    r++;
+
+    sheet.cell(CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: r))
+      ..value = TextCellValue('Medio de Pago')
+      ..cellStyle = headerStyle;
+    sheet.cell(CellIndex.indexByColumnRow(columnIndex: 1, rowIndex: r))
+      ..value = TextCellValue('N.° Cobros')
+      ..cellStyle = headerStyle;
+    sheet.cell(CellIndex.indexByColumnRow(columnIndex: 2, rowIndex: r))
+      ..value = TextCellValue('Monto Total (S/)')
+      ..cellStyle = headerStyle;
+    r++;
+
+    for (final pm in const ['Yape', 'Plin', 'BCP', 'BBVA', 'Efectivo']) {
+      sheet.cell(CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: r))
+        ..value = TextCellValue(pm);
+      sheet.cell(CellIndex.indexByColumnRow(columnIndex: 1, rowIndex: r))
+        ..value = FormulaCellValue("COUNTIF('$sheetPagos'!I2:I$payRangeEnd, \"$pm\")");
+      sheet.cell(CellIndex.indexByColumnRow(columnIndex: 2, rowIndex: r))
+        ..value = FormulaCellValue("SUMIF('$sheetPagos'!I2:I$payRangeEnd, \"$pm\", '$sheetPagos'!K2:K$payRangeEnd)");
+      r++;
+    }
 
     sheet.setColumnWidth(0, 36.0);
     sheet.setColumnWidth(1, 24.0);

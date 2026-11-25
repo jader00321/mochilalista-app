@@ -5,6 +5,7 @@ import 'dart:typed_data';
 import 'package:crypto/crypto.dart' hide Hmac;
 import 'package:cryptography/cryptography.dart';
 import 'dpapi_service.dart';
+import 'time_utils.dart';
 
 /// Excepciones formales del subsistema de Bóveda y Criptografía (Plan 10)
 class VaultException implements Exception {
@@ -579,7 +580,7 @@ class VaultCryptoService {
     required VaultPayloadFiles files,
     required bool includeMasterKey,
     required Map<String, dynamic> stats,
-    String appVersion = '9.34.0+78',
+    String appVersion = '9.41.0+85',
     int dbSchemaVersion = 36,
   }) async {
     final createdAt = DateTime.now().toUtc().toIso8601String();
@@ -683,16 +684,34 @@ class VaultCryptoService {
       throw VaultFormatException('Formato de bóveda inválido: se esperaba MLVAULT.');
     }
 
+    final rawStats = parsed['stats'] is Map
+        ? Map<String, dynamic>.from(parsed['stats'] as Map)
+        : <String, dynamic>{};
+    final clientsCount = (rawStats['clients_count'] as num?)?.toInt() ??
+        (rawStats['total_clients'] as num?)?.toInt() ??
+        0;
+    final releasesCount = (rawStats['releases_count'] as num?)?.toInt() ?? 0;
+    rawStats['clients_count'] = clientsCount;
+    rawStats['releases_count'] = releasesCount;
+
+    final includesKey = parsed['includes_master_key'] == true;
+    final createdAtRaw = parsed['created_at'] as String?;
+
     final slots = (parsed['key_slots'] as Map?) ?? {};
     return {
       'format': parsed['format'],
       'version': parsed['version'],
-      'created_at': parsed['created_at'],
+      'created_at': createdAtRaw,
+      'created_at_lima': PeruTimeHelper.formatLimaDateTime(
+        createdAtRaw,
+        fallback: '-',
+      ),
       'app_version': parsed['app_version'],
       'db_schema_version': parsed['db_schema_version'],
-      'includes_master_key': parsed['includes_master_key'] == true,
-      'has_master_key': parsed['includes_master_key'] == true,
-      'stats': parsed['stats'] ?? {},
+      'includes_master_key': includesKey,
+      'includes_private_key': includesKey,
+      'has_master_key': includesKey,
+      'stats': rawStats,
       'has_dpapi': slots['slot_1_dpapi']?['wrapped_vmk_b64'] != null,
       'has_mlkey': slots['slot_2_file']?['wrapped_vmk_b64'] != null,
       'has_emergency_codes': (slots['slot_3_emergency']?['codes'] as List?)?.isNotEmpty == true,
@@ -789,7 +808,7 @@ class VaultCryptoService {
       format: parsed['format'] as String? ?? 'MLVAULT',
       version: parsed['version'] as String? ?? '1.1.0',
       createdAt: parsed['created_at'] as String? ?? '',
-      appVersion: parsed['app_version'] as String? ?? '9.34.0+78',
+      appVersion: parsed['app_version'] as String? ?? '9.41.0+85',
       dbSchemaVersion: (parsed['db_schema_version'] as num?)?.toInt() ?? 36,
       includesMasterKey: parsed['includes_master_key'] == true,
     );
