@@ -539,12 +539,19 @@ class DatabaseService {
       }
     }
 
-    // Persistir métricas operativas y técnicas reales
-    if (payload.containsKey('ai')) {
+    // Persistir métricas operativas y técnicas reales (conservando autoridad comercial de license_type)
+    if (payload.containsKey('ai') && payload['ai'] != null) {
       client['ai_reported_balance'] = (payload['ai'] as num).toInt();
     }
-    if (payload.containsKey('aiu')) {
-      client['ai_credits_used_total'] = (payload['aiu'] as num).toInt();
+    if (payload.containsKey('aiu') && payload['aiu'] != null) {
+      final prevAiu = client['ai_credits_used_total'] is num
+          ? (client['ai_credits_used_total'] as num).toInt()
+          : null;
+      final newAiu = (payload['aiu'] as num).toInt();
+      if (prevAiu != null && (newAiu - prevAiu) >= 0) {
+        client['ai_credits_used_delta'] = newAiu - prevAiu;
+      }
+      client['ai_credits_used_total'] = newAiu;
     }
     if (payload.containsKey('byok')) {
       client['uses_byok'] = payload['byok'] == true;
@@ -558,8 +565,11 @@ class DatabaseService {
     if (payload.containsKey('os') && (payload['os'] as String? ?? '').isNotEmpty) {
       client['android_version'] = (payload['os'] as String).trim();
     }
-    if (payload.containsKey('pc')) {
+    if (payload.containsKey('pc') && payload['pc'] != null) {
       client['profiles_count'] = (payload['pc'] as num).toInt();
+    }
+    if (payload.containsKey('dr') && payload['dr'] != null) {
+      client['trial_days_remaining'] = (payload['dr'] as num).toInt();
     }
     if (payload.containsKey('drv')) {
       client['backup_drive_linked'] = payload['drv'] == true;
@@ -570,17 +580,23 @@ class DatabaseService {
     if (payload.containsKey('lb')) {
       client['last_backup_at'] = payload['lb'];
     }
-    if (payload.containsKey('n')) {
+    if (payload.containsKey('n') && payload['n'] != null) {
       client['ultimo_nonce'] = (payload['n'] as num).toInt();
     }
 
     client['last_sync_at'] = syncDateTime.toIso8601String();
+    if (tsEpoch > 0) {
+      client['last_sync_ts'] = tsEpoch;
+    }
     client['last_sync_payload'] = {
       'version': payload['av'],
       'version_code': payload['bc'],
       'sqlite_schema': payload['db'],
       'ai_balance': payload['ai'],
       'ai_used': payload['aiu'],
+      'ai_used_delta': client['ai_credits_used_delta'],
+      'profiles_count': payload['pc'],
+      'days_remaining': payload['dr'],
       'status': payload['st'],
       'backup_health': payload['bh'],
       'device_model': payload['mod'],
@@ -920,12 +936,18 @@ class DatabaseService {
   Future<Map<String, dynamic>?> markClientUpdated(String clientId, String versionName, {bool force = false}) async {
     final client = await getClientById(clientId);
     if (client == null) return null;
-    final currentInstalled = client['installed_version'] as String? ?? '9.0.0';
-    if (!force && compareSemVer(currentInstalled, versionName) > 0) {
+    final cleanTarget = versionName.trim();
+    final currentInstalled = (client['installed_version'] as String? ?? '9.0.0').trim();
+    if (!force && compareSemVer(currentInstalled, cleanTarget) > 0) {
       // Blindaje: No degradar a un cliente que ya tiene una versión superior instalada
       return client;
     }
-    return updateClient(clientId, {'installed_version': versionName});
+    final updates = <String, dynamic>{'installed_version': cleanTarget};
+    if (currentInstalled != cleanTarget) {
+      updates['previous_installed_version'] = currentInstalled;
+      updates['installed_version_updated_at'] = DateTime.now().toUtc().toIso8601String();
+    }
+    return updateClient(clientId, updates);
   }
 
   /// Registra la trazabilidad del APK enviado por WhatsApp

@@ -273,26 +273,48 @@ class ClientSyncService {
       };
     }
 
-    // D) Anti-sobreescritura cronológica por timestamp
+    // D) Anti-sobreescritura cronológica por timestamp y detección de mismo reporte
     bool isOlderThanLastSync = false;
     String? staleWarning;
     DateTime? lastSyncAt;
+    int? lastSyncTs;
 
-    if (matchedClient != null && matchedClient['last_sync_at'] != null) {
-      lastSyncAt = DateTime.tryParse(matchedClient['last_sync_at'].toString());
-      if (lastSyncAt != null && syncDateTime.isBefore(lastSyncAt)) {
-        isOlderThanLastSync = true;
-        staleWarning = 'Esta ficha (${syncDateTime.toIso8601String()}) es cronológicamente anterior a la última sincronización registrada (${lastSyncAt.toIso8601String()}). Aplica solo si estás seguro.';
+    if (matchedClient != null) {
+      if (matchedClient['last_sync_at'] != null) {
+        lastSyncAt = DateTime.tryParse(matchedClient['last_sync_at'].toString());
+        if (lastSyncAt != null && syncDateTime.isBefore(lastSyncAt)) {
+          isOlderThanLastSync = true;
+          staleWarning =
+              'Esta ficha (${syncDateTime.toIso8601String()}) es cronológicamente anterior a la última sincronización registrada (${lastSyncAt.toIso8601String()}). Aplica solo si estás seguro.';
+        }
+      }
+      if (matchedClient['last_sync_ts'] is num) {
+        lastSyncTs = (matchedClient['last_sync_ts'] as num).toInt();
+      } else if (lastSyncAt != null) {
+        lastSyncTs = lastSyncAt.millisecondsSinceEpoch;
       }
     }
 
+    final bool sameTimestamp =
+        lastSyncTs != null && tsEpoch > 0 && lastSyncTs == tsEpoch;
+
     // E) Tabla estructurada Diff: Antes (Admin) -> Real (Celular)
     final changes = <Map<String, dynamic>>[];
+    int? aiUsedDelta;
+
     if (matchedClient != null) {
-      void addDiff(String field, String label, dynamic beforeVal, dynamic afterVal, {String type = 'text'}) {
+      void addDiff(
+        String field,
+        String label,
+        dynamic beforeVal,
+        dynamic afterVal, {
+        String type = 'text',
+        int? delta,
+        bool? forceIsDifferent,
+      }) {
         final bStr = beforeVal?.toString() ?? '-';
         final aStr = afterVal?.toString() ?? '-';
-        final isDifferent = bStr != aStr;
+        final isDifferent = forceIsDifferent ?? (bStr != aStr);
         changes.add({
           'field': field,
           'label': label,
@@ -303,20 +325,154 @@ class ClientSyncService {
           'is_different': isDifferent,
           'changed': isDifferent,
           'type': type,
+          if (delta != null) 'delta': delta,
         });
       }
 
-      addDiff('ai_reported_balance', 'Saldo Créditos IA', matchedClient['ai_reported_balance'] ?? 0, payload['ai'] ?? 0, type: 'number');
-      addDiff('installed_version', 'Versión APK Instalada', matchedClient['installed_version'] ?? '9.0.0', payload['av'] ?? '9.0.0', type: 'version');
-      addDiff('device_model', 'Modelo de Celular', matchedClient['device_model'] ?? 'No registrado', payload['mod'] ?? 'No reportado');
-      addDiff('android_version', 'Versión de Android / OS', matchedClient['android_version'] ?? 'No registrado', payload['os'] ?? 'No reportado');
-      addDiff('backup_health_status', 'Salud de Respaldo', matchedClient['backup_health_status'] ?? 'NONE', payload['bh'] ?? 'NONE', type: 'badge');
-      addDiff('backup_drive_linked', 'Google Drive Vinculado', matchedClient['backup_drive_linked'] == true, payload['drv'] == true, type: 'boolean');
-      addDiff('last_backup_at', 'Último Respaldo Local/Drive', matchedClient['last_backup_at'] ?? 'Nunca', payload['lb'] ?? 'Sin respaldos');
-      addDiff('uses_byok', 'Usa API Key Propia (BYOK)', matchedClient['uses_byok'] == true, payload['byok'] == true, type: 'boolean');
-      addDiff('ultimo_nonce', 'Nonce Criptográfico', matchedClient['ultimo_nonce'] ?? 0, payload['n'] ?? 0, type: 'number');
-      addDiff('license_status', 'Estado de Licencia', matchedClient['situation'] ?? matchedClient['license_type'] ?? 'ACTIVA', payload['st'] ?? 'ACTIVA', type: 'badge');
+      String normalizeOptionalStr(dynamic val, String emptyFallback) {
+        final s = val?.toString().trim() ?? '';
+        if (s.isEmpty) return emptyFallback;
+        return s;
+      }
+
+      String normalizeBackupTimestamp(dynamic val) {
+        final s = val?.toString().trim() ?? '';
+        if (s.isEmpty || s == 'Nunca' || s == 'Sin respaldos' || s == 'null') {
+          return 'Sin respaldos';
+        }
+        return s;
+      }
+
+      final prevAiuRaw = matchedClient['ai_credits_used_total'];
+      final prevAiu = prevAiuRaw is num ? prevAiuRaw.toInt() : null;
+      final newAiu = payload['aiu'] is num
+          ? (payload['aiu'] as num).toInt()
+          : (int.tryParse(payload['aiu']?.toString() ?? '') ?? 0);
+      if (prevAiu != null && (newAiu - prevAiu) >= 0) {
+        aiUsedDelta = newAiu - prevAiu;
+      }
+
+      final clientDr = _computeClientDaysRemaining(matchedClient);
+      final reportedDr = (payload.containsKey('dr') && payload['dr'] != null)
+          ? (payload['dr'] as num).toInt()
+          : clientDr;
+
+      final clientPlan = (matchedClient['license_type'] ?? 'MENSUAL')
+          .toString()
+          .trim()
+          .toUpperCase();
+      final reportedPlan = (payload['pl'] ?? clientPlan)
+          .toString()
+          .trim()
+          .toUpperCase();
+
+      final clientAuthStatus = _computeAuthoritativeClientStatus(matchedClient);
+      final reportedNormStatus = _normalizeSyncStatus(payload['st']?.toString());
+      final statusDifferent = _normalizeSyncStatus(clientAuthStatus) !=
+          _normalizeSyncStatus(reportedNormStatus);
+
+      addDiff(
+        'ai_reported_balance',
+        'Saldo Créditos IA',
+        matchedClient['ai_reported_balance'] ?? 0,
+        payload['ai'] ?? 0,
+        type: 'number',
+      );
+      addDiff(
+        'ai_credits_used_total',
+        'Escaneos IA Consumidos (Histórico)',
+        prevAiu ?? 0,
+        newAiu,
+        type: 'number',
+        delta: aiUsedDelta,
+      );
+      addDiff(
+        'installed_version',
+        'Versión APK Instalada',
+        matchedClient['installed_version'] ?? '9.0.0',
+        payload['av'] ?? '9.0.0',
+        type: 'version',
+      );
+      addDiff(
+        'device_model',
+        'Modelo de Celular',
+        normalizeOptionalStr(matchedClient['device_model'], 'No registrado'),
+        normalizeOptionalStr(payload['mod'], 'No reportado'),
+      );
+      addDiff(
+        'android_version',
+        'Versión de Android / OS',
+        normalizeOptionalStr(matchedClient['android_version'], 'No registrado'),
+        normalizeOptionalStr(payload['os'], 'No reportado'),
+      );
+      addDiff(
+        'profiles_count',
+        'Perfiles de Negocio Activos',
+        matchedClient['profiles_count'] ?? 1,
+        payload['pc'] ?? 1,
+        type: 'number',
+      );
+      addDiff(
+        'backup_health_status',
+        'Salud de Respaldo',
+        matchedClient['backup_health_status'] ?? 'NONE',
+        payload['bh'] ?? 'NONE',
+        type: 'badge',
+      );
+      addDiff(
+        'backup_drive_linked',
+        'Google Drive Vinculado',
+        matchedClient['backup_drive_linked'] == true,
+        payload['drv'] == true,
+        type: 'boolean',
+      );
+      addDiff(
+        'last_backup_at',
+        'Último Respaldo Local/Drive',
+        normalizeBackupTimestamp(matchedClient['last_backup_at']),
+        normalizeBackupTimestamp(payload['lb']),
+        type: 'datetime',
+      );
+      addDiff(
+        'uses_byok',
+        'Usa API Key Propia (BYOK)',
+        matchedClient['uses_byok'] == true,
+        payload['byok'] == true,
+        type: 'boolean',
+      );
+      addDiff(
+        'ultimo_nonce',
+        'Nonce Criptográfico',
+        matchedClient['ultimo_nonce'] ?? 0,
+        payload['n'] ?? 0,
+        type: 'number',
+      );
+      addDiff(
+        'trial_days_remaining',
+        'Días de Vigencia Restantes',
+        clientDr,
+        reportedDr,
+        type: 'number',
+      );
+      addDiff(
+        'license_type',
+        'Plan Comercial',
+        clientPlan,
+        reportedPlan,
+        type: 'badge',
+      );
+      addDiff(
+        'license_status',
+        'Estado de Vigencia',
+        clientAuthStatus,
+        reportedNormStatus,
+        type: 'badge',
+        forceIsDifferent: statusDifferent,
+      );
     }
+
+    final bool allUnchanged =
+        changes.isNotEmpty && changes.every((c) => c['is_different'] != true);
 
     return {
       'match_type': matchType,
@@ -324,13 +480,75 @@ class ClientSyncService {
       'is_older_than_last_sync': isOlderThanLastSync,
       'stale_warning': staleWarning,
       'sync_timestamp_utc': syncDateTime.toIso8601String(),
+      'sync_timestamp_ms': tsEpoch,
       'last_sync_registered_utc': lastSyncAt?.toIso8601String(),
+      'all_unchanged': allUnchanged,
+      'same_timestamp': sameTimestamp,
+      'ai_credits_used_delta': aiUsedDelta,
       'migration_rescue': migrationRescue,
       'changes': changes,
       'hardware_id': hw,
       'bound_hardware_id': bhw,
       'status': st,
     };
+  }
+
+  /// Normaliza estados equivalentes emitidos por celular/CRM ('VENCIDA' == 'EXPIRADA', 'PERPETUA' == 'ACTIVA').
+  static String _normalizeSyncStatus(String? rawStatus) {
+    final s = (rawStatus ?? 'ACTIVA').trim().toUpperCase();
+    if (s.isEmpty) return 'ACTIVA';
+    if (s == 'VENCIDA' || s == 'EXPIRED') return 'EXPIRADA';
+    if (s == 'PERPETUA' || s == 'PERPETUO' || s == 'PERPETUO_LIBERADO') {
+      return 'ACTIVA';
+    }
+    return s;
+  }
+
+  /// Calcula el Estado de Vigencia autoritativo en el CRM Admin separando Plan vs Vigencia.
+  /// Garantiza que un TRIAL vigente retorne 'ACTIVA' (cero bucle TRIAL -> ACTIVA).
+  static String _computeAuthoritativeClientStatus(Map<String, dynamic> client) {
+    final plan =
+        (client['license_type'] as String? ?? 'MENSUAL').trim().toUpperCase();
+    final status =
+        (client['license_status'] as String? ?? '').trim().toUpperCase();
+
+    if (plan == 'PROSPECTO' || status == 'PROSPECTO') {
+      return 'PROSPECTO';
+    }
+    if (plan.contains('PERPETU') || status == 'PERPETUA') {
+      return 'ACTIVA';
+    }
+
+    final expRaw = client['license_expires']?.toString().trim();
+    if (expRaw != null && expRaw.isNotEmpty) {
+      final expDate = DateTime.tryParse(expRaw);
+      if (expDate != null &&
+          expDate.toUtc().isBefore(DateTime.now().toUtc())) {
+        return 'EXPIRADA';
+      }
+    } else if (status == 'EXPIRADA' || status == 'VENCIDA') {
+      return 'EXPIRADA';
+    }
+
+    return 'ACTIVA';
+  }
+
+  /// Obtiene los días restantes registrados o deducidos desde license_expires.
+  static int _computeClientDaysRemaining(Map<String, dynamic> client) {
+    if (client['trial_days_remaining'] is num) {
+      return (client['trial_days_remaining'] as num).toInt();
+    }
+    final expRaw = client['license_expires']?.toString().trim();
+    if (expRaw != null && expRaw.isNotEmpty) {
+      final expDate = DateTime.tryParse(expRaw);
+      if (expDate != null) {
+        final diffHours =
+            expDate.toUtc().difference(DateTime.now().toUtc()).inHours;
+        if (diffHours <= 0) return 0;
+        return (diffHours / 24).ceil();
+      }
+    }
+    return 0;
   }
 
   /// Añade el relleno '=' necesario para que Base64 pueda decodificar strings Base64URL sin padding.

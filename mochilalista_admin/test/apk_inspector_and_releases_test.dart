@@ -215,7 +215,7 @@ void main() {
       );
       final noToolResult = await noToolInspector.inspectApk(officialApk);
       expect(noToolResult.signatureStatus, equals('UNVERIFIED'));
-      expect(noToolResult.signatureVerified, isFalse);
+      expect(noToolResult.signatureVerified, isNull);
     });
 
     // =========================================================================

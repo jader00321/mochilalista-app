@@ -24,11 +24,11 @@ Aquí se detallan todos los procedimientos paso a paso, comandos de terminal, pr
    - 1.3. Navegación por las 8 Pestañas Oficiales (`http://localhost:8080`)
    - 1.4. Flujo de Alta y Edición Total en Cartera CRM con Buscador Omnicanal
    - 1.5. Generador de Licencias Ed25519 con Tarjeta de Resumen y Ajustes Personalizados
-   - 1.6. Inspector Forense de Tokens ML9 con Lector Óptico de Imagen QR y Tabla de Claims
+   - 1.6. [Inspector Forense Dual (`#tabInspector`: Tokens `ML9-...` y Fichas `.mlsync` / `MLS1-...`)](#16-inspector-forense-dual-tabinspector-tokens-ml9--y-fichas-mlsync--mls1-)
    - 1.7. Pestaña Finanzas & Respaldos: Libro Contable y Centro de Respaldos en Disco (`backups/`)
    - 1.8. Venta de Bolsas Extra de Escaneos IA (+150 escaneos)
    - 1.9. Reasignación Técnica de Dispositivo por Cambio o Pérdida de Celular
-   - 1.10. Re-descarga de Credenciales PNG Históricas desde el Modal de Cliente
+   - 1.10. Ficha 360° del Cliente y Re-descarga de Credenciales PNG
    - 1.11. Centro de Personalización y Exportación a Libros Excel Multi-Hoja (`#tabSettings`)
    - 1.12. Bóveda de Seguridad, Persistencia y Multi-Llave (`#tabSecurityVault`)
 2. [GUÍA 2: Compilación y Firma Oficial Release de la App Móvil](#guía-2-compilación-y-firma-oficial-release-de-la-app-móvil)
@@ -38,12 +38,12 @@ Aquí se detallan todos los procedimientos paso a paso, comandos de terminal, pr
    - 2.4. Compilación del APK Release Ligero ARM64 para WhatsApp (`compilar_apk_arm64.bat`)
    - 2.5. Compilación del App Bundle para Google Play Store (`flutter build appbundle`)
    - 2.6. Auditoría Forense y Verificación de Firma con `apksigner`
-3. [GUÍA 3: Publicación y Notificación de Actualizaciones (Release Manager & Plan Maestro 19)](#guía-3-publicación-y-notificación-de-actualizaciones-release-manager--plan-maestro-19)
+3. [GUÍA 3: Publicación y Notificación de Actualizaciones (Release Manager — Planes 19 y 22)](#guía-3-publicación-y-notificación-de-actualizaciones-release-manager--planes-19-y-22)
    - 3.1. Diferenciación Estricta: `HOTFIX` vs. `FEATURE_RELEASE`
-   - 3.2. Carga Inteligente de APKs, Auto-Lectura Forense y Escudo Anti-debug.apk
+   - 3.2. Carga Inteligente de APKs, Escudo de Firma 3 Estados (SDK `37+`) y Autodetección Deduplicada
    - 3.3. Catálogo de Versiones Publicadas y Edición Total (`#modalEditRelease`)
-   - 3.4. Matriz Inteligente SemVer y Barra de Progreso de Despliegue
-   - 3.5. Despacho Asistido de APK por WhatsApp y Portapapeles Windows
+   - 3.4. Matriz Inteligente SemVer, Corrección Segura y Reenvío en 1 Clic
+   - 3.5. Despacho Asistido de APK por WhatsApp (`#modalWaComposer`) y Portapapeles Windows Endurecido
    - 3.6. Protocolo Dual de Sincronización Offline (`.mlsync` / `MLS1-...`) y Rescate 1-Clic
    - 3.7. Comportamiento en la App Móvil: Snapshot `.bak` y Novedades v9.40.0
 4. [GUÍA 4: Protocolo de Respuesta ante Incidentes y Seguridad Adversarial](#guía-4-protocolo-de-respuesta-ante-incidentes-y-seguridad-adversarial)
@@ -172,18 +172,11 @@ Abre tu navegador web en `http://localhost:8080`. Dispones de **8 módulos de co
      - **Bonos IA Pendientes por Emitir:** Escaneos adicionales que se incorporarán en la próxima emisión de token criptográfico Ed25519 (ej. `+20 IA`). Ambos valores se muestran desacoplados de forma transparente, previniendo falsas sumas anticipadas en el CRM.
 3. Presiona **"Guardar Cliente"** o **"Guardar y Emitir Licencia"**.
 
-#### B. Compositor Universal de WhatsApp (`#modalWaComposer`):
-Accesible con 1 clic desde el botón verde de WhatsApp de la Cartera CRM y desde la Ficha 360° (con gestor de capas `z-index: 3000` y reapertura automática en la misma pestaña):
-- **6 Plantillas Predefinidas de 1 Clic:**
-  1. *Saludo y Bienvenida:* Presentación cordial del equipo y plataforma.
-  2. *Renovación Preventiva:* Notificación de días por vencer y cuentas oficiales.
-  3. *Seguimiento Prospecto:* Mensaje consultivo para negocios en evaluación.
-  4. *Entrega de Licencia:* Envío formateado con token `ML9-...`, vigencia y pasos guiados.
-  5. *Nueva Versión APK:* Aviso de release con novedades y recordatorio de actualización.
-  6. *Chat Vacío:* Abre la conversación sin mensaje predeterminado.
-- **Barra de Inserción Rápida:** Chips interactivos para insertar con 1 clic variables en la posición del cursor: `{NEGOCIO}`, `{TITULAR}`, `{TOKEN}`, `{VENCIMIENTO}`, `{HARDWARE_ID}`.
-- **Guardado de Plantillas:** Botón **`[Guardar Plantilla]`** para persistir en caliente el texto en `owner_config.json` sin alterar el código fuente.
-- **Acceso Rápido:** Botón **`[Copiar Mensaje]`**, botón **`[Abrir Chat Vacío]`** y botón **`[Abrir en WhatsApp]`** enlazado a `https://wa.me/51...`.
+#### B. Compositor Universal de WhatsApp (`#modalWaComposer` — Plan Maestro 22):
+Accesible en 1 clic desde Cartera CRM, Ficha 360°, Comprobantes y Matriz de Versiones (con UI libre de emojis crudos y footer responsivo):
+- **Toggle Real en 6 Plantillas Rápidas de 1 Clic:** `Saludo y Bienvenida`, `Renovación Preventiva`, `Seguimiento Prospecto`, `Entrega de Licencia`, `Nueva Versión APK` y `Chat Vacío`. El 1.er clic aplica la plantilla conservando chips activos y resguardando el borrador previo; el **2.º clic sobre la misma píldora activa la desactiva** y restaura tu texto previo limpio sin duplicaciones. Si seleccionas `Nueva Versión APK` desde CRM, se despliega allí mismo el panel de versión APK.
+- **Chips `Insertar:` Multi-Select Idempotentes:** `+ Datos Yape / Plin`, `+ Hardware ID`, `+ Vencimiento` y `+ Último Token` se combinan de forma acumulativa (1.er clic inserta y marca `.active`; 2.º clic remueve exactamente su bloque y colapsa saltos sobrantes).
+- **Guardado/Copia/Despacho:** **`[Guardar Plantilla]`**, **`[Restaurar por defecto]`**, **`[Copiar Solo Texto]`**, **`[Copiar Mensaje]`**, **`[Abrir Chat Vacío]`** y **`[Abrir en WhatsApp]`**.
 
 #### C. Buscador Omnicanal Reactivo:
 En la parte superior de la tabla, escribe en la caja de búsqueda cualquier fragmento de negocio, dueño, DNI, teléfono, Hardware ID o versión. La tabla filtrará en tiempo real sin recargar la página.
@@ -218,21 +211,18 @@ Toca el botón de edición para modificar libremente los datos del cliente, o ac
 
 ---
 
-### 1.6. Inspector Forense con Lector Óptico QR y Tabla Unificada de Claims
+### 1.6. Inspector Forense Dual (`#tabInspector`: Tokens `ML9-...` y Fichas `.mlsync` / `MLS1-...`)
 
-En la pestaña **Inspector de Tokens ML9**:
-1. **Lector Óptico de Imagen QR:** Arrastra cualquier foto de un código QR o captura de pantalla de credencial directamente sobre la zona interactiva. El motor JavaScript integrado **`jsQR`** decodificará la imagen localmente sin enviar datos a internet, rellenará el campo de texto y ejecutará la auditoría al instante.
-2. **Tabla Unificada de Claims:** Inspecciona de forma transparente cada clave del payload:
-   - **`d`** (`device_id`): Identificador del teléfono.
-   - **`p`** (`plan`): Plan comercial.
-   - **`y`** (`days_added`): Días sumados.
-   - **`n`** (`nonce`): Correlativo anti-reutilización.
-   - **`v`** (`min_app_version`): Versión mayor mínima.
-   - **`iat` / `e`** (`emitted_at`): Fecha/hora UTC de emisión.
-   - **`u`** (`updates_until`): Ventana de updates para perpetuos.
-   - **`b`** (`business_tag`): Nombre de la librería.
-   - **`c`** (`ai_extra_credits`): Créditos IA otorgados.
-3. **Cruce Automático con el CRM:** Muestra si el cliente existe en tu base de datos y si el `nonce` es el vigente (última licencia emitida), uno histórico (ya superado) o uno futuro listo para canjear.
+En la pestaña **Inspector Forense (`#tabInspector`)**:
+1. **Lector Óptico QR y Archivo `.mlsync`:** Arrastra una captura QR / Credencial PNG (`jsQR` local 100% offline), un archivo `.mlsync` / `.json` o pega cualquier mensaje de WhatsApp que contenga un token `ML9-...` o `MLS1-...`.
+2. **Tabla Unificada de Claims (`ML9-...`) y Fechas Perú GMT-5:** Muestra `d`, `p`, `y`, `n`, `v`, `iat` (`America/Lima` GMT-5 con UTC en `title`), `u`, `b`, `c`.
+3. **Matriz Exacta de 4 Estados de Nonce (`ultimo_nonce` + `next_nonce`):**
+   - **`Canjeado en celular (Verificado por .mlsync #N)`** (Verde): Cuando el celular reportó `ultimo_nonce >= tNonce`.
+   - **`Emitido — Pendiente de canje en celular (Sin .mlsync reciente)`** (Azul): Último token emitido (`tNonce == next_nonce - 1`) aún sin reporte `.mlsync` posterior.
+   - **`Nonce futuro listo para canje`** (Ámbar): Únicamente cuando `tNonce >= next_nonce`.
+   - **`Superado / Histórico`** (Púrpura): Tokens anteriores ya rebasados sin confirmación `.mlsync` vigente.
+4. **Auditoría `.mlsync` + Comparador Unificado:** Cuando se inspecciona una ficha `MLS1-...` / `.mlsync`, exhibe las 21 métricas humanizadas (`Sí`/`No`, `Óptimo`/`Requiere atención`/`Crítico`, hora `America/Lima` GMT-5) y reutiliza debajo la tabla comparativa **"Antes (Admin) ➔ Real (Celular)"** (con banner verde `Sin cambios por aplicar` cuando coincide al 100%).
+5. **Acciones en 1 Clic e Historial de Sesión (`#inspectorSessionHistoryPanel`):** Desde `#inspectMatchingClientBox` puedes ejecutar **`Abrir Ficha 360°`**, **`Abrir WhatsApp`** o **`Copiar Informe Forense`**. Al pie del panel, el historial colapsable conserva las **últimas 10 auditorías de la sesión** para recargarlas con un clic.
 
 ---
 
@@ -286,8 +276,8 @@ Cuando un comerciante cambia de celular, se le extravía o restaura una copia de
 En **Cartera de Clientes**, presiona el botón **`[👁️]`** (Ficha 360°) o **`[🪟]`** (QR Directo) para abrir el Drawer lateral deslizable con gestor inteligente de capas (`z-index: 3000` con auto-retorno exacto a la pestaña activa):
 
 1. **Pestaña 1 — Resumen Ejecutivo:**
-   - Métricas clave en tiempo real: Plan Actual con badge `Trial (Xd)` en ámbar si aplica, Vencimiento, Créditos IA Desacoplados (`Reportado en Celular` y `Bono Pendiente`), Total Recaudado y Versión APK.
-   - **Botón `[📱 Sincronizar Estado Reportado del Celular]` (`#modalSyncReported`):** Permite registrar en caliente Hardware ID, modelo, versión, saldo IA y días restantes reportados por el comerciante vía WhatsApp, actualizando de forma bidireccional los formularios de la plataforma sin requerir internet en el móvil.
+   - Métricas clave en tiempo real: Plan Actual con badge `Trial (Xd)` en ámbar si aplica, Vencimiento, Créditos IA Desglosados (`En celular: X IA | Consumidos: Z IA (+delta reciente) | Bono pend: +Y IA`), **Última Sincronización Real en hora `America/Lima` (GMT-5)**, **Respaldo Drive** humanizado (`Vinculado (Óptimo / Requiere atención / Crítico)`), **`Perfiles Activos`** (`pc`) y **`Último Nonce Reportado`** (`ultimo_nonce`).
+   - **Botón `[Sincronizar Celular]` (`#modalSyncReported`):** Abre el comparador `.mlsync` / `MLS1` o el ajuste manual de emergencia.
 
 2. **Pestaña 2 — QR & Credencial Oficial:**
    - Visualización garantizada del código QR en alta definición mediante `renderSafeQrCode()`.
@@ -442,7 +432,7 @@ Certifica que las firmas v1, v2 y v3 corresponden exclusivamente al certificado 
 
 ---
 
-## GUÍA 3: PUBLICACIÓN Y NOTIFICACIÓN DE ACTUALIZACIONES (RELEASE MANAGER & PLAN MAESTRO 19)
+## GUÍA 3: PUBLICACIÓN Y NOTIFICACIÓN DE ACTUALIZACIONES (RELEASE MANAGER — PLANES 19 y 22)
 
 ### 3.1. Diferenciación Estricta: `HOTFIX` vs. `FEATURE_RELEASE`
 
@@ -453,64 +443,58 @@ Certifica que las firmas v1, v2 y v3 corresponden exclusivamente al certificado 
 
 ---
 
-### 3.2. Carga Inteligente de APKs, Auto-Lectura Forense y Escudo Anti-debug.apk
-En la pestaña **Gestor de Versiones**, presiona **`[Subir / Registrar Nueva Versión]`**:
-1. **Drag & Drop con Auto-Lectura Real:** Al arrastrar tu archivo `.apk` a la zona punteada, el motor forense (`ApkInspectorService`) extrae de inmediato:
-   * **Nombre de Versión (`version_name`) y Código de Build (`version_code`):** Parseo real vía `aapt2 dump badging` o manifiesto ZIP, eliminando errores manuales (cero discrepancias como `Build 24`).
-   * **Arquitectura de Variante:** Detección automática en Dart puro inspeccionando `lib/` (`ARM64 Ligero` vs. `Universal`).
-   * **Tamaño Exacto en MB y Hash SHA-256:** Calculados de forma determinista sobre el binario.
-   * **Sugerencia Automática de Changelog Comercial:** Lectura de notas comerciales limpias desde archivos compañeros `*_cambios.txt` en la biblioteca oficial.
-2. **Escudo Anti-debug.apk con Firma Oficial RSA-4096:**
-   * El sistema audita la firma con `apksigner verify --verbose --print-certs`.
-   * Si el certificado coincide con la huella oficial de Julio Angello Vasquez Navarro (`7c43addc34776f3974eac23fdacc47599efd5393a4dbb28672d06899833ffd20`), se despliega un escudo verde **`Firma Oficial Verificada`**.
-   * Si es un `app-debug.apk` o una firma desconocida, se activa un banner rojo preventivo que **bloquea la publicación** protegiendo a los comerciantes en producción.
-3. **Autodetección Multi-Directorio:**
-   * Al pulsar **`[Autodetectar APKs Compilados]`**, el sistema busca tanto en la biblioteca oficial del propietario (`C:\Users\vjuli\Documents\v-app-offline apks\`) como en `app_movil/build/app/outputs/flutter-apk/`, ordenando los binarios de más reciente a más antiguo para importación en 1 clic.
+### 3.2. Carga Inteligente de APKs, Escudo de Firma 3 Estados (SDK `37+`) y Autodetección Deduplicada
+En la pestaña **Versiones APK (`#tabReleaseManager`)**:
+1. **Inspección Forense al Subir o Autodetectar (`ApkInspectorService`):**
+   * **Nombre de Versión (`version_name`), Código de Build (`version_code`) y Esquema SQLite:** Parseo real vía `aapt2` y ZIP.
+   * **Auto-Selección SemVer de Tipo:** `patch > 0` sugiere `HOTFIX`; `patch == 0` sugiere `FEATURE_RELEASE`.
+   * **Lectura Dual de Notas Compañeras:** Lee automáticamente `*_cambios.txt` para el **Changelog Comercial** y `*_atp.txt` para las **Notas Técnicas Internas**, con botones rápidos para recargar ambos archivos en el modal.
+   * **Arquitectura, Tamaño y SHA-256:** Detección `ARM64` vs `Universal`, tamaño formateado con sufijo `MB` y huella SHA-256 en minúsculas.
+2. **Escudo de Firma Criptográfica con 3 Estados Honestos (SDK `37.0.0+` y `<= 36.x`):**
+   * Compatible con la salida multi-esquema de Android SDK Build-Tools `37.0.0+` (`V2 Signer:`, excluyendo `SourceStamp Signer:`) y versiones anteriores (`Signer #1`).
+   * **Estado 1 — `Oficial RSA-4096` (`OFFICIAL_RELEASE`):** Firma verificada coincidente con la huella oficial (`7c43addc34776f3974eac23fdacc47599efd5393a4dbb28672d06899833ffd20`).
+   * **Estado 2 — `No Oficial / posible debug.apk` (`UNOFFICIAL_SIGNATURE`):** Firma válida distinta a la oficial; activa bloqueo preventivo para impedir publicar APKs debug en producción.
+   * **Estado 3 — `Sin Verificar` (`UNVERIFIED`):** Si `apksigner` no está disponible o no emite digest legible, informa honestamente con detalle diagnóstico sin etiquetarlo falsamente como `debug.apk`.
+3. **Autodetección Multi-Directorio Deduplicada por SHA-256 (`GET /api/releases/detect-local-build`):**
+   * Escanea `C:\Users\vjuli\Documents\v-app-offline apks\` (`Biblioteca Oficial`) y `app_movil/build/app/outputs/flutter-apk/`, normalizando rutas de Windows y deduplicando binarios idénticos por SHA-256 (priorizando la Biblioteca Oficial e informando rutas duplicadas mediante insignias de origen).
 
 ---
 
 ### 3.3. Catálogo de Versiones Publicadas y Edición Total (`#modalEditRelease`)
-En la tabla de versiones publicadas:
-- **Acciones 100% SVG:** Descarga de binario (`APK`), revelado en Explorador de Windows (`Carpeta`), edición completa (`Editar`) y eliminación protegida (`Eliminar`).
-- **Edición Completa sin Bloqueos:** El modal de edición permite corregir `version_code`, `min_required_version`, `db_schema_version`, alternar entre `HOTFIX` y `FEATURE_RELEASE`, y segregar claramente el **Changelog Comercial para Clientes** de las **Notas Técnicas Internas**.
-- **Doble Variante Oficial:** Soporte nativo para almacenar binario Universal y binario ARM64 con indicadores visuales de integridad física en disco.
+En la tabla del catálogo de versiones publicadas:
+- **Acciones en 1 Sola Línea Horizontal SVG:** Botones compactos para **`Verificar`** (auditoría en vivo en disco con `POST /api/releases/:version/verify`), **`APK`**, **`Copiar`**, **`Carpeta`**, **`Editar`** y **`Eliminar`**.
+- **Métricas Claras:** Unidades siempre normalizadas en `MB` (`formatApkSizeMb`) y píldora de adopción por versión (`N clientes`).
+- **Tarjetas Enriquecidas en `#modalEditRelease`:**
+  * Cada variante (`Universal` y `ARM64 Ligero`) muestra estado real en disco (`Verificado en disco` vs `No encontrado`), tamaño en `MB`, SHA-256 con botón **`Copiar SHA`**, insignia de 3 estados, botón **`Re-verificar`** y doble vía para adjuntar binario: **`Subir desde PC`** o **`Vincular desde Biblioteca Local`**.
+  * Junto a los campos de texto, botones directos para importar/recargar `*_cambios.txt` y `*_atp.txt` desde el endpoint `GET /api/releases/:version/companion-notes`.
 
 ---
 
-### 3.4. Matriz Inteligente SemVer y Barra de Progreso de Despliegue
-La matriz compara la versión instalada de cada cliente contra el último lanzamiento bajo 5 estados exhaustivos:
-* **`AL DÍA` (Verde):** El cliente cuenta con la versión más reciente o superior.
-* **`ACTUALIZACIÓN PENDIENTE` (Naranja):** El cliente tiene derecho a la versión y aún no ha sido despachada.
-* **`VERSIÓN SUPERIOR` (Azul):** El cliente posee una versión mayor a la última registrada en BD (ej. piloto); **se bloquea preventivamente cualquier degradación**.
-* **`APK ENVIADO` (Púrpura):** Ya se despachó el APK por WhatsApp con badge de fecha (`Enviado DD/MM`).
-* **`REQUIERE PASE` (Ámbar):** Licencias perpetuas con pase vencido ante un `FEATURE_RELEASE` (ofrece cotizar o emitir pase, o autorizar botón de **Cortesía**).
-* **Barra de Progreso Tricolor (`#releasesRolloutProgress`):** Muestra el porcentaje consolidado de clientes al día, clientes con APK enviado y pendientes de actualización.
+### 3.4. Matriz Inteligente SemVer, Corrección Segura y Reenvío en 1 Clic
+La matriz evalúa la versión de cada cliente frente a la última publicada bajo 5 estados (`AL DÍA`, `ACTUALIZACIÓN PENDIENTE`, `VERSIÓN SUPERIOR`, `APK ENVIADO`, `REQUIERE PASE`) junto con `#releasesRolloutProgress`:
+* **Reenvío Permanente:** Incluso clientes en **`Al Día`** o **`Versión superior`** mantienen visible el botón **`Reenviar / Elegir APK`** para volver a despachar un instalador o elegir otra versión.
+* **Reversión y Corrección Segura sin `window.prompt`:** El botón rápido de marcar actualizado ofrece acción **`Deshacer`** en el toast y las celdas de versión disponen del modal **`Corregir Versión Instalada`** (`#modalFixClientVersion`), respaldado por `POST /api/clients/:id/mark-updated` con soporte `force: true` y retorno de `previous_installed_version`.
 
 ---
 
-### 3.5. Despacho Asistido de APK por WhatsApp y Portapapeles Windows
-Al pulsar **`[Enviar APK]`** en la matriz o en la ficha del cliente:
-1. **Compositor Especializado (`#modalWaComposer`):** Abre un modal interactivo con el mensaje formateado, saludo personalizado, changelog comercial limpio y garantía de cero pérdida de datos.
-2. **Cero Enlaces Inútiles:** Erradicación total de links `http://localhost:8080`.
-3. **Selector de Variante:** Permite elegir entre el APK **Universal** (~109 MB) o el APK **ARM64 Ligero** (~35 MB).
-4. **Copia Real al Portapapeles (`Set-Clipboard -LiteralPath`):**
-   * El botón principal copia el archivo físico `.apk` al portapapeles de Windows y abre WhatsApp Web o Desktop en el chat del cliente.
-   * **Acción:** Solo debes pulsar **`Ctrl + V`** en el chat para adjuntar el archivo directamente como documento, sin necesidad de arrastrarlo.
-5. **Apertura de Carpeta:** Botón secundario para mostrar el archivo resaltado en el Explorador si se prefiere arrastrar manualmente.
-6. **Trazabilidad Automática:** Al despachar, el cliente pasa a estado `APK Enviado` con registro de fecha y variante enviada.
+### 3.5. Despacho Asistido de APK por WhatsApp (`#modalWaComposer`) y Portapapeles Windows Endurecido
+Al abrir **`Enviar APK`** / **`Reenviar / Elegir APK`** desde la matriz (o seleccionar la plantilla **`Nueva Versión APK`** desde CRM / Ficha 360°):
+1. **Selector Dinámico de Versión (`<select id="waApkVersionSelect">`):** Permite elegir cualquier versión publicada sin cerrar el compositor, actualizando título, variante auto-seleccionada, badge de firma, esquema SQLite y changelog mientras preserva tus chips `Insertar:` activos.
+2. **Alerta Preventiva `> 100 MB`:** Cuando el binario seleccionado (ej. Universal `~108 MB`) supera los **100 MB**, el panel advierte del límite de adjuntos de **WhatsApp Web (100 MB)** frente a **WhatsApp Desktop (2 GB)**, sugiriendo cambiar a **ARM64 Ligero** (`~30 MB`), usar WhatsApp Desktop o compartir enlace externo.
+3. **Acciones Flexibles de Despacho:**
+   - **`[Copiar Archivo .APK y Abrir WhatsApp]`:** Invoca `POST /api/releases/:version/copy-file`, ejecutado en backend con **`powershell -NoProfile -STA`**, construyendo un `System.Windows.Forms.DataObject` completo (`SetFileDropList` `CF_HDROP` + `Preferred DropEffect` `DROPEFFECT_COPY` + `SetDataObject(..., $true, 10, 50)` con 10 reintentos COM). Verifica estrictamente `ok === true`, muestra el toast **`Archivo .apk copiado: presiona Ctrl + V en WhatsApp`**, despliega la confirmación visual con botón **`Volver a Copiar .APK`** y mantiene el modal abierto.
+   - **`[Copiar Solo Texto]`**, **`[Abrir Carpeta]`** y **`[Solo Abrir WhatsApp]`** con registro automático de trazabilidad `APK Enviado`.
 
 ---
 
 ### 3.6. Protocolo Dual de Sincronización Offline (`.mlsync` / `MLS1-...`) y Rescate 1-Clic
-Permite auditar el estado real del celular del cliente sin conexión a internet y sin vulnerar su privacidad:
-1. **Formato Dual:** Admite archivos `.mlsync` (JSON estructurado) y tokens ultracompactos `MLS1-...` (HMAC-SHA256 en Base64Url).
-2. **Lista Blanca Estricta de 21 Claves Técnicas:** Solo incluye telemetría de soporte (versión instalada, build code, modelo de celular, versión de Android, saldo IA, vigencia de plan y estado de respaldos Drive). **CERO datos de productos, ventas o inventarios**.
-3. **Tres Puntos de Entrada en el Admin:**
-   * **Botón en Ficha 360°:** Para sincronizar al cliente que se está atendiendo.
-   * **Botón Global en Cartera CRM:** Para pegar un token o soltar un archivo `.mlsync` y detectar automáticamente a qué cliente pertenece.
-   * **Pestaña Inspector Forense (`#tabInspector`):** Soporta tanto tokens de licencia `ML9-...` como fichas de sincronización `MLS1-...`.
-4. **Comparador Visual "Antes (Admin) ➔ Real (Celular)":** Resalta discrepancias en verde/ámbar y cuenta con escudo anti-sobreescritura si se intenta aplicar un reporte más antiguo que el último registrado.
-5. **Rescate 1-Clic de `PENDIENTE_MIGRACION`:** Si un comerciante restauró su copia en un celular nuevo, su reporte incluye el hardware actual (`hw`) y el anterior (`bhw`). El Admin detecta al cliente original de inmediato y ofrece el botón **`[Rescatar y Migrar Dispositivo]`**, migrándolo en 1 clic con 0 días de costo adicional.
+Permite auditar el estado real del celular sin conexión y sin duplicar discrepancias falsas:
+1. **Separación Estricta `Plan Comercial` vs `Estado de Vigencia`:** El comparador evalúa por separado el plan contratado (`pl`, ej. `TRIAL`, `MENSUAL`, `PERPETUO_LIBERADO`) y el estado operativo real (`st`, normalizando `EXPIRADA` / `VENCIDA` y manteniendo `ACTIVA` cuando un `TRIAL` está vigente — cero bucle `TRIAL -> ACTIVA`), conservando la autoridad comercial del CRM.
+2. **Telemetría Completa, Español Natural y Hora Perú (`America/Lima` GMT-5):**
+   - Incorpora `dr` (`Días de Vigencia Restantes`), `aiu` (`Escaneos IA Consumidos (Histórico)` con cálculo de **`ai_credits_used_delta`** `+N desde última sync`) y `pc` (`Perfiles de Negocio Activos`).
+   - Traduce valores técnicos al español (`Sí`/`No`, `Óptimo`/`Requiere atención`/`Crítico`/`Sin respaldo`) y muestra timestamps en `DD/MM/YYYY HH:mm:ss (Lima GMT-5)` con UTC original en `title`.
+   - Cuando `all_unchanged == true` o coincide el timestamp (`same_timestamp`), muestra el banner verde **`La ficha coincide al 100% con el estado actual del CRM — Sin cambios por aplicar`** y adapta el botón a **`Re-confirmar Ficha`**.
+3. **Rescate 1-Clic de `PENDIENTE_MIGRACION`:** Identifica automáticamente al cliente origen mediante `bhw` y ofrece **`Migrar Dispositivo (Restauración — 0 días)`** sin costo extra ni duplicación de vigencia.
 
 ---
 

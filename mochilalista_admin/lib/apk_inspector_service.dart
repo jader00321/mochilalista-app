@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 import 'package:crypto/crypto.dart';
@@ -21,11 +22,15 @@ class ApkInspectionResult {
   final String minRequiredVersion;
   final String? minSdk;
   final String? targetSdk;
-  final bool? signatureVerified; // true: oficial, false: no oficial / debug, null: tool no disponible
-  final String signatureStatus; // 'VERIFIED' | 'UNOFFICIAL_OR_DEBUG' | 'TOOL_UNAVAILABLE'
+  final bool? signatureVerified; // true: oficial, false: no oficial / debug, null: tool no disponible o no verificable
+  final String signatureStatus; // 'OFFICIAL_RELEASE' | 'UNOFFICIAL_SIGNATURE' | 'UNVERIFIED'
+  final String? signatureDetail;
   final String? signerSha256;
   final String? signerDn;
   final String suggestedChangelog;
+  final String suggestedInternalNotes;
+  final String suggestedReleaseType; // 'FEATURE_RELEASE' | 'HOTFIX'
+  final List<String> duplicatePaths;
 
   const ApkInspectionResult({
     required this.success,
@@ -47,10 +52,49 @@ class ApkInspectionResult {
     this.targetSdk,
     this.signatureVerified,
     required this.signatureStatus,
+    this.signatureDetail,
     this.signerSha256,
     this.signerDn,
     this.suggestedChangelog = '',
+    this.suggestedInternalNotes = '',
+    this.suggestedReleaseType = 'FEATURE_RELEASE',
+    this.duplicatePaths = const [],
   });
+
+  ApkInspectionResult copyWith({
+    List<String>? duplicatePaths,
+    String? sourceLabel,
+    String? filePath,
+  }) {
+    return ApkInspectionResult(
+      success: success,
+      errorMessage: errorMessage,
+      fileName: fileName,
+      filePath: filePath ?? this.filePath,
+      sourceLabel: sourceLabel ?? this.sourceLabel,
+      modifiedAt: modifiedAt,
+      sizeBytes: sizeBytes,
+      sizeMb: sizeMb,
+      sha256: sha256,
+      packageName: packageName,
+      versionName: versionName,
+      versionCode: versionCode,
+      abiVariant: abiVariant,
+      dbSchemaVersion: dbSchemaVersion,
+      minRequiredVersion: minRequiredVersion,
+      minSdk: minSdk,
+      targetSdk: targetSdk,
+      signatureVerified: signatureVerified,
+      signatureStatus: signatureStatus,
+      signatureDetail: signatureDetail,
+      signerSha256: signerSha256,
+      signerDn: signerDn,
+      suggestedChangelog: suggestedChangelog,
+      suggestedInternalNotes: suggestedInternalNotes,
+      suggestedReleaseType: suggestedReleaseType,
+      duplicatePaths: duplicatePaths ?? this.duplicatePaths,
+    );
+  }
 
   Map<String, dynamic> toJson() => {
         'success': success,
@@ -72,9 +116,13 @@ class ApkInspectionResult {
         'target_sdk': targetSdk,
         'signature_verified': signatureVerified,
         'signature_status': signatureStatus,
+        if (signatureDetail != null) 'signature_detail': signatureDetail,
         'signer_sha256': signerSha256,
         'signer_dn': signerDn,
         'suggested_changelog': suggestedChangelog,
+        'suggested_internal_notes': suggestedInternalNotes,
+        'suggested_release_type': suggestedReleaseType,
+        'duplicate_paths': duplicatePaths,
       };
 }
 
@@ -100,36 +148,116 @@ class ApkInspectorService {
     this.defaultBuildOutputDir,
   });
 
+  /// Normaliza una ruta eliminando segmentos `..`, unificando separadores y resolviendo enlaces
+  static String canonicalizePath(String rawPath) {
+    final trimmed = rawPath.trim();
+    if (trimmed.isEmpty) return trimmed;
+    try {
+      final f = File(trimmed);
+      if (f.existsSync()) {
+        return f.resolveSymbolicLinksSync();
+      }
+      final d = Directory(trimmed);
+      if (d.existsSync()) {
+        return d.resolveSymbolicLinksSync();
+      }
+    } catch (_) {}
+
+    final abs = File(trimmed).absolute.path;
+    return _normalizeLexicalPath(abs);
+  }
+
+  static String _normalizeLexicalPath(String rawAbs) {
+    final sep = Platform.pathSeparator;
+    String path = rawAbs.replaceAll('/', sep).replaceAll('\\', sep);
+
+    String prefix = '';
+    if (Platform.isWindows) {
+      if (path.startsWith(r'\\')) {
+        prefix = r'\\';
+        path = path.substring(2);
+      } else if (path.length >= 2 && path[1] == ':') {
+        prefix = '${path.substring(0, 2)}$sep';
+        path = path.substring(2);
+      }
+    } else if (path.startsWith('/')) {
+      prefix = '/';
+      path = path.substring(1);
+    }
+
+    final resolved = <String>[];
+    for (final seg in path.split(sep)) {
+      if (seg.isEmpty || seg == '.') continue;
+      if (seg == '..') {
+        if (resolved.isNotEmpty) resolved.removeLast();
+      } else {
+        resolved.add(seg);
+      }
+    }
+    return '$prefix${resolved.join(sep)}';
+  }
+
+  /// Infiere tipo de lanzamiento sugerido desde SemVer:
+  /// `patch > 0` -> `HOTFIX`, `patch == 0` -> `FEATURE_RELEASE`
+  static String inferReleaseTypeFromVersion(String? versionName) {
+    if (versionName == null || versionName.trim().isEmpty) {
+      return 'FEATURE_RELEASE';
+    }
+    final clean = versionName
+        .trim()
+        .replaceFirst(RegExp(r'^[vV]'), '')
+        .split('+')
+        .first
+        .split('-')
+        .first;
+    final parts = clean.split('.');
+    final patch = parts.length > 2 ? (int.tryParse(parts[2]) ?? 0) : 0;
+    return patch > 0 ? 'HOTFIX' : 'FEATURE_RELEASE';
+  }
+
   /// Inspecciona exhaustivamente un archivo APK combinando Dart puro y herramientas Android SDK
-  Future<ApkInspectionResult> inspectApk(File apkFile, {String? sourceLabel}) async {
-    if (!await apkFile.exists()) {
+  Future<ApkInspectionResult> inspectApk(
+    File apkFile, {
+    String? sourceLabel,
+    String? apkLibraryDir,
+    List<Directory> extraSearchDirs = const [],
+  }) async {
+    final canonicalApkPath = canonicalizePath(apkFile.path);
+    final canonicalFile = File(canonicalApkPath);
+
+    if (!await canonicalFile.exists()) {
       return ApkInspectionResult(
         success: false,
-        errorMessage: 'El archivo APK no existe en disco: ${apkFile.path}',
-        fileName: apkFile.uri.pathSegments.isNotEmpty
-            ? apkFile.uri.pathSegments.last
+        errorMessage: 'El archivo APK no existe en disco: $canonicalApkPath',
+        fileName: canonicalFile.uri.pathSegments.isNotEmpty
+            ? canonicalFile.uri.pathSegments.last
             : 'desconocido.apk',
-        filePath: apkFile.path,
+        filePath: canonicalApkPath,
         sourceLabel: sourceLabel,
         sizeBytes: 0,
         sizeMb: '0.00 MB',
         sha256: '',
         abiVariant: 'UNIVERSAL',
-        signatureStatus: 'TOOL_UNAVAILABLE',
+        signatureVerified: null,
+        signatureStatus: 'UNVERIFIED',
+        signatureDetail: 'El archivo APK no existe en disco.',
       );
     }
 
-    final stat = await apkFile.stat();
-    final fileName = apkFile.uri.pathSegments.last;
+    final stat = await canonicalFile.stat();
+    final fileName = canonicalFile.uri.pathSegments.isNotEmpty
+        ? canonicalFile.uri.pathSegments.last
+        : 'app-release.apk';
 
     // 1. Capa 1: Tamaño y Hash Criptográfico SHA-256 determinista
-    final fileLength = await apkFile.length();
-    final sha256Digest = (await sha256.bind(apkFile.openRead()).first).toString().toLowerCase();
+    final fileLength = await canonicalFile.length();
+    final sha256Digest =
+        (await sha256.bind(canonicalFile.openRead()).first).toString().toLowerCase();
     final sizeMb = (fileLength / (1024 * 1024)).toStringAsFixed(2);
     final sizeMbStr = '$sizeMb MB';
 
     // 2. Capa 1: Detección ABI determinista en Dart puro inspeccionando el ZIP
-    final detectedAbis = await _detectZipAbis(apkFile);
+    final detectedAbis = await _detectZipAbis(canonicalFile);
     final isArm64Only = detectedAbis.length == 1 && detectedAbis.contains('arm64-v8a');
     final abiVariant = isArm64Only ? 'ARM64' : 'UNIVERSAL';
 
@@ -148,7 +276,7 @@ class ApkInspectorService {
 
     final aapt2Exe = await _findBuildTool('aapt2');
     if (aapt2Exe != null) {
-      final aaptRes = await _runProcess(aapt2Exe, ['dump', 'badging', apkFile.absolute.path]);
+      final aaptRes = await _runProcess(aapt2Exe, ['dump', 'badging', canonicalApkPath]);
       if (aaptRes.exitCode == 0) {
         final out = aaptRes.stdout.toString();
         final parsed = _parseAapt2Badging(out);
@@ -167,17 +295,22 @@ class ApkInspectorService {
       versionCode ??= pubspecMeta.versionCode;
     }
 
-    // 4. Capa 3: Escudo Anti-debug.apk con apksigner
+    // 4. Capa 3: Escudo Anti-debug.apk con apksigner (compatible SDK <=36 y 37+)
     bool? signatureVerified;
     String signatureStatus = 'UNVERIFIED';
+    String? signatureDetail;
     String? signerSha256;
     String? signerDn;
 
     final apksignerBin = await _findBuildTool('apksigner');
-    if (apksignerBin != null) {
+    if (apksignerBin == null) {
+      signatureVerified = null;
+      signatureStatus = 'UNVERIFIED';
+      signatureDetail = 'apksigner no disponible en el SDK de Android.';
+    } else {
       final apkSignerRes = await _runProcess(
         apksignerBin,
-        ['verify', '--verbose', '--print-certs', apkFile.absolute.path],
+        ['verify', '--verbose', '--print-certs', canonicalApkPath],
       );
       if (apkSignerRes.exitCode == 0) {
         final out = '${apkSignerRes.stdout}\n${apkSignerRes.stderr}';
@@ -185,27 +318,48 @@ class ApkInspectorService {
         signerSha256 = parsedSig.signerSha256;
         signerDn = parsedSig.signerDn;
 
-        if (parsedSig.signerSha256 != null &&
-            parsedSig.signerSha256!.toLowerCase() == officialSignerSha256.toLowerCase()) {
+        if (parsedSig.signerSha256 == null) {
+          signatureVerified = null;
+          signatureStatus = 'UNVERIFIED';
+          signatureDetail =
+              'apksigner finalizó correctamente pero no devolvió una huella SHA-256 legible.';
+        } else if (parsedSig.signerSha256!.toLowerCase() ==
+            officialSignerSha256.toLowerCase()) {
           signatureVerified = true;
           signatureStatus = 'OFFICIAL_RELEASE';
+          signatureDetail = 'Certificado oficial RSA-4096 verificado.';
         } else {
           signatureVerified = false;
           signatureStatus = 'UNOFFICIAL_SIGNATURE';
+          signatureDetail =
+              'La huella del certificado (${parsedSig.signerSha256}) no coincide con la oficial.';
         }
       } else {
-        signatureVerified = false;
+        signatureVerified = null;
         signatureStatus = 'UNVERIFIED';
+        final errOut = apkSignerRes.stderr.toString().trim();
+        signatureDetail = errOut.isNotEmpty
+            ? 'No se pudo verificar con apksigner (${apkSignerRes.exitCode}): $errOut'
+            : 'apksigner no pudo completar la verificación (código ${apkSignerRes.exitCode}).';
       }
     }
 
-    // 5. Capa 4: Sugerencia de Changelog Comercial limpio
-    final suggestedChangelog = await _findSuggestedChangelog(apkFile, versionName);
+    // 5. Capa 4: Notas compañeras (Changelog comercial y Notas Técnicas *_atp.txt) + SemVer
+    final notes = await readCompanionNotesForVersion(
+      versionName ?? '',
+      apkPath: canonicalApkPath,
+      apkLibraryDir: apkLibraryDir,
+      extraSearchDirs: extraSearchDirs,
+      fallbackRegistryChangelog: true,
+    );
+    final suggestedChangelog = (notes['suggested_changelog'] as String?) ?? '';
+    final suggestedInternalNotes = (notes['suggested_internal_notes'] as String?) ?? '';
+    final suggestedReleaseType = inferReleaseTypeFromVersion(versionName);
 
     return ApkInspectionResult(
       success: true,
       fileName: fileName,
-      filePath: apkFile.absolute.path,
+      filePath: canonicalApkPath,
       sourceLabel: sourceLabel,
       modifiedAt: stat.modified,
       sizeBytes: fileLength,
@@ -221,69 +375,101 @@ class ApkInspectorService {
       targetSdk: targetSdk,
       signatureVerified: signatureVerified,
       signatureStatus: signatureStatus,
+      signatureDetail: signatureDetail,
       signerSha256: signerSha256,
       signerDn: signerDn,
       suggestedChangelog: suggestedChangelog,
+      suggestedInternalNotes: suggestedInternalNotes,
+      suggestedReleaseType: suggestedReleaseType,
     );
   }
 
   /// Escanea transparentemente la biblioteca oficial y outputs locales,
-  /// limitando la inspección profunda a los 6 APKs más recientes
+  /// deduplicando por SHA-256 (prioriza Biblioteca Oficial sobre build/)
   Future<List<ApkInspectionResult>> detectLocalApks({
     required Directory apkLibraryDir,
     Directory? buildOutputDir,
     int maxCandidates = 6,
   }) async {
     final candidateFiles = <_ApkCandidate>[];
+    final seenPaths = <String>{};
 
-    // 1. Escanear directorio de la biblioteca oficial
-    if (await apkLibraryDir.exists()) {
+    void addCandidateDir(Directory dir, String label, int priority) {
+      final canonDirPath = canonicalizePath(dir.path);
+      final canonDir = Directory(canonDirPath);
+      if (!canonDir.existsSync()) return;
       try {
-        final list = apkLibraryDir.listSync(followLinks: false);
+        final list = canonDir.listSync(followLinks: false);
         for (final entity in list) {
           if (entity is File && entity.path.toLowerCase().endsWith('.apk')) {
-            candidateFiles.add(_ApkCandidate(
-              file: entity,
-              sourceLabel: 'Biblioteca Oficial (v-app-offline apks)',
-              modified: entity.statSync().modified,
-            ));
+            final canonFile = canonicalizePath(entity.path);
+            final key = Platform.isWindows ? canonFile.toLowerCase() : canonFile;
+            if (seenPaths.add(key)) {
+              candidateFiles.add(_ApkCandidate(
+                file: File(canonFile),
+                sourceLabel: label,
+                modified: entity.statSync().modified,
+                priority: priority,
+              ));
+            }
           }
         }
       } catch (_) {}
     }
 
-    // 2. Escanear build/app/outputs/flutter-apk/ si existe
+    // 1. Escanear directorio de la biblioteca oficial (prioridad 0)
+    addCandidateDir(apkLibraryDir, 'Biblioteca Oficial (v-app-offline apks)', 0);
+
+    // 2. Escanear build/app/outputs/flutter-apk/ si existe (prioridad 1)
     final buildDir = buildOutputDir ??
         defaultBuildOutputDir ??
         Directory('../app_movil/build/app/outputs/flutter-apk');
-    if (await buildDir.exists()) {
-      try {
-        final list = buildDir.listSync(followLinks: false);
-        for (final entity in list) {
-          if (entity is File && entity.path.toLowerCase().endsWith('.apk')) {
-            candidateFiles.add(_ApkCandidate(
-              file: entity,
-              sourceLabel: 'Compilación Local (app_movil/build)',
-              modified: entity.statSync().modified,
-            ));
-          }
-        }
-      } catch (_) {}
-    }
+    addCandidateDir(buildDir, 'Compilación Local (app_movil/build)', 1);
 
-    // Ordenar de más reciente a más antiguo por fecha de modificación
-    candidateFiles.sort((a, b) => b.modified.compareTo(a.modified));
+    // Ordenar de más reciente a más antiguo; ante igualdad de fecha, priorizar Biblioteca Oficial
+    candidateFiles.sort((a, b) {
+      final cmp = b.modified.compareTo(a.modified);
+      if (cmp != 0) return cmp;
+      return a.priority.compareTo(b.priority);
+    });
 
-    // Limitar estrictamente a los candidatos más recientes para rendimiento instantáneo
-    final selectedCandidates = candidateFiles.take(maxCandidates).toList();
-    final results = <ApkInspectionResult>[];
+    // Inspeccionar ventana ampliada (12) para absorber duplicados y devolver hasta maxCandidates únicos
+    final inspectLimit = maxCandidates * 2;
+    final selectedCandidates = candidateFiles.take(inspectLimit).toList();
+    final uniqueResults = <ApkInspectionResult>[];
+    final indexBySha = <String, int>{};
+    final libPath = canonicalizePath(apkLibraryDir.path);
 
     for (final c in selectedCandidates) {
-      final res = await inspectApk(c.file, sourceLabel: c.sourceLabel);
-      results.add(res);
+      final res = await inspectApk(
+        c.file,
+        sourceLabel: c.sourceLabel,
+        apkLibraryDir: libPath,
+      );
+      if (res.sha256.isEmpty) {
+        uniqueResults.add(res);
+        continue;
+      }
+
+      final existingIdx = indexBySha[res.sha256];
+      if (existingIdx == null) {
+        indexBySha[res.sha256] = uniqueResults.length;
+        uniqueResults.add(res);
+      } else {
+        final existing = uniqueResults[existingIdx];
+        final isNewOfficialLib = c.priority == 0 &&
+            existing.sourceLabel != 'Biblioteca Oficial (v-app-offline apks)';
+        if (isNewOfficialLib) {
+          final mergedDups = <String>[...existing.duplicatePaths, existing.filePath];
+          uniqueResults[existingIdx] = res.copyWith(duplicatePaths: mergedDups);
+        } else {
+          final mergedDups = <String>[...existing.duplicatePaths, res.filePath];
+          uniqueResults[existingIdx] = existing.copyWith(duplicatePaths: mergedDups);
+        }
+      }
     }
 
-    return results;
+    return uniqueResults.take(maxCandidates).toList();
   }
 
   // =================== MÉTODOS AUXILIARES DETERMINISTAS ===================
@@ -399,77 +585,205 @@ class ApkInspectorService {
   }
 
   /// Parsea la salida oficial de apksigner verify --verbose --print-certs
+  /// Compatible con Build-Tools <= 36 (`Signer #1 certificate ...`) y 37+ (`V2 Signer: certificate ...`),
+  /// excluyendo líneas de `SourceStamp`.
   _ApkSignerResult _parseApksignerOutput(String output) {
-    String? signerSha256;
-    String? signerDn;
-
-    final shaMatch = RegExp(
-      r'Signer #1 certificate SHA-256 digest:\s*([0-9a-fA-F:]+)',
+    final shaLineRegex = RegExp(
+      r'^(?:V\d+(?:\.\d+)?\s+Signer:|Signer\s*#\d+)\s*certificate\s+SHA-256\s+digest:\s*([0-9a-fA-F:]+)',
       caseSensitive: false,
-    ).firstMatch(output);
+    );
+    final dnLineRegex = RegExp(
+      r'^(?:V\d+(?:\.\d+)?\s+Signer:|Signer\s*#\d+)\s*certificate\s+DN:\s*(.+)',
+      caseSensitive: false,
+    );
 
-    if (shaMatch != null) {
-      signerSha256 = shaMatch.group(1)!.replaceAll(':', '').trim().toLowerCase();
+    final extracted = <_ApkSignerResult>[];
+    String? currentDn;
+    String? firstDn;
+
+    for (final rawLine in LineSplitter.split(output)) {
+      final line = rawLine.trim();
+      if (line.isEmpty || line.toLowerCase().contains('sourcestamp')) continue;
+
+      final dnMatch = dnLineRegex.firstMatch(line);
+      if (dnMatch != null) {
+        currentDn = dnMatch.group(1)!.trim();
+        firstDn ??= currentDn;
+        continue;
+      }
+
+      final shaMatch = shaLineRegex.firstMatch(line);
+      if (shaMatch != null) {
+        final normalizedSha =
+            shaMatch.group(1)!.replaceAll(':', '').trim().toLowerCase();
+        extracted.add(_ApkSignerResult(
+          signerSha256: normalizedSha,
+          signerDn: currentDn,
+        ));
+      }
     }
 
-    final dnMatch = RegExp(
-      r'Signer #1 certificate DN:\s*(.+)',
-      caseSensitive: false,
-    ).firstMatch(output);
-
-    if (dnMatch != null) {
-      signerDn = dnMatch.group(1)!.trim();
+    if (extracted.isEmpty) {
+      return _ApkSignerResult(signerSha256: null, signerDn: firstDn);
     }
 
-    return _ApkSignerResult(signerSha256: signerSha256, signerDn: signerDn);
+    for (final entry in extracted) {
+      if (entry.signerSha256 == officialSignerSha256.toLowerCase()) {
+        return entry;
+      }
+    }
+    return extracted.first;
   }
 
-  /// Sugiere un changelog comercial limpio leyendo `*_cambios.txt` o `app_changelog_registry.dart`
-  Future<String> _findSuggestedChangelog(File apkFile, String? versionName) async {
-    try {
-      // 1. Buscar archivo compañero *_cambios.txt en la misma carpeta del APK
-      final parentDir = apkFile.parent;
-      final apkBaseName = apkFile.uri.pathSegments.last.replaceAll(RegExp(r'\.apk$', caseSensitive: false), '');
-      
-      final candidates = [
-        File('${parentDir.path}/${apkBaseName}_cambios.txt'),
-        File('${parentDir.path}/${apkBaseName.replaceAll('_atp', '')}_cambios.txt'),
-        if (versionName != null) File('${parentDir.path}/mochilalista_v${versionName}_cambios.txt'),
-        if (versionName != null) File('${parentDir.path}/mochilalista_v${versionName.replaceAll('.0', '')}_cambios.txt'),
-      ];
+  /// Lee de forma segura (UTF-8 con tolerancia BOM/caracteres) notas compañeras de versión:
+  /// - `suggested_changelog`: `*_cambios.txt` / `*_changelog.txt`
+  /// - `suggested_internal_notes`: `*_atp.txt` / `<apkBase>.txt` (excluyendo `_cambios`/`_changelog`)
+  Future<Map<String, dynamic>> readCompanionNotesForVersion(
+    String versionName, {
+    String? apkPath,
+    String? apkLibraryDir,
+    List<Directory> extraSearchDirs = const [],
+    bool fallbackRegistryChangelog = false,
+  }) async {
+    final searchDirs = <Directory>[];
+    final seenDirs = <String>{};
 
-      for (final f in candidates) {
-        if (await f.exists()) {
-          final text = (await f.readAsString()).trim();
-          if (text.isNotEmpty) return text;
+    void addDir(Directory d) {
+      final canon = canonicalizePath(d.path);
+      final key = Platform.isWindows ? canon.toLowerCase() : canon;
+      if (canon.isNotEmpty && seenDirs.add(key)) {
+        searchDirs.add(Directory(canon));
+      }
+    }
+
+    String? apkBaseName;
+    if (apkPath != null && apkPath.trim().isNotEmpty) {
+      final f = File(canonicalizePath(apkPath));
+      addDir(f.parent);
+      if (f.uri.pathSegments.isNotEmpty) {
+        apkBaseName = f.uri.pathSegments.last
+            .replaceAll(RegExp(r'\.apk$', caseSensitive: false), '');
+      }
+    }
+    for (final d in extraSearchDirs) {
+      addDir(d);
+    }
+    if (apkLibraryDir != null && apkLibraryDir.trim().isNotEmpty) {
+      addDir(Directory(apkLibraryDir));
+    }
+
+    final cleanVer = versionName.trim().replaceFirst(RegExp(r'^[vV]'), '');
+    final shortVer = cleanVer.replaceFirst(RegExp(r'\.0$'), '');
+    final verTags = <String>[
+      if (cleanVer.isNotEmpty) cleanVer,
+      if (shortVer.isNotEmpty && shortVer != cleanVer) shortVer,
+    ];
+
+    Future<String?> safeReadTxt(File f) async {
+      if (!await f.exists()) return null;
+      try {
+        final bytes = await f.readAsBytes();
+        final decoded = utf8.decode(bytes, allowMalformed: true);
+        final cleaned = decoded.replaceFirst('\uFEFF', '').trim();
+        return cleaned.isEmpty ? null : cleaned;
+      } catch (_) {
+        return null;
+      }
+    }
+
+    String changelog = '';
+    String? changelogSource;
+    final changelogNames = <String>[
+      if (apkBaseName != null && apkBaseName.isNotEmpty) ...[
+        '${apkBaseName}_cambios.txt',
+        '${apkBaseName.replaceAll('_atp', '')}_cambios.txt',
+        '${apkBaseName.replaceAll('_atp', '')}_atp_cambios.txt',
+      ],
+      for (final tag in verTags) ...[
+        'mochilalista_v${tag}_atp_cambios.txt',
+        'mochilalista_v${tag}_cambios.txt',
+        'mochilalista_v${tag}_changelog.txt',
+        '${tag}_cambios.txt',
+      ],
+    ];
+
+    outerChangelog:
+    for (final dir in searchDirs) {
+      for (final name in changelogNames) {
+        final candidate = File(canonicalizePath('${dir.path}${Platform.pathSeparator}$name'));
+        final text = await safeReadTxt(candidate);
+        if (text != null) {
+          changelog = text;
+          changelogSource = candidate.path;
+          break outerChangelog;
         }
       }
+    }
 
-      // 2. Fallback a app_changelog_registry.dart si coincide la versión
-      final changelogFile = File('../app_movil/lib/core/config/app_changelog_registry.dart');
-      if (await changelogFile.exists()) {
-        final content = await changelogFile.readAsString();
-        final matches = RegExp(
-          r'title:\s*["\x27](.+?)["\x27],\s*description:\s*["\x27](.+?)["\x27]',
-          dotAll: true,
-        ).allMatches(content);
+    if (changelog.isEmpty && fallbackRegistryChangelog) {
+      try {
+        final registryFile = File('../app_movil/lib/core/config/app_changelog_registry.dart');
+        if (await registryFile.exists()) {
+          final content = await registryFile.readAsString();
+          final matches = RegExp(
+            r'title:\s*["\x27](.+?)["\x27],\s*description:\s*["\x27](.+?)["\x27]',
+            dotAll: true,
+          ).allMatches(content);
 
-        final bullets = <String>[];
-        for (final m in matches) {
-          final title = m.group(1)?.trim() ?? '';
-          final desc = m.group(2)?.replaceAll(RegExp(r'\s+'), ' ').trim() ?? '';
-          if (title.isNotEmpty) {
-            bullets.add('• $title: $desc');
+          final bullets = <String>[];
+          for (final m in matches) {
+            final title = m.group(1)?.trim() ?? '';
+            final desc = m.group(2)?.replaceAll(RegExp(r'\s+'), ' ').trim() ?? '';
+            if (title.isNotEmpty) {
+              bullets.add('• $title: $desc');
+            }
+            if (bullets.length >= 4) break;
           }
-          if (bullets.length >= 4) break;
+          if (bullets.isNotEmpty) {
+            changelog = bullets.join('\n');
+          }
         }
-        if (bullets.isNotEmpty) {
-          return bullets.join('\n');
+      } catch (_) {}
+    }
+
+    String internalNotes = '';
+    String? internalNotesSource;
+    final notesNames = <String>[
+      if (apkBaseName != null && apkBaseName.isNotEmpty) ...[
+        '$apkBaseName.txt',
+        '${apkBaseName.replaceAll('_atp', '')}_atp.txt',
+      ],
+      for (final tag in verTags) ...[
+        'mochilalista_v${tag}_atp.txt',
+        'mochilalista_v$tag.txt',
+      ],
+    ];
+
+    outerNotes:
+    for (final dir in searchDirs) {
+      for (final name in notesNames) {
+        final lower = name.toLowerCase();
+        if (lower.endsWith('_cambios.txt') || lower.endsWith('_changelog.txt')) {
+          continue;
+        }
+        final candidate = File(canonicalizePath('${dir.path}${Platform.pathSeparator}$name'));
+        final text = await safeReadTxt(candidate);
+        if (text != null) {
+          internalNotes = text;
+          internalNotesSource = candidate.path;
+          break outerNotes;
         }
       }
-    } catch (_) {}
+    }
 
-    return '';
+    return {
+      'ok': true,
+      'version_name': versionName,
+      'suggested_changelog': changelog,
+      'suggested_internal_notes': internalNotes,
+      if (changelogSource != null) 'changelog_source': changelogSource,
+      if (internalNotesSource != null) 'internal_notes_source': internalNotesSource,
+    };
   }
 
   /// Infiere la versión de esquema SQLite buscando en local_db.dart / database_helper.dart en app_movil
@@ -504,14 +818,29 @@ class ApkInspectorService {
           if (line.trim().startsWith('version:')) {
             final vPart = line.replaceFirst('version:', '').trim();
             final parts = vPart.split('+');
-            final vName = parts.isNotEmpty ? parts[0] : '9.38.0';
-            final vCode = parts.length > 1 ? int.tryParse(parts[1]) ?? 82 : 82;
+            final vName = parts.isNotEmpty ? parts[0] : '9.40.0';
+            final vCode = parts.length > 1 ? int.tryParse(parts[1]) ?? 84 : 84;
             return _VersionMeta(versionName: vName, versionCode: vCode);
           }
         }
       } catch (_) {}
     }
-    return const _VersionMeta(versionName: '9.38.0', versionCode: 82);
+    return const _VersionMeta(versionName: '9.40.0', versionCode: 84);
+  }
+
+  /// Compara nombres de carpetas de build-tools numéricamente (ej. 37.0.0 > 36.1.0)
+  int _compareVersionFolderNames(String a, String b) {
+    final nameA = a.split(RegExp(r'[/\\]')).where((s) => s.isNotEmpty).last;
+    final nameB = b.split(RegExp(r'[/\\]')).where((s) => s.isNotEmpty).last;
+    final partsA = nameA.split('.').map((e) => int.tryParse(e) ?? 0).toList();
+    final partsB = nameB.split('.').map((e) => int.tryParse(e) ?? 0).toList();
+    final len = partsA.length > partsB.length ? partsA.length : partsB.length;
+    for (int i = 0; i < len; i++) {
+      final va = i < partsA.length ? partsA[i] : 0;
+      final vb = i < partsB.length ? partsB[i] : 0;
+      if (va != vb) return va.compareTo(vb);
+    }
+    return nameA.compareTo(nameB);
   }
 
   /// Ubica la herramienta especificada (aapt2 o apksigner) en build-tools de Android SDK
@@ -522,27 +851,29 @@ class ApkInspectorService {
         : toolName;
 
     // Raíces configuradas o por variables de entorno
-    final searchRoots = sdkSearchRootsOverride ?? [
+    final rawRoots = sdkSearchRootsOverride ?? [
       if (Platform.environment['ANDROID_HOME'] != null)
-        '${Platform.environment['ANDROID_HOME']}/build-tools',
+        '${Platform.environment['ANDROID_HOME']}${Platform.pathSeparator}build-tools',
       if (Platform.environment['ANDROID_SDK_ROOT'] != null)
-        '${Platform.environment['ANDROID_SDK_ROOT']}/build-tools',
+        '${Platform.environment['ANDROID_SDK_ROOT']}${Platform.pathSeparator}build-tools',
       if (isWindows && Platform.environment['LOCALAPPDATA'] != null)
-        '${Platform.environment['LOCALAPPDATA']}/Android/Sdk/build-tools',
+        '${Platform.environment['LOCALAPPDATA']}\\Android\\Sdk\\build-tools',
     ];
 
-    for (final root in searchRoots) {
-      final dir = Directory(root);
+    for (final rawRoot in rawRoots) {
+      final dir = Directory(canonicalizePath(rawRoot));
       if (await dir.exists()) {
         try {
           final entries = dir.listSync().whereType<Directory>().toList();
-          // Ordenar descendente por nombre de versión (ej. 37.0.0 > 35.0.0)
-          entries.sort((a, b) => b.path.compareTo(a.path));
+          // Ordenar descendente numéricamente (37.0.0 > 36.1.0)
+          entries.sort((a, b) => _compareVersionFolderNames(b.path, a.path));
 
           for (final verDir in entries) {
-            final toolFile = File('${verDir.path}/$exeName');
+            final candidatePath =
+                canonicalizePath('${verDir.path}${Platform.pathSeparator}$exeName');
+            final toolFile = File(candidatePath);
             if (await toolFile.exists()) {
-              return toolFile.absolute.path;
+              return canonicalizePath(toolFile.path);
             }
           }
         } catch (_) {}
@@ -573,11 +904,13 @@ class _ApkCandidate {
   final File file;
   final String sourceLabel;
   final DateTime modified;
+  final int priority;
 
   _ApkCandidate({
     required this.file,
     required this.sourceLabel,
     required this.modified,
+    this.priority = 1,
   });
 }
 

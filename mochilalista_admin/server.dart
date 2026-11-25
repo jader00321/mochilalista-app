@@ -72,6 +72,26 @@ Future<String> _readRequestBody(HttpRequest request) async {
   return utf8.decode(bytes, allowMalformed: true);
 }
 
+/// Construye argumentos seguros de PowerShell `-NoProfile -STA` para copiar
+/// un archivo real como `CF_HDROP` (`FileDrop` + `Preferred DropEffect` COPY)
+/// compatible con WhatsApp Desktop / Chromium / Explorador de Windows.
+List<String> buildWindowsClipboardPsArgs(String fullPath) {
+  final escaped = fullPath.replaceAll("'", "''");
+  final psScript = [
+    'Add-Type -AssemblyName System.Windows.Forms',
+    r"$p = '" + escaped + "'",
+    r"if (-not (Test-Path -LiteralPath $p)) { Write-Error ('Archivo no encontrado: ' + $p); exit 2 }",
+    r'$dataObj = New-Object System.Windows.Forms.DataObject',
+    r'$col = New-Object System.Collections.Specialized.StringCollection',
+    r'[void]$col.Add($p)',
+    r'$dataObj.SetFileDropList($col)',
+    r'$dropEffect = New-Object System.IO.MemoryStream(, [byte[]](5,0,0,0))',
+    r"$dataObj.SetData('Preferred DropEffect', $dropEffect)",
+    r'[System.Windows.Forms.Clipboard]::SetDataObject($dataObj, $true, 10, 50)',
+  ].join('; ');
+  return ['-NoProfile', '-STA', '-Command', psScript];
+}
+
 /// Comparador SemVer riguroso (major.minor.patch)
 int compareSemVer(String v1, String v2) {
   List<int> parse(String v) {
@@ -878,16 +898,22 @@ Future<void> _handleApiRoute(
     final segments = path.split('/');
     if (segments.length == 5) {
       final clientId = segments[3];
-      final bodyStr = await utf8.decodeStream(request);
+      final bodyStr = await _readRequestBody(request);
       final body = jsonDecode(bodyStr) as Map<String, dynamic>;
-      final versionName = body['version_name'] as String? ?? '9.34.0';
+      final versionName = (body['version_name'] as String? ?? '9.34.0').trim();
+      final bool force = body['force'] == true;
 
-      final updated = await dbService.markClientUpdated(clientId, versionName);
+      final updated = await dbService.markClientUpdated(clientId, versionName,
+          force: force);
       if (updated == null) {
         request.response.statusCode = HttpStatus.notFound;
         request.response.write(jsonEncode({'error': 'Cliente no encontrado'}));
       } else {
-        request.response.write(jsonEncode(updated));
+        request.response.write(jsonEncode({
+          ...updated,
+          'force_applied': force,
+          'previous_installed_version': updated['previous_installed_version'],
+        }));
       }
       await request.response.close();
       return;
@@ -919,7 +945,8 @@ Future<void> _handleApiRoute(
       try {
         final bodyStr = await _readRequestBody(request);
         final body = jsonDecode(bodyStr) as Map<String, dynamic>;
-        final updated = await dbService.updatePayment(clientId, paymentId, body);
+        final updated =
+            await dbService.updatePayment(clientId, paymentId, body);
         if (updated == null) {
           request.response.statusCode = HttpStatus.notFound;
           request.response
@@ -1226,9 +1253,11 @@ Future<void> _handleApiRoute(
         : configService.getPlanAiCredits(normPlan,
             fallback: LicenseSigner.getCumulativeScansForPlan(normPlan));
     final totalCredited = baseAi + aiExtra;
-    final lastCode = (updatedClient?['generated_codes_history'] as List?)?.isNotEmpty == true
-        ? (updatedClient!['generated_codes_history'] as List).last as Map<String, dynamic>?
-        : null;
+    final lastCode =
+        (updatedClient?['generated_codes_history'] as List?)?.isNotEmpty == true
+            ? (updatedClient!['generated_codes_history'] as List).last
+                as Map<String, dynamic>?
+            : null;
 
     request.response.write(jsonEncode({
       'token': token,
@@ -1263,7 +1292,8 @@ Future<void> _handleApiRoute(
       final syncResult = syncService.parseRawInput(token);
       if (syncResult.valid && syncResult.payload != null) {
         final clients = await dbService.getClients();
-        final analysis = syncService.analyzeForClients(syncResult.payload!, clients);
+        final analysis =
+            syncService.analyzeForClients(syncResult.payload!, clients);
         request.response.write(jsonEncode({
           'ok': true,
           'input_kind': 'CLIENT_SYNC',
@@ -1310,6 +1340,13 @@ Future<void> _handleApiRoute(
           'installed_version': matched['installed_version'],
           'license_type': matched['license_type'],
           'license_status': matched['license_status'],
+          'next_nonce': matched['next_nonce'] ?? 1,
+          'ultimo_nonce': matched['ultimo_nonce'],
+          'last_sync_at': matched['last_sync_at'],
+          'license_expires': matched['license_expires'],
+          'ai_reported_balance': matched['ai_reported_balance'],
+          'ai_credits_used_total': matched['ai_credits_used_total'],
+          'document_id': matched['document_id'] ?? matched['document_number'],
         };
       } catch (_) {
         result['matching_client'] = null;
@@ -1378,7 +1415,8 @@ Future<void> _handleApiRoute(
       request.response.write(jsonEncode({
         'ok': false,
         'error_code': 'MISSING_FIELDS',
-        'error': 'Se requiere client_id y raw_input (ficha .mlsync o token MLS1-...).',
+        'error':
+            'Se requiere client_id y raw_input (ficha .mlsync o token MLS1-...).',
       }));
       await request.response.close();
       return;
@@ -1578,7 +1616,10 @@ Future<void> _handleApiRoute(
     await targetFile.writeAsBytes(allBytes);
 
     // Inspección forense multicapa automática
-    final inspection = await inspector.inspectApk(targetFile);
+    final inspection = await inspector.inspectApk(
+      targetFile,
+      apkLibraryDir: configService.apkLibraryDir,
+    );
 
     request.response.write(jsonEncode({
       'ok': inspection.success,
@@ -1599,8 +1640,8 @@ Future<void> _handleApiRoute(
     request.response.write(jsonEncode({
       'ok': true,
       'apk_found': hasApk,
-      'version_name': top?.versionName ?? '9.38.0',
-      'version_code': top?.versionCode ?? 82,
+      'version_name': top?.versionName ?? '9.40.0',
+      'version_code': top?.versionCode ?? 84,
       'db_schema_version': top?.dbSchemaVersion ?? 36,
       'min_required_version': top?.minRequiredVersion ?? '9.0.0',
       'file_name': top?.fileName,
@@ -1609,9 +1650,12 @@ Future<void> _handleApiRoute(
       'sha256': top?.sha256,
       'signature_verified': top?.signatureVerified,
       'signature_status': top?.signatureStatus,
+      'signature_detail': top?.signatureDetail,
       'signer_sha256': top?.signerSha256,
       'signer_dn': top?.signerDn,
       'suggested_changelog': top?.suggestedChangelog ?? '',
+      'suggested_internal_notes': top?.suggestedInternalNotes ?? '',
+      'suggested_release_type': top?.suggestedReleaseType ?? 'FEATURE_RELEASE',
       'available_builds': candidates.map((c) => c.toJson()).toList(),
       'total_found': candidates.length,
       if (!hasApk)
@@ -1626,9 +1670,10 @@ Future<void> _handleApiRoute(
   if (path == '/api/releases/import-local-apk' && method == 'POST') {
     final bodyStr = await _readRequestBody(request);
     final body = jsonDecode(bodyStr) as Map<String, dynamic>;
-    final sourcePath = (body['source_path'] as String? ?? '').trim();
+    final rawSourcePath = (body['source_path'] as String? ?? '').trim();
 
-    if (sourcePath.isEmpty || !sourcePath.toLowerCase().endsWith('.apk')) {
+    if (rawSourcePath.isEmpty ||
+        !rawSourcePath.toLowerCase().endsWith('.apk')) {
       request.response.statusCode = HttpStatus.badRequest;
       request.response.write(jsonEncode({
         'error': 'Ruta de archivo .apk inválida',
@@ -1637,30 +1682,42 @@ Future<void> _handleApiRoute(
       return;
     }
 
-    final sourceFile = File(sourcePath);
+    final normalizedSource =
+        ApkInspectorService.canonicalizePath(rawSourcePath);
+    final sourceFile = File(normalizedSource);
     if (!await sourceFile.exists()) {
       request.response.statusCode = HttpStatus.notFound;
       request.response.write(jsonEncode({
-        'error': 'El archivo APK de origen no existe en disco',
+        'error':
+            'El archivo APK de origen no existe en disco: $normalizedSource',
       }));
       await request.response.close();
       return;
     }
 
-    // Validación de seguridad de ruta (evitar path traversal fuera de áreas autorizadas)
-    final canonicalSource = sourceFile.resolveSymbolicLinksSync().toLowerCase();
-    final allowedRoots = [
-      Directory(configService.apkLibraryDir).absolute.path.toLowerCase(),
-      Directory('../app_movil/build').absolute.path.toLowerCase(),
-      Directory('releases_apks').absolute.path.toLowerCase(),
-      Directory.systemTemp.absolute.path.toLowerCase(),
+    // Validación canónica de ruta (evitar path traversal y falsos 403 por segmentos ..)
+    final canonicalSource = sourceFile.resolveSymbolicLinksSync();
+    final sourceCmp =
+        Platform.isWindows ? canonicalSource.toLowerCase() : canonicalSource;
+    final rawRoots = [
+      configService.apkLibraryDir,
+      '../app_movil/build',
+      'releases_apks',
+      Directory.systemTemp.path,
     ];
+    final sep = Platform.pathSeparator;
+    final isAllowed = rawRoots.any((r) {
+      final canonRoot = ApkInspectorService.canonicalizePath(r);
+      final rootCmp = Platform.isWindows ? canonRoot.toLowerCase() : canonRoot;
+      if (rootCmp.isEmpty) return false;
+      return sourceCmp == rootCmp || sourceCmp.startsWith('$rootCmp$sep');
+    });
 
-    final isAllowed = allowedRoots.any((root) => canonicalSource.startsWith(root));
     if (!isAllowed) {
       request.response.statusCode = HttpStatus.forbidden;
       request.response.write(jsonEncode({
-        'error': 'Acceso denegado: el archivo debe residir en la biblioteca de APKs o directorio de build.',
+        'error':
+            'Acceso denegado: el archivo debe residir en la biblioteca de APKs o directorio de build.',
       }));
       await request.response.close();
       return;
@@ -1669,16 +1726,21 @@ Future<void> _handleApiRoute(
     // Copiar atómicamente al directorio de releases del entorno
     final targetDir = dbService.currentReleasesApkDir;
     await targetDir.create(recursive: true);
-    final safeFileName = sourceFile.uri.pathSegments.last.replaceAll(RegExp(r'[^a-zA-Z0-9_\.-]'), '_');
+    final safeFileName = sourceFile.uri.pathSegments.last
+        .replaceAll(RegExp(r'[^a-zA-Z0-9_\.-]'), '_');
     final destFile = File('${targetDir.path}/$safeFileName');
     await sourceFile.copy(destFile.path);
 
-    // Inspección forense del archivo importado
-    final inspection = await inspector.inspectApk(destFile);
+    // Inspección forense del archivo importado preservando acceso a notas compañeras en origen y biblioteca
+    final inspection = await inspector.inspectApk(
+      destFile,
+      apkLibraryDir: configService.apkLibraryDir,
+      extraSearchDirs: [sourceFile.parent],
+    );
 
     request.response.write(jsonEncode({
       'ok': true,
-      'imported_path': destFile.path,
+      'imported_path': inspection.filePath,
       ...inspection.toJson(),
     }));
     await request.response.close();
@@ -1694,14 +1756,17 @@ Future<void> _handleApiRoute(
     File? apkFile;
     if (release != null) {
       if (variant == 'arm64' && release['arm64_apk'] != null) {
-        final p = (release['arm64_apk'] as Map<String, dynamic>)['file_path'] as String?;
+        final p = (release['arm64_apk'] as Map<String, dynamic>)['file_path']
+            as String?;
         if (p != null && File(p).existsSync()) apkFile = File(p);
       } else if (variant == 'universal' && release['universal_apk'] != null) {
-        final p = (release['universal_apk'] as Map<String, dynamic>)['file_path'] as String?;
+        final p = (release['universal_apk']
+            as Map<String, dynamic>)['file_path'] as String?;
         if (p != null && File(p).existsSync()) apkFile = File(p);
       }
 
-      if (apkFile == null && (release['apk_file_path'] as String? ?? '').isNotEmpty) {
+      if (apkFile == null &&
+          (release['apk_file_path'] as String? ?? '').isNotEmpty) {
         final f = File(release['apk_file_path'] as String);
         if (await f.exists()) apkFile = f;
       }
@@ -1710,8 +1775,10 @@ Future<void> _handleApiRoute(
     if (apkFile == null) {
       // Buscar en releases_apks/{mode}/
       final candidates = [
-        File('releases_apks/${dbService.currentMode}/mochilalista-v$versionName.apk'),
-        File('releases_apks/${dbService.currentMode}/mochilalista-$versionName.apk'),
+        File(
+            'releases_apks/${dbService.currentMode}/mochilalista-v$versionName.apk'),
+        File(
+            'releases_apks/${dbService.currentMode}/mochilalista-$versionName.apk'),
         File('../app_movil/build/app/outputs/flutter-apk/app-release.apk'),
       ];
       for (final c in candidates) {
@@ -1725,7 +1792,8 @@ Future<void> _handleApiRoute(
     if (apkFile == null || !await apkFile.exists()) {
       request.response.statusCode = HttpStatus.notFound;
       request.response.write(jsonEncode({
-        'error': 'Archivo APK no encontrado en disco para la versión $versionName'
+        'error':
+            'Archivo APK no encontrado en disco para la versión $versionName'
       }));
       await request.response.close();
       return;
@@ -1741,69 +1809,263 @@ Future<void> _handleApiRoute(
     return;
   }
 
-  // Copiar archivo APK binario real al portapapeles de Windows (Set-Clipboard -LiteralPath)
-  final copyFileMatch = RegExp(r'^/api/releases/([^/]+)/copy-file$').firstMatch(path);
+  // Copiar archivo APK binario real al portapapeles de Windows (CF_HDROP en -STA con reintentos COM)
+  final copyFileMatch =
+      RegExp(r'^/api/releases/([^/]+)/copy-file$').firstMatch(path);
   if (copyFileMatch != null && method == 'POST') {
-    final versionName = copyFileMatch.group(1)!;
+    final versionName = Uri.decodeComponent(copyFileMatch.group(1)!);
     final variant = request.uri.queryParameters['variant']?.toLowerCase();
     final release = await dbService.getReleaseByVersion(versionName);
 
     File? apkFile;
     if (release != null) {
       if (variant == 'arm64' && release['arm64_apk'] != null) {
-        final p = (release['arm64_apk'] as Map<String, dynamic>)['file_path'] as String?;
+        final p = (release['arm64_apk'] as Map<String, dynamic>)['file_path']
+            as String?;
         if (p != null && File(p).existsSync()) apkFile = File(p);
       } else if (variant == 'universal' && release['universal_apk'] != null) {
-        final p = (release['universal_apk'] as Map<String, dynamic>)['file_path'] as String?;
+        final p = (release['universal_apk']
+            as Map<String, dynamic>)['file_path'] as String?;
         if (p != null && File(p).existsSync()) apkFile = File(p);
       }
 
-      if (apkFile == null && (release['apk_file_path'] as String? ?? '').isNotEmpty) {
+      if (apkFile == null &&
+          (release['apk_file_path'] as String? ?? '').isNotEmpty) {
         final f = File(release['apk_file_path'] as String);
         if (await f.exists()) apkFile = f;
       }
     }
 
     if (apkFile == null || !await apkFile.exists()) {
-      final local = File('releases_apks/${dbService.currentMode}/mochilalista-v$versionName.apk');
+      final local = File(
+          'releases_apks/${dbService.currentMode}/mochilalista-v$versionName.apk');
       if (await local.exists()) apkFile = local;
     }
 
     if (apkFile == null || !await apkFile.exists()) {
       request.response.statusCode = HttpStatus.notFound;
       request.response.write(jsonEncode({
-        'error': 'No se encontró archivo APK en disco para copiar al portapapeles',
+        'error':
+            'No se encontró archivo APK en disco para copiar al portapapeles',
       }));
       await request.response.close();
       return;
     }
 
-    final fullPath = apkFile.absolute.path;
+    final rawFullPath = apkFile.absolute.path;
+    final canonicalFullPath = ApkInspectorService.canonicalizePath(rawFullPath);
     bool copiedOk = false;
+    String? clipboardError;
 
     if (onCopyFileOverride != null) {
-      copiedOk = await onCopyFileOverride(fullPath);
+      copiedOk = await onCopyFileOverride(rawFullPath);
     } else if (Platform.isWindows) {
       try {
-        final escaped = fullPath.replaceAll("'", "''");
-        final proc = await Process.run(
-          'powershell',
-          ['-NoProfile', '-Command', "Set-Clipboard -LiteralPath '$escaped'"],
-        ).timeout(const Duration(seconds: 10));
+        final psArgs = buildWindowsClipboardPsArgs(canonicalFullPath);
+        final proc = await Process.run('powershell', psArgs)
+            .timeout(const Duration(seconds: 12));
         copiedOk = proc.exitCode == 0;
-      } catch (_) {
+        if (!copiedOk) {
+          final err = proc.stderr.toString().trim();
+          final out = proc.stdout.toString().trim();
+          clipboardError = err.isNotEmpty
+              ? err
+              : (out.isNotEmpty ? out : 'PowerShell exitCode ${proc.exitCode}');
+        }
+      } catch (e) {
         copiedOk = false;
+        clipboardError = e.toString();
       }
     } else {
       copiedOk = true; // Simulado en sistemas no-Windows
     }
 
+    if (!copiedOk) {
+      request.response.statusCode = HttpStatus.internalServerError;
+      request.response.write(jsonEncode({
+        'ok': false,
+        'error': clipboardError ??
+            'No se pudo copiar el archivo .APK al portapapeles de Windows.',
+        'copied_path': canonicalFullPath,
+        'file_name': apkFile.uri.pathSegments.last,
+        'variant': variant ?? 'universal',
+      }));
+      await request.response.close();
+      return;
+    }
+
     request.response.write(jsonEncode({
-      'ok': copiedOk,
-      'copied_path': fullPath,
+      'ok': true,
+      'copied_path': canonicalFullPath,
       'file_name': apkFile.uri.pathSegments.last,
       'variant': variant ?? 'universal',
     }));
+    await request.response.close();
+    return;
+  }
+
+  // Re-verificar firma criptográfica, tamaño, SHA-256 y existencia física en disco
+  final verifyReleaseMatch =
+      RegExp(r'^/api/releases/([^/]+)/verify$').firstMatch(path);
+  if (verifyReleaseMatch != null && method == 'POST') {
+    final versionName = Uri.decodeComponent(verifyReleaseMatch.group(1)!);
+    final release = await dbService.getReleaseByVersion(versionName);
+    if (release == null) {
+      request.response.statusCode = HttpStatus.notFound;
+      request.response.write(jsonEncode({'error': 'Versión no encontrada'}));
+      await request.response.close();
+      return;
+    }
+
+    final updates = <String, dynamic>{};
+    final verifiedVariants = <String>[];
+    ApkInspectionResult? primaryInspection;
+    bool anyFileExists = false;
+
+    Future<Map<String, dynamic>?> verifyVariantPath(
+        String? rawPath, String label) async {
+      if (rawPath == null || rawPath.trim().isEmpty) return null;
+      final canon = ApkInspectorService.canonicalizePath(rawPath);
+      final f = File(canon);
+      if (!await f.exists()) return null;
+
+      anyFileExists = true;
+      final res = await inspector.inspectApk(
+        f,
+        apkLibraryDir: configService.apkLibraryDir,
+      );
+      verifiedVariants.add(label);
+      primaryInspection ??= res;
+      return {
+        'file_path': res.filePath,
+        'file_size_mb': res.sizeMb,
+        'sha256': res.sha256,
+        'signature_status': res.signatureStatus,
+        'signature_verified': res.signatureVerified,
+        if (res.signatureDetail != null)
+          'signature_detail': res.signatureDetail,
+        'signer_sha256': res.signerSha256,
+        'signer_dn': res.signerDn,
+        'file_exists': true,
+      };
+    }
+
+    final rawUnivPath = (release['universal_apk']
+        as Map<String, dynamic>?)?['file_path'] as String?;
+    final rawArmPath = (release['arm64_apk']
+        as Map<String, dynamic>?)?['file_path'] as String?;
+    final rawMainPath = release['apk_file_path'] as String?;
+
+    final updatedUniv = await verifyVariantPath(rawUnivPath, 'universal');
+    if (updatedUniv != null) {
+      updates['universal_apk'] = updatedUniv;
+    }
+
+    final updatedArm = await verifyVariantPath(rawArmPath, 'arm64');
+    if (updatedArm != null) {
+      updates['arm64_apk'] = updatedArm;
+    }
+
+    if (rawMainPath != null && rawMainPath.trim().isNotEmpty) {
+      final mainCanon = ApkInspectorService.canonicalizePath(rawMainPath);
+      final mainExists = await File(mainCanon).exists();
+      if (mainExists) {
+        if (primaryInspection == null) {
+          await verifyVariantPath(mainCanon, 'primary');
+        } else {
+          anyFileExists = true;
+        }
+      }
+    }
+
+    if (primaryInspection != null) {
+      final p = primaryInspection!;
+      updates['apk_file_path'] = p.filePath;
+      updates['file_size_mb'] = p.sizeMb;
+      updates['apk_sha256'] = p.sha256;
+      updates['signature_verified'] = p.signatureVerified;
+      updates['signature_status'] = p.signatureStatus;
+      updates['signature_detail'] = p.signatureDetail;
+      updates['signer_sha256'] = p.signerSha256;
+      updates['signer_dn'] = p.signerDn;
+      if (p.versionCode != null) updates['version_code'] = p.versionCode;
+      updates['db_schema_version'] = p.dbSchemaVersion;
+      if (p.abiVariant == 'UNIVERSAL' && updatedUniv == null) {
+        updates['universal_apk'] = {
+          'file_path': p.filePath,
+          'file_size_mb': p.sizeMb,
+          'sha256': p.sha256,
+          'signature_status': p.signatureStatus,
+          'signature_verified': p.signatureVerified,
+          if (p.signatureDetail != null) 'signature_detail': p.signatureDetail,
+          'signer_sha256': p.signerSha256,
+          'signer_dn': p.signerDn,
+          'file_exists': true,
+        };
+      } else if (p.abiVariant == 'ARM64' && updatedArm == null) {
+        updates['arm64_apk'] = {
+          'file_path': p.filePath,
+          'file_size_mb': p.sizeMb,
+          'sha256': p.sha256,
+          'signature_status': p.signatureStatus,
+          'signature_verified': p.signatureVerified,
+          if (p.signatureDetail != null) 'signature_detail': p.signatureDetail,
+          'signer_sha256': p.signerSha256,
+          'signer_dn': p.signerDn,
+          'file_exists': true,
+        };
+      }
+    } else {
+      updates['signature_verified'] = null;
+      updates['signature_status'] = 'UNVERIFIED';
+      updates['signature_detail'] =
+          'No se encontró ningún archivo físico APK registrado en disco.';
+    }
+
+    final updatedRelease = await dbService.updateRelease(versionName, updates);
+    final companionNotes = await inspector.readCompanionNotesForVersion(
+      versionName,
+      apkPath: (updatedRelease?['apk_file_path'] as String?) ??
+          rawMainPath ??
+          rawUnivPath ??
+          rawArmPath,
+      apkLibraryDir: configService.apkLibraryDir,
+    );
+
+    request.response.write(jsonEncode({
+      'ok': true,
+      'release': updatedRelease ?? release,
+      'file_exists': anyFileExists,
+      'verified_variants': verifiedVariants,
+      'suggested_changelog': companionNotes['suggested_changelog'],
+      'suggested_internal_notes': companionNotes['suggested_internal_notes'],
+      if (companionNotes['changelog_source'] != null)
+        'changelog_source': companionNotes['changelog_source'],
+      if (companionNotes['internal_notes_source'] != null)
+        'internal_notes_source': companionNotes['internal_notes_source'],
+    }));
+    await request.response.close();
+    return;
+  }
+
+  // Obtener notas compañeras (*_cambios.txt y *_atp.txt) desde biblioteca o carpeta del APK
+  final companionNotesMatch =
+      RegExp(r'^/api/releases/([^/]+)/companion-notes$').firstMatch(path);
+  if (companionNotesMatch != null && method == 'GET') {
+    final versionName = Uri.decodeComponent(companionNotesMatch.group(1)!);
+    final release = await dbService.getReleaseByVersion(versionName);
+    final apkPath = (release?['apk_file_path'] as String?) ??
+        ((release?['universal_apk'] as Map<String, dynamic>?)?['file_path']
+            as String?) ??
+        ((release?['arm64_apk'] as Map<String, dynamic>?)?['file_path']
+            as String?);
+
+    final notes = await inspector.readCompanionNotesForVersion(
+      versionName,
+      apkPath: apkPath,
+      apkLibraryDir: configService.apkLibraryDir,
+    );
+    request.response.write(jsonEncode(notes));
     await request.response.close();
     return;
   }
@@ -1825,7 +2087,8 @@ Future<void> _handleApiRoute(
       return;
     }
 
-    final updated = await dbService.recordApkDispatched(clientId, version, variant: variant);
+    final updated = await dbService.recordApkDispatched(clientId, version,
+        variant: variant);
     if (updated == null) {
       request.response.statusCode = HttpStatus.notFound;
       request.response.write(jsonEncode({'error': 'Cliente no encontrado'}));
@@ -1847,20 +2110,25 @@ Future<void> _handleApiRoute(
     final bodyStr = await utf8.decodeStream(request);
     final body = jsonDecode(bodyStr) as Map<String, dynamic>;
     final versionName = body['version_name'] as String? ?? '';
-    final variant = (request.uri.queryParameters['variant'] ?? body['variant'] as String?)?.toLowerCase();
+    final variant =
+        (request.uri.queryParameters['variant'] ?? body['variant'] as String?)
+            ?.toLowerCase();
     final release = await dbService.getReleaseByVersion(versionName);
 
     String? fullPath;
     if (release != null) {
       if (variant == 'arm64' && release['arm64_apk'] != null) {
-        final p = (release['arm64_apk'] as Map<String, dynamic>)['file_path'] as String?;
+        final p = (release['arm64_apk'] as Map<String, dynamic>)['file_path']
+            as String?;
         if (p != null && File(p).existsSync()) fullPath = p;
       } else if (variant == 'universal' && release['universal_apk'] != null) {
-        final p = (release['universal_apk'] as Map<String, dynamic>)['file_path'] as String?;
+        final p = (release['universal_apk']
+            as Map<String, dynamic>)['file_path'] as String?;
         if (p != null && File(p).existsSync()) fullPath = p;
       }
 
-      if (fullPath == null && (release['apk_file_path'] as String? ?? '').isNotEmpty) {
+      if (fullPath == null &&
+          (release['apk_file_path'] as String? ?? '').isNotEmpty) {
         final p = release['apk_file_path'] as String;
         if (File(p).existsSync()) fullPath = p;
       }
@@ -1879,7 +2147,8 @@ Future<void> _handleApiRoute(
               'explorer.exe', ['/select,', File(fullPath).absolute.path]);
         } catch (_) {}
       }
-      request.response.write(jsonEncode({'ok': true, 'path': fullPath, 'variant': variant ?? 'universal'}));
+      request.response.write(jsonEncode(
+          {'ok': true, 'path': fullPath, 'variant': variant ?? 'universal'}));
     } else {
       request.response.statusCode = HttpStatus.notFound;
       request.response.write(jsonEncode(

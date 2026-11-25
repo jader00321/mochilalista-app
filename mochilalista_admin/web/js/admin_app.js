@@ -143,32 +143,96 @@ document.addEventListener('DOMContentLoaded', async () => {
 });
 
 // =================== SISTEMA DE NOTIFICACIONES TOAST ===================
-function showToast(message, type = 'info', duration = 3500) {
+function showToast(message, type = 'info', durationOrOptions = 3500) {
   const container = document.getElementById('toastContainer');
   if (!container) return;
 
+  let duration = 3500;
+  let actionLabel = null;
+  let onAction = null;
+
+  if (typeof durationOrOptions === 'number') {
+    duration = durationOrOptions;
+  } else if (durationOrOptions && typeof durationOrOptions === 'object') {
+    if (typeof durationOrOptions.duration === 'number') {
+      duration = durationOrOptions.duration;
+    }
+    if (durationOrOptions.actionLabel) {
+      actionLabel = String(durationOrOptions.actionLabel);
+    }
+    if (typeof durationOrOptions.onAction === 'function') {
+      onAction = durationOrOptions.onAction;
+    }
+    if (actionLabel && typeof durationOrOptions.duration !== 'number') {
+      duration = 7500;
+    }
+  }
+
   const toast = document.createElement('div');
-  toast.className = `toast ${type}`;
+  toast.className = `toast ${type} toast-${type}`;
 
-  let icon = 'ℹ️';
-  if (type === 'success') icon = '✅';
-  else if (type === 'error') icon = '❌';
-  else if (type === 'warning') icon = '⚠️';
+  let iconSvg = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>';
+  if (type === 'success') {
+    iconSvg = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>';
+  } else if (type === 'error') {
+    iconSvg = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>';
+  } else if (type === 'warning') {
+    iconSvg = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>';
+  }
 
-  toast.innerHTML = `
-    <span class="toast-icon">${icon}</span>
-    <div class="toast-content">${escapeHtml(message)}</div>
-    <button class="toast-close" onclick="this.parentElement.remove()">✕</button>
-  `;
+  const iconSpan = document.createElement('span');
+  iconSpan.className = 'toast-icon';
+  iconSpan.innerHTML = iconSvg;
+
+  const contentDiv = document.createElement('div');
+  contentDiv.className = 'toast-content';
+  contentDiv.textContent = message == null ? '' : String(message);
+
+  toast.appendChild(iconSpan);
+  toast.appendChild(contentDiv);
+
+  let dismissTimer = null;
+  let removed = false;
+  const removeToast = () => {
+    if (removed) return;
+    removed = true;
+    if (dismissTimer) clearTimeout(dismissTimer);
+    toast.style.opacity = '0';
+    toast.style.transform = 'translateX(100%)';
+    toast.style.transition = 'all 0.25s ease';
+    setTimeout(() => toast.remove(), 260);
+  };
+
+  if (actionLabel && onAction) {
+    let actionRan = false;
+    const actionBtn = document.createElement('button');
+    actionBtn.type = 'button';
+    actionBtn.className = 'toast-action-btn';
+    actionBtn.textContent = actionLabel;
+    actionBtn.addEventListener('click', async () => {
+      if (actionRan) return;
+      actionRan = true;
+      actionBtn.disabled = true;
+      try {
+        await onAction();
+      } finally {
+        removeToast();
+      }
+    });
+    toast.appendChild(actionBtn);
+  }
+
+  const closeBtn = document.createElement('button');
+  closeBtn.type = 'button';
+  closeBtn.className = 'toast-close';
+  closeBtn.title = 'Cerrar';
+  closeBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
+  closeBtn.addEventListener('click', removeToast);
+  toast.appendChild(closeBtn);
 
   container.appendChild(toast);
 
-  setTimeout(() => {
-    toast.style.opacity = '0';
-    toast.style.transform = 'translateX(100%)';
-    toast.style.transition = 'all 0.3s ease';
-    setTimeout(() => toast.remove(), 300);
-  }, duration);
+  dismissTimer = setTimeout(removeToast, duration);
 }
 
 // =================== MODAL DE CONFIRMACIÓN PROFESIONAL ===================
@@ -4558,24 +4622,41 @@ async function openClient360Drawer(clientId) {
   }
   const drawerAiBreakdown = document.getElementById('drawerAiBreakdown');
   if (drawerAiBreakdown) {
-    drawerAiBreakdown.textContent = `En celular: ${realAi} IA | Bono pendiente: +${pendingAi} IA`;
+    const usedAi = client.ai_credits_used_total ?? 0;
+    const deltaAi = client.ai_credits_used_delta ?? 0;
+    const deltaTxt = deltaAi > 0 ? ` (+${deltaAi} reciente)` : '';
+    drawerAiBreakdown.textContent = `En celular: ${realAi} IA | Consumidos: ${usedAi} IA${deltaTxt} | Bono pend: +${pendingAi} IA`;
   }
   const drawerLastSync = document.getElementById('drawerLastSync');
   if (drawerLastSync) {
     if (client.last_sync_at) {
-      drawerLastSync.textContent = client.last_sync_at.replace('T', ' ').substring(0, 19) + ' UTC';
+      drawerLastSync.textContent = formatLimaDateTime(client.last_sync_at);
+      drawerLastSync.title = `UTC: ${client.last_sync_at}`;
     } else {
       drawerLastSync.textContent = 'Nunca sincronizado';
+      drawerLastSync.title = '';
     }
   }
   const drawerBackupDrive = document.getElementById('drawerBackupDrive');
   if (drawerBackupDrive) {
     if (client.backup_drive_linked) {
-      const bh = client.backup_health_status || 'OK';
+      const bh = humanizeSyncFieldValue('backup_health_status', client.backup_health_status || 'OK');
       drawerBackupDrive.textContent = `Vinculado (${bh})`;
     } else {
       drawerBackupDrive.textContent = 'No vinculado';
     }
+  }
+  const drawerProfilesCount = document.getElementById('drawerProfilesCount');
+  if (drawerProfilesCount) {
+    drawerProfilesCount.textContent = (client.profiles_count !== undefined && client.profiles_count !== null)
+      ? String(client.profiles_count)
+      : '-';
+  }
+  const drawerUltimoNonce = document.getElementById('drawerUltimoNonce');
+  if (drawerUltimoNonce) {
+    drawerUltimoNonce.textContent = (client.ultimo_nonce !== undefined && client.ultimo_nonce !== null)
+      ? `#${client.ultimo_nonce}`
+      : 'Sin reporte';
   }
   const drawerFollowup = document.getElementById('drawerFollowup');
   if (drawerFollowup) {
@@ -4924,8 +5005,12 @@ async function openClient360Drawer(clientId) {
                 </div>
                 <div class="reason-edit-wrap" style="display:none; align-items:center; gap:0.25rem;">
                   <input type="text" class="form-control reason-input" style="font-size:0.75rem; padding:2px 4px; height:24px; min-width:120px;" value="${escapeHtml(h.reason || '')}">
-                  <button type="button" class="btn btn-primary btn-xs btn-save-reason" style="padding:2px 5px;">✓</button>
-                  <button type="button" class="btn btn-outline btn-xs btn-cancel-reason" style="padding:2px 5px;">✕</button>
+                  <button type="button" class="btn btn-primary btn-xs btn-save-reason" style="padding:2px 5px;" title="Guardar motivo">
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                  </button>
+                  <button type="button" class="btn btn-outline btn-xs btn-cancel-reason" style="padding:2px 5px;" title="Cancelar">
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                  </button>
                 </div>
               </td>
             `;
@@ -5241,7 +5326,9 @@ function openSyncReportedModal(clientId) {
   if (syncAnalysisResult) {
     syncAnalysisResult.style.display = 'none';
     syncAnalysisResult.dataset.parsedToken = '';
+    syncAnalysisResult.dataset.parsedRaw = '';
   }
+  updateSyncApplyButtonState(document.getElementById('btnApplySyncReported'), false, 'Aplicar Sincronización en Ficha');
 
   // Activar pestaña principal de importación por defecto
   switchSyncReportedTab('import');
@@ -5293,31 +5380,146 @@ function switchSyncReportedTab(tab) {
 }
 
 /**
+ * Convierte timestamps ISO UTC o epoch ms a hora oficial Perú (America/Lima, GMT-5)
+ * con formato DD/MM/YYYY HH:mm:ss (Lima GMT-5) y fallback aritmético determinista -5h.
+ */
+function formatLimaDateTime(isoOrEpoch, fallback = '-') {
+  if (isoOrEpoch === null || isoOrEpoch === undefined || isoOrEpoch === '') return fallback;
+  let dateObj = null;
+  if (typeof isoOrEpoch === 'number') {
+    dateObj = new Date(isoOrEpoch);
+  } else {
+    const raw = String(isoOrEpoch).trim();
+    if (!raw || raw === '-' || raw === 'Nunca' || raw === 'Sin respaldos' || raw === 'Sin copias registradas' || raw === 'No aplica') {
+      return raw || fallback;
+    }
+    if (/^\d{10,13}$/.test(raw)) {
+      const n = Number(raw);
+      dateObj = new Date(raw.length === 10 ? n * 1000 : n);
+    } else {
+      dateObj = new Date(raw);
+    }
+  }
+  if (!dateObj || Number.isNaN(dateObj.getTime())) {
+    return String(isoOrEpoch);
+  }
+
+  try {
+    const parts = new Intl.DateTimeFormat('en-GB', {
+      timeZone: 'America/Lima',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false,
+    }).formatToParts(dateObj);
+    const map = {};
+    parts.forEach(p => { map[p.type] = p.value; });
+    const hh = map.hour === '24' ? '00' : map.hour;
+    return `${map.day}/${map.month}/${map.year} ${hh}:${map.minute}:${map.second} (Lima GMT-5)`;
+  } catch (_) {
+    const lima = new Date(dateObj.getTime() - 5 * 60 * 60 * 1000);
+    const pad = (n) => String(n).padStart(2, '0');
+    return `${pad(lima.getUTCDate())}/${pad(lima.getUTCMonth() + 1)}/${lima.getUTCFullYear()} ${pad(lima.getUTCHours())}:${pad(lima.getUTCMinutes())}:${pad(lima.getUTCSeconds())} (Lima GMT-5)`;
+  }
+}
+
+/**
+ * Humaniza campos técnicos de sincronización .mlsync al español operativo del propietario.
+ */
+function humanizeSyncFieldValue(field, val) {
+  if (field === 'backup_drive_linked' || field === 'uses_byok' || field === 'drv' || field === 'byok' || typeof val === 'boolean') {
+    if (val === true || String(val).toLowerCase() === 'true') return 'Sí';
+    if (val === false || String(val).toLowerCase() === 'false') return 'No';
+  }
+  if (field === 'backup_health_status' || field === 'bh') {
+    const norm = String(val ?? 'NONE').trim().toUpperCase();
+    if (norm === 'OK' || norm === 'OPTIMAL') return 'Óptimo';
+    if (norm === 'ATTENTION') return 'Requiere atención';
+    if (norm === 'CRITICAL') return 'Crítico';
+    if (norm === 'NONE' || norm === '-' || norm === '') return 'Sin respaldo';
+    return String(val);
+  }
+  if (field === 'last_backup_at' || field === 'last_sync_at' || field === 'lb' || field === 'ts') {
+    return formatLimaDateTime(val, 'Sin respaldos');
+  }
+  if (val === null || val === undefined || val === '') return '-';
+  return String(val);
+}
+
+function updateSyncApplyButtonState(btn, isAllUnchanged, defaultLabel = 'Aplicar Sincronización') {
+  if (!btn) return;
+  const checkIcon = '<svg class="btn-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>';
+  if (isAllUnchanged) {
+    btn.classList.remove('btn-primary');
+    btn.classList.add('btn-outline');
+    btn.innerHTML = `${checkIcon} Re-confirmar Ficha`;
+  } else {
+    btn.classList.remove('btn-outline');
+    btn.classList.add('btn-primary');
+    btn.innerHTML = `${checkIcon} ${escapeHtml(defaultLabel)}`;
+  }
+}
+
+/**
  * Generador HTML de Tabla Diff Estructurada: Antes (Admin) -> Real (Celular)
  */
-function renderSyncDiffTable(changes) {
+function renderSyncDiffTable(changes, meta = {}) {
   if (!changes || !changes.length) {
     return '<p style="color:var(--text-muted); font-size:0.83rem;">No se detectaron diferencias respecto a los datos actuales.</p>';
   }
+
+  let bannerHtml = '';
+  const allUnchanged = Boolean(meta.allUnchanged ?? meta.all_unchanged ?? changes.every(c => !c.is_different && !c.changed));
+  const sameTimestamp = Boolean(meta.sameTimestamp ?? meta.same_timestamp);
+  if (allUnchanged || sameTimestamp) {
+    bannerHtml = `
+      <div class="sync-all-unchanged-banner">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" style="flex-shrink:0;"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+        <span>La ficha coincide al 100% con el estado actual del CRM — Sin cambios por aplicar</span>
+      </div>
+    `;
+  }
+
   let rowsHtml = '';
   changes.forEach(c => {
-    const isChanged = c.changed;
+    const isChanged = Boolean(c.changed || c.is_different);
     const rowClass = isChanged ? 'sync-diff-row-changed' : '';
     const badgeHtml = isChanged
       ? '<span class="sync-diff-badge-changed">Modificado</span>'
       : '<span class="sync-diff-badge-same">Sin cambios</span>';
-    const beforeStr = c.before !== null && c.before !== undefined && c.before !== '' ? String(c.before) : '-';
-    const afterStr = c.after !== null && c.after !== undefined && c.after !== '' ? String(c.after) : '-';
+
+    const beforeRaw = c.before;
+    const afterRaw = c.after;
+    const beforeDisplay = humanizeSyncFieldValue(c.field, beforeRaw);
+    const afterDisplay = humanizeSyncFieldValue(c.field, afterRaw);
+
+    const isDateField = c.type === 'datetime' || c.field === 'last_backup_at' || c.field === 'last_sync_at';
+    const beforeTitleAttr = (isDateField && beforeRaw && beforeRaw !== 'Nunca' && beforeRaw !== 'Sin respaldos')
+      ? ` title="UTC: ${escapeHtml(String(beforeRaw))}"`
+      : '';
+    const afterTitleAttr = (isDateField && afterRaw && afterRaw !== 'Nunca' && afterRaw !== 'Sin respaldos')
+      ? ` title="UTC: ${escapeHtml(String(afterRaw))}"`
+      : '';
+
+    const deltaHtml = (c.field === 'ai_credits_used_total' && typeof c.delta === 'number' && c.delta > 0)
+      ? `<span class="sync-diff-delta-pill">(+${c.delta} desde última sync)</span>`
+      : '';
+
     rowsHtml += `
       <tr class="${rowClass}">
         <td><strong>${escapeHtml(c.label || c.field)}</strong></td>
-        <td class="sync-diff-before">${escapeHtml(beforeStr)}</td>
-        <td class="sync-diff-after">${escapeHtml(afterStr)}</td>
+        <td class="sync-diff-before"${beforeTitleAttr}>${escapeHtml(beforeDisplay)}</td>
+        <td class="sync-diff-after"${afterTitleAttr}>${escapeHtml(afterDisplay)}${deltaHtml}</td>
         <td>${badgeHtml}</td>
       </tr>
     `;
   });
+
   return `
+    ${bannerHtml}
     <div style="font-weight:700; font-size:0.86rem; color:var(--text-primary); margin-bottom:0.35rem;">
       Comparador: Antes (Admin) &rarr; Real (Celular)
     </div>
@@ -5463,8 +5665,15 @@ async function analyzeSyncReported() {
       staleEl.style.display = 'none';
     }
 
-    // 5. Tabla Diff
-    diffContainer.innerHTML = renderSyncDiffTable(data.changes || []);
+    // 5. Tabla Diff + Adaptación botón Re-confirmar Ficha
+    const allUnchanged = Boolean(data.all_unchanged ?? data.analysis?.all_unchanged);
+    const sameTimestamp = Boolean(data.same_timestamp ?? data.analysis?.same_timestamp);
+    diffContainer.innerHTML = renderSyncDiffTable(data.changes || [], { allUnchanged, sameTimestamp });
+    updateSyncApplyButtonState(
+      document.getElementById('btnApplySyncReported'),
+      allUnchanged || sameTimestamp,
+      'Aplicar Sincronización en Ficha'
+    );
     showToast('Ficha de sincronización analizada.', 'success');
   } catch (err) {
     showToast('Error al analizar ficha: ' + err.message, 'error');
@@ -5533,6 +5742,7 @@ function openGlobalClientSyncModal() {
   }
   const footer = document.getElementById('globalSyncModalFooter');
   if (footer) footer.style.display = 'none';
+  updateSyncApplyButtonState(document.getElementById('btnApplyGlobalSync'), false, 'Aplicar Sincronización');
   openModal('modalGlobalClientSync');
 }
 
@@ -5670,7 +5880,14 @@ async function analyzeGlobalSync() {
         staleEl.style.display = 'none';
       }
 
-      diffContainer.innerHTML = renderSyncDiffTable(data.changes || []);
+      const allUnchanged = Boolean(data.all_unchanged ?? data.analysis?.all_unchanged);
+      const sameTimestamp = Boolean(data.same_timestamp ?? data.analysis?.same_timestamp);
+      diffContainer.innerHTML = renderSyncDiffTable(data.changes || [], { allUnchanged, sameTimestamp });
+      updateSyncApplyButtonState(
+        document.getElementById('btnApplyGlobalSync'),
+        allUnchanged || sameTimestamp,
+        'Aplicar Sincronización'
+      );
       if (footer) footer.style.display = 'flex';
     } else {
       // Nuevo cliente no registrado
@@ -5872,14 +6089,19 @@ function auditTokenInInspector(token) {
   }
 }
 
-// =================== 3B. COMPOSITOR UNIVERSAL DE WHATSAPP (FASE 4) ===================
+// =================== 3B. COMPOSITOR UNIVERSAL DE WHATSAPP (PLAN 22 FASE 3) ===================
 let currentWaComposerClientId = null;
 let currentWaComposerTemplateKey = 'welcome';
+let currentWaPreTemplateDraft = '';
+let currentWaRenderedTemplateBase = '';
+let openedInApkDispatchMode = false;
 let currentDispatchRelease = null;
 let currentDispatchClient = null;
 let currentDispatchMode = 'eligible';
 let currentDispatchVariant = 'universal';
 let isApkDispatchMode = false;
+
+const WA_SNIPPET_KEYS = ['payment', 'device', 'expiration', 'token'];
 
 const WA_TEMPLATES = {
   welcome: {
@@ -5931,6 +6153,183 @@ function formatPlanLabel(plan) {
   return plan.replace(/_/g, ' ');
 }
 
+function getCurrentWaComposerClient() {
+  return (globalClients && globalClients.find(c => c.id === currentWaComposerClientId)) ||
+         (globalReleaseMatrix && globalReleaseMatrix.find(r => r.client_id === currentWaComposerClientId)) ||
+         currentDispatchClient ||
+         null;
+}
+
+function normalizeWaSnippetKey(rawType) {
+  if (rawType === 'payment' || rawType === 'yape') return 'payment';
+  if (rawType === 'device' || rawType === 'hardware') return 'device';
+  if (rawType === 'expiration' || rawType === 'vencimiento') return 'expiration';
+  if (rawType === 'token') return 'token';
+  return rawType;
+}
+
+function buildWaSnippetBlock(rawType, options = {}) {
+  const key = normalizeWaSnippetKey(rawType);
+  const notify = options.notify === true;
+  const client = getCurrentWaComposerClient();
+  const modalEl = document.getElementById('modalWaComposer');
+  const pm = ownerConfig?.payment_methods || {};
+  const li = ownerConfig?.legal_identity || {};
+
+  if (key === 'payment') {
+    const hasConfiguredPm = Boolean(ownerConfig && ownerConfig.payment_methods);
+    const phone = hasConfiguredPm
+      ? String(pm.yape_plin_phone ?? '').trim()
+      : '922836879';
+    const titular = String(pm.yape_plin_holder || li.author_full_name || '').trim() || 'Julio Angello Vasquez Navarro';
+    if (!phone) {
+      if (notify) showToast('No hay número Yape / Plin configurado en Ajustes.', 'warning');
+      return null;
+    }
+    return `*Datos de Pago Yape / Plin:*\n• Número: *${phone}*\n• Titular: *${titular}*\n• Enviar comprobante por este medio.`;
+  }
+
+  if (key === 'device') {
+    const devId = String(client?.current_device_id || client?.device_id || '').trim();
+    if (!devId || devId === 'PENDIENTE' || devId === '-') {
+      if (notify) showToast('Este cliente aún no tiene un Hardware ID vinculado.', 'warning');
+      return null;
+    }
+    return `*Hardware ID:* \`${devId}\``;
+  }
+
+  if (key === 'expiration') {
+    const licType = String(client?.license_type || '').toUpperCase();
+    const isPerp = licType === 'PERPETUO_LIBERADO' || licType === 'PERPETUO';
+    const expRaw = String(client?.license_expires || '').trim();
+    if ((!expRaw && !isPerp) || licType === 'PROSPECTO') {
+      if (notify) showToast('Este cliente no tiene fecha de vencimiento activa registrada.', 'warning');
+      return null;
+    }
+    if (expRaw) {
+      const expDate = new Date(expRaw);
+      const diffDays = Number.isNaN(expDate.getTime())
+        ? 0
+        : Math.max(0, Math.ceil((expDate - new Date()) / (1000 * 60 * 60 * 24)));
+      return `*Vencimiento:* ${expRaw.substring(0, 10)} (${diffDays} día(s) restantes)`;
+    }
+    const updStr = client?.updates_until ? String(client.updates_until).substring(0, 10) : 'Vigente';
+    return `*Vencimiento:* Licencia Perpetua (Updates hasta: ${updStr})`;
+  }
+
+  if (key === 'token') {
+    const hasRealToken = modalEl?.dataset?.hasRealToken === 'true';
+    const lastToken = String(modalEl?.dataset?.lastToken || '').trim();
+    if (!hasRealToken || !lastToken || lastToken.startsWith('ML9-PENDIENTE')) {
+      if (notify) showToast('Este cliente aún no tiene un token de licencia emitido.', 'warning');
+      return null;
+    }
+    return `*Último Token de Licencia:*\n\`${lastToken}\``;
+  }
+
+  return null;
+}
+
+function appendSnippetBlockToText(text, block) {
+  const cleanText = String(text || '').replace(/\r\n/g, '\n');
+  if (!block) return cleanText;
+  if (cleanText.includes(block)) return cleanText;
+  const trimmedEnd = cleanText.replace(/\s+$/, '');
+  return trimmedEnd ? `${trimmedEnd}\n\n${block}` : block;
+}
+
+function removeSnippetBlockFromText(text, block) {
+  const cleanText = String(text || '').replace(/\r\n/g, '\n');
+  if (!block || !cleanText.includes(block)) return cleanText;
+  return cleanText
+    .split(block)
+    .join('')
+    .replace(/\n{3,}/g, '\n\n')
+    .replace(/^\n+|\n+$/g, '')
+    .trim();
+}
+
+function extractBaseAndSnippetsFromText(text) {
+  let working = String(text || '').replace(/\r\n/g, '\n');
+  const activeMatches = [];
+
+  WA_SNIPPET_KEYS.forEach(k => {
+    const blk = buildWaSnippetBlock(k, { notify: false });
+    if (blk && working.includes(blk)) {
+      activeMatches.push({ key: k, block: blk, index: working.indexOf(blk) });
+    }
+  });
+
+  activeMatches.sort((a, b) => a.index - b.index);
+  activeMatches.forEach(item => {
+    working = removeSnippetBlockFromText(working, item.block);
+  });
+
+  return {
+    baseText: working,
+    activeKeys: activeMatches.map(item => item.key),
+  };
+}
+
+function syncWaInsertChipsState() {
+  const textarea = document.getElementById('waCompMessage');
+  const normalized = String(textarea?.value || '').replace(/\r\n/g, '\n');
+  document.querySelectorAll('.wa-insert-chip').forEach(chip => {
+    const key = normalizeWaSnippetKey(chip.dataset.snippet || '');
+    if (!key) {
+      chip.classList.remove('active');
+      return;
+    }
+    const blk = buildWaSnippetBlock(key, { notify: false });
+    const isActive = Boolean(blk && normalized.includes(blk));
+    chip.classList.toggle('active', isActive);
+  });
+}
+
+function renderWaTemplateBaseText(tplKey) {
+  const client = getCurrentWaComposerClient();
+  const modalEl = document.getElementById('modalWaComposer');
+  if (!client) return '';
+
+  if (tplKey === 'update' && currentDispatchRelease) {
+    return buildApkDispatchMessage(currentDispatchRelease, client, currentDispatchMode);
+  }
+
+  const customText = ownerConfig?.templates?.[tplKey];
+  const rawTpl = (customText !== undefined && customText !== null) ? customText : (WA_TEMPLATES[tplKey]?.text || '');
+  if (!rawTpl) return '';
+
+  const now = new Date();
+  const expDate = client.license_expires ? new Date(client.license_expires) : null;
+  const diffDays = expDate ? Math.max(0, Math.ceil((expDate - now) / (1000 * 60 * 60 * 24))) : 0;
+  const latestVer = getLatestPublishedVersion() || client.installed_version || '9.40.0';
+
+  const pm = ownerConfig?.payment_methods || {};
+  const li = ownerConfig?.legal_identity || {};
+  const yapePhone = pm.yape_plin_phone || '922836879';
+  const yapeTitular = pm.yape_plin_holder || li.author_full_name || 'Julio Angello Vasquez Navarro';
+  const autor = li.author_full_name || 'Julio Angello Vasquez Navarro';
+  const aiCredsVal = modalEl?.dataset?.aiCredits || client.ai_reported_balance || '0';
+  const diasVal = modalEl?.dataset?.diasExtension || '7';
+  const lastToken = (modalEl?.dataset?.lastToken || '').trim() || `ML9-PENDIENTE-${client.current_device_id || 'DISPOSITIVO'}`;
+
+  return rawTpl
+    .replace(/\{negocio\}/g, client.business_name || 'su negocio')
+    .replace(/\{titular\}/g, client.owner_name || 'Estimado cliente')
+    .replace(/\{plan\}/g, formatPlanLabel(client.license_type))
+    .replace(/\{dias_restantes\}/g, String(diffDays))
+    .replace(/\{dias\}/g, String(diasVal))
+    .replace(/\{creditos_ia\}/g, String(aiCredsVal))
+    .replace(/\{vencimiento\}/g, client.license_expires ? client.license_expires.substring(0, 10) : 'Activa')
+    .replace(/\{device_id\}/g, client.current_device_id || client.device_id || 'PENDIENTE')
+    .replace(/\{version\}/g, latestVer)
+    .replace(/\{codigo_licencia\}/g, lastToken)
+    .replace(/\{codigo\}/g, lastToken)
+    .replace(/\{yape_phone\}/g, yapePhone)
+    .replace(/\{yape_titular\}/g, yapeTitular)
+    .replace(/\{autor\}/g, autor);
+}
+
 async function openWhatsAppComposer(clientId, defaultTemplateKey = null, options = {}) {
   const client = (globalClients && globalClients.find(c => c.id === clientId)) ||
                  (globalReleaseMatrix && globalReleaseMatrix.find(r => r.client_id === clientId)) ||
@@ -5941,6 +6340,12 @@ async function openWhatsAppComposer(clientId, defaultTemplateKey = null, options
   }
 
   currentWaComposerClientId = clientId;
+  currentWaPreTemplateDraft = '';
+  currentWaRenderedTemplateBase = '';
+  openedInApkDispatchMode = options.isApkDispatch === true;
+
+  const copyHintEl = document.getElementById('waApkCopySuccessHint');
+  if (copyHintEl) copyHintEl.style.display = 'none';
 
   const bizNameEl = document.getElementById('waCompBizName');
   const ownerNameEl = document.getElementById('waCompOwnerName');
@@ -5953,7 +6358,7 @@ async function openWhatsAppComposer(clientId, defaultTemplateKey = null, options
 
   if (bizNameEl) bizNameEl.textContent = client.business_name || 'Sin negocio';
   if (ownerNameEl) ownerNameEl.textContent = client.owner_name || 'Sin titular';
-  if (devIdEl) devIdEl.textContent = client.current_device_id || 'PENDIENTE';
+  if (devIdEl) devIdEl.textContent = client.current_device_id || client.device_id || 'PENDIENTE';
 
   const badgeInfo = getClientStatusBadge(client, { asObject: true });
   if (planBadgeEl) {
@@ -6004,14 +6409,16 @@ async function openWhatsAppComposer(clientId, defaultTemplateKey = null, options
   }
 
   // Cargar token histórico más reciente si existe o usar el provisto en options
-  let lastToken = options.token || `ML9-PENDIENTE-${client.current_device_id || 'DISPOSITIVO'}`;
+  let realToken = options.token ? String(options.token).trim() : '';
+  let hasRealToken = Boolean(realToken && !realToken.startsWith('ML9-PENDIENTE'));
   if (!options.token) {
     try {
       const res = await fetch(`/api/clients/${clientId}/history`);
       if (res.ok) {
         const history = await res.json();
         if (history.codes && history.codes.length > 0) {
-          lastToken = history.codes[history.codes.length - 1].token;
+          realToken = String(history.codes[history.codes.length - 1].token || '').trim();
+          hasRealToken = Boolean(realToken);
         }
       }
     } catch (_) { }
@@ -6019,101 +6426,116 @@ async function openWhatsAppComposer(clientId, defaultTemplateKey = null, options
 
   const modalEl = document.getElementById('modalWaComposer');
   if (modalEl) {
-    modalEl.dataset.lastToken = lastToken;
+    modalEl.dataset.lastToken = realToken;
+    modalEl.dataset.hasRealToken = hasRealToken ? 'true' : 'false';
     modalEl.dataset.cleanPhone = cleanDigits;
     modalEl.dataset.aiCredits = options.aiCredits !== undefined ? String(options.aiCredits) : '';
     modalEl.dataset.diasExtension = options.diasExtension !== undefined ? String(options.diasExtension) : '';
   }
 
-  // Alternar panel y footer exclusivo de Despacho Asistido de APK (Plan 19 Fase 3)
-  isApkDispatchMode = options.isApkDispatch === true;
-  const dispatchPanel = document.getElementById('waApkDispatchPanel');
-  const standardFooter = document.getElementById('waStandardFooterActions');
-  const dispatchFooter = document.getElementById('waApkDispatchFooterActions');
-
-  if (isApkDispatchMode) {
-    if (dispatchPanel) dispatchPanel.style.display = 'block';
-    if (standardFooter) standardFooter.style.display = 'none';
-    if (dispatchFooter) dispatchFooter.style.display = 'flex';
+  // Alternar panel y footer exclusivo de Despacho Asistido de APK (Plan 19 / 22 Fase 3)
+  if (options.isApkDispatch === true) {
+    const sorted = [...(globalReleases || [])].sort((a, b) => compareSemVer(b.version_name, a.version_name));
+    currentDispatchRelease = options.release || sorted[0] || currentDispatchRelease;
+    toggleWaApkDispatchPanelVisibility(true);
+    if (currentDispatchRelease) {
+      syncWaApkDispatchPanel(currentDispatchRelease, { skipMessageUpdate: true });
+    }
   } else {
-    if (dispatchPanel) dispatchPanel.style.display = 'none';
-    if (standardFooter) standardFooter.style.display = 'flex';
-    if (dispatchFooter) dispatchFooter.style.display = 'none';
+    currentDispatchRelease = null;
+    currentDispatchClient = null;
+    currentDispatchMode = 'eligible';
+    toggleWaApkDispatchPanelVisibility(false);
   }
 
   if (options.customMessage) {
-    document.querySelectorAll('.wa-template-btn').forEach(b => b.classList.remove('active'));
-    currentWaComposerTemplateKey = 'custom';
     const textarea = document.getElementById('waCompMessage');
+    if (openedInApkDispatchMode) {
+      currentWaComposerTemplateKey = 'update';
+      currentWaRenderedTemplateBase = options.customMessage;
+      document.querySelectorAll('.wa-template-btn').forEach(b => {
+        b.classList.toggle('active', b.dataset.tpl === 'update');
+      });
+    } else {
+      currentWaComposerTemplateKey = null;
+      currentWaPreTemplateDraft = options.customMessage;
+      document.querySelectorAll('.wa-template-btn').forEach(b => b.classList.remove('active'));
+    }
     if (textarea) {
       textarea.value = options.customMessage;
       updateWaComposerStats();
+      syncWaInsertChipsState();
     }
   } else {
+    currentWaComposerTemplateKey = null;
     selectWaTemplate(initialTpl);
   }
   openModal('modalWaComposer');
 }
 
-function selectWaTemplate(tplKey) {
+function selectWaTemplate(tplKey, options = {}) {
   if (!WA_TEMPLATES[tplKey]) tplKey = 'welcome';
-  currentWaComposerTemplateKey = tplKey;
-
-  document.querySelectorAll('.wa-template-btn').forEach(b => {
-    if (b.dataset.tpl === tplKey) {
-      b.classList.add('active');
-    } else {
-      b.classList.remove('active');
-    }
-  });
-
-  const client = globalClients.find(c => c.id === currentWaComposerClientId);
-  const modalEl = document.getElementById('modalWaComposer');
-  const lastToken = modalEl?.dataset?.lastToken || 'ML9-PENDIENTE';
   const textarea = document.getElementById('waCompMessage');
+  if (!textarea) return;
 
-  if (!client || !textarea) return;
+  const { baseText, activeKeys } = extractBaseAndSnippetsFromText(textarea.value || '');
 
-  const customText = ownerConfig?.templates?.[tplKey];
-  const rawTpl = (customText !== undefined && customText !== null) ? customText : (WA_TEMPLATES[tplKey]?.text || '');
+  // Segundo clic sobre la misma plantilla activa -> desactivar y restaurar borrador previo sin duplicar
+  if (!options.forceApply && currentWaComposerTemplateKey === tplKey) {
+    currentWaComposerTemplateKey = null;
+    document.querySelectorAll('.wa-template-btn').forEach(b => b.classList.remove('active'));
 
-  if (!rawTpl) {
-    textarea.value = '';
+    let restored = currentWaPreTemplateDraft || '';
+    activeKeys.forEach(k => {
+      const blk = buildWaSnippetBlock(k, { notify: false });
+      if (blk) restored = appendSnippetBlockToText(restored, blk);
+    });
+
+    textarea.value = restored;
+    currentWaPreTemplateDraft = '';
+    currentWaRenderedTemplateBase = '';
+
+    if (tplKey === 'update' && !openedInApkDispatchMode) {
+      toggleWaApkDispatchPanelVisibility(false);
+    }
+
     updateWaComposerStats();
+    syncWaInsertChipsState();
     return;
   }
 
-  const now = new Date();
-  const expDate = client.license_expires ? new Date(client.license_expires) : null;
-  const diffDays = expDate ? Math.max(0, Math.ceil((expDate - now) / (1000 * 60 * 60 * 24))) : 0;
-  const latestVer = getLatestPublishedVersion() || client.installed_version || '9.35.0';
+  // Al pasar desde texto libre hacia una plantilla, resguardar borrador previo
+  if (!currentWaComposerTemplateKey || currentWaComposerTemplateKey === 'custom') {
+    currentWaPreTemplateDraft = baseText;
+  }
 
-  const pm = ownerConfig?.payment_methods || {};
-  const li = ownerConfig?.legal_identity || {};
-  const yapePhone = pm.yape_plin_phone || '922836879';
-  const yapeTitular = pm.yape_plin_holder || li.author_full_name || 'Julio Angello Vasquez Navarro';
-  const autor = li.author_full_name || 'Julio Angello Vasquez Navarro';
-  const aiCredsVal = modalEl?.dataset?.aiCredits || client.ai_reported_balance || '0';
-  const diasVal = modalEl?.dataset?.diasExtension || '7';
+  currentWaComposerTemplateKey = tplKey;
+  document.querySelectorAll('.wa-template-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.tpl === tplKey);
+  });
 
-  let rendered = rawTpl
-    .replace(/\{negocio\}/g, client.business_name || 'su negocio')
-    .replace(/\{titular\}/g, client.owner_name || 'Estimado cliente')
-    .replace(/\{plan\}/g, formatPlanLabel(client.license_type))
-    .replace(/\{dias_restantes\}/g, String(diffDays))
-    .replace(/\{dias\}/g, String(diasVal))
-    .replace(/\{creditos_ia\}/g, String(aiCredsVal))
-    .replace(/\{vencimiento\}/g, client.license_expires ? client.license_expires.substring(0, 10) : 'Activa')
-    .replace(/\{device_id\}/g, client.current_device_id || 'PENDIENTE')
-    .replace(/\{version\}/g, latestVer)
-    .replace(/\{codigo_licencia\}/g, lastToken)
-    .replace(/\{codigo\}/g, lastToken)
-    .replace(/\{yape_phone\}/g, yapePhone)
-    .replace(/\{yape_titular\}/g, yapeTitular)
-    .replace(/\{autor\}/g, autor);
+  if (tplKey === 'update') {
+    ensureWaDispatchReleaseInitialized();
+    toggleWaApkDispatchPanelVisibility(true);
+    if (currentDispatchRelease) {
+      syncWaApkDispatchPanel(currentDispatchRelease, { skipMessageUpdate: true });
+    }
+  } else if (!openedInApkDispatchMode) {
+    toggleWaApkDispatchPanelVisibility(false);
+  }
 
-  textarea.value = rendered;
+  const newBase = renderWaTemplateBaseText(tplKey);
+  currentWaRenderedTemplateBase = newBase;
+
+  let nextText = newBase;
+  activeKeys.forEach(k => {
+    const blk = buildWaSnippetBlock(k, { notify: false });
+    if (blk) nextText = appendSnippetBlockToText(nextText, blk);
+  });
+
+  textarea.value = nextText;
   updateWaComposerStats();
+  syncWaInsertChipsState();
 }
 
 function updateWaComposerStats() {
@@ -6124,7 +6546,7 @@ function updateWaComposerStats() {
   const cleanDigits = modalEl?.dataset?.cleanPhone || '';
 
   if (!textarea) return;
-  const text = textarea.value;
+  const text = textarea.value || '';
   if (counter) counter.textContent = `${text.length} caracteres`;
 
   if (sendBtn && cleanDigits && cleanDigits.length >= 9) {
@@ -6134,15 +6556,11 @@ function updateWaComposerStats() {
 
 function copyWaComposerMessage() {
   const textarea = document.getElementById('waCompMessage');
-  if (!textarea || !textarea.value) {
+  if (!textarea || !textarea.value.trim()) {
     showToast('El mensaje está vacío.', 'warning');
     return;
   }
-  navigator.clipboard.writeText(textarea.value).then(() => {
-    showToast('¡Mensaje copiado al portapapeles!', 'success');
-  }).catch(() => {
-    showToast('Error al copiar el mensaje.', 'error');
-  });
+  copyPlainTextToClipboard(textarea.value, 'Mensaje copiado al portapapeles.');
 }
 
 function insertTextAtCursor(textarea, textToInsert) {
@@ -6152,50 +6570,50 @@ function insertTextAtCursor(textarea, textToInsert) {
   const current = textarea.value;
   textarea.value = current.substring(0, start) + textToInsert + current.substring(end);
   textarea.selectionStart = textarea.selectionEnd = start + textToInsert.length;
-  textarea.focus();
+  textarea.focus?.();
   updateWaComposerStats();
+  syncWaInsertChipsState();
 }
 
 function insertWaSnippet(type) {
   const textarea = document.getElementById('waCompMessage');
   if (!textarea) return;
-  const pm = ownerConfig?.payment_methods || {};
-  const li = ownerConfig?.legal_identity || {};
-  const client = globalClients.find(c => c.id === currentWaComposerClientId);
-  const modalEl = document.getElementById('modalWaComposer');
-  const lastToken = modalEl?.dataset?.lastToken || 'ML9-PENDIENTE';
 
-  let textToInsert = '';
-  if (type === 'payment' || type === 'yape') {
-    const phone = pm.yape_plin_phone || '922836879';
-    const titular = pm.yape_plin_holder || li.author_full_name || 'Julio Angello Vasquez Navarro';
-    textToInsert = `\n📲 *Datos de Pago Yape / Plin:*\n• Número: *${phone}*\n• Titular: *${titular}*\n• Enviar comprobante por este medio.`;
-  } else if (type === 'device' || type === 'hardware') {
-    const devId = client?.current_device_id || 'PENDIENTE';
-    textToInsert = `\n📱 *Hardware ID:* \`${devId}\``;
-  } else if (type === 'expiration' || type === 'vencimiento') {
-    const exp = client?.license_expires ? client.license_expires.substring(0, 10) : 'Activa';
-    textToInsert = `\n📅 *Vencimiento:* ${exp}`;
-  } else if (type === 'token') {
-    textToInsert = `\n🔑 *Código de Licencia:*\n\`${lastToken}\``;
+  const key = normalizeWaSnippetKey(type);
+  const block = buildWaSnippetBlock(key, { notify: true });
+  if (!block) {
+    syncWaInsertChipsState();
+    return;
   }
 
-  if (textToInsert) {
-    insertTextAtCursor(textarea, textToInsert);
+  const normalized = (textarea.value || '').replace(/\r\n/g, '\n');
+  if (normalized.includes(block)) {
+    textarea.value = removeSnippetBlockFromText(normalized, block);
+  } else {
+    textarea.value = appendSnippetBlockToText(normalized, block);
   }
+
+  textarea.focus?.();
+  updateWaComposerStats();
+  syncWaInsertChipsState();
 }
 
 async function saveCurrentWaTemplate() {
   const textarea = document.getElementById('waCompMessage');
   if (!textarea) return;
-  const newText = textarea.value;
+  const tplKey = currentWaComposerTemplateKey;
+  if (!tplKey || !WA_TEMPLATES[tplKey]) {
+    showToast('Selecciona primero una plantilla para guardar cambios.', 'warning');
+    return;
+  }
+
+  const { baseText } = extractBaseAndSnippetsFromText(textarea.value || '');
+  const newText = baseText;
 
   if (!ownerConfig) ownerConfig = {};
   if (!ownerConfig.templates) ownerConfig.templates = {};
-  ownerConfig.templates[currentWaComposerTemplateKey] = newText;
-  if (WA_TEMPLATES[currentWaComposerTemplateKey]) {
-    WA_TEMPLATES[currentWaComposerTemplateKey].text = newText;
-  }
+  ownerConfig.templates[tplKey] = newText;
+  WA_TEMPLATES[tplKey].text = newText;
 
   try {
     const res = await fetch('/api/config', {
@@ -6211,13 +6629,16 @@ async function saveCurrentWaTemplate() {
 }
 
 async function resetCurrentWaTemplate() {
-  const defaultText = DEFAULT_WA_TEMPLATES[currentWaComposerTemplateKey]?.text || '';
-  if (WA_TEMPLATES[currentWaComposerTemplateKey]) {
-    WA_TEMPLATES[currentWaComposerTemplateKey].text = defaultText;
+  const tplKey = (currentWaComposerTemplateKey && DEFAULT_WA_TEMPLATES[currentWaComposerTemplateKey])
+    ? currentWaComposerTemplateKey
+    : 'welcome';
+  const defaultText = DEFAULT_WA_TEMPLATES[tplKey]?.text || '';
+  if (WA_TEMPLATES[tplKey]) {
+    WA_TEMPLATES[tplKey].text = defaultText;
   }
 
   if (ownerConfig?.templates) {
-    delete ownerConfig.templates[currentWaComposerTemplateKey];
+    delete ownerConfig.templates[tplKey];
     try {
       await fetch('/api/config', {
         method: 'PUT',
@@ -6227,30 +6648,88 @@ async function resetCurrentWaTemplate() {
     } catch (_) { }
   }
 
-  selectWaTemplate(currentWaComposerTemplateKey);
+  selectWaTemplate(tplKey, { forceApply: true });
   showToast('Plantilla restaurada a los valores predeterminados.', 'info');
 }
 
 function initWaComposerEvents() {
-  document.getElementById('waCompMessage')?.addEventListener('input', updateWaComposerStats);
-
-  // Botones de selección de plantillas
-  document.querySelectorAll('.wa-template-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      selectWaTemplate(btn.dataset.tpl);
-    });
+  document.getElementById('waCompMessage')?.addEventListener('input', () => {
+    updateWaComposerStats();
+    syncWaInsertChipsState();
   });
-
-  // Botones de acción en compositor
-  document.getElementById('btnWaSaveTemplate')?.addEventListener('click', saveCurrentWaTemplate);
-  document.getElementById('btnWaResetTemplate')?.addEventListener('click', resetCurrentWaTemplate);
-  document.getElementById('btnWaCompCopy')?.addEventListener('click', copyWaComposerMessage);
 }
 
-// =================== 4. RELEASE MANAGER & MATRIZ INTELIGENTE (PLAN 19) ===================
+// =================== 4. RELEASE MANAGER & MATRIZ INTELIGENTE (PLAN 19 / 22) ===================
 let globalReleaseMatrix = [];
 let currentMatrixFilter = 'ALL';
 let currentMatrixSearch = '';
+let lastInspectedCreateData = null;
+let editModalLocalBuildsCache = [];
+
+/**
+ * Normaliza tamaños APK para evitar valores sin sufijo o "MB MB" duplicado
+ */
+function formatApkSizeMb(raw) {
+  if (raw === null || raw === undefined) return '-';
+  const s = String(raw).trim();
+  if (!s || s === '-' || s === 'null' || s === 'undefined') return '-';
+  const cleaned = s.replace(/\s*MB\s*$/i, '').trim();
+  if (!cleaned) return '-';
+  const num = Number(cleaned);
+  if (!Number.isNaN(num) && Number.isFinite(num)) {
+    return `${num.toFixed(2)} MB`;
+  }
+  return /\bMB$/i.test(s) ? s.replace(/\s*MB$/i, ' MB') : `${s} MB`;
+}
+
+/**
+ * Infiere tipo de lanzamiento sugerido desde SemVer:
+ * patch > 0 -> HOTFIX, patch == 0 -> FEATURE_RELEASE
+ */
+function inferReleaseTypeFromSemVer(versionName) {
+  if (!versionName) return 'FEATURE_RELEASE';
+  const clean = String(versionName).trim().replace(/^[vV]/, '').split('+')[0].split('-')[0];
+  const segs = clean.split('.');
+  const patch = segs.length > 2 ? (parseInt(segs[2], 10) || 0) : 0;
+  return patch > 0 ? 'HOTFIX' : 'FEATURE_RELEASE';
+}
+
+/**
+ * Renderiza el badge de firma criptográfica de 3 estados honestos
+ */
+function renderSignatureStatusBadge(sigStatus, sigVerified, labelOfficial = 'Oficial RSA-4096') {
+  if (sigStatus === 'OFFICIAL_RELEASE' || sigVerified === true) {
+    return `<span class="badge badge-official-sig" title="Firma Oficial Verificada (RSA-4096 — Julio Angello Vasquez Navarro)"><svg class="btn-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><polyline points="9 12 11 14 15 10"/></svg> ${escapeHtml(labelOfficial)}</span>`;
+  }
+  if (sigStatus === 'UNOFFICIAL_SIGNATURE' || (sigVerified === false && sigStatus !== 'UNVERIFIED')) {
+    return '<span class="badge badge-unofficial-sig" title="Firma No Oficial / Debug Keystore"><svg class="btn-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg> No Oficial</span>';
+  }
+  return '<span class="badge badge-unverified-sig" title="Firma no verificada en este entorno"><svg class="btn-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg> Sin Verificar</span>';
+}
+
+/**
+ * Copia texto plano (ej. SHA-256) al portapapeles de forma segura
+ */
+async function copyPlainTextToClipboard(text, successMsg = 'Texto copiado al portapapeles.') {
+  if (!text) return;
+  try {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      await navigator.clipboard.writeText(text);
+    } else {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      ta.remove();
+    }
+    showToast(successMsg, 'success');
+  } catch (err) {
+    showToast('No se pudo copiar al portapapeles: ' + err.message, 'error');
+  }
+}
 
 /**
  * Comparador SemVer numérico client-side determinista
@@ -6315,7 +6794,14 @@ async function loadReleases() {
         : '<span class="badge badge-purple">FEATURE RELEASE</span>';
 
       const shortSha = r.apk_sha256 ? `${r.apk_sha256.substring(0, 12)}...` : '-';
-      const sizeInfo = r.file_size_mb ? `${r.file_size_mb}` : '-';
+      const sizeInfo = formatApkSizeMb(r.file_size_mb);
+
+      const verNorm = String(r.version_name || '').trim().replace(/^[vV]/, '');
+      const adoptionCount = (globalClients || []).filter(c => {
+        const inst = String(c.installed_version || '').trim().replace(/^[vV]/, '');
+        return inst && inst === verNorm;
+      }).length;
+      const adoptionLabel = adoptionCount === 1 ? '1 cliente' : `${adoptionCount} clientes`;
 
       // Badges de variantes
       const variantsBadges = [];
@@ -6323,19 +6809,19 @@ async function loadReleases() {
         variantsBadges.push('<span class="badge badge-universal" title="Compatible con todos los procesadores">Universal</span>');
       }
       if (r.arm64_apk || r.abi_variant === 'ARM64') {
-        variantsBadges.push('<span class="badge badge-arm64" title="Optimizado para 64 bits (30 MB)">ARM64</span>');
+        variantsBadges.push('<span class="badge badge-arm64" title="Optimizado para 64 bits">ARM64</span>');
       }
 
-      // Badge de firma oficial
-      let sigBadge = '<span class="badge" style="background:rgba(245,158,11,0.15); color:#f59e0b; border:1px solid rgba(245,158,11,0.3);" title="Firma no verificada"><svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg> Sin Verificar</span>';
-      if (r.signature_status === 'OFFICIAL_RELEASE' || r.signature_verified === true) {
-        sigBadge = '<span class="badge badge-official-sig" title="Firma Oficial Verificada (RSA-4096 — Julio Angello Vasquez Navarro)"><svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><polyline points="9 12 11 14 15 10"/></svg> Oficial</span>';
-      } else if (r.signature_status === 'UNOFFICIAL_SIGNATURE' || r.signature_verified === false) {
-        sigBadge = '<span class="badge badge-unofficial-sig" title="Firma No Oficial / Debug Keystore"><svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg> No Oficial</span>';
-      }
+      // Badge de firma oficial de 3 estados honestos
+      const sigBadge = renderSignatureStatusBadge(r.signature_status, r.signature_verified, 'Oficial');
 
       tr.innerHTML = `
-        <td><strong>v${escapeHtml(r.version_name)}</strong></td>
+        <td>
+          <div class="release-version-cell">
+            <strong>v${escapeHtml(r.version_name)}</strong>
+            <span class="release-adoption-pill ${adoptionCount > 0 ? 'has-clients' : ''}" title="${adoptionCount} cliente(s) con esta versión instalada">${adoptionLabel}</span>
+          </div>
+        </td>
         <td>${r.version_code || '-'}</td>
         <td>Esquema v${r.db_schema_version || 36}</td>
         <td>${badge}</td>
@@ -6347,58 +6833,62 @@ async function loadReleases() {
           </div>
         </td>
         <td>
-          <div style="font-size:0.75rem; color:var(--text-secondary);">${sizeInfo}</div>
+          <div style="font-size:0.75rem; color:var(--text-secondary); white-space:nowrap;">${escapeHtml(sizeInfo)}</div>
           <code style="font-family:var(--font-mono); font-size:0.72rem;" title="${escapeHtml(r.apk_sha256 || '')}">${shortSha}</code>
         </td>
         <td>
-          <div style="display:flex; gap:0.35rem; flex-wrap:wrap; align-items:center;">
+          <div class="release-actions-row" style="display:flex; gap:0.25rem; flex-wrap:nowrap; align-items:center; white-space:nowrap;">
             ${(() => {
               const hasUniversal = !!r.universal_apk || (!r.universal_apk && !r.arm64_apk);
               const hasArm64 = !!r.arm64_apk;
               if (hasUniversal && hasArm64) {
                 return `
                   <div class="variant-btn-group" title="Descargar APK directo del servidor">
-                    <a href="/api/releases/download/${encodeURIComponent(r.version_name)}?variant=universal" class="btn btn-outline btn-sm" title="Descargar APK Universal">Univ</a>
-                    <a href="/api/releases/download/${encodeURIComponent(r.version_name)}?variant=arm64" class="btn btn-outline btn-sm" title="Descargar APK ARM64 Ligero">ARM64</a>
+                    <a href="/api/releases/download/${encodeURIComponent(r.version_name)}?variant=universal" class="btn btn-outline btn-xs" title="Descargar APK Universal">Univ</a>
+                    <a href="/api/releases/download/${encodeURIComponent(r.version_name)}?variant=arm64" class="btn btn-outline btn-xs" title="Descargar APK ARM64 Ligero">ARM64</a>
                   </div>
                   <div class="variant-btn-group" title="Copiar archivo APK al portapapeles">
-                    <button type="button" class="btn btn-outline btn-sm" onclick="copyReleaseApkToClipboard('${escapeHtml(r.version_name)}', 'universal')" title="Copiar APK Universal al portapapeles">Copiar Univ</button>
-                    <button type="button" class="btn btn-outline btn-sm" onclick="copyReleaseApkToClipboard('${escapeHtml(r.version_name)}', 'arm64')" title="Copiar APK ARM64 Ligero al portapapeles">ARM64</button>
+                    <button type="button" class="btn btn-outline btn-xs" onclick="copyReleaseApkToClipboard('${escapeHtml(r.version_name)}', 'universal')" title="Copiar APK Universal al portapapeles">Copiar Univ</button>
+                    <button type="button" class="btn btn-outline btn-xs" onclick="copyReleaseApkToClipboard('${escapeHtml(r.version_name)}', 'arm64')" title="Copiar APK ARM64 Ligero al portapapeles">ARM64</button>
                   </div>
                 `;
               } else if (hasArm64) {
                 return `
-                  <a href="/api/releases/download/${encodeURIComponent(r.version_name)}?variant=arm64" class="btn btn-outline btn-sm" title="Descargar APK ARM64 Ligero">
-                    <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                  <a href="/api/releases/download/${encodeURIComponent(r.version_name)}?variant=arm64" class="btn btn-outline btn-xs" title="Descargar APK ARM64 Ligero">
+                    <svg class="btn-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
                     APK ARM64
                   </a>
-                  <button type="button" class="btn btn-outline btn-sm" onclick="copyReleaseApkToClipboard('${escapeHtml(r.version_name)}', 'arm64')" title="Copiar APK ARM64 Ligero al portapapeles">
-                    <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                  <button type="button" class="btn btn-outline btn-xs" onclick="copyReleaseApkToClipboard('${escapeHtml(r.version_name)}', 'arm64')" title="Copiar APK ARM64 Ligero al portapapeles">
+                    <svg class="btn-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
                     Copiar ARM64
                   </button>
                 `;
               } else {
                 return `
-                  <a href="/api/releases/download/${encodeURIComponent(r.version_name)}?variant=universal" class="btn btn-outline btn-sm" title="Descargar APK directo del servidor">
-                    <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                  <a href="/api/releases/download/${encodeURIComponent(r.version_name)}?variant=universal" class="btn btn-outline btn-xs" title="Descargar APK directo del servidor">
+                    <svg class="btn-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
                     APK
                   </a>
-                  <button type="button" class="btn btn-outline btn-sm" onclick="copyReleaseApkToClipboard('${escapeHtml(r.version_name)}', 'universal')" title="Copiar archivo APK binario al portapapeles para pegar en WhatsApp">
-                    <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                  <button type="button" class="btn btn-outline btn-xs" onclick="copyReleaseApkToClipboard('${escapeHtml(r.version_name)}', 'universal')" title="Copiar archivo APK binario al portapapeles para pegar en WhatsApp">
+                    <svg class="btn-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
                     Copiar
                   </button>
                 `;
               }
             })()}
-            <button type="button" class="btn btn-outline btn-sm" onclick="revealReleaseInExplorer('${escapeHtml(r.version_name)}')" title="Mostrar en Carpeta de Windows">
-              <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+            <button type="button" class="btn btn-outline btn-xs" onclick="revealReleaseInExplorer('${escapeHtml(r.version_name)}')" title="Mostrar en Carpeta de Windows">
+              <svg class="btn-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
               Carpeta
             </button>
-            <button type="button" class="btn btn-outline btn-sm" onclick="openEditReleaseModal('${escapeHtml(r.version_name)}')" title="Editar Versión y Changelog">
-              <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+            <button type="button" class="btn btn-outline btn-xs" onclick="verifyReleaseIntegrity('${escapeHtml(r.version_name)}')" title="Verificar archivo en disco y firma criptográfica RSA-4096">
+              <svg class="btn-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><polyline points="9 12 11 14 15 10"/></svg>
+              Verificar
             </button>
-            <button type="button" class="btn btn-outline btn-sm" style="color:var(--danger); border-color:var(--danger);" onclick="deleteRelease('${escapeHtml(r.version_name)}')" title="Eliminar Versión">
-              <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+            <button type="button" class="btn btn-outline btn-xs" onclick="openEditReleaseModal('${escapeHtml(r.version_name)}')" title="Editar Versión y Changelog">
+              <svg class="btn-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+            </button>
+            <button type="button" class="btn btn-outline btn-xs" style="color:var(--danger); border-color:var(--danger);" onclick="deleteRelease('${escapeHtml(r.version_name)}')" title="Eliminar Versión">
+              <svg class="btn-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
             </button>
           </div>
         </td>
@@ -6413,6 +6903,102 @@ async function loadReleases() {
   } catch (e) {
     console.error('Error al cargar releases:', e);
   }
+}
+
+/**
+ * Re-verifica en disco duro el archivo físico y firma RSA-4096 de una versión
+ */
+async function verifyReleaseIntegrity(versionName, fromEditModal = false) {
+  if (!versionName) return;
+  try {
+    showToast(`Auditando archivo y firma de v${versionName}...`, 'info', 2500);
+    const res = await fetch(`/api/releases/${encodeURIComponent(versionName)}/verify`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+    });
+    const data = await res.json();
+    if (!res.ok || !data.ok) {
+      throw new Error(data.error || 'No se pudo verificar la versión');
+    }
+
+    const updatedRel = data.release;
+    if (updatedRel) {
+      const idx = globalReleases.findIndex(r => r.version_name === versionName);
+      if (idx !== -1) globalReleases[idx] = updatedRel;
+
+      if (fromEditModal || document.getElementById('modalEditRelease')?.classList.contains('open')) {
+        const currentEditVer = document.getElementById('editRelVersionName')?.value;
+        if (currentEditVer === versionName) {
+          const vcInput = document.getElementById('editRelVersionCode');
+          const dbInput = document.getElementById('editRelDbSchema');
+          if (vcInput && updatedRel.version_code) vcInput.value = updatedRel.version_code;
+          if (dbInput && updatedRel.db_schema_version) dbInput.value = updatedRel.db_schema_version;
+          renderEditReleaseVariants(updatedRel);
+        }
+      }
+    }
+
+    await loadReleases();
+    await loadReleaseMatrix();
+
+    if (!data.file_exists) {
+      showToast(`No se encontró ningún APK físico en disco para v${versionName}.`, 'warning');
+    } else if (updatedRel?.signature_status === 'OFFICIAL_RELEASE' || updatedRel?.signature_verified === true) {
+      showToast(`v${versionName} verificada: Firma Oficial RSA-4096 y archivo en disco OK.`, 'success');
+    } else if (updatedRel?.signature_status === 'UNOFFICIAL_SIGNATURE' || updatedRel?.signature_verified === false) {
+      showToast(`v${versionName} auditada: se detectó firma NO OFICIAL.`, 'warning');
+    } else {
+      showToast(`v${versionName} auditada en disco (${updatedRel?.signature_detail || 'Sin Verificar'}).`, 'info');
+    }
+  } catch (e) {
+    showToast('Error al verificar versión: ' + e.message, 'error');
+  }
+}
+
+/**
+ * Carga notas compañeras (*_cambios.txt o *_atp.txt) en el campo indicado sin mezclarlas
+ */
+async function loadCompanionNoteIntoField(versionName, targetFieldId, noteKind, cachedData = null) {
+  const field = document.getElementById(targetFieldId);
+  if (!field) return;
+
+  const cleanVer = String(versionName || '').trim().replace(/^[vV]/, '');
+  let noteText = '';
+
+  if (cachedData && cleanVer && String(cachedData.version_name || '').trim().replace(/^[vV]/, '') === cleanVer) {
+    noteText = noteKind === 'internal_notes'
+      ? (cachedData.suggested_internal_notes || '')
+      : (cachedData.suggested_changelog || '');
+  }
+
+  if (!noteText && cleanVer) {
+    try {
+      const res = await fetch(`/api/releases/${encodeURIComponent(cleanVer)}/companion-notes`);
+      if (res.ok) {
+        const data = await res.json();
+        noteText = noteKind === 'internal_notes'
+          ? (data.suggested_internal_notes || '')
+          : (data.suggested_changelog || '');
+      }
+    } catch (e) {
+      showToast('Error al leer notas compañeras: ' + e.message, 'error');
+      return;
+    }
+  }
+
+  const filePattern = noteKind === 'internal_notes' ? '*_atp.txt' : '*_cambios.txt';
+  if (!noteText.trim()) {
+    showToast(`No se encontró archivo ${filePattern} en disco para la versión ${cleanVer || 'indicada'}.`, 'warning');
+    return;
+  }
+
+  field.value = noteText;
+  showToast(
+    noteKind === 'internal_notes'
+      ? `Notas internas cargadas desde ${filePattern}.`
+      : `Changelog comercial cargado desde ${filePattern}.`,
+    'success'
+  );
 }
 
 /**
@@ -6455,6 +7041,92 @@ let currentUploadVariantVersion = null;
 let currentUploadVariantType = 'universal';
 
 /**
+ * Construye una tarjeta enriquecida de variante APK dentro de #modalEditRelease
+ */
+function buildEditVariantCardHtml(rel, variantKey, titleLabel, badgeClass, vData) {
+  const versionName = rel.version_name || '';
+  const hasPath = !!(vData && vData.file_path);
+  const sizeFormatted = hasPath ? formatApkSizeMb(vData.file_size_mb) : 'Sin archivo físico';
+  const sha = (vData && vData.sha256) ? String(vData.sha256) : '';
+  const shortSha = sha ? `${sha.substring(0, 14)}...` : '-';
+
+  // Estado real en disco
+  let diskBadge = '<span class="badge badge-disk-missing">No encontrado</span>';
+  if (hasPath) {
+    const diskState = vData.file_exists !== undefined ? vData.file_exists : rel.file_exists;
+    if (diskState === false) {
+      diskBadge = '<span class="badge badge-disk-missing">No encontrado</span>';
+    } else if (diskState === true) {
+      diskBadge = '<span class="badge badge-disk-ok">Verificado en disco</span>';
+    } else {
+      diskBadge = '<span class="badge badge-unverified-sig">Pendiente verificar</span>';
+    }
+  }
+
+  // Firma de 3 estados honestos
+  const sigStatus = vData?.signature_status ?? (hasPath ? rel.signature_status : 'UNVERIFIED');
+  const sigVerified = vData?.signature_verified !== undefined
+    ? vData.signature_verified
+    : (hasPath ? rel.signature_verified : null);
+  const sigBadge = hasPath
+    ? renderSignatureStatusBadge(sigStatus, sigVerified, 'Oficial RSA-4096')
+    : '<span class="badge badge-unverified-sig">Sin Verificar</span>';
+
+  return `
+    <div class="edit-variant-card" data-variant="${variantKey}">
+      <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.4rem;">
+        <div style="display:flex; align-items:center; gap:0.4rem; flex-wrap:wrap;">
+          <span class="badge ${badgeClass}">${escapeHtml(titleLabel)}</span>
+          <strong style="font-size:0.78rem; color:var(--text-primary);">${escapeHtml(sizeFormatted)}</strong>
+          ${diskBadge}
+          ${sigBadge}
+        </div>
+        <div style="display:flex; gap:0.3rem; flex-wrap:wrap; align-items:center;">
+          <button type="button" class="btn btn-outline btn-xs" onclick="triggerVariantUpload('${variantKey}', '${escapeHtml(versionName)}')">
+            <svg class="btn-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+            Subir desde PC
+          </button>
+          <button type="button" class="btn btn-outline btn-xs btn-toggle-local-picker" data-variant="${variantKey}" data-version="${escapeHtml(versionName)}">
+            <svg class="btn-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+            Vincular desde Biblioteca Local
+          </button>
+          <button type="button" class="btn btn-outline btn-xs" onclick="verifyReleaseIntegrity('${escapeHtml(versionName)}', true)" title="Re-verificar archivo en disco y firma RSA-4096">
+            <svg class="btn-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><polyline points="9 12 11 14 15 10"/></svg>
+            Re-verificar
+          </button>
+          ${hasPath ? `
+            <button type="button" class="btn btn-outline btn-xs" onclick="copyReleaseApkToClipboard('${escapeHtml(versionName)}', '${variantKey}')">Copiar</button>
+            <button type="button" class="btn btn-outline btn-xs" onclick="revealReleaseInExplorer('${escapeHtml(versionName)}', '${variantKey}')">Carpeta</button>
+          ` : ''}
+        </div>
+      </div>
+      ${hasPath ? `
+        <div class="edit-variant-meta-row">
+          <span style="color:var(--text-muted);">SHA-256:</span>
+          <code style="font-family:var(--font-mono); color:var(--text-primary);" title="${escapeHtml(sha)}">${escapeHtml(shortSha)}</code>
+          ${sha ? `<button type="button" class="btn btn-outline btn-xs btn-copy-variant-sha" data-sha="${escapeHtml(sha)}">Copiar SHA</button>` : ''}
+        </div>
+        <div style="font-size:0.73rem; color:var(--text-secondary); font-family:var(--font-mono); word-break:break-all;">
+          ${escapeHtml(vData.file_path || '')}
+        </div>
+      ` : '<div style="font-size:0.73rem; color:var(--text-muted);">No registrado en disco para esta versión. Usa "Subir desde PC" o "Vincular desde Biblioteca Local".</div>'}
+      <div class="edit-variant-local-picker" id="editVariantLocalPicker_${variantKey}" style="display:none;">
+        <div style="display:flex; justify-content:space-between; align-items:center; gap:0.5rem;">
+          <strong style="font-size:0.75rem; color:var(--primary);">Seleccionar APK detectado en Biblioteca Local / Build:</strong>
+          <span style="font-size:0.71rem; color:var(--text-muted);" id="editVariantLocalStatus_${variantKey}">Cargando...</span>
+        </div>
+        <div style="display:flex; gap:0.4rem; flex-wrap:wrap; align-items:center;">
+          <select id="editVariantLocalSelect_${variantKey}" style="flex:1; min-width:220px; font-size:0.76rem; padding:0.35rem 0.55rem;"></select>
+          <button type="button" class="btn btn-primary btn-xs btn-link-local-build" data-variant="${variantKey}" data-version="${escapeHtml(versionName)}">
+            Vincular Seleccionado
+          </button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+/**
  * Renderiza el estado y acciones de variantes físicas dentro del modal de edición
  */
 function renderEditReleaseVariants(rel) {
@@ -6467,6 +7139,7 @@ function renderEditReleaseVariants(rel) {
     sha256: rel.apk_sha256,
     signature_status: rel.signature_status,
     signature_verified: rel.signature_verified,
+    file_exists: rel.file_exists,
   } : null);
 
   const arm64Data = rel.arm64_apk || (rel.apk_file_path && rel.abi_variant === 'ARM64' ? {
@@ -6475,59 +7148,138 @@ function renderEditReleaseVariants(rel) {
     sha256: rel.apk_sha256,
     signature_status: rel.signature_status,
     signature_verified: rel.signature_verified,
+    file_exists: rel.file_exists,
   } : null);
 
   container.innerHTML = `
     <div style="display:flex; flex-direction:column; gap:0.75rem;">
-      <!-- Variante Universal -->
-      <div style="background:var(--bg-primary); border:1px solid var(--border-color); border-radius:6px; padding:0.6rem 0.75rem;">
-        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.4rem; margin-bottom:0.35rem;">
-          <div style="display:flex; align-items:center; gap:0.4rem;">
-            <span class="badge badge-universal">Universal (~110 MB)</span>
-            <small style="color:var(--text-secondary);">${universalData ? (universalData.file_size_mb || '') : 'Sin archivo físico'}</small>
-          </div>
-          <div style="display:flex; gap:0.3rem;">
-            <button type="button" class="btn btn-outline btn-xs" onclick="triggerVariantUpload('universal', '${escapeHtml(rel.version_name)}')">
-              ${universalData ? 'Reemplazar APK' : '+ Adjuntar APK'}
-            </button>
-            ${universalData ? `
-              <button type="button" class="btn btn-outline btn-xs" onclick="copyReleaseApkToClipboard('${escapeHtml(rel.version_name)}', 'universal')">Copiar</button>
-              <button type="button" class="btn btn-outline btn-xs" onclick="revealReleaseInExplorer('${escapeHtml(rel.version_name)}', 'universal')">Carpeta</button>
-            ` : ''}
-          </div>
-        </div>
-        ${universalData ? `
-          <div style="font-size:0.73rem; color:var(--text-secondary); font-family:var(--font-mono); word-break:break-all;">
-            ${escapeHtml(universalData.file_path || '')}
-          </div>
-        ` : '<div style="font-size:0.73rem; color:var(--text-muted);">No registrado en disco para esta versión.</div>'}
-      </div>
-
-      <!-- Variante ARM64 Ligero -->
-      <div style="background:var(--bg-primary); border:1px solid var(--border-color); border-radius:6px; padding:0.6rem 0.75rem;">
-        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.4rem; margin-bottom:0.35rem;">
-          <div style="display:flex; align-items:center; gap:0.4rem;">
-            <span class="badge badge-arm64">ARM64 Ligero (~30 MB)</span>
-            <small style="color:var(--text-secondary);">${arm64Data ? (arm64Data.file_size_mb || '') : 'Sin archivo físico'}</small>
-          </div>
-          <div style="display:flex; gap:0.3rem;">
-            <button type="button" class="btn btn-outline btn-xs" onclick="triggerVariantUpload('arm64', '${escapeHtml(rel.version_name)}')">
-              ${arm64Data ? 'Reemplazar APK' : '+ Adjuntar APK'}
-            </button>
-            ${arm64Data ? `
-              <button type="button" class="btn btn-outline btn-xs" onclick="copyReleaseApkToClipboard('${escapeHtml(rel.version_name)}', 'arm64')">Copiar</button>
-              <button type="button" class="btn btn-outline btn-xs" onclick="revealReleaseInExplorer('${escapeHtml(rel.version_name)}', 'arm64')">Carpeta</button>
-            ` : ''}
-          </div>
-        </div>
-        ${arm64Data ? `
-          <div style="font-size:0.73rem; color:var(--text-secondary); font-family:var(--font-mono); word-break:break-all;">
-            ${escapeHtml(arm64Data.file_path || '')}
-          </div>
-        ` : '<div style="font-size:0.73rem; color:var(--text-muted);">No registrado en disco para esta versión.</div>'}
-      </div>
+      ${buildEditVariantCardHtml(rel, 'universal', 'Universal (~110 MB)', 'badge-universal', universalData)}
+      ${buildEditVariantCardHtml(rel, 'arm64', 'ARM64 Ligero (~30 MB)', 'badge-arm64', arm64Data)}
     </div>
   `;
+}
+
+/**
+ * Abre/carga el selector de Biblioteca Local para vincular una variante sin subir por red
+ */
+async function toggleEditVariantLocalPicker(variantKey, versionName) {
+  const picker = document.getElementById(`editVariantLocalPicker_${variantKey}`);
+  const statusEl = document.getElementById(`editVariantLocalStatus_${variantKey}`);
+  const selectEl = document.getElementById(`editVariantLocalSelect_${variantKey}`);
+  if (!picker || !selectEl) return;
+
+  const isVisible = picker.style.display !== 'none';
+  if (isVisible) {
+    picker.style.display = 'none';
+    return;
+  }
+
+  picker.style.display = 'flex';
+  if (statusEl) statusEl.textContent = 'Escaneando biblioteca...';
+  selectEl.innerHTML = '<option value="">Buscando APKs locales...</option>';
+
+  try {
+    const res = await fetch('/api/releases/detect-local-build');
+    if (!res.ok) throw new Error('Error al consultar biblioteca local');
+    const data = await res.json();
+    editModalLocalBuildsCache = Array.isArray(data.available_builds) ? data.available_builds : [];
+
+    if (editModalLocalBuildsCache.length === 0) {
+      if (statusEl) statusEl.textContent = 'Sin APKs detectados';
+      selectEl.innerHTML = '<option value="">No se encontraron APKs en biblioteca ni build/</option>';
+      return;
+    }
+
+    if (statusEl) statusEl.textContent = `${editModalLocalBuildsCache.length} APK(s) detectados`;
+    selectEl.innerHTML = '';
+    editModalLocalBuildsCache.forEach((b, idx) => {
+      const opt = document.createElement('option');
+      opt.value = String(idx);
+      const sizeStr = formatApkSizeMb(b.size_mb);
+      const originStr = (b.source_label || '').toLowerCase().includes('biblioteca') ? 'Biblioteca' : 'Build Local';
+      opt.textContent = `v${b.version_name || '?'} · ${b.abi_variant || 'UNIVERSAL'} · ${sizeStr} · ${originStr} (${b.file_name || ''})`;
+      if (b.version_name === versionName && ((variantKey === 'arm64' && b.abi_variant === 'ARM64') || (variantKey === 'universal' && b.abi_variant !== 'ARM64'))) {
+        opt.selected = true;
+      }
+      selectEl.appendChild(opt);
+    });
+  } catch (e) {
+    if (statusEl) statusEl.textContent = 'Error';
+    selectEl.innerHTML = `<option value="">Error: ${escapeHtml(e.message)}</option>`;
+  }
+}
+
+/**
+ * Importa localmente el APK elegido de Biblioteca Local y lo vincula a la variante del release
+ */
+async function linkLocalBuildToReleaseVariant(versionName, variantKey) {
+  const selectEl = document.getElementById(`editVariantLocalSelect_${variantKey}`);
+  const idx = parseInt(selectEl?.value ?? '', 10);
+  const build = Number.isInteger(idx) ? editModalLocalBuildsCache[idx] : null;
+  if (!build || !build.file_path) {
+    showToast('Selecciona un APK válido de la lista local.', 'warning');
+    return;
+  }
+
+  try {
+    showToast(`Vinculando ${build.file_name} a v${versionName} (${variantKey.toUpperCase()})...`, 'info');
+    const impRes = await fetch('/api/releases/import-local-apk', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ source_path: build.file_path }),
+    });
+    const impData = await impRes.json();
+    if (!impRes.ok || !impData.ok) {
+      throw new Error(impData.error || 'No se pudo importar el APK local');
+    }
+
+    const normalizedSize = formatApkSizeMb(impData.size_mb);
+    const variantData = {
+      file_path: impData.imported_path || impData.file_path,
+      file_size_mb: normalizedSize,
+      sha256: impData.sha256,
+      signature_status: impData.signature_status,
+      signature_verified: impData.signature_verified,
+      signature_detail: impData.signature_detail,
+      signer_sha256: impData.signer_sha256,
+      signer_dn: impData.signer_dn,
+      file_exists: true,
+    };
+
+    const updates = {};
+    if (variantKey === 'arm64') {
+      updates.arm64_apk = variantData;
+    } else {
+      updates.universal_apk = variantData;
+      updates.apk_file_path = variantData.file_path;
+      updates.file_size_mb = normalizedSize;
+      updates.apk_sha256 = impData.sha256;
+      updates.signature_status = impData.signature_status;
+      updates.signature_verified = impData.signature_verified;
+      updates.signature_detail = impData.signature_detail;
+      updates.signer_sha256 = impData.signer_sha256;
+      updates.signer_dn = impData.signer_dn;
+    }
+
+    const putRes = await fetch(`/api/releases/${encodeURIComponent(versionName)}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updates),
+    });
+    if (!putRes.ok) throw new Error('Error al vincular variante en la base de datos');
+    const updatedRel = await putRes.json();
+    updatedRel.file_exists = true;
+
+    const rIdx = globalReleases.findIndex(r => r.version_name === versionName);
+    if (rIdx !== -1) globalReleases[rIdx] = updatedRel;
+
+    renderEditReleaseVariants(updatedRel);
+    await loadReleases();
+    await loadReleaseMatrix();
+    showToast(`Variante ${variantKey.toUpperCase()} vinculada desde biblioteca local (${normalizedSize}).`, 'success');
+  } catch (err) {
+    showToast('Error al vincular desde biblioteca: ' + err.message, 'error');
+  }
 }
 
 function triggerVariantUpload(variant, versionName) {
@@ -6554,12 +7306,17 @@ async function handleVariantFileSelected(file, variant, versionName) {
       throw new Error(data.error || 'Error al inspeccionar archivo subido');
     }
 
+    const normalizedSize = formatApkSizeMb(data.size_mb);
     const variantData = {
       file_path: data.file_path,
-      file_size_mb: data.file_size_mb,
+      file_size_mb: normalizedSize,
       sha256: data.sha256,
       signature_status: data.signature_status,
       signature_verified: data.signature_verified,
+      signature_detail: data.signature_detail,
+      signer_sha256: data.signer_sha256,
+      signer_dn: data.signer_dn,
+      file_exists: true,
     };
 
     const updates = {};
@@ -6568,10 +7325,13 @@ async function handleVariantFileSelected(file, variant, versionName) {
     } else {
       updates.universal_apk = variantData;
       updates.apk_file_path = data.file_path;
-      updates.file_size_mb = data.file_size_mb;
+      updates.file_size_mb = normalizedSize;
       updates.apk_sha256 = data.sha256;
       updates.signature_status = data.signature_status;
       updates.signature_verified = data.signature_verified;
+      updates.signature_detail = data.signature_detail;
+      updates.signer_sha256 = data.signer_sha256;
+      updates.signer_dn = data.signer_dn;
     }
 
     const putRes = await fetch(`/api/releases/${encodeURIComponent(versionName)}`, {
@@ -6581,13 +7341,15 @@ async function handleVariantFileSelected(file, variant, versionName) {
     });
     if (!putRes.ok) throw new Error('Error al vincular variante en el release');
     const updatedRel = await putRes.json();
+    updatedRel.file_exists = true;
 
     const idx = globalReleases.findIndex(r => r.version_name === versionName);
     if (idx !== -1) globalReleases[idx] = updatedRel;
 
     renderEditReleaseVariants(updatedRel);
     await loadReleases();
-    showToast(`Variante ${variant.toUpperCase()} vinculada con éxito (${data.file_size_mb || ''}).`, 'success');
+    await loadReleaseMatrix();
+    showToast(`Variante ${variant.toUpperCase()} vinculada con éxito (${normalizedSize}).`, 'success');
   } catch (err) {
     showToast('Error al actualizar variante: ' + err.message, 'error');
   }
@@ -6779,9 +7541,13 @@ function renderReleaseMatrix() {
     } else if (status === 'AHEAD' || cmp > 0) {
       statusBadge = `<span class="badge badge-ahead" title="Cliente cuenta con versión superior de prueba o desarrollo">Versión superior (v${escapeHtml(row.installed_version)})</span>`;
     } else if (status === 'UP_TO_DATE' || row.is_up_to_date) {
-      statusBadge = '<span class="badge badge-green">✓ Al Día</span>';
+      statusBadge = '<span class="badge badge-green"><svg class="btn-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> Al Día</span>';
     } else if (status === 'SENT') {
-      const sentDate = row.last_apk_sent_at ? row.last_apk_sent_at.substring(5, 10).replace('-', '/') : '';
+      let sentDate = '';
+      if (row.last_apk_sent_at) {
+        const isoDate = String(row.last_apk_sent_at).substring(0, 10).split('-');
+        sentDate = isoDate.length === 3 ? `${isoDate[2]}/${isoDate[1]}` : '';
+      }
       statusBadge = `<span class="badge badge-sent" title="APK enviado: pendiente de confirmación en cliente">Enviado ${sentDate}</span>`;
     } else {
       statusBadge = row.is_eligible_for_free
@@ -6798,33 +7564,38 @@ function renderReleaseMatrix() {
       if (row.is_eligible_for_free) {
         const sendLabel = status === 'SENT' ? 'Reenviar APK' : 'Enviar APK';
         actionButtons = `
-          <button type="button" class="btn btn-wa btn-sm" onclick="openApkDispatchComposer('${row.client_id}', '${row.latest_version}', 'eligible')" title="${sendLabel} por WhatsApp con copia de binario APK al portapapeles">
-            <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M22 2L11 13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+          <button type="button" class="btn btn-wa btn-sm" onclick="openApkDispatchComposer('${escapeHtml(row.client_id)}', '${escapeHtml(row.latest_version)}', 'eligible')" title="${sendLabel} por WhatsApp con copia de binario APK al portapapeles">
+            <svg class="btn-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M22 2L11 13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
             ${sendLabel}
           </button>
-          <button type="button" class="btn btn-outline btn-sm" onclick="markClientUpdated('${row.client_id}', '${row.latest_version}')" title="Marcar como actualizado a v${row.latest_version}">
-            <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="20 6 9 17 4 12"/></svg>
+          <button type="button" class="btn btn-outline btn-sm" onclick="markClientUpdated('${escapeHtml(row.client_id)}', '${escapeHtml(row.latest_version)}')" title="Marcar como actualizado a v${escapeHtml(row.latest_version)}">
+            <svg class="btn-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="20 6 9 17 4 12"/></svg>
             Marcar Actualizado
           </button>
         `;
       } else {
         actionButtons = `
-          <button type="button" class="btn btn-outline btn-sm" onclick="openApkDispatchComposer('${row.client_id}', '${row.latest_version}', 'quote')" title="Cotizar Pase Anual de Actualizaciones por WhatsApp">
-            <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
+          <button type="button" class="btn btn-outline btn-sm" onclick="openApkDispatchComposer('${escapeHtml(row.client_id)}', '${escapeHtml(row.latest_version)}', 'quote')" title="Cotizar Pase Anual de Actualizaciones por WhatsApp">
+            <svg class="btn-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
             Cotizar Pase
           </button>
-          <button type="button" class="btn btn-primary btn-sm" onclick="jumpToIssuePass('${row.client_id}')" title="Ir a Emitir Pase Anual">
-            <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>
+          <button type="button" class="btn btn-primary btn-sm" onclick="jumpToIssuePass('${escapeHtml(row.client_id)}')" title="Ir a Emitir Pase Anual">
+            <svg class="btn-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>
             Emitir Pase
           </button>
-          <button type="button" class="btn btn-outline btn-sm" style="opacity:0.85;" onclick="authorizeCourtesyUpdate('${row.client_id}', '${row.latest_version}', '${escapeHtml(row.business_name)}', '${cleanPhone}', '${escapeHtml(row.owner_name)}')" title="Autorizar Envío de Cortesía Excepcional">
-            <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="20 12 20 22 4 22 4 12"/><rect x="2" y="7" width="20" height="5"/><line x1="12" y1="22" x2="12" y2="7"/></svg>
+          <button type="button" class="btn btn-outline btn-sm" style="opacity:0.85;" onclick="authorizeCourtesyUpdate('${escapeHtml(row.client_id)}', '${escapeHtml(row.latest_version)}', '${escapeHtml(row.business_name)}', '${cleanPhone}', '${escapeHtml(row.owner_name)}')" title="Autorizar Envío de Cortesía Excepcional">
+            <svg class="btn-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="20 12 20 22 4 22 4 12"/><rect x="2" y="7" width="20" height="5"/><line x1="12" y1="22" x2="12" y2="7"/></svg>
             Cortesía
           </button>
         `;
       }
-    } else if (status === 'AHEAD') {
-      actionButtons = '<span style="color:var(--text-muted); font-size:0.78rem;">Versión anticipada (sin acciones)</span>';
+    } else if (!isProspect && (status === 'UP_TO_DATE' || status === 'AHEAD' || row.is_up_to_date || cmp >= 0)) {
+      actionButtons = `
+        <button type="button" class="btn btn-outline btn-sm" onclick="openApkDispatchComposer('${escapeHtml(row.client_id)}', '${escapeHtml(row.latest_version)}', 'resend')" title="Reenviar APK o elegir versión para este cliente">
+          <svg class="btn-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M22 2L11 13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+          Reenviar / Elegir APK
+        </button>
+      `;
     }
 
     tr.innerHTML = `
@@ -6833,7 +7604,16 @@ function renderReleaseMatrix() {
         <div style="font-size:0.75rem; color:var(--text-muted);">${escapeHtml(row.owner_name || '')}</div>
       </td>
       <td>${escapeHtml(phoneDisplay)}</td>
-      <td>v${escapeHtml(row.installed_version)}</td>
+      <td>
+        <div class="matrix-installed-ver-cell">
+          <span>v${escapeHtml(row.installed_version)}</span>
+          ${!isProspect ? `
+            <button type="button" class="btn-micro-edit-ver" data-fix-client-id="${escapeHtml(row.client_id)}" title="Corregir versión instalada">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+            </button>
+          ` : ''}
+        </div>
+      </td>
       <td>v${escapeHtml(row.latest_version)}</td>
       <td>${escapeHtml(row.release_type || 'FEATURE_RELEASE')}</td>
       <td>${statusBadge}</td>
@@ -6920,61 +7700,155 @@ function authorizeCourtesyUpdate(clientId, latestVersion, businessName, cleanPho
   );
 }
 
-/**
- * Cambia la variante activa en el compositor de despacho APK
- */
-function setDispatchVariant(variant) {
-  currentDispatchVariant = variant;
-  const univCard = document.getElementById('waVariantCardUniversal');
-  const armCard = document.getElementById('waVariantCardArm64');
+function parseApkSizeMbNumber(raw) {
+  if (raw === null || raw === undefined) return null;
+  const cleaned = String(raw).trim().replace(/\s*MB\s*$/i, '').trim();
+  if (!cleaned) return null;
+  const num = Number(cleaned);
+  return (!Number.isNaN(num) && Number.isFinite(num)) ? num : null;
+}
 
-  if (univCard) {
-    if (variant === 'universal') univCard.classList.add('active');
-    else univCard.classList.remove('active');
-  }
-  if (armCard) {
-    if (variant === 'arm64') armCard.classList.add('active');
-    else armCard.classList.remove('active');
-  }
+function updateWaApkSizeWarning(rawSize, hasArm64 = false) {
+  const warnEl = document.getElementById('waApkSizeWarning');
+  const sizeLabelEl = document.getElementById('waApkWarningSizeLabel');
+  const adviceEl = document.getElementById('waApkWarningAdvice');
+  if (!warnEl) return;
 
-  // Actualizar tamaño de APK mostrado
-  const sizeEl = document.getElementById('waApkSizeText');
-  if (sizeEl && currentDispatchRelease) {
-    if (variant === 'arm64' && currentDispatchRelease.arm64_apk?.file_size_mb) {
-      sizeEl.textContent = currentDispatchRelease.arm64_apk.file_size_mb;
-    } else if (variant === 'universal' && currentDispatchRelease.universal_apk?.file_size_mb) {
-      sizeEl.textContent = currentDispatchRelease.universal_apk.file_size_mb;
-    } else {
-      sizeEl.textContent = currentDispatchRelease.file_size_mb || '109 MB';
+  const sizeNum = parseApkSizeMbNumber(rawSize);
+  if (sizeNum !== null && sizeNum > 100) {
+    warnEl.style.display = 'flex';
+    if (sizeLabelEl) sizeLabelEl.textContent = formatApkSizeMb(rawSize);
+    if (adviceEl) {
+      adviceEl.textContent = (hasArm64 && currentDispatchVariant !== 'arm64')
+        ? 'Puedes cambiar arriba a la variante ARM64 Ligero (<= 100 MB), usar WhatsApp Desktop (hasta 2 GB) o compartir el enlace externo.'
+        : 'Usa WhatsApp Desktop (admite hasta 2 GB) o comparte un enlace externo de Google Drive para evitar el bloqueo de 100 MB en WhatsApp Web.';
     }
+  } else {
+    warnEl.style.display = 'none';
   }
 }
 
-/**
- * Abre el Compositor Universal en modo Despacho Asistido de APK (Plan 19 Fase 3)
- */
-function openApkDispatchComposer(clientId, versionName, mode = 'eligible') {
-  const client = (globalClients && globalClients.find(c => c.id === clientId)) ||
-                 (globalReleaseMatrix && globalReleaseMatrix.find(r => r.client_id === clientId));
-  if (!client) {
-    showToast('Cliente no encontrado para despacho de APK.', 'error');
-    return;
+function toggleWaApkDispatchPanelVisibility(show) {
+  isApkDispatchMode = !!show;
+  const dispatchPanel = document.getElementById('waApkDispatchPanel');
+  const standardFooter = document.getElementById('waStandardFooterActions');
+  const dispatchFooter = document.getElementById('waApkDispatchFooterActions');
+  const copyHint = document.getElementById('waApkCopySuccessHint');
+  const sizeWarn = document.getElementById('waApkSizeWarning');
+
+  if (dispatchPanel) dispatchPanel.style.display = show ? 'block' : 'none';
+  if (standardFooter) standardFooter.style.display = show ? 'none' : 'flex';
+  if (dispatchFooter) dispatchFooter.style.display = show ? 'flex' : 'none';
+  if (!show) {
+    if (copyHint) copyHint.style.display = 'none';
+    if (sizeWarn) sizeWarn.style.display = 'none';
+  }
+}
+
+function ensureWaDispatchReleaseInitialized() {
+  if (currentDispatchRelease) return currentDispatchRelease;
+  const sorted = [...(globalReleases || [])].sort((a, b) => compareSemVer(b.version_name, a.version_name));
+  if (sorted.length > 0) {
+    currentDispatchRelease = sorted[0];
+  } else {
+    currentDispatchRelease = {
+      version_name: '9.40.0',
+      version_code: 84,
+      db_schema_version: 36,
+      type: 'FEATURE_RELEASE',
+      file_size_mb: '108.47 MB',
+      changelog: 'Mejoras clave de rendimiento, estabilidad y nuevas funciones comerciales.',
+      signature_status: 'OFFICIAL_RELEASE',
+      signature_verified: true,
+    };
+  }
+  return currentDispatchRelease;
+}
+
+function populateWaApkVersionSelect(selectedVersion) {
+  const selectEl = document.getElementById('waApkVersionSelect');
+  if (!selectEl) return;
+
+  const list = [...(globalReleases || [])].sort((a, b) => compareSemVer(b.version_name, a.version_name));
+  if (selectedVersion && !list.some(r => r.version_name === selectedVersion) && currentDispatchRelease) {
+    list.unshift(currentDispatchRelease);
   }
 
-  const rel = (globalReleases && globalReleases.find(r => r.version_name === versionName)) ||
-              (globalReleases && globalReleases[0]) || {
-                version_name: versionName,
-                version_code: 82,
-                db_schema_version: 36,
-                type: 'FEATURE_RELEASE',
-                file_size_mb: '109 MB',
-                changelog: 'Mejoras clave de rendimiento, estabilidad y nuevas funciones comerciales.',
-                signature_status: 'OFFICIAL_RELEASE',
-              };
+  selectEl.innerHTML = '';
+  list.forEach(rel => {
+    const opt = document.createElement('option');
+    opt.value = rel.version_name;
+    const typeLabel = rel.type === 'HOTFIX' ? 'HOTFIX' : 'FEATURE';
+    opt.textContent = `v${rel.version_name} (Build ${rel.version_code || '-'}) — ${typeLabel}`;
+    selectEl.appendChild(opt);
+  });
 
+  if (selectedVersion) {
+    selectEl.value = selectedVersion;
+  } else if (list.length > 0) {
+    selectEl.value = list[0].version_name;
+  }
+}
+
+function buildApkDispatchMessage(rel, client, mode = 'eligible') {
+  const author = ownerConfig?.legal_identity?.author_full_name || 'Julio Angello Vasquez Navarro';
+  const ownerName = client?.owner_name || 'Estimado(a) Cliente';
+  const bizName = client?.business_name || 'tu negocio';
+
+  if (mode === 'quote') {
+    const passPrice = (ownerConfig?.catalog?.PASE_ACTUALIZACION_ANUAL?.price || 150).toFixed(2);
+    const installedVer = client?.installed_version || client?.version || '9.0.0';
+    return `Hola ${ownerName}, te saluda ${author} de MochilaLista.\n\n` +
+      `Acabamos de lanzar la versión oficial *v${rel.version_name}* con mejoras avanzadas.\n` +
+      `Tu negocio *${bizName}* cuenta actualmente con la versión v${installedVer}.\n\n` +
+      `Para acceder a este paquete de nuevas funciones y soporte continuo, puedes adquirir tu *Pase Anual de Actualizaciones* por solo S/ ${passPrice}.\n\n` +
+      `¿Deseas que coordinemos la activación del pase hoy mismo?`;
+  }
+
+  const hasDriveUrl = Boolean(rel.apk_download_url && rel.apk_download_url.startsWith('http') && !rel.apk_download_url.includes('localhost'));
+  const downloadPart = hasDriveUrl
+    ? `*Enlace de Descarga Directa:*\n${rel.apk_download_url}\n\n`
+    : (mode === 'courtesy'
+        ? `*Archivo APK:* Se adjunta directamente en este chat como cortesía especial para tu negocio.\n\n`
+        : `*Archivo APK:* Se adjunta directamente en este chat para su instalación.\n\n`);
+  const changelogText = rel.changelog || 'Mejoras clave de rendimiento, estabilidad y nuevas funciones comerciales.';
+
+  if (mode === 'courtesy') {
+    return `Hola ${ownerName}, te saluda ${author} de MochilaLista.\n\n` +
+      `Como cortesía especial por tu fidelidad comercial, te hemos liberado el acceso directo a la nueva versión *v${rel.version_name}* para tu negocio *${bizName}*.\n\n` +
+      `*Versión:* MochilaLista v${rel.version_name}\n` +
+      `*Novedades:*\n${changelogText}\n\n` +
+      `${downloadPart}` +
+      `*Garantía Cero Pérdida:* Al instalar este APK sobre el actual, tu base de datos y productos se mantienen 100% intactos.`;
+  }
+
+  if (mode === 'resend') {
+    return `Hola ${ownerName}, te saluda ${author} de MochilaLista.\n\n` +
+      `Te compartimos nuevamente el instalador oficial para *${bizName}*.\n\n` +
+      `*Versión:* MochilaLista v${rel.version_name} (Build ${rel.version_code || 82})\n` +
+      `*Novedades:*\n${changelogText}\n\n` +
+      `${downloadPart}` +
+      `*Garantía Cero Pérdida:* Al instalar este APK sobre el actual, tu base de datos y productos se mantienen 100% intactos.`;
+  }
+
+  return `Hola ${ownerName}, te saluda ${author} de MochilaLista.\n\n` +
+    `¡Tenemos lista una nueva actualización oficial para *${bizName}*!\n\n` +
+    `*Versión:* MochilaLista v${rel.version_name} (Build ${rel.version_code || 82})\n` +
+    `*Novedades:*\n${changelogText}\n\n` +
+    `${downloadPart}` +
+    `*Garantía Cero Pérdida:* Al instalar este APK sobre el actual, tu base de datos y productos se mantienen 100% intactos.`;
+}
+
+function syncWaApkDispatchPanel(rel, options = {}) {
+  if (!rel) return;
   currentDispatchRelease = rel;
-  currentDispatchClient = client;
-  currentDispatchMode = mode;
+
+  populateWaApkVersionSelect(rel.version_name);
+
+  const copyHintEl = document.getElementById('waApkCopySuccessHint');
+  if (copyHintEl && !options.preserveCopyHint) {
+    copyHintEl.style.display = 'none';
+  }
 
   // Evaluar disponibilidad de variantes
   const hasUniversal = !!rel.universal_apk || (!rel.universal_apk && !rel.arm64_apk);
@@ -6989,8 +7863,9 @@ function openApkDispatchComposer(clientId, versionName, mode = 'eligible') {
     if (hasUniversal) {
       univCard.classList.remove('disabled');
       if (univDesc) {
-        univDesc.textContent = rel.universal_apk?.file_size_mb
-          ? `Compatible con cualquier celular Android (${rel.universal_apk.file_size_mb})`
+        const uSize = formatApkSizeMb(rel.universal_apk?.file_size_mb || rel.file_size_mb);
+        univDesc.textContent = uSize !== '-'
+          ? `Compatible con cualquier celular Android (${uSize})`
           : 'Compatible con cualquier celular Android';
       }
     } else {
@@ -7003,8 +7878,9 @@ function openApkDispatchComposer(clientId, versionName, mode = 'eligible') {
     if (hasArm64) {
       armCard.classList.remove('disabled');
       if (armDesc) {
-        armDesc.textContent = rel.arm64_apk?.file_size_mb
-          ? `Rápido para transferir por WhatsApp (${rel.arm64_apk.file_size_mb})`
+        const aSize = formatApkSizeMb(rel.arm64_apk?.file_size_mb);
+        armDesc.textContent = aSize !== '-'
+          ? `Rápido para transferir por WhatsApp (${aSize})`
           : 'Rápido para transferir por WhatsApp (celulares modernos)';
       }
     } else {
@@ -7035,7 +7911,8 @@ function openApkDispatchComposer(clientId, versionName, mode = 'eligible') {
 
   const diskStatusEl = document.getElementById('waApkDiskStatus');
   if (diskStatusEl) {
-    const hasAnyFile = !!(rel.apk_file_path || rel.universal_apk?.file_path || rel.arm64_apk?.file_path);
+    const hasPath = !!(rel.apk_file_path || rel.universal_apk?.file_path || rel.arm64_apk?.file_path);
+    const hasAnyFile = hasPath && rel.file_exists !== false;
     if (hasAnyFile) {
       diskStatusEl.textContent = 'Verificado en Disco';
       diskStatusEl.style.color = '#22c55e';
@@ -7047,59 +7924,150 @@ function openApkDispatchComposer(clientId, versionName, mode = 'eligible') {
 
   const sigBadgeEl = document.getElementById('waApkSigBadge');
   if (sigBadgeEl) {
-    if (rel.signature_status === 'OFFICIAL_RELEASE' || rel.signature_verified === true) {
-      sigBadgeEl.innerHTML = '<span class="badge badge-official-sig" title="Firma Oficial Verificada (Julio Angello Vasquez Navarro)"><svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><polyline points="9 12 11 14 15 10"/></svg> Oficial</span>';
-    } else if (rel.signature_status === 'UNOFFICIAL_SIGNATURE' || rel.signature_verified === false) {
-      sigBadgeEl.innerHTML = '<span class="badge badge-unofficial-sig" title="Firma No Oficial / Debug Keystore"><svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg> No Oficial</span>';
-    } else {
-      sigBadgeEl.innerHTML = '<span class="badge" style="background:rgba(245,158,11,0.15); color:#f59e0b; border:1px solid rgba(245,158,11,0.3);" title="Firma sin verificar"><svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg> Sin Verificar</span>';
+    sigBadgeEl.innerHTML = renderSignatureStatusBadge(rel.signature_status, rel.signature_verified, 'Oficial RSA-4096');
+  }
+
+  // Actualizar texto comercial conservando chips Insertar activos
+  if (!options.skipMessageUpdate && (currentWaComposerTemplateKey === 'update' || isApkDispatchMode)) {
+    const textarea = document.getElementById('waCompMessage');
+    const client = getCurrentWaComposerClient();
+    if (textarea && client) {
+      const { activeKeys } = extractBaseAndSnippetsFromText(textarea.value || '');
+      const updatedBase = buildApkDispatchMessage(rel, client, currentDispatchMode);
+      currentWaRenderedTemplateBase = updatedBase;
+
+      let nextValue = updatedBase;
+      activeKeys.forEach(k => {
+        const blk = buildWaSnippetBlock(k, { notify: false });
+        if (blk) nextValue = appendSnippetBlockToText(nextValue, blk);
+      });
+
+      textarea.value = nextValue;
+      updateWaComposerStats();
+      syncWaInsertChipsState();
     }
   }
+}
 
-  // Redacción comercial sin URLs localhost ni notas internas
-  const author = ownerConfig?.legal_identity?.author_full_name || 'Julio Angello Vasquez Navarro';
-  const ownerName = client.owner_name || 'Estimado(a) Cliente';
-  const bizName = client.business_name || 'tu negocio';
-  let customMessage = '';
+function onChangeDispatchReleaseVersion(versionName, options = {}) {
+  const rel = (globalReleases && globalReleases.find(r => r.version_name === versionName)) || currentDispatchRelease;
+  if (!rel) return;
+  syncWaApkDispatchPanel(rel, options);
+}
 
-  if (mode === 'quote') {
-    const passPrice = (ownerConfig?.catalog?.PASE_ACTUALIZACION_ANUAL?.price || 150).toFixed(2);
-    const installedVer = client.installed_version || client.version || '9.0.0';
-    customMessage = `Hola ${ownerName}, te saluda ${author} de MochilaLista.\n\n` +
-      `Acabamos de lanzar la versión oficial *v${rel.version_name}* con mejoras avanzadas.\n` +
-      `Tu negocio *${bizName}* cuenta actualmente con la versión v${installedVer}.\n\n` +
-      `Para acceder a este paquete de nuevas funciones y soporte continuo, puedes adquirir tu *Pase Anual de Actualizaciones* por solo S/ ${passPrice}.\n\n` +
-      `¿Deseas que coordinemos la activación del pase hoy mismo?`;
-  } else if (mode === 'courtesy') {
-    const downloadPart = (rel.apk_download_url && rel.apk_download_url.startsWith('http') && !rel.apk_download_url.includes('localhost'))
-      ? `*Enlace de Descarga Directa:*\n${rel.apk_download_url}\n\n`
-      : `*Archivo APK:* Se adjunta directamente en este chat como cortesía especial para tu negocio.\n\n`;
-    const changelogText = rel.changelog || 'Mejoras clave de rendimiento, estabilidad y nuevas funciones comerciales.';
-    customMessage = `Hola ${ownerName}, te saluda ${author} de MochilaLista.\n\n` +
-      `Como cortesía especial por tu fidelidad comercial, te hemos liberado el acceso directo a la nueva versión *v${rel.version_name}* para tu negocio *${bizName}*.\n\n` +
-      `*Versión:* MochilaLista v${rel.version_name}\n` +
-      `*Novedades:*\n${changelogText}\n\n` +
-      `${downloadPart}` +
-      `*Garantía Cero Pérdida:* Al instalar este APK sobre el actual, tu base de datos y productos se mantienen 100% intactos.`;
-  } else {
-    // Modo eligible
-    const downloadPart = (rel.apk_download_url && rel.apk_download_url.startsWith('http') && !rel.apk_download_url.includes('localhost'))
-      ? `*Enlace de Descarga Directa:*\n${rel.apk_download_url}\n\n`
-      : `*Archivo APK:* Se adjunta directamente en este chat para su instalación.\n\n`;
-    const changelogText = rel.changelog || 'Mejoras clave de rendimiento, estabilidad y nuevas funciones comerciales.';
-    customMessage = `Hola ${ownerName}, te saluda ${author} de MochilaLista.\n\n` +
-      `¡Tenemos lista una nueva actualización oficial para *${bizName}*!\n\n` +
-      `*Versión:* MochilaLista v${rel.version_name} (Build ${rel.version_code || 82})\n` +
-      `*Novedades:*\n${changelogText}\n\n` +
-      `${downloadPart}` +
-      `*Garantía Cero Pérdida:* Al instalar este APK sobre el actual, tu base de datos y productos se mantienen 100% intactos.`;
+/**
+ * Cambia la variante activa en el compositor de despacho APK
+ */
+function setDispatchVariant(variant) {
+  currentDispatchVariant = variant;
+  const univCard = document.getElementById('waVariantCardUniversal');
+  const armCard = document.getElementById('waVariantCardArm64');
+
+  if (univCard) {
+    if (variant === 'universal') univCard.classList.add('active');
+    else univCard.classList.remove('active');
   }
+  if (armCard) {
+    if (variant === 'arm64') armCard.classList.add('active');
+    else armCard.classList.remove('active');
+  }
+
+  // Actualizar tamaño de APK mostrado siempre con formato MB y evaluar aviso >100 MB
+  const sizeEl = document.getElementById('waApkSizeText');
+  let rawSize = '';
+  if (currentDispatchRelease) {
+    if (variant === 'arm64' && currentDispatchRelease.arm64_apk?.file_size_mb) {
+      rawSize = currentDispatchRelease.arm64_apk.file_size_mb;
+    } else if (variant === 'universal' && currentDispatchRelease.universal_apk?.file_size_mb) {
+      rawSize = currentDispatchRelease.universal_apk.file_size_mb;
+    } else {
+      rawSize = currentDispatchRelease.file_size_mb || '';
+    }
+  }
+  if (sizeEl) {
+    sizeEl.textContent = formatApkSizeMb(rawSize);
+  }
+  const hasArm64 = !!(currentDispatchRelease && currentDispatchRelease.arm64_apk);
+  updateWaApkSizeWarning(rawSize, hasArm64);
+}
+
+/**
+ * Abre el Compositor Universal en modo Despacho Asistido de APK (Plan 19 / 22 Fase 3)
+ */
+function openApkDispatchComposer(clientId, versionName, mode = 'eligible') {
+  const client = (globalClients && globalClients.find(c => c.id === clientId)) ||
+                 (globalReleaseMatrix && globalReleaseMatrix.find(r => r.client_id === clientId));
+  if (!client) {
+    showToast('Cliente no encontrado para despacho de APK.', 'error');
+    return;
+  }
+
+  const rel = (globalReleases && globalReleases.find(r => r.version_name === versionName)) ||
+              (globalReleases && globalReleases[0]) || {
+                version_name: versionName,
+                version_code: 84,
+                db_schema_version: 36,
+                type: 'FEATURE_RELEASE',
+                file_size_mb: '108.47 MB',
+                changelog: 'Mejoras clave de rendimiento, estabilidad y nuevas funciones comerciales.',
+                signature_status: 'OFFICIAL_RELEASE',
+                signature_verified: true,
+              };
+
+  currentDispatchRelease = rel;
+  currentDispatchClient = client;
+  currentDispatchMode = mode;
+
+  const customMessage = buildApkDispatchMessage(rel, client, mode);
 
   openWhatsAppComposer(clientId, 'update', {
     isApkDispatch: true,
     release: rel,
     customMessage: customMessage,
   });
+}
+
+async function copyCurrentDispatchApkToClipboard() {
+  if (!currentDispatchRelease) return { ok: false };
+  const versionName = currentDispatchRelease.version_name;
+  const variant = currentDispatchVariant || 'universal';
+  const copyHintEl = document.getElementById('waApkCopySuccessHint');
+  const copyHintTextEl = document.getElementById('waApkCopySuccessText');
+
+  const copyRes = await fetch(`/api/releases/${encodeURIComponent(versionName)}/copy-file?variant=${encodeURIComponent(variant)}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' }
+  });
+  const copyData = await copyRes.json().catch(() => ({}));
+
+  if (!copyRes.ok || copyData.ok !== true) {
+    if (copyHintEl) copyHintEl.style.display = 'none';
+    const errMsg = copyRes.status === 404
+      ? `No se encontró el archivo .apk físico en disco para v${versionName} (${variant}).`
+      : (copyData.error || 'No se pudo copiar el archivo .apk al portapapeles de Windows.');
+    showToast(errMsg, 'error');
+    return { ok: false, error: errMsg };
+  }
+
+  const fileName = copyData.file_name || `mochilalista-v${versionName}.apk`;
+  showToast(`Archivo .apk copiado: presiona Ctrl + V en WhatsApp (${fileName}).`, 'success');
+  if (copyHintEl) copyHintEl.style.display = 'flex';
+  if (copyHintTextEl) {
+    copyHintTextEl.textContent = `Listo en portapapeles de Windows: ${fileName} — En el chat de WhatsApp que se abrió, presiona Ctrl + V para adjuntar el archivo.`;
+  }
+  return { ok: true, data: copyData, fileName };
+}
+
+async function reCopyCurrentDispatchApk() {
+  const btn = document.getElementById('btnWaReCopyApk');
+  if (btn) btn.disabled = true;
+  try {
+    await copyCurrentDispatchApkToClipboard();
+  } catch (e) {
+    showToast('Error al volver a copiar APK: ' + e.message, 'error');
+  } finally {
+    if (btn) btn.disabled = false;
+  }
 }
 
 /**
@@ -7110,9 +8078,7 @@ async function copyApkAndOpenWhatsApp() {
   const versionName = currentDispatchRelease.version_name;
   const variant = currentDispatchVariant || 'universal';
   const clientId = currentWaComposerClientId;
-  const client = (globalClients && globalClients.find(c => c.id === clientId)) ||
-                 (globalReleaseMatrix && globalReleaseMatrix.find(r => r.client_id === clientId)) ||
-                 currentDispatchClient;
+  const client = getCurrentWaComposerClient();
 
   let rawPhone = (client?.phone || '').trim();
   let cleanDigits = rawPhone.replace(/[^0-9]/g, '');
@@ -7125,22 +8091,10 @@ async function copyApkAndOpenWhatsApp() {
   if (btn) btn.disabled = true;
 
   try {
-    // 1. Invocar POST /api/releases/:version/copy-file?variant=...
-    const copyRes = await fetch(`/api/releases/${encodeURIComponent(versionName)}/copy-file?variant=${encodeURIComponent(variant)}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' }
-    });
-
-    const copyData = await copyRes.json().catch(() => ({}));
-
-    if (!copyRes.ok || !copyData.ok) {
-      if (copyRes.status === 404) {
-        showToast(`Archivo APK físico no encontrado en disco (${versionName} - ${variant}). Puedes enviar el mensaje de texto o generar la compilación.`, 'warning');
-      } else {
-        showToast(`Aviso al copiar APK: ${copyData.error || 'No se pudo copiar el archivo al portapapeles'}.`, 'warning');
-      }
-    } else {
-      showToast(`Archivo .APK copiado al portapapeles: presiona Ctrl + V en WhatsApp para adjuntarlo (${copyData.file_name || versionName}).`, 'success');
+    // 1. Verificar explícitamente POST /api/releases/:version/copy-file?variant=...
+    const copyOutcome = await copyCurrentDispatchApkToClipboard();
+    if (!copyOutcome.ok) {
+      return;
     }
 
     // 2. Registrar trazabilidad comercial de despacho en backend
@@ -7154,11 +8108,10 @@ async function copyApkAndOpenWhatsApp() {
       const waUrl = `https://api.whatsapp.com/send?phone=${cleanDigits}&text=${encodeURIComponent(text)}`;
       window.open(waUrl, '_blank');
     } else {
-      showToast('Teléfono no registrado: mensaje redactado pero WhatsApp no se abrió automáticamente.', 'info');
+      showToast('Teléfono no registrado: APK copiado, pero WhatsApp no se abrió automáticamente.', 'info');
     }
 
-    // 4. Cerrar modal y refrescar la matriz en tiempo real (pasa a "Enviado DD/MM")
-    closeModal('modalWaComposer');
+    // 4. Refrescar matriz en vivo conservando el modal abierto con #waApkCopySuccessHint visible
     await loadReleaseMatrix();
   } catch (e) {
     showToast('Error en despacho asistido: ' + e.message, 'error');
@@ -7208,21 +8161,94 @@ async function sendWaDispatchTextOnly() {
   await loadReleaseMatrix();
 }
 
-async function markClientUpdated(clientId, versionName) {
+async function markClientUpdated(clientId, versionName, options = {}) {
+  const force = !!options.force;
+  const silentUndo = !!options.silentUndo;
   try {
     const res = await fetch(`/api/clients/${clientId}/mark-updated`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ version_name: versionName }),
+      body: JSON.stringify({ version_name: versionName, force: force }),
     });
     if (!res.ok) throw new Error('Error al marcar cliente actualizado');
-    showToast(`Cliente actualizado a v${versionName} en el registro.`, 'success');
-    loadReleaseMatrix();
-    loadClients();
-    loadDashboard();
+    const data = await res.json().catch(() => ({}));
+    const updatedVer = data.installed_version || versionName;
+    const prevVer = data.previous_installed_version;
+
+    if (!silentUndo && prevVer && prevVer !== updatedVer) {
+      showToast(`Cliente actualizado a v${updatedVer} (antes v${prevVer}).`, 'success', {
+        duration: 8000,
+        actionLabel: 'Deshacer',
+        onAction: async () => {
+          await markClientUpdated(clientId, prevVer, { force: true, silentUndo: true });
+        },
+      });
+    } else {
+      showToast(`Cliente actualizado a v${updatedVer} en el registro.`, 'success');
+    }
+
+    await loadReleaseMatrix();
+    await loadClients();
+    await loadReleases();
+    await loadDashboard();
   } catch (e) {
     showToast('Error: ' + e.message, 'error');
   }
+}
+
+/**
+ * Abre el modal compacto para corregir manualmente la versión instalada (force: true)
+ */
+function openFixClientVersionModal(clientId) {
+  const row = (globalReleaseMatrix && globalReleaseMatrix.find(r => r.client_id === clientId)) ||
+              (globalClients && globalClients.find(c => c.id === clientId));
+  if (!row) {
+    showToast('Cliente no encontrado.', 'error');
+    return;
+  }
+
+  const currentVer = String(row.installed_version || '9.0.0').trim();
+  const idInput = document.getElementById('fixClientVersionId');
+  const bizEl = document.getElementById('fixClientVersionBiz');
+  const curEl = document.getElementById('fixClientVersionCurrent');
+  const selEl = document.getElementById('fixClientVersionSelect');
+  const customInput = document.getElementById('fixClientVersionInput');
+
+  if (idInput) idInput.value = clientId;
+  if (bizEl) bizEl.textContent = row.business_name || row.owner_name || clientId;
+  if (curEl) curEl.textContent = `v${currentVer}`;
+  if (customInput) customInput.value = currentVer;
+
+  if (selEl) {
+    selEl.innerHTML = '';
+    const seen = new Set();
+    const versions = [];
+    (globalReleases || []).forEach(r => {
+      if (r.version_name && !seen.has(r.version_name)) {
+        seen.add(r.version_name);
+        versions.push({
+          version: r.version_name,
+          label: `v${r.version_name} (${r.type === 'HOTFIX' ? 'HOTFIX' : 'FEATURE'})`,
+        });
+      }
+    });
+    if (!seen.has(currentVer)) {
+      versions.push({ version: currentVer, label: `v${currentVer} (actual)` });
+    }
+    versions.forEach(item => {
+      const opt = document.createElement('option');
+      opt.value = item.version;
+      opt.textContent = item.label;
+      if (item.version === currentVer) opt.selected = true;
+      selEl.appendChild(opt);
+    });
+    const manualOpt = document.createElement('option');
+    manualOpt.value = '__CUSTOM__';
+    manualOpt.textContent = 'Otra versión manual...';
+    selEl.appendChild(manualOpt);
+  }
+
+  openModal('modalFixClientVersion');
 }
 
 /**
@@ -7248,6 +8274,79 @@ function initReleaseUploadAndAutoDetect() {
   matrixSearchInput?.addEventListener('input', (e) => {
     currentMatrixSearch = e.target.value;
     renderReleaseMatrix();
+  });
+
+  // Delegación segura para corrección rápida de versión en matriz (sin window.prompt)
+  document.getElementById('matrixTableBody')?.addEventListener('click', (e) => {
+    const btn = e.target.closest('.btn-micro-edit-ver');
+    if (!btn) return;
+    const clientId = btn.dataset.fixClientId;
+    if (clientId) openFixClientVersionModal(clientId);
+  });
+
+  document.getElementById('fixClientVersionSelect')?.addEventListener('change', (e) => {
+    const val = e.target.value;
+    const customInput = document.getElementById('fixClientVersionInput');
+    if (!customInput) return;
+    if (val === '__CUSTOM__') {
+      customInput.focus();
+      customInput.select();
+    } else {
+      customInput.value = val;
+    }
+  });
+
+  document.getElementById('btnSubmitFixClientVersion')?.addEventListener('click', async () => {
+    const clientId = document.getElementById('fixClientVersionId')?.value;
+    const rawVer = document.getElementById('fixClientVersionInput')?.value?.trim() || '';
+    const cleanVer = rawVer.replace(/^[vV]/, '');
+    if (!clientId || !cleanVer) {
+      showToast('Ingresa una versión SemVer válida (ej: 9.38.0).', 'warning');
+      return;
+    }
+    closeModal('modalFixClientVersion');
+    await markClientUpdated(clientId, cleanVer, { force: true, silentUndo: false });
+  });
+
+  // Delegación en tarjetas de variantes de #modalEditRelease
+  document.getElementById('editRelVariantsContainer')?.addEventListener('click', (e) => {
+    const copyBtn = e.target.closest('.btn-copy-variant-sha');
+    if (copyBtn) {
+      copyPlainTextToClipboard(copyBtn.dataset.sha, 'Hash SHA-256 copiado al portapapeles.');
+      return;
+    }
+
+    const togglePickerBtn = e.target.closest('.btn-toggle-local-picker');
+    if (togglePickerBtn) {
+      toggleEditVariantLocalPicker(togglePickerBtn.dataset.variant, togglePickerBtn.dataset.version);
+      return;
+    }
+
+    const linkLocalBtn = e.target.closest('.btn-link-local-build');
+    if (linkLocalBtn) {
+      linkLocalBuildToReleaseVariant(linkLocalBtn.dataset.version, linkLocalBtn.dataset.variant);
+    }
+  });
+
+  // Botones de recarga rápida de notas compañeras (*_cambios.txt y *_atp.txt)
+  document.getElementById('btnCreateLoadCambiosTxt')?.addEventListener('click', () => {
+    const ver = document.getElementById('relVersionName')?.value || '';
+    loadCompanionNoteIntoField(ver, 'relChangelog', 'changelog', lastInspectedCreateData);
+  });
+
+  document.getElementById('btnCreateLoadAtpTxt')?.addEventListener('click', () => {
+    const ver = document.getElementById('relVersionName')?.value || '';
+    loadCompanionNoteIntoField(ver, 'relInternalNotes', 'internal_notes', lastInspectedCreateData);
+  });
+
+  document.getElementById('btnEditLoadCambiosTxt')?.addEventListener('click', () => {
+    const ver = document.getElementById('editRelVersionName')?.value || '';
+    loadCompanionNoteIntoField(ver, 'editRelChangelog', 'changelog');
+  });
+
+  document.getElementById('btnEditLoadAtpTxt')?.addEventListener('click', () => {
+    const ver = document.getElementById('editRelInternalNotes')?.value || '';
+    loadCompanionNoteIntoField(ver, 'editRelInternalNotes', 'internal_notes');
   });
 
   // Drag & drop handlers
@@ -7276,6 +8375,17 @@ function initReleaseUploadAndAutoDetect() {
     }
   });
 
+  // Delegación segura para importar APKs locales sin interpolar barras Windows en onclick
+  const buildsGridEl = document.getElementById('localBuildsGrid');
+  buildsGridEl?.addEventListener('click', (e) => {
+    const btn = e.target.closest('.btn-import-local-build');
+    if (!btn) return;
+    const sourcePath = btn.dataset.sourcePath || availableLocalBuilds[parseInt(btn.dataset.buildIndex || '-1', 10)]?.file_path;
+    if (sourcePath) {
+      importLocalApkDirectly(sourcePath);
+    }
+  });
+
   // Autodetectar builds locales desde biblioteca oficial y app_movil/build
   document.getElementById('btnDetectLocalBuild')?.addEventListener('click', async () => {
     const statusEl = document.getElementById('detectApkStatus');
@@ -7288,6 +8398,7 @@ function initReleaseUploadAndAutoDetect() {
       const data = await res.json();
 
       if (data.apk_found && data.available_builds && data.available_builds.length > 0) {
+        availableLocalBuilds = data.available_builds;
         if (statusEl) {
           statusEl.textContent = `Se encontraron ${data.total_found} APK(s) recientes. Selecciona uno para importar:`;
         }
@@ -7295,49 +8406,66 @@ function initReleaseUploadAndAutoDetect() {
           gridEl.style.display = 'grid';
           gridEl.innerHTML = '';
 
-          data.available_builds.forEach(b => {
+          data.available_builds.forEach((b, idx) => {
             const card = document.createElement('div');
             card.className = 'local-build-card';
+
+            const isOfficialLib = (b.source_label || '').toLowerCase().includes('biblioteca oficial');
+            const originBadge = isOfficialLib
+              ? '<span class="badge badge-origin-lib">Biblioteca Oficial</span>'
+              : '<span class="badge badge-origin-local">Build Local</span>';
 
             const variantBadge = b.abi_variant === 'ARM64'
               ? '<span class="badge badge-arm64">ARM64 Ligero</span>'
               : '<span class="badge badge-universal">Universal</span>';
 
-            let sigBadge = '<span class="badge" style="background:rgba(245,158,11,0.15); color:#f59e0b;">Sin Verificar</span>';
-            if (b.signature_status === 'OFFICIAL_RELEASE' || b.signature_verified === true) {
-              sigBadge = '<span class="badge badge-official-sig">Oficial RSA-4096</span>';
-            } else if (b.signature_status === 'UNOFFICIAL_SIGNATURE' || b.signature_verified === false) {
-              sigBadge = '<span class="badge badge-unofficial-sig">No Oficial</span>';
-            }
+            const sigBadge = renderSignatureStatusBadge(b.signature_status, b.signature_verified, 'Oficial RSA-4096');
 
             const modDate = b.modified_at ? b.modified_at.substring(0, 16).replace('T', ' ') : '-';
             const shortSha = b.sha256 ? `${b.sha256.substring(0, 10)}...` : '-';
+            const sizeFormatted = formatApkSizeMb(b.size_mb);
+            const dupPaths = Array.isArray(b.duplicate_paths) ? b.duplicate_paths : [];
+            const dupHtml = dupPaths.length > 0
+              ? `<div class="local-build-dup" title="${escapeHtml(dupPaths.join('\n'))}">Deduplicado por SHA-256 (${dupPaths.length} copia idéntica omitida)</div>`
+              : '';
 
             card.innerHTML = `
               <div class="local-build-header">
                 <strong style="color:var(--text-primary); font-size:0.85rem;">v${escapeHtml(b.version_name || '')} (Build ${b.version_code || '-'})</strong>
-                <div style="display:flex; gap:0.25rem;">
+                <div style="display:flex; gap:0.25rem; flex-wrap:wrap; justify-content:flex-end;">
+                  ${originBadge}
                   ${variantBadge}
                   ${sigBadge}
                 </div>
               </div>
               <div class="local-build-path" title="${escapeHtml(b.file_path || '')}">${escapeHtml(b.file_path || b.file_name)}</div>
               <div class="local-build-meta">
-                <span>${b.size_mb || '-'}</span>
+                <span>${escapeHtml(sizeFormatted)}</span>
                 <span>•</span>
-                <span>${modDate}</span>
+                <span>${escapeHtml(modDate)}</span>
                 <span>•</span>
-                <code style="font-size:0.7rem;">${shortSha}</code>
+                <code style="font-size:0.7rem;">${escapeHtml(shortSha)}</code>
               </div>
-              <button type="button" class="btn btn-outline btn-sm" style="margin-top:0.4rem; width:100%;" onclick="importLocalApkDirectly('${escapeHtml(b.file_path)}')">
-                <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                Seleccionar e Importar
-              </button>
+              ${dupHtml}
             `;
+
+            const importBtn = document.createElement('button');
+            importBtn.type = 'button';
+            importBtn.className = 'btn btn-outline btn-sm btn-import-local-build';
+            importBtn.style.marginTop = '0.4rem';
+            importBtn.style.width = '100%';
+            importBtn.dataset.sourcePath = b.file_path || '';
+            importBtn.dataset.buildIndex = String(idx);
+            importBtn.innerHTML = `
+              <svg class="btn-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              Seleccionar e Importar
+            `;
+            card.appendChild(importBtn);
             gridEl.appendChild(card);
           });
         }
       } else {
+        availableLocalBuilds = [];
         if (statusEl) {
           statusEl.textContent = 'No se encontraron archivos APK en la biblioteca oficial ni en build/app/outputs/flutter-apk/.';
         }
@@ -7367,7 +8495,7 @@ async function importLocalApkDirectly(sourcePath) {
     }
     const data = await res.json();
     populateCreateReleaseFormFromInspection(data);
-    showToast(`APK importado exitosamente: ${data.file_name} (${data.size_mb}).`, 'success');
+    showToast(`APK importado exitosamente: ${data.file_name} (${formatApkSizeMb(data.size_mb)}).`, 'success');
   } catch (e) {
     showToast('Error: ' + e.message, 'error');
   }
@@ -7377,13 +8505,24 @@ async function importLocalApkDirectly(sourcePath) {
  * Rellena el formulario de nuevo release a partir de la inspección real
  */
 function populateCreateReleaseFormFromInspection(data) {
+  lastInspectedCreateData = data;
   document.getElementById('relUploadedPath').value = data.imported_path || data.file_path || '';
   document.getElementById('relVersionName').value = data.version_name || '';
   document.getElementById('relVersionCode').value = data.version_code || 82;
   document.getElementById('relDbSchema').value = data.db_schema_version || 36;
   document.getElementById('relMinRequiredVersion').value = data.min_required_version || '9.0.0';
-  document.getElementById('relSizeMb').value = data.size_mb || '';
+  const normalizedSize = formatApkSizeMb(data.size_mb);
+  document.getElementById('relSizeMb').value = normalizedSize === '-' ? '' : normalizedSize;
   document.getElementById('relSha256').value = data.sha256 || '';
+
+  const relTypeSel = document.getElementById('relType');
+  if (relTypeSel) {
+    const suggestedType = (data.suggested_release_type === 'HOTFIX' || data.suggested_release_type === 'FEATURE_RELEASE')
+      ? data.suggested_release_type
+      : inferReleaseTypeFromSemVer(data.version_name);
+    relTypeSel.value = suggestedType;
+    updateReleaseTypeInfo('relType', 'relTypeInfoText');
+  }
 
   const variant = data.abi_variant || 'UNIVERSAL';
   document.getElementById('relAbiVariant').value = variant;
@@ -7393,10 +8532,16 @@ function populateCreateReleaseFormFromInspection(data) {
     variantBadge.textContent = variant === 'ARM64' ? 'ARM64 LIGERO' : 'UNIVERSAL';
   }
 
-  // Sugerencia de changelog
+  // Sugerencia de changelog comercial (*_cambios.txt) sin mezclar notas de ingeniería
   const changelogInput = document.getElementById('relChangelog');
   if (changelogInput && !changelogInput.value.trim() && data.suggested_changelog) {
     changelogInput.value = data.suggested_changelog;
+  }
+
+  // Pre-relleno automático de notas internas técnicas (*_atp.txt) cuando esté vacío
+  const internalNotesInput = document.getElementById('relInternalNotes');
+  if (internalNotesInput && !internalNotesInput.value.trim() && data.suggested_internal_notes) {
+    internalNotesInput.value = data.suggested_internal_notes;
   }
 
   // Escudo Anti-debug.apk Banner
@@ -7404,40 +8549,47 @@ function populateCreateReleaseFormFromInspection(data) {
 }
 
 /**
- * Renderiza el banner del escudo anti-debug según signature_status
+ * Renderiza el banner del escudo anti-debug con 3 estados honestos
  */
 function renderSignatureShieldBanner(data) {
   const banner = document.getElementById('apkSignatureBanner');
   if (!banner) return;
 
-  const status = data.signature_status;
-  document.getElementById('relSignatureVerified').value = data.signature_verified;
+  const status = data.signature_status || 'UNVERIFIED';
+  document.getElementById('relSignatureVerified').value =
+    data.signature_verified === true ? 'true' : (data.signature_verified === false ? 'false' : '');
   document.getElementById('relSignatureStatus').value = status;
   document.getElementById('relSignerSha256').value = data.signer_sha256 || '';
   document.getElementById('relSignerDn').value = data.signer_dn || '';
 
   banner.style.display = 'block';
 
+  const isUnofficial = status === 'UNOFFICIAL_SIGNATURE' || (data.signature_verified === false && status !== 'UNVERIFIED');
+
   if (status === 'OFFICIAL_RELEASE' || data.signature_verified === true) {
+    const shortSignerSha = data.signer_sha256 ? `${String(data.signer_sha256).substring(0, 16)}...` : '';
+    const dnPart = data.signer_dn ? `Titular: <code>${escapeHtml(data.signer_dn)}</code>` : 'Titular: Julio Angello Vasquez Navarro';
+    const shaPart = shortSignerSha ? ` · Huella: <code>${escapeHtml(shortSignerSha)}</code>` : '';
     banner.className = 'apk-signature-banner sig-official';
     banner.innerHTML = `
       <div style="display:flex; align-items:center; gap:0.5rem; font-weight:700;">
-        <svg style="width:18px; height:18px;" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><polyline points="9 12 11 14 15 10"/></svg>
-        Firma Oficial Verificada (RSA-4096 — Julio Angello Vasquez Navarro)
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><polyline points="9 12 11 14 15 10"/></svg>
+        Firma Comercial Oficial Verificada (RSA-4096)
       </div>
-      <div style="font-size:0.75rem; opacity:0.9;">
-        El certificado criptográfico coincide con la clave comercial maestra. Este APK es seguro para distribución pública.
+      <div style="font-size:0.75rem; opacity:0.92;">
+        ${dnPart}${shaPart}. El certificado criptográfico coincide con la clave maestra comercial.
       </div>
     `;
-  } else if (status === 'UNOFFICIAL_SIGNATURE' || data.signature_verified === false) {
+  } else if (isUnofficial) {
     banner.className = 'apk-signature-banner sig-unofficial';
     banner.innerHTML = `
       <div style="display:flex; align-items:center; gap:0.5rem; font-weight:700;">
-        <svg style="width:18px; height:18px;" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-        ¡ATENCIÓN! Este APK no cuenta con la firma comercial oficial (posible debug.apk).
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+        ¡ATENCIÓN! Este APK no cuenta con la firma comercial oficial (posible debug.apk)
       </div>
       <div style="font-size:0.76rem;">
         ${data.signer_dn ? `Firmado por: <code>${escapeHtml(data.signer_dn)}</code>. ` : ''}
+        ${data.signature_detail ? `${escapeHtml(data.signature_detail)} ` : ''}
         No distribuyas este binario a clientes comerciales de producción.
       </div>
       <label style="display:flex; align-items:center; gap:0.5rem; margin-top:0.4rem; cursor:pointer; font-weight:600; font-size:0.78rem;">
@@ -7449,11 +8601,11 @@ function renderSignatureShieldBanner(data) {
     banner.className = 'apk-signature-banner sig-unverified';
     banner.innerHTML = `
       <div style="display:flex; align-items:center; gap:0.5rem; font-weight:600;">
-        <svg style="width:18px; height:18px;" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-        Firma No Verificada (apksigner no disponible en el servidor)
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+        Firma no verificable en este entorno
       </div>
-      <div style="font-size:0.75rem; opacity:0.85;">
-        Los metadatos SemVer, tamaño y SHA-256 fueron extraídos correctamente en Dart puro.
+      <div style="font-size:0.75rem; opacity:0.88;">
+        ${escapeHtml(data.signature_detail || 'apksigner no disponible o sin huella legible en el entorno actual. Los metadatos SemVer, tamaño y SHA-256 fueron extraídos en Dart puro.')}
       </div>
     `;
   }
@@ -7504,13 +8656,231 @@ async function handleApkUpload(file) {
   }
 }
 
-// =================== 5. INSPECTOR DE TOKENS ML9 CON LECTOR ÓPTICO QR ===================
+// =================== 5. INSPECTOR FORENSE DUAL (ML9 / MLS1 — PLAN 22 FASE 4) ===================
+const INSPECTOR_HISTORY_STORAGE_KEY = 'ml_inspector_session_history_v1';
+const MAX_INSPECTOR_SESSION_HISTORY = 10;
+let inspectorSessionHistory = [];
+let currentInspectorAuditSnapshot = null;
+
+function reconcileInspectorNonceStatus(tNonceRaw, matchedClient) {
+  const tNonce = Number(tNonceRaw ?? 0);
+  const cNonce = Number(matchedClient?.next_nonce ?? 1);
+  const hasSyncedNonce = Boolean(
+    matchedClient &&
+    matchedClient.ultimo_nonce !== null &&
+    matchedClient.ultimo_nonce !== undefined
+  );
+  const syncedNonce = hasSyncedNonce ? Number(matchedClient.ultimo_nonce) : null;
+
+  if (syncedNonce !== null && !Number.isNaN(syncedNonce) && tNonce <= syncedNonce) {
+    return {
+      state: 'REDEEMED_SYNCED',
+      badgeClass: 'badge badge-green',
+      label: `Canjeado en celular (Verificado por .mlsync #${syncedNonce})`,
+    };
+  }
+  if (tNonce === cNonce - 1) {
+    return {
+      state: 'EMITTED_PENDING',
+      badgeClass: 'badge badge-blue',
+      label: 'Emitido — Pendiente de canje en celular (Sin .mlsync reciente)',
+    };
+  }
+  if (tNonce >= cNonce) {
+    return {
+      state: 'FUTURE_READY',
+      badgeClass: 'badge badge-yellow',
+      label: 'Nonce futuro listo para canje',
+    };
+  }
+  return {
+    state: 'HISTORICAL_SUPERSEDED',
+    badgeClass: 'badge badge-purple',
+    label: 'Superado / Histórico',
+  };
+}
+
+function loadInspectorSessionHistory() {
+  try {
+    const raw = typeof sessionStorage !== 'undefined'
+      ? sessionStorage.getItem(INSPECTOR_HISTORY_STORAGE_KEY)
+      : null;
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        inspectorSessionHistory = parsed.slice(0, MAX_INSPECTOR_SESSION_HISTORY);
+      }
+    }
+  } catch (_) {
+    // fallback in-memory si sessionStorage no está disponible
+  }
+  return inspectorSessionHistory;
+}
+
+function saveInspectorSessionHistory() {
+  try {
+    if (typeof sessionStorage !== 'undefined') {
+      sessionStorage.setItem(
+        INSPECTOR_HISTORY_STORAGE_KEY,
+        JSON.stringify(inspectorSessionHistory.slice(0, MAX_INSPECTOR_SESSION_HISTORY))
+      );
+    }
+  } catch (_) {
+    // ignore storage errors
+  }
+}
+
+function recordInspectorSessionEntry(entry) {
+  if (!entry || !entry.rawInput) return;
+  loadInspectorSessionHistory();
+  const filtered = inspectorSessionHistory.filter(item => item.rawInput !== entry.rawInput);
+  filtered.unshift({
+    kind: entry.kind || 'ML9',
+    summaryLabel: entry.summaryLabel || '-',
+    hardwareId: entry.hardwareId || '-',
+    statusText: entry.statusText || '-',
+    statusTone: entry.statusTone || 'badge-mono',
+    timestampIso: entry.timestampIso || new Date().toISOString(),
+    timestampLima: formatLimaDateTime(entry.timestampIso || Date.now()),
+    rawInput: entry.rawInput,
+  });
+  inspectorSessionHistory = filtered.slice(0, MAX_INSPECTOR_SESSION_HISTORY);
+  saveInspectorSessionHistory();
+  renderInspectorSessionHistory();
+}
+
+function clearInspectorSessionHistory() {
+  inspectorSessionHistory = [];
+  saveInspectorSessionHistory();
+  renderInspectorSessionHistory();
+  showToast('Historial de auditorías de sesión limpiado.', 'info');
+}
+
+function reloadInspectorHistoryEntry(idx) {
+  const entry = inspectorSessionHistory[idx];
+  if (!entry) return;
+  const input = document.getElementById('inspectTokenInput');
+  if (input) {
+    input.value = entry.rawInput;
+    inspectToken({ skipHistoryRecord: true });
+  }
+}
+
+function renderInspectorSessionHistory() {
+  const panel = document.getElementById('inspectorSessionHistoryPanel');
+  const listEl = document.getElementById('inspectorSessionHistoryList');
+  const countEl = document.getElementById('inspectorHistoryCount');
+  if (!panel || !listEl) return;
+
+  loadInspectorSessionHistory();
+  if (countEl) countEl.textContent = String(inspectorSessionHistory.length);
+
+  if (inspectorSessionHistory.length === 0) {
+    panel.style.display = 'none';
+    listEl.innerHTML = '';
+    return;
+  }
+
+  panel.style.display = 'block';
+  listEl.innerHTML = '';
+  inspectorSessionHistory.forEach((item, idx) => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'inspector-history-item';
+    btn.title = 'Clic para recargar y volver a auditar';
+    btn.innerHTML = `
+      <div style="display:flex; align-items:center; gap:0.5rem; flex-wrap:wrap;">
+        <span class="badge ${escapeHtml(item.kind === 'MLS1' ? 'badge-blue' : 'badge-mono')}">${escapeHtml(item.kind)}</span>
+        <strong style="font-size:0.84rem;">${escapeHtml(item.summaryLabel)}</strong>
+        <code style="font-family:var(--font-mono); font-size:0.78rem; color:var(--primary);">${escapeHtml(item.hardwareId)}</code>
+      </div>
+      <div style="display:flex; align-items:center; gap:0.5rem; flex-wrap:wrap;">
+        <span class="badge ${escapeHtml(item.statusTone)}">${escapeHtml(item.statusText)}</span>
+        <span style="font-size:0.74rem; color:var(--text-muted);" title="UTC: ${escapeHtml(item.timestampIso)}">${escapeHtml(item.timestampLima)}</span>
+      </div>
+    `;
+    btn.addEventListener('click', () => reloadInspectorHistoryEntry(idx));
+    listEl.appendChild(btn);
+  });
+}
+
+function openClientDrawerFromInspector(clientId) {
+  if (!clientId) return;
+  document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+  document.querySelector('[data-tab="tabClients"]')?.classList.add('active');
+  document.getElementById('tabClients')?.classList.add('active');
+  openClient360Drawer(clientId, 'drawerTabOverview');
+}
+
+function buildInspectorForensicReportText(snapshot) {
+  if (!snapshot) return '';
+  const lines = [
+    `INFORME FORENSE MOCHILALISTA (${snapshot.kind})`,
+    `Fecha de Auditoría: ${formatLimaDateTime(snapshot.auditedAtIso)} [UTC: ${snapshot.auditedAtIso}]`,
+    `Validez Criptográfica: ${snapshot.valid ? 'VÁLIDA' : 'INVÁLIDA'} (${snapshot.statusDetail || '-'})`,
+  ];
+  if (snapshot.clientSummary) {
+    lines.push(`Cliente CRM: ${snapshot.clientSummary}`);
+  }
+  if (snapshot.nonceStatusLabel) {
+    lines.push(`Estado de Nonce Reconciliado: ${snapshot.nonceStatusLabel}`);
+  }
+  if (Array.isArray(snapshot.highlights) && snapshot.highlights.length > 0) {
+    lines.push('Detalle Técnico:');
+    snapshot.highlights.forEach(h => lines.push(`- ${h.label}: ${h.value}`));
+  }
+  return lines.join('\n');
+}
+
+function copyInspectorForensicReport() {
+  const reportText = buildInspectorForensicReportText(currentInspectorAuditSnapshot);
+  if (!reportText) {
+    showToast('No hay informe forense activo para copiar.', 'warning');
+    return;
+  }
+  copyPlainTextToClipboard(reportText, 'Informe forense copiado al portapapeles.');
+}
+
+function renderInspectorQuickActionsBar(matchedClient) {
+  if (!matchedClient || !matchedClient.id) return '';
+  return `
+    <div class="inspector-actions-bar">
+      <button type="button" class="btn btn-outline btn-xs" id="btnInspectOpenDrawer360">
+        <svg class="btn-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        Abrir Ficha 360°
+      </button>
+      <button type="button" class="btn btn-outline btn-xs" id="btnInspectOpenWa">
+        <svg class="btn-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+        Abrir WhatsApp
+      </button>
+      <button type="button" class="btn btn-outline btn-xs" id="btnInspectCopyReport">
+        <svg class="btn-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+        Copiar Informe Forense
+      </button>
+    </div>
+  `;
+}
+
+function bindInspectorQuickActions(clientId) {
+  document.getElementById('btnInspectOpenDrawer360')?.addEventListener('click', () => {
+    openClientDrawerFromInspector(clientId);
+  });
+  document.getElementById('btnInspectOpenWa')?.addEventListener('click', () => {
+    openWhatsAppComposer(clientId);
+  });
+  document.getElementById('btnInspectCopyReport')?.addEventListener('click', () => {
+    copyInspectorForensicReport();
+  });
+}
+
 function initInspectorEvents() {
-  document.getElementById('btnInspectToken')?.addEventListener('click', inspectToken);
+  document.getElementById('btnInspectToken')?.addEventListener('click', () => inspectToken());
   document.getElementById('btnClearInspectToken')?.addEventListener('click', () => {
     document.getElementById('inspectTokenInput').value = '';
     document.getElementById('inspectResultContainer').style.display = 'none';
   });
+  renderInspectorSessionHistory();
 
   // Lector óptico Drag & Drop
   const qrDropZone = document.getElementById('qrOpticalDropZone');
@@ -7618,7 +8988,7 @@ async function handleOpticalQrFile(file) {
 /**
  * Renderizado de Auditoría para Fichas de Sincronización Offline (CLIENT_SYNC)
  */
-function renderInspectClientSync(data, rawToken) {
+function renderInspectClientSync(data, rawToken, options = {}) {
   const container = document.getElementById('inspectResultContainer');
   const badge = document.getElementById('inspectStatusBadge');
   const syncAuditCard = document.getElementById('inspectSyncAuditCard');
@@ -7644,7 +9014,7 @@ function renderInspectClientSync(data, rawToken) {
     badge.style.color = '#ef4444';
     badge.innerHTML = `
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-      <span><strong>FIRMA ALTERADA O CORRUPTA (${escapeHtml(data.error_code || 'INVALID_SIGNATURE')}):</strong> ${escapeHtml(data.message || 'Firma inválida')}</span>
+      <span><strong>FIRMA ALTERADA O CORRUPTA (${escapeHtml(data.error_code || 'INVALID_SIGNATURE')}):</strong> ${escapeHtml(data.message || data.error || 'Firma inválida')}</span>
     `;
   }
 
@@ -7675,7 +9045,7 @@ function renderInspectClientSync(data, rawToken) {
         </div>
         <div style="display:flex; justify-content:flex-end;">
           <button type="button" class="btn btn-warning btn-sm" id="btnInspectRescueMigrate">
-            <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>
+            <svg class="btn-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>
             Migrar Dispositivo (Restauración — 0 días)
           </button>
         </div>
@@ -7683,7 +9053,7 @@ function renderInspectClientSync(data, rawToken) {
     `;
   }
 
-  // 21 campos técnicos del payload .mlsync
+  const tsIso = p.ts ? new Date(p.ts).toISOString() : '';
   const syncFields = [
     { key: 'v', name: 'version_protocolo', desc: 'Versión del protocolo de sincronización', val: p.v || 1 },
     { key: 'hw', name: 'hardware_id', desc: 'Identificador único del hardware actual', val: p.hw || '-' },
@@ -7700,25 +9070,32 @@ function renderInspectClientSync(data, rawToken) {
     { key: 'n', name: 'last_nonce', desc: 'Último Nonce criptográfico consumido', val: `#${p.n !== undefined ? p.n : 0}` },
     { key: 'ai', name: 'ai_balance', desc: 'Saldo real disponible de créditos IA', val: `${p.ai !== undefined ? p.ai : 0} IA` },
     { key: 'aiu', name: 'ai_used_total', desc: 'Total histórico de consultas IA consumidas', val: `${p.aiu !== undefined ? p.aiu : 0} IA` },
-    { key: 'byok', name: 'uses_byok', desc: 'Utiliza clave de API propia (Bring Your Own Key)', val: p.byok ? 'Sí (Clave Propia)' : 'No (Gestionado)' },
+    { key: 'byok', name: 'uses_byok', desc: 'Utiliza clave de API propia (Bring Your Own Key)', val: `${humanizeSyncFieldValue('uses_byok', p.byok)} (${p.byok ? 'Clave Propia' : 'Gestionado'})` },
     { key: 'pc', name: 'profiles_count', desc: 'Cantidad de perfiles de negocio creados', val: p.pc !== undefined ? p.pc : 1 },
-    { key: 'drv', name: 'drive_linked', desc: 'Copia de seguridad en Google Drive activa', val: p.drv ? 'Vinculado' : 'No vinculado' },
-    { key: 'bh', name: 'backup_health', desc: 'Estado de salud del respaldo en la nube', val: p.bh || 'OK' },
-    { key: 'lb', name: 'last_backup_at', desc: 'Fecha y hora del último respaldo exitoso', val: p.lb || 'Sin copias registradas' },
-    { key: 'ts', name: 'generated_at', desc: 'Marca de tiempo UTC de generación del reporte', val: p.ts ? new Date(p.ts).toISOString() : '-' },
+    { key: 'drv', name: 'drive_linked', desc: 'Copia de seguridad en Google Drive activa', val: p.drv ? 'Sí (Vinculado)' : 'No (Sin vincular)' },
+    { key: 'bh', name: 'backup_health', desc: 'Estado de salud del respaldo en la nube', val: humanizeSyncFieldValue('backup_health_status', p.bh || 'OK') },
+    { key: 'lb', name: 'last_backup_at', desc: 'Fecha y hora del último respaldo exitoso (Lima GMT-5)', val: p.lb ? formatLimaDateTime(p.lb) : 'Sin respaldos', rawTitle: p.lb ? `UTC: ${p.lb}` : '' },
+    { key: 'ts', name: 'generated_at', desc: 'Marca de tiempo de generación del reporte (Lima GMT-5)', val: p.ts ? formatLimaDateTime(p.ts) : '-', rawTitle: tsIso ? `UTC: ${tsIso}` : '' },
   ];
 
   let syncTableRows = '';
   syncFields.forEach(f => {
+    const titleAttr = f.rawTitle ? ` title="${escapeHtml(f.rawTitle)}"` : '';
     syncTableRows += `
       <tr>
         <td><span class="claims-compact-key">${escapeHtml(f.key)}</span></td>
         <td><code>${escapeHtml(f.name)}</code></td>
         <td style="color:var(--text-secondary);">${escapeHtml(f.desc)}</td>
-        <td><strong>${escapeHtml(String(f.val))}</strong></td>
+        <td${titleAttr}><strong>${escapeHtml(String(f.val))}</strong></td>
       </tr>
     `;
   });
+
+  const allUnchanged = Boolean(data.all_unchanged ?? data.analysis?.all_unchanged);
+  const sameTimestamp = Boolean(data.same_timestamp ?? data.analysis?.same_timestamp);
+  const diffSectionHtml = (Array.isArray(data.changes) && data.changes.length > 0)
+    ? `<div id="inspectSyncDiffSection" style="margin-top:1rem;">${renderSyncDiffTable(data.changes, { allUnchanged, sameTimestamp })}</div>`
+    : '';
 
   syncAuditCard.innerHTML = `
     ${rescueCardHtml}
@@ -7732,7 +9109,7 @@ function renderInspectClientSync(data, rawToken) {
             <th style="width:100px;">Clave</th>
             <th style="width:160px;">Campo Técnico</th>
             <th>Descripción de Métrica</th>
-            <th style="width:240px;">Valor Reportado</th>
+            <th style="width:260px;">Valor Reportado</th>
           </tr>
         </thead>
         <tbody>
@@ -7740,9 +9117,9 @@ function renderInspectClientSync(data, rawToken) {
         </tbody>
       </table>
     </div>
+    ${diffSectionHtml}
   `;
 
-  // Botón rescate en Inspector
   document.getElementById('btnInspectRescueMigrate')?.addEventListener('click', () => {
     if (data.matched_client && data.matched_client.id) {
       openMigrateModal(data.matched_client.id, {
@@ -7753,8 +9130,25 @@ function renderInspectClientSync(data, rawToken) {
     }
   });
 
-  // 3. Cruce con Cartera CRM
   const matchedClient = data.matched_client;
+  currentInspectorAuditSnapshot = {
+    kind: 'MLS1',
+    auditedAtIso: new Date().toISOString(),
+    valid: Boolean(data.valid),
+    statusDetail: data.valid ? 'Integridad HMAC-SHA256 verificada' : (data.error_code || 'INVALID_SIGNATURE'),
+    clientSummary: matchedClient
+      ? `${matchedClient.business_name} (${matchedClient.owner_name}) | ${matchedClient.current_device_id}`
+      : `Sin coincidencia en CRM (hw=${p.hw || '-'})`,
+    highlights: [
+      { label: 'Hardware ID', value: p.hw || '-' },
+      { label: 'Versión APK', value: `v${p.av || '-'}` },
+      { label: 'Plan / Vigencia', value: `${p.pl || '-'} / ${p.st || '-'}` },
+      { label: 'Saldo IA / Consumidos', value: `${p.ai ?? 0} IA / ${p.aiu ?? 0} IA` },
+      { label: 'Nonce Reportado', value: `#${p.n ?? 0}` },
+      { label: 'Generado (Lima)', value: p.ts ? formatLimaDateTime(p.ts) : '-' },
+    ],
+  };
+
   if (matchedClient) {
     matchBox.style.display = 'block';
     const canApplyDirectly = data.valid && data.match_type === 'EXACT_HARDWARE';
@@ -7766,8 +9160,8 @@ function renderInspectClientSync(data, rawToken) {
         </div>
         ${canApplyDirectly ? `
           <button type="button" class="btn btn-primary btn-sm" id="btnInspectApplySync">
-            <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M20 6L9 17l-5-5"/></svg>
-            Aplicar Sincronización en Cartera CRM
+            <svg class="btn-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M20 6L9 17l-5-5"/></svg>
+            ${allUnchanged || sameTimestamp ? 'Re-confirmar Ficha en Cartera CRM' : 'Aplicar Sincronización en Cartera CRM'}
           </button>
         ` : ''}
       </div>
@@ -7777,7 +9171,10 @@ function renderInspectClientSync(data, rawToken) {
         • Hardware ID: <code style="font-family:var(--font-mono); font-weight:700;">${escapeHtml(matchedClient.current_device_id || '-')}</code>
         • Plan: <span class="badge badge-mono">${escapeHtml(matchedClient.license_type)}</span>
       </p>
+      ${renderInspectorQuickActionsBar(matchedClient)}
     `;
+
+    bindInspectorQuickActions(matchedClient.id);
 
     document.getElementById('btnInspectApplySync')?.addEventListener('click', async () => {
       try {
@@ -7813,12 +9210,19 @@ function renderInspectClientSync(data, rawToken) {
         <span style="color:var(--text-muted); font-size:0.85rem;">
           Hardware ID <code>${escapeHtml(p.hw || '-')}</code> no está registrado en la Cartera CRM actual.
         </span>
-        <button type="button" class="btn btn-outline btn-sm" id="btnInspectCreateClient">
-          <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-          Registrar Nuevo Cliente
-        </button>
+        <div style="display:flex; gap:0.45rem; flex-wrap:wrap;">
+          <button type="button" class="btn btn-outline btn-xs" id="btnInspectCopyReport">
+            <svg class="btn-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+            Copiar Informe Forense
+          </button>
+          <button type="button" class="btn btn-outline btn-sm" id="btnInspectCreateClient">
+            <svg class="btn-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            Registrar Nuevo Cliente
+          </button>
+        </div>
       </div>
     `;
+    document.getElementById('btnInspectCopyReport')?.addEventListener('click', copyInspectorForensicReport);
 
     document.getElementById('btnInspectCreateClient')?.addEventListener('click', () => {
       openModal('modalCreateClient');
@@ -7830,9 +9234,21 @@ function renderInspectClientSync(data, rawToken) {
       if (aiInp) aiInp.value = p.ai || 0;
     });
   }
+
+  if (!options.skipHistoryRecord) {
+    recordInspectorSessionEntry({
+      kind: 'MLS1',
+      summaryLabel: matchedClient ? matchedClient.business_name : (p.mod || 'Dispositivo sin registrar'),
+      hardwareId: p.hw || '-',
+      statusText: data.valid ? (allUnchanged ? 'Sin cambios' : 'Válida HMAC') : (data.error_code || 'Inválida'),
+      statusTone: data.valid ? 'badge-green' : 'badge-red',
+      timestampIso: new Date().toISOString(),
+      rawInput: rawToken,
+    });
+  }
 }
 
-async function inspectToken() {
+async function inspectToken(options = {}) {
   const token = document.getElementById('inspectTokenInput').value.trim();
   if (!token) {
     showToast('Por favor pega un código de licencia, token MLS1 o sube un archivo.', 'warning');
@@ -7851,7 +9267,7 @@ async function inspectToken() {
 
     // Enrutamiento DUAL: Si es CLIENT_SYNC, delegar al renderizado especializado
     if (data.input_kind === 'CLIENT_SYNC') {
-      renderInspectClientSync(data, token);
+      renderInspectClientSync(data, token, options);
       return;
     }
 
@@ -7866,7 +9282,8 @@ async function inspectToken() {
     if (syncAuditCard) syncAuditCard.style.display = 'none';
     if (licenseClaimsWrapper) licenseClaimsWrapper.style.display = 'block';
 
-    if (data.valid || data.isValid) {
+    const isTokenValid = Boolean(data.valid || data.isValid);
+    if (isTokenValid) {
       badge.style.background = 'rgba(16, 185, 129, 0.15)';
       badge.style.border = '1px solid rgba(16, 185, 129, 0.4)';
       badge.style.color = '#10b981';
@@ -7887,19 +9304,31 @@ async function inspectToken() {
     if (!data.payload) {
       tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; color:var(--text-muted); padding:1rem;">El token no contiene un payload decodificable.</td></tr>';
       matchBox.style.display = 'none';
+      currentInspectorAuditSnapshot = {
+        kind: 'ML9',
+        auditedAtIso: new Date().toISOString(),
+        valid: false,
+        statusDetail: data.message || data.error || 'Token ilegible',
+        highlights: [],
+      };
       return;
     }
 
-    // Tabla Unificada de Claims (Sincronizada con Planes 07 y 08)
     const p = data.payload;
+    const rawIat = p.e || p.iat || data.emitted_at || '';
+    const rawU = p.u || data.updates_until || '';
+    const formattedU = rawU
+      ? (String(rawU).includes('T') ? formatLimaDateTime(rawU) : String(rawU))
+      : 'No aplica';
+
     const claims = [
       { key: 'd', name: 'hardware_id', desc: 'Hardware ID único generado desde Settings.Secure.ANDROID_ID', val: p.d || data.device_id || '-' },
       { key: 'p', name: 'plan', desc: 'Tipo de plan comercial otorgado', val: p.p || data.plan || '-' },
       { key: 'y', name: 'days_added', desc: 'Días acumulativos sumados a la vigencia', val: `+${p.y !== undefined ? p.y : data.days_added} días` },
       { key: 'n', name: 'nonce', desc: 'Contador correlativo anti-reutilización', val: `#${p.n !== undefined ? p.n : data.nonce}` },
       { key: 'v', name: 'min_app_version', desc: 'Versión mayor mínima requerida', val: `v${p.v !== undefined ? p.v : data.max_major_version}` },
-      { key: 'iat', name: 'emitted_at', desc: 'Marca de tiempo ISO-8601 de emisión (UTC)', val: p.e || p.iat || data.emitted_at || '-' },
-      { key: 'u', name: 'updates_until', desc: 'Fecha límite de actualizaciones (updates)', val: p.u || data.updates_until || 'No aplica' },
+      { key: 'iat', name: 'emitted_at', desc: 'Fecha de emisión (Hora Perú GMT-5)', val: rawIat ? formatLimaDateTime(rawIat) : '-', rawTitle: rawIat ? `UTC: ${rawIat}` : '' },
+      { key: 'u', name: 'updates_until', desc: 'Fecha límite de actualizaciones (updates)', val: formattedU, rawTitle: rawU && String(rawU).includes('T') ? `UTC: ${rawU}` : '' },
       { key: 'b', name: 'business_tag', desc: 'Razón social o etiqueta del negocio', val: p.b || data.business_tag || '-' },
       { key: 'c', name: 'ai_extra_credits', desc: 'Créditos IA extras/recarga (claim c de transporte anti-doble conteo)', val: `+${p.c !== undefined ? p.c : data.ai_extra_credits} escaneos` },
     ];
@@ -7907,30 +9336,28 @@ async function inspectToken() {
     tbody.innerHTML = '';
     claims.forEach(c => {
       const tr = document.createElement('tr');
+      const titleAttr = c.rawTitle ? ` title="${escapeHtml(c.rawTitle)}"` : '';
       tr.innerHTML = `
         <td><span class="claims-compact-key">${escapeHtml(c.key)}</span></td>
         <td><code>${escapeHtml(c.name)}</code></td>
         <td style="color:var(--text-secondary);">${escapeHtml(c.desc)}</td>
-        <td><strong>${escapeHtml(String(c.val))}</strong></td>
+        <td${titleAttr}><strong>${escapeHtml(String(c.val))}</strong></td>
       `;
       tbody.appendChild(tr);
     });
 
-    // Cruce con Cliente Registrado en CRM
+    // Cruce con Cliente Registrado en CRM + Matriz de 4 Estados de Nonce
     const matchedClient = data.matching_client || data.registered_client;
+    const tNonce = p.n !== undefined ? p.n : data.nonce;
+    let nonceInfo = null;
+
     if (matchedClient) {
       matchBox.style.display = 'block';
-      const cNonce = matchedClient.next_nonce || 1;
-      const tNonce = p.n !== undefined ? p.n : data.nonce;
-      let nonceStatusBadge = '';
-
-      if (tNonce === cNonce - 1) {
-        nonceStatusBadge = '<span class="badge badge-green">Nonce vigente (última emitida)</span>';
-      } else if (tNonce >= cNonce) {
-        nonceStatusBadge = '<span class="badge badge-yellow">Nonce futuro listo para canje</span>';
-      } else {
-        nonceStatusBadge = '<span class="badge badge-purple">Nonce histórico ya superado</span>';
-      }
+      nonceInfo = reconcileInspectorNonceStatus(tNonce, matchedClient);
+      const nonceStatusBadge = `<span class="${escapeHtml(nonceInfo.badgeClass)}">${escapeHtml(nonceInfo.label)}</span>`;
+      const lastSyncHint = matchedClient.last_sync_at
+        ? ` • Últ. Sync: <span title="UTC: ${escapeHtml(matchedClient.last_sync_at)}">${escapeHtml(formatLimaDateTime(matchedClient.last_sync_at))}</span>`
+        : '';
 
       matchBox.innerHTML = `
         <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.5rem; margin-bottom:0.4rem;">
@@ -7944,16 +9371,55 @@ async function inspectToken() {
           <strong>${escapeHtml(matchedClient.business_name)}</strong> (${escapeHtml(matchedClient.owner_name)})
           • WhatsApp: <strong>${escapeHtml(matchedClient.phone)}</strong>
           • Plan en DB: <span class="badge badge-mono">${escapeHtml(matchedClient.license_type)}</span>
-          • Versión Instalada: v${escapeHtml(matchedClient.installed_version || '9.24.0')}
+          • Versión Instalada: v${escapeHtml(matchedClient.installed_version || '9.24.0')}${lastSyncHint}
         </p>
+        ${renderInspectorQuickActionsBar(matchedClient)}
       `;
+      bindInspectorQuickActions(matchedClient.id);
     } else {
       matchBox.style.display = 'block';
       matchBox.innerHTML = `
-        <span style="color:var(--text-muted); font-size:0.85rem;">
-          El token fue firmado válidamente con tu clave maestra pero el Device ID <code>${escapeHtml(p.d || '-')}</code> no coincide con ningún cliente registrado en este entorno.
-        </span>
+        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.5rem;">
+          <span style="color:var(--text-muted); font-size:0.85rem;">
+            El token fue firmado válidamente con tu clave maestra pero el Device ID <code>${escapeHtml(p.d || '-')}</code> no coincide con ningún cliente registrado en este entorno.
+          </span>
+          <button type="button" class="btn btn-outline btn-xs" id="btnInspectCopyReport">
+            <svg class="btn-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+            Copiar Informe Forense
+          </button>
+        </div>
       `;
+      document.getElementById('btnInspectCopyReport')?.addEventListener('click', copyInspectorForensicReport);
+    }
+
+    currentInspectorAuditSnapshot = {
+      kind: 'ML9',
+      auditedAtIso: new Date().toISOString(),
+      valid: isTokenValid,
+      statusDetail: isTokenValid ? 'Firma Ed25519 auténtica' : (data.status || 'ERROR'),
+      clientSummary: matchedClient
+        ? `${matchedClient.business_name} (${matchedClient.owner_name}) | ${p.d || '-'}`
+        : `Sin coincidencia en CRM (d=${p.d || '-'})`,
+      nonceStatusLabel: nonceInfo ? nonceInfo.label : `Nonce #${tNonce ?? '-'} (sin cliente CRM)`,
+      highlights: [
+        { label: 'Hardware ID (d)', value: p.d || '-' },
+        { label: 'Plan (p)', value: p.p || '-' },
+        { label: 'Días / Créditos IA', value: `+${p.y ?? 0}d / +${p.c ?? 0} IA` },
+        { label: 'Nonce Token (n)', value: `#${tNonce ?? '-'}` },
+        { label: 'Emitido (Lima)', value: rawIat ? formatLimaDateTime(rawIat) : '-' },
+      ],
+    };
+
+    if (!options.skipHistoryRecord) {
+      recordInspectorSessionEntry({
+        kind: 'ML9',
+        summaryLabel: matchedClient ? matchedClient.business_name : (p.b || 'Licencia Ed25519'),
+        hardwareId: p.d || data.device_id || '-',
+        statusText: nonceInfo ? nonceInfo.label : (isTokenValid ? 'Token válido' : 'Token inválido'),
+        statusTone: isTokenValid ? 'badge-green' : 'badge-red',
+        timestampIso: new Date().toISOString(),
+        rawInput: token,
+      });
     }
   } catch (e) {
     showToast('Error al auditar token: ' + e.message, 'error');
@@ -8528,6 +9994,7 @@ function initModalEvents() {
 
   // Modal Crear Release
   document.getElementById('btnOpenCreateRelease')?.addEventListener('click', () => {
+    lastInspectedCreateData = null;
     document.getElementById('formCreateRelease')?.reset();
     const banner = document.getElementById('apkSignatureBanner');
     if (banner) {
@@ -8558,7 +10025,8 @@ function initModalEvents() {
     const minRequired = document.getElementById('relMinRequiredVersion').value.trim() || '9.0.0';
     const schemaVersion = parseInt(document.getElementById('relDbSchema').value, 10) || 36;
     const type = document.getElementById('relType').value;
-    const sizeMb = document.getElementById('relSizeMb').value.trim();
+    const rawSizeMb = document.getElementById('relSizeMb').value.trim();
+    const sizeMb = rawSizeMb ? formatApkSizeMb(rawSizeMb) : '';
     const url = document.getElementById('relDownloadUrl').value.trim();
     const sha = document.getElementById('relSha256').value.trim();
     const changelog = document.getElementById('relChangelog').value.trim();
@@ -8567,7 +10035,8 @@ function initModalEvents() {
     const abiVariant = document.getElementById('relAbiVariant').value || 'UNIVERSAL';
 
     const sigStatus = document.getElementById('relSignatureStatus')?.value;
-    const sigVerified = document.getElementById('relSignatureVerified')?.value === 'true';
+    const sigVerifiedRaw = document.getElementById('relSignatureVerified')?.value;
+    const sigVerified = sigVerifiedRaw === 'true' ? true : (sigVerifiedRaw === 'false' ? false : null);
     const signerSha = document.getElementById('relSignerSha256')?.value;
     const signerDn = document.getElementById('relSignerDn')?.value;
 
@@ -8890,8 +10359,9 @@ async function openClientHistoryModal(clientId) {
           <td>${escapeHtml(p.method || '-')}</td>
           <td>${escapeHtml(p.reference || '-')}</td>
           <td>
-            <button class="btn btn-outline btn-sm" style="color:var(--danger); border-color:var(--danger); font-size:0.75rem;" onclick="voidPayment('${client.id}', '${p.id}')" title="Anular transacción">
-              🗑️ Anular
+            <button class="btn btn-outline btn-sm" style="color:var(--danger); border-color:var(--danger); font-size:0.75rem; display:inline-flex; align-items:center; gap:0.3rem;" onclick="voidPayment('${client.id}', '${p.id}')" title="Anular transacción">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+              <span>Anular</span>
             </button>
           </td>
         `;
@@ -8917,10 +10387,11 @@ async function openClientHistoryModal(clientId) {
           <td>
             <div style="display:flex; gap:0.3rem;">
               <button class="btn btn-outline btn-sm" onclick="copyTokenToClipboard('${escapeHtml(c.token)}')" title="Copiar Token">
-                📋
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
               </button>
-              <button class="btn btn-primary btn-sm" onclick="downloadHistoricalCredential(${idx})" title="Descargar Credencial PNG Oficial">
-                🪪 Tarjeta PNG
+              <button class="btn btn-primary btn-sm" onclick="downloadHistoricalCredential(${idx})" title="Descargar Credencial PNG Oficial" style="display:inline-flex; align-items:center; gap:0.3rem;">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><line x1="15" y1="10" x2="19" y2="10"/><line x1="7" y1="15" x2="19" y2="15"/></svg>
+                <span>Tarjeta PNG</span>
               </button>
             </div>
           </td>
@@ -8933,8 +10404,9 @@ async function openClientHistoryModal(clientId) {
     const hwBox = document.getElementById('historyCurrentDeviceBox');
     hwBox.innerHTML = `
       <div style="font-size:0.85rem; color:var(--text-secondary); margin-bottom:0.25rem;">Dispositivo Actualmente Vinculado:</div>
-      <div style="font-size:1.1rem; font-weight:700; color:var(--success); font-family:var(--font-mono);">
-        📱 ${escapeHtml(client.current_device_id)}
+      <div style="font-size:1.1rem; font-weight:700; color:var(--success); font-family:var(--font-mono); display:flex; align-items:center; gap:0.4rem;">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>
+        <span>${escapeHtml(client.current_device_id)}</span>
       </div>
       <div style="font-size:0.78rem; color:var(--text-muted); margin-top:0.25rem;">
         Versión de la app: v${escapeHtml(client.installed_version || '9.24.0')} • Licencia válida exclusivamente para esta placa.
@@ -10127,7 +11599,7 @@ function renderVaultFilesTable(files, mirrorExists) {
       </td>
       <td>
         ${(mirrorExists && exists)
-        ? '<span style="color:var(--cyan); font-weight:600; font-size:0.8rem;">🛡️ Bóveda Espejo</span>'
+        ? '<span style="color:var(--cyan); font-weight:600; font-size:0.8rem; display:inline-flex; align-items:center; gap:0.25rem;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg> Bóveda Espejo</span>'
         : '<span style="color:var(--text-muted); font-size:0.8rem;">-</span>'
       }
       </td>
@@ -10401,7 +11873,13 @@ async function inspectLoadedVault() {
     const vClients = document.getElementById('metaVaultClients');
     if (vClients) vClients.textContent = `${loadedVaultMetadata.total_clients ?? 0} clientes`;
     const vKey = document.getElementById('metaVaultHasKey');
-    if (vKey) vKey.textContent = loadedVaultMetadata.has_master_key ? '✅ Incluida' : '○ No incluida';
+    if (vKey) {
+      if (loadedVaultMetadata.has_master_key) {
+        vKey.innerHTML = '<span style="display:inline-flex; align-items:center; gap:0.25rem; color:var(--success); font-weight:600;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> Incluida</span>';
+      } else {
+        vKey.textContent = 'No incluida';
+      }
+    }
     const vSlots = document.getElementById('metaVaultSlots');
     if (vSlots) vSlots.textContent = (loadedVaultMetadata.available_slots || []).join(', ');
 
