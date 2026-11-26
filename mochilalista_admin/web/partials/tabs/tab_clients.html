@@ -1,0 +1,68 @@
+    <section id="tabClients" class="tab-pane">
+      <div class="content-card">
+        <div class="card-header">
+          <h2>
+            <svg class="icon-svg" style="color:var(--primary);" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+            Cartera de Clientes & Dispositivos Vinculados
+          </h2>
+        </div>
+
+        <!-- BARRA OMNICANAL DE BÚSQUEDA Y CREACIÓN -->
+        <div class="crm-toolbar">
+          <div class="search-input-wrap">
+            <input type="text" id="inputClientSearch" class="search-input" placeholder="Buscar por Negocio, Titular, RUC/DNI, WhatsApp, Hardware ID o Versión...">
+            <button class="btn-clear-search" id="btnClearClientSearch" title="Limpiar búsqueda">✕</button>
+          </div>
+          <div style="display:flex; gap:0.5rem; flex-wrap:wrap;">
+            <button class="btn btn-outline" id="btnImportClientSync" title="Importar Ficha de Sincronización Offline (.mlsync o MLS1-...)">
+              <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              Importar Ficha (.mlsync / MLS1)
+            </button>
+            <button class="btn btn-outline" id="btnCrmExportExcel" title="Exportar Cartera Completa a Microsoft Excel (.xlsx)">
+              <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="16" y2="17"/><line x1="10" y1="9" x2="8" y2="9"/></svg>
+              Exportar Excel (.xlsx)
+            </button>
+            <button class="btn btn-primary" id="btnOpenCreateClient">
+              <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              Registrar Nuevo Cliente
+            </button>
+          </div>
+        </div>
+
+        <!-- FILTROS DE ESTADO CRM -->
+        <div class="client-filters-bar" style="display:flex; gap:0.5rem; flex-wrap:wrap; margin-bottom:1rem; align-items:center;">
+          <span style="font-size:0.85rem; color:var(--text-secondary); font-weight:600; margin-right:0.25rem;">Filtrar:</span>
+          <button class="filter-chip active" data-filter="all">Todos (<span id="countAll">0</span>)</button>
+          <button class="filter-chip" data-filter="active">Activos (<span id="countActive">0</span>)</button>
+          <button class="filter-chip" data-filter="expiring">Por Vencer (<span id="countExpiring">0</span>)</button>
+          <button class="filter-chip" data-filter="expired">Vencidos (<span id="countExpired">0</span>)</button>
+          <button class="filter-chip" data-filter="trial">En Trial (<span id="countTrial">0</span>)</button>
+          <button class="filter-chip" data-filter="pending_bonus" id="chipFilterPendingBonus">Con Bono IA Pendiente (<span id="countPendingBonus">0</span>)</button>
+          <button class="filter-chip" data-filter="followup_due" id="chipFilterFollowupDue">Seguimientos Hoy / Vencidos (<span id="countFollowupDue">0</span>)</button>
+          <button class="filter-chip" data-filter="perpetual">Perpetuos (<span id="countPerpetual">0</span>)</button>
+          <button class="filter-chip" data-filter="prospect">Prospectos (<span id="countProspect">0</span>)</button>
+          <button class="filter-chip" data-filter="outdated">APK Desactualizado (<span id="countOutdated">0</span>)</button>
+        </div>
+
+        <div class="table-responsive">
+          <table class="data-table" id="clientsTable">
+            <thead>
+              <tr>
+                <th style="min-width: 85px; white-space: nowrap;">ID</th>
+                <th>Negocio & Titular</th>
+                <th>Plan & Vigencia</th>
+                <th>Hardware ID (ANDROID_ID)</th>
+                <th style="width: 125px;">Versión APK</th>
+                <th style="width: 110px;">Créditos IA</th>
+                <th style="min-width: 175px; text-align: center; white-space: nowrap;">Acciones Clave</th>
+              </tr>
+            </thead>
+            <tbody id="clientsTableBody">
+              <tr><td colspan="7" style="text-align:center;">Cargando cartera de clientes...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 3: GENERADOR DE LICENCIAS ED25519 CON AJUSTES PERSONALIZADOS -->

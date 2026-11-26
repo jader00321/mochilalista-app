@@ -1,0 +1,600 @@
+/* === LAYER: css/modules/releases_catalog.css === */
+
+/* =================== CARGADOR DRAG & DROP DE APK & PLAN 19 RELEASES =================== */
+.apk-drop-zone {
+  border: 2px dashed var(--border-color);
+  border-radius: 12px;
+  padding: 1.5rem;
+  text-align: center;
+  background-color: var(--bg-hover);
+  cursor: pointer;
+  transition: all 0.25s ease;
+}
+
+.apk-drop-zone:hover,
+.apk-drop-zone.dragover {
+  border-color: var(--primary);
+  background-color: rgba(37, 99, 235, 0.08);
+}
+
+.apk-drop-zone.has-manual-apk {
+  border-style: solid;
+  border-color: #0ea5e9;
+  background: linear-gradient(135deg, rgba(14, 165, 233, 0.12), rgba(37, 99, 235, 0.08));
+  box-shadow: 0 0 0 2px rgba(14, 165, 233, 0.18);
+}
+
+/* Tarjeta Unívoca de APK Activo Listo para Publicar (Plan 22.5 Fase 2) */
+@keyframes activeApkCardReveal {
+  from {
+    opacity: 0;
+    transform: translateY(-6px) scale(0.99);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.active-apk-card {
+  margin-top: 0.75rem;
+  border-radius: 10px;
+  padding: 0.8rem 0.95rem;
+  border: 1px solid rgba(16, 185, 129, 0.4);
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.1), rgba(37, 99, 235, 0.06));
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  opacity: 0;
+  transition: opacity 0.22s ease, border-color 0.22s ease, box-shadow 0.22s ease;
+}
+
+.active-apk-card.source-manual {
+  border-color: rgba(14, 165, 233, 0.45);
+  background: linear-gradient(135deg, rgba(14, 165, 233, 0.12), rgba(37, 99, 235, 0.07));
+}
+
+.active-apk-card.visible {
+  opacity: 1;
+  animation: activeApkCardReveal 0.24s ease-out forwards;
+}
+
+.active-apk-card-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.active-apk-card-badges {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+.active-apk-card-details {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+
+.badge-source-manual {
+  background: rgba(14, 165, 233, 0.16);
+  color: #38bdf8;
+  border: 1px solid rgba(14, 165, 233, 0.38);
+}
+
+.badge-source-autodetect {
+  background: rgba(16, 185, 129, 0.16);
+  color: #34d399;
+  border: 1px solid rgba(16, 185, 129, 0.38);
+}
+
+.drop-icon {
+  font-size: 2.2rem;
+  margin-bottom: 0.35rem;
+}
+
+.drop-title {
+  font-size: 0.92rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.drop-subtitle {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  margin-bottom: 0.75rem;
+}
+
+/* Selector Tipo de Lanzamiento sin truncar */
+#relType,
+#editRelType {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+/* Tarjeta Explicativa Reactiva de Tipo de Lanzamiento */
+.release-type-info-card {
+  margin-top: 0.5rem;
+  padding: 0.65rem 0.85rem;
+  border-radius: 8px;
+  font-size: 0.8rem;
+  line-height: 1.4;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  border: 1px solid rgba(37, 99, 235, 0.2);
+  background: rgba(37, 99, 235, 0.06);
+  color: var(--text-secondary);
+}
+
+.release-type-info-card svg {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  margin-top: 2px;
+  color: var(--primary);
+}
+
+/* Escudo Anti-debug.apk Banner */
+.apk-signature-banner {
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+  margin: 0.85rem 0;
+  font-size: 0.82rem;
+  line-height: 1.45;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.apk-signature-banner.sig-official {
+  background: rgba(16, 185, 129, 0.1);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  color: #10b981;
+}
+
+.apk-signature-banner.sig-unofficial {
+  background: rgba(239, 68, 68, 0.12);
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  color: #ef4444;
+}
+
+.apk-signature-banner.sig-unverified {
+  background: rgba(245, 158, 11, 0.1);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  color: #f59e0b;
+}
+
+/* Autodetección Transparente de Builds Locales & Rutas Configurables (Plan 22.5 Fase 2) */
+.autodetect-container {
+  margin: 0.85rem 0;
+  background: rgba(37, 99, 235, 0.06);
+  border: 1px solid rgba(37, 99, 235, 0.22);
+  border-radius: 10px;
+  padding: 0.85rem 1rem;
+}
+
+.search-dirs-panel {
+  margin-top: 0.75rem;
+  padding: 0.75rem;
+  border-radius: 8px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.search-dirs-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.search-dirs-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.search-dir-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.55rem;
+  flex-wrap: wrap;
+  padding: 0.5rem 0.65rem;
+  border-radius: 7px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  transition: opacity 0.18s ease, border-color 0.18s ease;
+}
+
+.search-dir-item.disabled {
+  opacity: 0.62;
+}
+
+.search-dir-info {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  flex: 1;
+  min-width: 220px;
+}
+
+.search-dir-path {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  word-break: break-all;
+}
+
+.search-dir-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+
+.badge-dir-exists {
+  background: rgba(16, 185, 129, 0.14);
+  color: #34d399;
+  border: 1px solid rgba(16, 185, 129, 0.32);
+}
+
+.badge-dir-missing {
+  background: rgba(245, 158, 11, 0.14);
+  color: #fbbf24;
+  border: 1px solid rgba(245, 158, 11, 0.35);
+}
+
+.search-dir-add-row {
+  display: flex;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+  align-items: center;
+  padding-top: 0.25rem;
+  border-top: 1px dashed var(--border-color);
+}
+
+.search-dir-add-row input {
+  flex: 1;
+  min-width: 220px;
+  padding: 0.45rem 0.65rem;
+  border-radius: 7px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-size: 0.78rem;
+  font-family: var(--font-mono);
+}
+
+.local-builds-toolbar {
+  margin-top: 0.75rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  padding-top: 0.6rem;
+  border-top: 1px solid rgba(37, 99, 235, 0.16);
+}
+
+.local-abi-chips {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+
+.local-abi-chip {
+  padding: 0.25rem 0.65rem;
+  border-radius: 999px;
+  font-size: 0.74rem;
+  font-weight: 600;
+  border: 1px solid var(--border-color);
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.18s ease;
+}
+
+.local-abi-chip:hover {
+  border-color: var(--primary);
+  color: var(--text-primary);
+}
+
+.local-abi-chip.active {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: #ffffff;
+}
+
+.local-builds-toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+.local-builds-filter-input {
+  padding: 0.3rem 0.6rem;
+  border-radius: 7px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  font-size: 0.76rem;
+  min-width: 175px;
+}
+
+.local-builds-limit-select {
+  padding: 0.28rem 0.5rem;
+  border-radius: 7px;
+  font-size: 0.76rem;
+}
+
+.local-builds-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 0.65rem;
+  margin-top: 0.75rem;
+}
+
+@keyframes activeApkPulse {
+  0%, 100% {
+    box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.26), 0 6px 16px -6px rgba(16, 185, 129, 0.28);
+  }
+  50% {
+    box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.42), 0 8px 20px -6px rgba(16, 185, 129, 0.38);
+  }
+}
+
+.local-build-card {
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 0.75rem;
+  background: var(--bg-secondary);
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  transition: border-color 0.22s ease, background 0.22s ease, opacity 0.22s ease, transform 0.22s ease, box-shadow 0.22s ease;
+}
+
+.local-build-card:hover {
+  border-color: var(--primary);
+}
+
+.local-build-card.is-selected {
+  border-color: #10b981;
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.14), rgba(37, 99, 235, 0.06));
+  transform: translateY(-1px);
+  animation: activeApkPulse 2.4s ease-in-out infinite;
+}
+
+.local-build-card.is-dimmed {
+  opacity: 0.62;
+}
+
+.local-build-card.is-dimmed:hover {
+  opacity: 0.95;
+}
+
+.local-build-selected-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.12rem 0.48rem;
+  border-radius: 999px;
+  font-size: 0.69rem;
+  font-weight: 700;
+  background: rgba(16, 185, 129, 0.18);
+  color: #34d399;
+  border: 1px solid rgba(16, 185, 129, 0.4);
+}
+
+.btn-selected-apk {
+  background: rgba(16, 185, 129, 0.18);
+  border-color: #10b981;
+  color: #34d399;
+  font-weight: 700;
+}
+
+.btn-selected-apk:hover {
+  background: rgba(16, 185, 129, 0.25);
+}
+
+.btn-import-local-build.is-loading {
+  opacity: 0.78;
+  cursor: wait;
+}
+
+.local-build-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.local-build-path {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  word-break: break-all;
+  white-space: normal;
+  max-height: 2.8em;
+  overflow: hidden;
+}
+
+.local-build-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+
+/* Barra de Progreso de Despliegue Global (Rollout) */
+.rollout-card {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  padding: 1rem 1.25rem;
+  margin-bottom: 1.25rem;
+}
+
+.rollout-kpis {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.85rem;
+}
+
+.rollout-kpi-item {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  cursor: pointer;
+  padding: 0.35rem 0.6rem;
+  border-radius: 8px;
+  transition: background 0.2s;
+}
+
+.rollout-kpi-item:hover {
+  background: var(--bg-hover);
+}
+
+.rollout-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.rollout-dot.green { background: #10b981; }
+
+.rollout-dot.blue { background: #3b82f6; }
+
+.rollout-dot.amber { background: #f59e0b; }
+
+.rollout-kpi-label {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+
+.rollout-kpi-val {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.rollout-segmented-bar {
+  display: flex;
+  height: 10px;
+  border-radius: 5px;
+  overflow: hidden;
+  background: var(--bg-hover);
+  margin-bottom: 0.4rem;
+}
+
+.rollout-segment {
+  height: 100%;
+  transition: width 0.3s ease;
+  cursor: pointer;
+}
+
+.rollout-segment.green { background: #10b981; }
+
+.rollout-segment.blue { background: #3b82f6; }
+
+.rollout-segment.amber { background: #f59e0b; }
+
+/* Toolbar y Filtros de Matriz */
+.rel-matrix-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+}
+
+.rel-filter-chips {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+.rel-chip {
+  padding: 0.35rem 0.75rem;
+  border-radius: 20px;
+  font-size: 0.78rem;
+  font-weight: 500;
+  cursor: pointer;
+  border: 1px solid var(--border-color);
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  transition: all 0.2s ease;
+}
+
+.rel-chip:hover {
+  border-color: var(--primary);
+  color: var(--text-primary);
+}
+
+.rel-chip.active {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: #ffffff;
+}
+
+/* Badges específicos de Releases */
+.badge-arm64 {
+  background: rgba(139, 92, 246, 0.15);
+  color: #a78bfa;
+  border: 1px solid rgba(139, 92, 246, 0.3);
+}
+
+.badge-universal {
+  background: rgba(59, 130, 246, 0.15);
+  color: #60a5fa;
+  border: 1px solid rgba(59, 130, 246, 0.3);
+}
+
+.badge-official-sig {
+  background: rgba(16, 185, 129, 0.12);
+  color: #10b981;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.badge-unofficial-sig {
+  background: rgba(239, 68, 68, 0.12);
+  color: #ef4444;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.badge-ahead {
+  background: rgba(6, 182, 212, 0.15);
+  color: #06b6d4;
+  border: 1px solid rgba(6, 182, 212, 0.3);
+}
+
+.badge-sent {
+  background: rgba(59, 130, 246, 0.15);
+  color: #3b82f6;
+  border: 1px solid rgba(59, 130, 246, 0.3);
+}

@@ -1,6 +1,6 @@
 # PLAN MAESTRO 25: AUDITORÍA ARQUITECTÓNICA TOTAL, MODULARIZACIÓN SEGURA POR CAPAS, CONSOLIDACIÓN DRY (CERO DUPLICACIÓN), OPTIMIZACIÓN DE PESO APK Y RECURSOS, E HIGIENE DE INGENIERÍA
 
-> **Documento Técnico y Hoja de Ruta Arquitectónica — Versión 1.4 (`BLOQUE I CERTIFICADO — CHECKPOINT 1 CERRADO (FASES 1 + 2 EN VERDE) — LISTO PARA BLOQUE II: FASE 3 WEB HTML/CSS`)**  
+> **Documento Técnico y Hoja de Ruta Arquitectónica — Versión 1.8 (`BLOQUE II ADMIN WEB COMPLETO Y CERTIFICADO: FASES 3 + 4 + 5A + 5B — CHECKPOINT 2 LISTO PARA FASE 6 MÓVIL`)**  
 > **Proyecto:** MochilaLista POS Comercial (`app_movil/`) & MochilaLista Admin Platform (`mochilalista_admin/`)  
 > **Línea Base Certificada:** Rama `dev/mejoras-v9.0-comercializacion-seguridad` tras el cierre de los Planes Maestros 23 (`e84583a`), 23.5 (`09a84df`) y 24 (`fffb329`) — **`1,693/1,693` pruebas en verde** (`255/255` en `mochilalista_admin/` y `1,438/1,438` en `app_movil/`), motor QR ISO/IEC 18004 V1–V40 en `qrcode.min.js`, `owner_commercial_defaults.dart`, Inspector Tri-Protocolo (`ML9`/`MLS1`/`MLC1`) y `compilar_release_dual.bat` con `--init-notes` operativos.  
 > **Objetivo Estratégico:** Eliminar la fragilidad de los archivos monolíticos extensos (`> 800–1,000` líneas tanto en código reciente como heredado), organizar el código en capas cohesivas, consolidar lógica duplicada bajo una sola fuente de verdad (DRY), corregir bugs latentes y código muerto detectados, optimizar de forma realista el peso del APK (incluyendo emisión Universal ARM física `~70.6 MB` aprobada por el propietario) y el consumo de recursos (RAM/CPU/DOM), e incorporar los 4 pilares de higiene técnica (`Problems = 0` en PowerShell, `.gitattributes`, caché-busting unificado `?v=25` y `ARQUITECTURA_MODULAR.md`), **preservando el 100 % de las funciones, contratos de datos, pruebas e interfaces existentes**.
@@ -288,70 +288,105 @@ mochilalista_admin/
 
 ```text
 mochilalista_admin/web/
-├── index.html                                  (< 250 L: shell head ?v=25 + sidebar + header + markers <!-- @PARTIAL:... --> + scripts ordenados ?v=25)
-├── partials/
+├── index.html                                  (140 L: shell head ?v=25 + markers <!-- @PARTIAL:... --> + scripts ordenados ?v=25)
+├── partials/                                   (18 parciales <= 445 L ensamblados en memoria por HtmlTemplateAssembler; bloqueados por HTTP /partials/*)
+│   ├── layout/
+│   │   └── sidebar.html                        (99 L: sidebar lateral colapsable)
 │   ├── tabs/
-│   │   ├── tab_dashboard.html
-│   │   ├── tab_clients.html
-│   │   ├── tab_license_studio.html
-│   │   ├── tab_release_manager.html
-│   │   ├── tab_inspector.html
-│   │   ├── tab_finances_backups.html
-│   │   ├── tab_settings.html
-│   │   └── tab_security_vault.html
+│   │   ├── tab_dashboard.html                  (133 L)
+│   │   ├── tab_clients.html                    (68 L)
+│   │   ├── tab_license_studio.html             (308 L)
+│   │   ├── tab_release_manager.html            (216 L)
+│   │   ├── tab_inspector.html                  (164 L)
+│   │   ├── tab_finances_backups.html           (201 L)
+│   │   ├── tab_settings.html                   (348 L)
+│   │   └── tab_security_vault.html             (341 L)
 │   ├── drawers/
-│   │   └── client_360_drawer.html
+│   │   └── client_360_drawer.html              (374 L)
 │   └── modals/
-│       ├── modals_clients_crm.html             (Create/Edit Client, History, ManualPayment, Receipt, Sync, GlobalSync, Migrate)
-│       ├── modals_licenses_wa.html             (ConfirmLicenseEmission, Confirm, WaComposer, QuickQr)
-│       ├── modals_releases.html                (CreateRelease, EditRelease, FixClientVersion)
-│       ├── modals_settings_mlc1.html           (UnsavedSettings, ResetSettingsScope, CommercialConfigSync)
-│       └── modals_vault_backups.html           (ImportVault, AutoRecovery, PrintableEmergencyKit, VaultAuditReport, BackupPreview)
-├── css/                                        (Todos referenciados con ?v=25 en cascada estricta)
-│   ├── 00_tokens.css                           (Variables root Deep Obsidian + tipografía + reset base)
-│   ├── 01_layout_shell.css                     (Sidebar, header, navegación, tooltips, mode switcher)
-│   ├── 02_components.css                       (Botones, badges, tablas, formularios, modales base, toasts)
+│       ├── modals_clients_crm.html             (445 L: Create/Edit Client, History, ManualPayment)
+│       ├── modals_receipts.html                (275 L: PaymentReceipt)
+│       ├── modals_sync_migration.html          (358 L: SyncReported, GlobalClientSync, MigrateDevice)
+│       ├── modals_licenses_wa.html             (403 L: ConfirmLicenseEmission, Confirm, WaComposer, QuickQr)
+│       ├── modals_releases.html                (354 L: CreateRelease, EditRelease, FixClientVersion)
+│       ├── modals_settings_mlc1.html           (216 L: UnsavedSettings, ResetSettingsScope, CommercialConfigSync)
+│       ├── modals_vault_security.html          (353 L: ImportVault, AutoRecovery, PrintableEmergencyKit, VaultAuditReport)
+│       └── modals_backups_preview.html         (70 L: BackupPreview)
+├── css/                                        (19 hojas <= 600 L con ?v=25 en cascada estricta; styles.css retirado)
+│   ├── 00_tokens.css                           (60 L: variables root Deep Obsidian + tipografía + reset base)
+│   ├── 01_layout_shell.css                     (564 L: sidebar, header, navegación, tooltips, mode switcher)
+│   ├── 02_components_core.css                  (537 L: botones, badges, tablas, formularios, alertas, toasts)
+│   ├── 03_components_modals.css                (586 L: modales base, grillas, paginación y controles reutilizables)
 │   ├── modules/
-│   │   ├── crm_drawer.css                      (CRM omnicanal, Drawer 360°, comprobantes, migración, sync diff)
-│   │   ├── releases_inspector.css              (Drop zone, matriz releases, guía dual, inspector tri-protocolo)
-│   │   ├── finances_backups.css                (Filtros finanzas, pills backups, modal preview)
-│   │   ├── settings_mlc1.css                   (Settings 4 tabs, WhatsApp preview, modal MLC1 + QR)
-│   │   └── security_vault.css                  (Bóveda, factores 25%, tabla 6 cols, lock overlay)
-│   ├── 90_light_theme.css                      (TODAS las 144 reglas [data-theme="light"] unificadas al final de componentes)
-│   ├── 95_responsive.css                       (TODAS las reglas @media max-width consolidadas)
-│   └── 99_print.css                            (Reglas exclusivas @media print — Kit de Rescate A4 intacto)
-└── js/                                         (Zero-Bundler: carga ordenada determinista ?v=25; qrcode.min.js y jsqr.min.js intactos)
+│   │   ├── dashboard_crm.css                   (393 L: dashboard KPIs, gráficos SVG, tabla CRM y búsqueda)
+│   │   ├── crm_drawer.css                      (453 L: Drawer 360°, tabs internas, badges y timeline)
+│   │   ├── receipts_modal.css                  (472 L: split modal boletas/facturas y vista previa A4/ticket)
+│   │   ├── releases_catalog.css                (600 L: drop zone APK, tarjetas versión y tabla catálogo)
+│   │   ├── releases_matrix.css                 (575 L: matriz releases, guía dual y modales release)
+│   │   ├── inspector_sync.css                  (574 L: inspector tri-protocolo ML9/MLS1/MLC1 y sync diff)
+│   │   ├── finances_backups.css                (410 L: filtros finanzas, pills backups y modal preview)
+│   │   ├── wa_composer.css                     (293 L: compositor WhatsApp multi-plantilla y preview móvil)
+│   │   ├── settings_center.css                 (419 L: Settings 4 tabs, catálogos comerciales y dirty guard)
+│   │   ├── settings_mlc1.css                   (306 L: Ficha MLC1 QR Vía 1 y Vía 2 exportador Dart)
+│   │   └── security_vault.css                  (240 L: bóveda DPAPI, factores 25%, tabla 6 cols y PIN lock overlay)
+│   ├── 90_light_theme_base.css                 (238 L: reglas [data-theme="light"] de tokens, shell y componentes)
+│   ├── 91_light_theme_modules.css              (481 L: reglas [data-theme="light"] de módulos e inspector)
+│   ├── 95_responsive.css                       (82 L: TODAS las reglas @media max-width consolidadas)
+│   └── 99_print.css                            (155 L: reglas exclusivas @media print — Kit de Rescate A4 intacto)
+└── js/                                         (Zero-Bundler: 50 scripts ordenados con ?v=25 [48 app + 2 vendor]; admin_app.js RETIRADO)
     ├── qrcode.min.js                           (ISO/IEC 18004 V1-V40 - intacto)
     ├── jsqr.min.js                             (Decodificador QR - intacto)
-    ├── core/
-    │   ├── fetch_auth.js                       (Interceptor fetch PIN HTTP 423)
-    │   ├── semver.js                           (Única compareSemVer + getLatestPublishedVersion)
-    │   ├── time_lima.js                        (formatLimaDateTime, formatLimaIsoDate, formatLimaReceiptStamp)
-    │   ├── formatters.js                       (normalizePeruPhone, formatPeruvianPhoneDisplay, formatPlanHumanLabel, normalizePlanToSlug, escapeHtml)
-    │   ├── clipboard.js                        (copyPlainTextToClipboard con fallback + copyPngBlobToClipboard)
-    │   ├── whatsapp.js                         (buildWhatsAppSendUrl único + helpers)
-    │   ├── qr_utils.js                         (getUtf8ByteLength, renderSafeQrCode, downloadQrWithQuietZone)
-    │   ├── canvas_pdf_utils.js                 (roundRect, wrapText, drawFallbackLogo, generateOfflinePdfFromCanvas, sanitizeDownloadFileName)
-    │   └── ui_feedback.js                      (showToast, initModalConfirm, showConfirmModal, openModal/closeModal, isDesktopAppMode)
-    ├── state/
-    │   └── app_store.js                        (Estado global compartido: currentMode, globalClients, globalReleases, ownerConfig, dirty flags)
-    ├── modules/
-    │   ├── navigation_theme.js                 (initNavigation, initTheme, initModeSwitcher, shutdown screen)
-    │   ├── dashboard.js                        (loadDashboard, gráficos SVG, KPI click events)
-    │   ├── clients_crm.js                      (loadClients, omnichannel search, filter counts, renderClientsTable con DocumentFragment)
-    │   ├── license_studio.js                   (Estudio Generador Ed25519, modal confirmación, renderCredentialCanvas)
-    │   ├── receipts.js                         (Modal Boletas/Facturas, Canvas2D, PDF, WhatsApp)
-    │   ├── drawer_360.js                       (openClient360Drawer, switchDrawerTab, pagos, hardware, edición)
-    │   ├── client_sync.js                      (Sync .mlsync / MLS1 individual y global + renderMigrationRescueCard DRY)
-    │   ├── whatsapp_composer.js                (Plantillas WA, snippets, stats, guardado)
-    │   ├── releases_manager.js                 (formatApkSizeMb..renderSignatureStatusBadge, catálogo, matriz, drag&drop, guía dual, verify-all)
-    │   ├── inspector_triprotocol.js            (Marcador Sección 5: Inspector ML9 / MLS1 / MLC1 + auditoría)
-    │   ├── finances_backups.js                 (Marcador Sección 6: Finanzas, backups, Excel export)
-    │   ├── modals_crud_history.js              (Marcador Sección 7: CRUD clientes, historial, migración 1 paso)
-    │   ├── settings_center.js                  (Marcador Sección 8: 4 sub-tabs, dirty guard, scopes reset)
-    │   ├── mlc1_sync_exporter.js               (Sección 8B: Ficha MLC1 QR + Export Dart completo)
-    │   └── security_vault.js                   (Bóveda DPAPI, espejo, auditoría SHA-256, Kit Rescate, PIN, .mlvault)
-    └── bootstrap.js                            (Único DOMContentLoaded + bootstrapAuthenticatedWorkspace + registro window.*)
+    ├── core/                                   (9 módulos DRY <= 217 L - CERTIFICADOS Fase 4)
+    │   ├── fetch_auth.js                       (39 L: Interceptor fetch PIN HTTP 423)
+    │   ├── semver.js                           (46 L: Única compareSemVer + getLatestPublishedVersion — Fix D-ADM-01)
+    │   ├── time_lima.js                        (108 L: formatLimaDateTime, formatLimaIsoDate, formatLimaReceiptStamp, getLocalIsoDate GMT-5 — Fix D-ADM-04)
+    │   ├── formatters.js                       (115 L: normalizePeruPhone, formatPeruvianPhoneDisplay, formatPlanHumanLabel/formatPlanLabel, normalizePlanToSlug, escapeHtml — DRY D-ADM-05)
+    │   ├── clipboard.js                        (79 L: copyPlainTextToClipboard con fallback + copyPngBlobToClipboard — DRY D-ADM-03)
+    │   ├── whatsapp.js                         (24 L: buildWhatsAppSendUrl + sanitizeWhatsAppDigits — DRY D-ADM-06)
+    │   ├── qr_utils.js                         (128 L: getUtf8ByteLength, renderSafeQrCode, downloadQrWithQuietZone)
+    │   ├── canvas_pdf_utils.js                 (140 L: roundRect, wrapText, drawFallbackLogo, generateOfflinePdfFromCanvas, sanitizeDownloadFileName)
+    │   └── ui_feedback.js                      (217 L: showToast, initModalConfirm, showConfirmModal, openModal/closeModal, isDesktopAppMode)
+    ├── state/                                  (Estado compartido Fase 4 - CERTIFICADO)
+    │   └── app_store.js                        (23 L: currentMode, globalClients, globalReleases, globalFinances, ownerConfig, punteros UI/drawer)
+    ├── modules/                                (37 sub-módulos <= 582 L extraídos en Fases 4 + 5A + 5B; 0 navigator.clipboard directos)
+    │   ├── navigation_theme.js                 (459 L - F4: initNavigation, initTheme, applyTheme, applyTableDensity, initModeSwitcher, shutdown screen)
+    │   ├── dashboard.js                        (335 L - F4: loadDashboard, gráficos SVG, KPI click events)
+    │   ├── clients_crm.js                      (400 L - F4: loadClients, omnichannel search, filter counts, renderClientsTable con DocumentFragment D-ADM-10)
+    │   ├── license_projection.js               (441 L - F4: GEN_SVGS, decodeMl9TokenPayload, selectClientForLicense, updateLiveLicenseProjection)
+    │   ├── license_studio.js                   (511 L - F4: initLicenseStudioEvents, renderSelectedGeneratorLicense, openQuickQrModal)
+    │   ├── license_emission.js                 (352 L - F4: openConfirmEmissionModal, generateLicense, executeConfirmedEmission)
+    │   ├── license_credential_canvas.js        (271 L - F4: renderCredentialCanvas, downloadCredential, copyCredentialToClipboard)
+    │   ├── receipts_preview_and_canvas.js      (330 L - F5A: boletas/facturas DOM + formatLimaReceiptStamp D-ADM-04)
+    │   ├── receipts_canvas_render.js           (368 L - F5A: drawReceiptOnCanvas Canvas2D IGV/PNG)
+    │   ├── receipts_export_and_events.js       (253 L - F5A: PDF offline, copyPngBlobToClipboard D-ADM-03, WA D-ADM-06)
+    │   ├── drawer_360_core.js                  (259 L - F5A: switchDrawerTab, initDrawerEvents, updateDrawerEditPlanFields)
+    │   ├── drawer_360_profile_tab.js           (499 L - F5A: openClient360Drawer + clipboard DRY D-ADM-03)
+    │   ├── drawer_360_payments.js              (229 L - F5A: closeClient360Drawer, delete, pagos manuales/edición)
+    │   ├── client_sync_reported.js             (430 L - F5A: renderMigrationRescueCard DRY D-ADM-07 + diff/sync por cliente)
+    │   ├── client_sync_global.js               (342 L - F5A: analyzeGlobalSync + applyGlobalSync + initClientSyncEvents)
+    │   ├── whatsapp_templates.js               (290 L - F5A: marcador 3B, plantillas WA_TEMPLATES y snippets)
+    │   ├── whatsapp_composer.js                (352 L - F5A: compositor WhatsApp multi-plantilla + buildWhatsAppSendUrl D-ADM-06)
+    │   ├── releases_catalog.js                 (408 L - F5A: marcador 4, formatApkSizeMb..renderSignatureStatusBadge, loadReleases)
+    │   ├── releases_edit_and_verify.js         (582 L - F5A: isVerifyAllCatalogRunning..loadCompanionNoteIntoField + variantes edición)
+    │   ├── releases_matrix.js                  (402 L - F5A: matriz inteligente de despliegues y cortesías)
+    │   ├── releases_wa_dispatch.js             (551 L - F5A: parseApkSizeMbNumber..sendWaDispatchTextOnly + D-ADM-06)
+    │   ├── releases_upload_and_dual_guide.js   (494 L - F5A/5B: drag&drop APK, guía dual PC con copyPlainTextToClipboard D-ADM-03, textareas expandibles)
+    │   ├── releases_create_and_local_builds.js (372 L - F5A: tarjeta APK activo y grilla Biblioteca Local)
+    │   ├── releases_search_dirs_and_upload.js  (466 L - F5A: carpetas APK de búsqueda y carga multipart)
+    │   ├── inspector_history_and_qr.js         (441 L - F5A: marcador 5, historial sesión, guía 3 protocolos, lector jsQR)
+    │   ├── inspector_mlc1_render.js            (334 L - F5A: auditoría declarativa MLC1- en Inspector)
+    │   ├── inspector_sync_and_dispatch.js      (427 L - F5A: renderInspectClientSync con renderMigrationRescueCard D-ADM-07 + inspectToken)
+    │   ├── finances_backups.js                 (568 L - F5B: marcador Sección 6, finanzas GMT-5, paginación 20, backups preview/restore/purge)
+    │   ├── modals_crud_clients.js              (581 L - F5B: marcador Sección 7, eventos modales y edición rápida clientes)
+    │   ├── modals_history_and_migrate.js       (488 L - F5B: historial pagos/hardware, flujos 1 paso y migración con D-ADM-03/06)
+    │   ├── settings_core_and_dirty.js          (455 L - F5B: marcador Sección 8, 4 sub-tabs, dirty guard, snapshots, loadConfig, initSettingsEvents)
+    │   ├── settings_form_and_templates.js      (519 L - F5B: reset scopes, preview WA en vivo, poblado y guardado de configuración)
+    │   ├── mlc1_sync_exporter.js               (468 L - F5B: marcador Sección 8B, QR 512 px, exportador .dart y share WA/clipboard DRY D-ADM-03/06)
+    │   ├── excel_export.js                     (55 L - F5B: marcador Sección 9, exportación Excel maestro y financiero)
+    │   ├── security_vault_health.js            (451 L - F5B: marcador #tabSecurityVault, salud/factores 25%, tabla 6 cols y copy DRY D-ADM-03)
+    │   ├── security_vault_portability.js       (494 L - F5B: auditoría modal, espejo, cloud path, .mlkey, Kit Rescate A4 y export .mlvault)
+    │   └── security_vault_pin.js               (313 L - F5B: importación .mlvault, auto-recuperación espejo y bloqueo/recuperación PIN)
+    └── bootstrap.js                            (44 L - F5B: Único DOMContentLoaded + bootstrapAuthenticatedWorkspace; ubicado tras excel_export y previo a Vault)
 ```
 
 ---
@@ -566,10 +601,10 @@ Cada sub-fase respeta estrictamente el **Tope Atómico por Turno** (**máximo `3
 | **0** | **Fase 0** *(CERTIFICADA)* | Raíz + Scripts + Tests Admin | **Higiene A + B + Red de Seguridad Completa:** Renombradas 6 funciones en `scripts/compilar_release_dual.ps1` (`NO_BOM_PARSE_ERRORS=0`, `14` funciones con `0` verbos fuera de `(Get-Verb).Verb`, `CRLF` puro, único BOM `EF BB BF`), creado `.gitattributes` verificando cero archivos no editados en `git status`, creado `test/support/web_bundle_loader.dart`, **migrados los `34` archivos reales lectores de `web/`** sin debilitar aserciones y añadido `test/plan25_fase0_hygiene_and_loader_test.dart`. *(Nota: módulo externo `PSScriptAnalyzer` no instalado localmente; equivalencia validada vía Parser AST + `(Get-Verb).Verb`).* | `.ps1` con `0` verbos no aprobados; `34` tests migrados | AST/Verbs = 0 (`FUNCTIONS_COUNT=14`); `compilar_release_dual.bat --help/--dry-run/--verify-only --init-notes --no-pause` (`exit 0`); `git status` limpio; `dart analyze` limpio; `dart test` (`258/258`). |
 | **I** | **Fase 1** *(CERTIFICADA)* | `mochilalista_admin/` (`lib/`) | **DRY Backend + Extracción Servicios Soporte (6 servicios + `time_utils`/`dpapi`/`signer`/`client_sync`):** creada capa `lib/core/` (`6` módulos: `time_utils`, `semver_utils`, `csv_utils` corrigiendo `D-ADM-02` en `database_service.dart#exportClientsToCsv`, `path_security`, `backup_rotation_helper`, `commercial_constants`); modularizados `apk_inspector_service`, `config_service`, `vault_storage_service`, `vault_crypto_service`, `commercial_config_sync_service` y `excel_export_service` en `32` archivos `< 600` L (máx `571` L) conservando **`10` barrels `1–2` L (`export '...'`) en `lib/*.dart`**, adaptado `releases_matrix_and_ui_test.dart` a lectura modular de `lib/apk/` y agregado `test/plan25_fase1_admin_core_and_services_test.dart`. | Todos `< 600` L (`571` máx); `10` barrels `1–2` L | `dart analyze` (`No issues found!`); censo de líneas (`32` módulos `< 600` L); `dart test` completo (`262/262` en verde sin romper imports heredados). |
 | **I** | **Fase 2** *(CERTIFICADA)* | `mochilalista_admin/` (`server.dart` + `database_service.dart`) | **Modularización DB & HTTP (2 monolitos -> `23` módulos):** dividido `database_service.dart` (`2,708` L) en `8` archivos `lib/data/*` (`<= 445` L) con barrel `lib/database_service.dart` (`1` L); dividido `server.dart` (`3,220` L) en `server.dart` (`139` L) + `15` archivos `lib/http/**` (`<= 530` L) con `AuthPinMiddleware` (`423` Locked + cookies `HttpOnly`), `StaticHandler` anti-traversal **`D-ADM-09`**, `HtmlTemplateAssembler`, `SemVerUtils` unificado y migración de `existsSync` HTTP a I/O `async` **`D-ADM-10`** + `test/plan25_fase2_db_and_http_modular_test.dart`. | `server.dart` = `139` L; todo `lib/` `< 600` L (máx `571` L) | `dart analyze` (`No issues found!`); `0` `existsSync` en `lib/http/**`; test PIN `423` + traversal + `dart test` completo (`265/265` verde). |
-| **II** | **Fase 3** | `mochilalista_admin/web/` (HTML + CSS) | **Capas CSS + Parciales HTML + `?v=25`:** dividir `styles.css` (`7,399` L) respetando orden `tokens -> base -> components -> modules/* -> 90_light_theme -> 95_responsive -> 99_print`; dividir `index.html` (`4,825` L) en `partials/` ensamblados por `HtmlTemplateAssembler`; unificar `?v=25` (incluyendo `plan23_fase2_settings_and_templates_test.dart`). | CSS `< 700` L/archivo; `index.html < 250` L | `dart test` (`100 %` verde con `WebBundleLoader`) + prueba HTTP `/` y modo oscuro/claro/print A4. |
-| **II** | **Fase 4** | `mochilalista_admin/web/js/` (Parte 1) | **Extracción JS Core + Estado + Bloque 1 (~5,200 L):** crear `js/core/` (consolidando una sola `compareSemVer`, `clipboard`, `time_lima`, `formatters`/`escapeHtml`, `whatsapp`, `qr_utils`, `canvas_pdf_utils`, `ui_feedback`), `js/state/app_store.js` y `js/modules/` (`navigation_theme`, `dashboard`, `clients_crm` con `DocumentFragment`, `license_studio`), cargados en orden determinista antes del resto de `admin_app.js`. | Módulos `< 600` L | `node --check` en **cada `.js` individual Y en el bundle concatenado** (`WebBundleLoader.loadJs()`); `0` colisiones `let`/`const`; `dart test` (`100 %` verde). |
-| **II** | **Fase 5A** | `mochilalista_admin/web/js/` (Parte 2A) | **Extracción JS Bloque 2A (~5,600 L):** extraer `receipts.js`, `drawer_360.js`, `client_sync.js` (DRY `.sync-migration-rescue-card`), `whatsapp_composer.js`, `releases_manager.js` (`formatApkSizeMb..renderSignatureStatusBadge`, `isVerifyAllCatalogRunning`) e `inspector_triprotocol.js` (marcadores Sección 5 intactos). | Módulos `< 650` L | `node --check` por **archivo individual Y bundle concatenado**; validación `window.*` inline `onclick`; `dart test` (`100 %` verde). |
-| **II** | **Fase 5B** | `mochilalista_admin/web/js/` (Parte 2B) | **Extracción JS Bloque 2B & Retiro Monolito (~5,100 L):** extraer `finances_backups.js` (Sección 6), `modals_crud_history.js` (Sección 7), `settings_center.js` (Sección 8), `mlc1_sync_exporter.js` (Sección 8B), `security_vault.js` y `bootstrap.js` (`DOMContentLoaded` único + exports `window.*`); retirar `admin_app.js` monolítico. | Todos `< 650` L; `0` monolitos en Admin | `node --check` por **archivo individual Y bundle concatenado**; `dart test` (`255+` verde) + inspección visual Chrome oscuro/claro + A4 print. |
+| **II** | **Fase 3** *(CERTIFICADA)* | `mochilalista_admin/web/` (HTML + CSS) | **Capas CSS + Parciales HTML + `?v=25` (`19` CSS + `18` Parciales):** retirado `css/styles.css` (`7,399` L) y dividido en `19` hojas CSS (`<= 600` L) respetando orden `00_tokens -> 01_layout_shell -> 02..03_components -> modules/* -> 90..91_light_theme -> 95_responsive -> 99_print`; dividido `index.html` (`4,825` L) en `140` L + `18` parciales `web/partials/**` (`<= 445` L); añadido `HtmlTemplateAssembler.assembleSync()` (`184` L) y bloqueo HTTP `403` para `/partials/*` en `StaticHandler` (`138` L); unificado `?v=25` en stylesheets y scripts; actualizado `WebBundleLoader` + `plan23_fase2_settings_and_templates_test.dart` (`?v=25`) y agregada suite `test/plan25_fase3_html_css_modular_test.dart`. | CSS `<= 600` L; Parciales `<= 445` L; `index.html` = `140` L | `dart analyze` (`No issues found!`); paridad `901/901` IDs + `87` `onclick` + `266` `<svg>` + `144` light + `11` `@media` + `2` `@media print`; `node --check`; `dart test` completo (`268/268` verde) + HTTP `/`. |
+| **II** | **Fase 4** *(CERTIFICADA)* | `mochilalista_admin/web/js/` (Parte 1) | **Extracción JS Core + Estado + Bloque 1 (`17` módulos `<= 511` L):** creada capa `js/core/` (`9` módulos `<= 217` L: `fetch_auth`, `semver` única `compareSemVer` **`D-ADM-01`**, `time_lima` GMT-5 **`D-ADM-04`**, `formatters` **`D-ADM-05`**, `clipboard` **`D-ADM-03`**, `whatsapp` **`D-ADM-06`**, `qr_utils`, `canvas_pdf_utils`, `ui_feedback`), `js/state/app_store.js` (`23` L) y `7` módulos de Bloque 1 (`navigation_theme`, `dashboard`, `clients_crm` con `DocumentFragment` **`D-ADM-10`**, `license_projection`, `license_studio`, `license_emission`, `license_credential_canvas`); orden estricto `?v=25` en `index.html`, actualizado `WebBundleLoader.jsFilePaths()` + `plan25_fase0`/`fase3_plan18_5`/`plan22_fase3`/`plan22_fase4`/`plan23_fase2`/`plan24_fase2`/`plan25_fase3` y creada suite `test/plan25_fase4_js_core_and_modules_p1_test.dart`; `admin_app.js` reducido `15,969 -> 12,341` L preservando intactos los bloques de Fases 5A/5B. | Todos `< 600` L (`511` máx); `0` duplicados `let`/`const` | `node --check` en cada `.js` + bundle concatenado (`exit 0`); `COMPARE_SEMVER_DEFS=1`; `MISSING_FUNCTIONS=0`; `dart analyze` (`No issues found!`); `dart test` completo (`271/271` verde). |
+| **II** | **Fase 5A** *(CERTIFICADA)* | `mochilalista_admin/web/js/` (Parte 2A) | **Extracción JS Bloque 2A (`20` sub-módulos `<= 582` L):** extraídos `receipts_*` (`3`), `drawer_360_*` (`3`), `client_sync_*` (`2` con helper único **`renderMigrationRescueCard` — Fix `D-ADM-07`**), `whatsapp_*` (`2`), `releases_*` (`7` preservando `formatApkSizeMb..renderSignatureStatusBadge` y `isVerifyAllCatalogRunning..Carga notas compañeras`) e `inspector_*` (`3` preservando Sección 5 antes de Sección 6 en `admin_app.js`); adoptados `formatLimaReceiptStamp`, `copyPlainTextToClipboard`/`copyPngBlobToClipboard` y `buildWhatsAppSendUrl`; orden `?v=25` en `index.html`, adaptados `plan22_fase3`, `plan22_fase4`, `plan23_5_fase2`, `plan25_fase4` y creada suite `test/plan25_fase5a_js_modules_p2a_test.dart`; `admin_app.js` reducido `12,341 -> 4,459` L. | Sub-módulos `<= 582` L (`< 650`); `admin_app.js` = `4,459` L | `node --check` individual + concatenado (`exit 0`); `MISSING_INLINE_HANDLERS=0`; `COMPARE_SEMVER_DEFS=1`; `dart analyze` (`No issues found!`); `dart test` completo (`274/274` verde). |
+| **II** | **Fase 5B** *(CERTIFICADA)* | `mochilalista_admin/web/js/` (Parte 2B) | **Extracción JS Bloque 2B & Retiro Definitivo de `admin_app.js` (`10` módulos + `bootstrap.js`):** extraídos `finances_backups.js` (`568` L), `modals_crud_clients.js` (`581` L), `modals_history_and_migrate.js` (`488` L), `settings_core_and_dirty.js` (`455` L), `settings_form_and_templates.js` (`519` L), `mlc1_sync_exporter.js` (`468` L), `excel_export.js` (`55` L), `bootstrap.js` (`44` L), `security_vault_health.js` (`451` L), `security_vault_portability.js` (`494` L) y `security_vault_pin.js` (`313` L); migrado el 100 % restante de `navigator.clipboard` y enlaces WA en `modals_history_and_migrate`, `mlc1_sync_exporter`, `security_vault_health` y `releases_upload_and_dual_guide` (`D-ADM-03`/`06`); eliminado `admin_app.js` del árbol y de `web/index.html`; actualizados tests contractuales + creada suite `plan25_fase5b_js_closure_and_zero_monoliths_test.dart` (`277/277` en verde). | Todos `< 600` L (máx `582` L en `modules/`); **`0` monolitos en Admin** | `node --check` `50/50` + bundle (`exit 0`); `DIRECT_CLIPBOARD_IN_MODULES=0`; `dart analyze` (`No issues found!`); `dart test` (`277/277`) + `handleRequest()` HTTP `200`/`404`/`403`. |
 | **III** | **Fase 6** | `app_movil/` (Core DRY + Código Muerto) | **Consolidación DRY Móvil, Rendimiento Base & Limpieza Aprobada:** adoptar `AppCurrency.format` (`267` sitios), crear `AppDateFormatter`, `ClipboardHelper`, `WhatsAppUriBuilder` (corrigiendo bug `"51${phone}"`), `AppFeedbackHelper`; optimizar `UniversalImage` (`cacheWidth` + sin `existsSync` en `build()`); **remover los 5 huérfanos aprobados** (`business_backup_screen.dart`, `safe_dropdown.dart`, `super_switch.dart`, `team_members_tab.dart`, `access_codes_tab.dart`) y `com.google.android.geo.API_KEY` de `AndroidManifest.xml`. | Utils `< 250` L; `-730` L muertas | `flutter analyze --no-pub`; tests unitarios `WhatsAppUriBuilder` / `AppDateFormatter` / `AppCurrency` + `flutter test --no-pub -j 1`. |
 | **III** | **Fase 7** | `app_movil/` (Persistencia & Servicios Core — `7A` + `7B`) | **Sub-lote `7A` (3 archivos, `5,910` L):** `local_db.dart` (`1,450` L vía `part`, **SQLite `v36` 100 % inmutable**), `product_repository.dart` (`1,395` L), `client_service.dart` (`3,065` L).<br>**Sub-lote `7B` (3 archivos, `5,559` L):** `sales_service.dart` (`2,680` L), `commercial_radar_service.dart` (`1,417` L), `notification_provider.dart` (`1,462` L). | Todos `< 550–650` L | `flutter analyze --no-pub` + `flutter test --no-pub -j 1` tras `7A` y tras `7B` (integridad SQLite `v36` 100 % verde). |
 | **III** | **Fase 8A** | `app_movil/` (Auth & Onboarding — 3 archivos) | **Modularización Auth/Licencias (`7,558` L, `lock_screen.dart` INTOCABLE):** dividir `license_status_and_activation_screen.dart` (`4,769` L -> coordinador + 6 widgets/sheets con re-exports y `ValueKey`s intactos), `profile_selection_screen.dart` (`1,535` L) y `onboarding_screen.dart` (`1,254` L). | Archivos `< 550–650` L | `flutter analyze --no-pub`; pruebas licencia/onboarding + `0px Overflow` (`320x568`, `360x640`, `412x915` a `1.3x`) + `flutter test --no-pub -j 1`. |
@@ -591,7 +626,7 @@ Para garantizar reversibilidad inmediata ante cualquier regresión, **nunca** se
 1. Cada bloque certificado cerrará con un commit atómico en `dev/mejoras-v9.0-comercializacion-seguridad` (**sin `git tag` ni merge a `main`**, nunca usando `git add .` ni agregando secretos/datos reales):
    * **Checkpoint 0 *(CERRADO)*:** `Fase 0` (`.gitattributes`, `compilar_release_dual.ps1` con `0` verbos no aprobados y AST=0, `WebBundleLoader` + `34` tests migrados + `plan25_fase0_hygiene_and_loader_test.dart`, `dart analyze` limpio, `258/258` verde).
    * **Checkpoint 1 *(CERRADO)*:** `Bloque I Admin Backend` (`Fases 1 + 2`, `55` módulos `< 600` L, `11` barrels `1–2` L, `server.dart` = `139` L, `dart analyze` limpio, `265/265` pruebas en verde).
-   * **Checkpoint 2:** `Bloque II Admin Web` (`Fases 3 + 4 + 5A + 5B`, `dart test` + `node --check` verde).
+   * **Checkpoint 2 *(CERRADO)*:** `Bloque II Admin Web` (`Fases 3 + 4 + 5A + 5B`, **`0` monolitos en todo `mochilalista_admin/`**, `index.html` = `187` L, `19` CSS `<= 600` L + `18` parciales `<= 445` L + `48` scripts propios `<= 582` L con `?v=25`, `styles.css` y `admin_app.js` retirados, `D-ADM-01..10` cerrados en Admin, `dart analyze` limpio, **`277/277`** en verde + `node --check` OK).
    * **Checkpoint 3:** `Fase 6` (Core DRY + huérfanos + `UniversalImage`, `flutter test` verde).
    * **Checkpoint 4:** `Fase 7` (`7A + 7B`, persistencia/servicios + SQLite `v36` intacto, `flutter test` verde).
    * **Checkpoints 5A / 5B / 5C:** tras cada una de las sub-fases `Fase 8A`, `Fase 8B` y `Fase 8C`.
@@ -601,5 +636,5 @@ Para garantizar reversibilidad inmediata ante cualquier regresión, **nunca** se
 
 ---
 
-> **Estado Actual del Plan Maestro 25 (v1.4):** **Bloque I completo (`Fase 1` + `Fase 2` + `Checkpoint 1`) COMPLETADO Y CERTIFICADO (`55` módulos `< 600` L en `lib/`, `11` barrels `1–2` L, `server.dart` = `139` L, fixes `D-ADM-02`, `D-ADM-08`, `D-ADM-09`, `D-ADM-10`, `dart analyze = No issues found!`, `265/265` tests Admin en verde; `0` cambios en `app_movil/`, `web/` o `Manual 05`).**  
-> **Siguiente Paso:** Iniciar **Bloque II — Fase 3 (`mochilalista_admin/web/` HTML + CSS)** — Modularización de `web/css/styles.css` (`7,399` L) y `web/index.html` (`4,825` L) en `partials/` ensamblados por `HtmlTemplateAssembler` + caché-busting unificado `?v=25`.
+> **Estado Actual del Plan Maestro 25 (v1.8):** **Bloque II Admin Web (`Fases 3 + 4 + 5A + 5B`) 100 % COMPLETADO Y CERTIFICADO (`Checkpoint 2 CERRADO` — `0` monolitos en todo `mochilalista_admin/`, `styles.css` y `admin_app.js` retirados, `MISSING_FUNCTIONS=0`, `MISSING_INLINE_HANDLERS=0`, `COMPARE_SEMVER_DEFS=1`, `DIRECT_CLIPBOARD_IN_MODULES=0`, `0` colisiones `let`/`const`, `node --check` 50/50 + bundle OK, `dart analyze = No issues found!`, `277/277` tests Admin en verde; `0` cambios en `app_movil/`, `server.dart`, `Manual 05` o secretos).**  
+> **Siguiente Paso:** Ejecutar **Bloque III (`app_movil/`) — Fase 6** (Core DRY móvil `AppCurrency`/`AppDateFormatter`/`ClipboardHelper`/`WhatsAppUriBuilder`/`AppFeedbackHelper`, optimización `UniversalImage` y retiro de los `5` archivos huérfanos aprobados + `com.google.android.geo.API_KEY`).

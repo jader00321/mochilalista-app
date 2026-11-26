@@ -357,9 +357,10 @@ environment:
         '.mlc1-dart-target-box',
         '/* 5. Densidad Compacta de Tablas',
       );
+      final afterDartCss = css.substring(css.indexOf('.mlc1-dart-target-box'));
       expect(dartCss, contains('.mlc1-dart-path-code'));
-      expect(dartCss, contains('[data-theme="light"] .mlc1-dart-target-box'));
-      expect(dartCss, contains('[data-theme="light"] .mlc1-dart-path-code'));
+      expect(afterDartCss, contains('[data-theme="light"] .mlc1-dart-target-box'));
+      expect(afterDartCss, contains('[data-theme="light"] .mlc1-dart-path-code'));
 
       final sec8bJs = _extractSection(
         js,

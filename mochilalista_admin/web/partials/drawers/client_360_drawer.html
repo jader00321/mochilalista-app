@@ -1,0 +1,374 @@
+  <!-- DRAWER LATERAL DESLIZABLE: FICHA 360° DEL CLIENTE (FASE 4A + FASE 5) -->
+  <div class="drawer-backdrop" id="drawerClient360Backdrop" onclick="closeClient360Drawer()"></div>
+  <aside class="drawer-panel" id="drawerClient360">
+    <div class="drawer-header">
+      <div class="drawer-header-info">
+        <div style="display:flex; align-items:center; gap:0.5rem; flex-wrap:wrap;">
+          <h3 id="drawerBizName" style="font-size:1.15rem; font-weight:800; color:var(--text-primary); margin:0;">-</h3>
+          <span id="drawerStatusBadge" class="badge badge-green">Activa</span>
+        </div>
+        <div style="font-size:0.82rem; color:var(--text-secondary); margin-top:3px; display:flex; align-items:center; gap:0.4rem; flex-wrap:wrap;">
+          <span id="drawerOwnerName">-</span> • 
+          <span id="drawerDeviceId" style="font-family:var(--font-mono); color:var(--primary); font-weight:700;">-</span>
+          <button type="button" class="btn-micro" id="btnDrawerCopyDeviceId" onclick="copyDeviceIdToClipboard(document.getElementById('drawerDeviceId').textContent)" title="Copiar Hardware ID">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" style="width:13px; height:13px;"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+          </button>
+        </div>
+      </div>
+      <div style="display:flex; align-items:center; gap:0.45rem;">
+        <button type="button" class="btn-crm-action wa" id="btnDrawerHeaderWa" onclick="openWhatsAppComposer(currentDrawerClientId)" title="Contactar por WhatsApp">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+        </button>
+        <button type="button" class="btn-drawer-close" onclick="closeClient360Drawer()" title="Cerrar Ficha 360°">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- TABS DE NAVEGACIÓN DENTRO DEL DRAWER -->
+    <div class="drawer-tabs-bar">
+      <button class="drawer-tab-btn active" data-dtab="drawerTabOverview">Resumen</button>
+      <button class="drawer-tab-btn" data-dtab="drawerTabQr">QR & Credencial</button>
+      <button class="drawer-tab-btn" data-dtab="drawerTabFinances">Pagos</button>
+      <button class="drawer-tab-btn" data-dtab="drawerTabHardware">Hardware</button>
+      <button class="drawer-tab-btn" data-dtab="drawerTabEdit">Edición Rápida</button>
+    </div>
+
+    <div class="drawer-body">
+      <!-- PESTAÑA 1: RESUMEN Y LICENCIA -->
+      <div class="drawer-tab-pane active" id="drawerTabOverview">
+        <div class="drawer-kpi-grid">
+          <div class="drawer-kpi-box">
+            <span class="drawer-kpi-label">Plan Actual</span>
+            <span class="drawer-kpi-val" id="drawerKpiPlan">-</span>
+          </div>
+          <div class="drawer-kpi-box">
+            <span class="drawer-kpi-label">Vencimiento</span>
+            <span class="drawer-kpi-val" id="drawerKpiExpires">-</span>
+          </div>
+          <div class="drawer-kpi-box">
+            <span class="drawer-kpi-label">Créditos IA Acumulados</span>
+            <span class="drawer-kpi-val" id="drawerKpiAiCredits" style="color:var(--purple);">-</span>
+          </div>
+          <div class="drawer-kpi-box">
+            <span class="drawer-kpi-label">Versión APK Instalada</span>
+            <span class="drawer-kpi-val" id="drawerKpiVersion">-</span>
+          </div>
+          <div class="drawer-kpi-box" id="drawerBoxUpdates">
+            <span class="drawer-kpi-label">Ventana Updates</span>
+            <span class="drawer-kpi-val" id="drawerKpiUpdates">-</span>
+          </div>
+          <div class="drawer-kpi-box">
+            <span class="drawer-kpi-label">Total Recaudado</span>
+            <span class="drawer-kpi-val" id="drawerKpiTotalPaid" style="color:var(--success);">-</span>
+          </div>
+        </div>
+
+        <div style="background:var(--bg-card); border:1px solid var(--border-color); border-radius:10px; padding:1rem; display:flex; flex-direction:column; gap:0.5rem;">
+          <span style="font-size:0.75rem; color:var(--text-muted); font-weight:700; text-transform:uppercase;">Datos de Contacto & Dispositivo</span>
+          <div style="font-size:0.85rem; color:var(--text-primary);"><strong style="color:var(--text-secondary);">WhatsApp:</strong> <span id="drawerPhone">-</span></div>
+          <div style="font-size:0.85rem; color:var(--text-primary);"><strong style="color:var(--text-secondary);">RUC / DNI:</strong> <span id="drawerDocId">-</span></div>
+          <div style="font-size:0.85rem; color:var(--text-primary);"><strong style="color:var(--text-secondary);">Modelo Celular:</strong> <span id="drawerDeviceModel">No registrado</span></div>
+          <div style="font-size:0.85rem; color:var(--text-primary);"><strong style="color:var(--text-secondary);">Créditos IA Desglose:</strong> <span id="drawerAiBreakdown">-</span></div>
+          <div style="font-size:0.85rem; color:var(--text-primary);"><strong style="color:var(--text-secondary);">Última Sincronización Real:</strong> <span id="drawerLastSync">Nunca sincronizado</span></div>
+          <div style="font-size:0.85rem; color:var(--text-primary);"><strong style="color:var(--text-secondary);">Respaldo Drive:</strong> <span id="drawerBackupDrive">No vinculado</span></div>
+          <div style="font-size:0.85rem; color:var(--text-primary);"><strong style="color:var(--text-secondary);">Perfiles Activos:</strong> <span id="drawerProfilesCount">-</span></div>
+          <div style="font-size:0.85rem; color:var(--text-primary);"><strong style="color:var(--text-secondary);">Último Nonce Reportado:</strong> <span id="drawerUltimoNonce">Sin reporte</span></div>
+          <div style="font-size:0.85rem; color:var(--text-primary);"><strong style="color:var(--text-secondary);">Próximo Seguimiento:</strong> <span id="drawerFollowup">-</span></div>
+          <div style="font-size:0.85rem; color:var(--text-primary);"><strong style="color:var(--text-secondary);">Notas:</strong> <span id="drawerNotes" style="color:var(--text-secondary);">-</span></div>
+          <div style="margin-top:0.35rem;">
+            <button type="button" class="btn btn-outline btn-xs" id="btnDrawerQuickEditFollowup" onclick="switchDrawerTab('drawerTabEdit')" style="font-size:0.75rem; padding:3px 8px;">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle; margin-right:3px;"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+              Editar Seguimiento / Notas
+            </button>
+          </div>
+        </div>
+
+        <div style="display:flex; flex-direction:column; gap:0.6rem;">
+          <button type="button" class="btn btn-primary" id="btnDrawerEmitLicense" style="justify-content:center; padding:0.75rem;">
+            <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+            Emitir Renovación / Nueva Licencia
+          </button>
+          <div style="display:grid; grid-template-columns: 1fr 1fr; gap:0.5rem;">
+            <button type="button" class="btn btn-wa" id="btnDrawerOverviewWa" onclick="openWhatsAppComposer(currentDrawerClientId)" style="justify-content:center;">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" style="width:16px; height:16px; margin-right:4px;"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+              Enviar WhatsApp
+            </button>
+            <button type="button" class="btn btn-outline" id="btnDrawerSyncReported" onclick="openSyncReportedModal(currentDrawerClientId)" style="justify-content:center;">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" style="width:16px; height:16px; margin-right:4px;"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 21h5v-5"/></svg>
+              Sincronizar Celular
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- PESTAÑA 2: QR Y CREDENCIAL OFICIAL -->
+      <div class="drawer-tab-pane" id="drawerTabQr">
+        <!-- Empty State cuando no hay licencias emitidas -->
+        <div id="drawerQrEmptyState" class="drawer-qr-empty-state" style="display:none;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" style="width:48px; height:48px; color:var(--text-muted); opacity:0.6;"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+          <div style="font-weight:700; font-size:1rem; color:var(--text-primary);">Este cliente aún no cuenta con licencias Ed25519 emitidas.</div>
+          <div style="font-size:0.83rem; color:var(--text-secondary); max-width:380px;">Al emitir su primera licencia comercial o activar su pase, el código QR y credencial oficial se visualizarán aquí de forma automática.</div>
+          <button type="button" class="btn btn-primary" onclick="closeClient360Drawer(); selectClientForLicense(currentDrawerClientId);" style="margin-top:0.5rem;">
+            <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+            Emitir Primera Licencia
+          </button>
+        </div>
+
+        <!-- Contenido activo cuando sí tiene licencias -->
+        <div id="drawerQrContent" style="display:flex; flex-direction:column; gap:0.85rem;">
+          <!-- Selector histórico de licencias si hay más de 1 -->
+          <div id="drawerQrSelectorContainer" style="display:none; width:100%; margin-bottom:0.25rem;">
+            <label for="drawerQrCodeSelector" style="font-size:0.75rem; font-weight:700; text-transform:uppercase; color:var(--text-muted); display:block; margin-bottom:0.25rem;">
+              Seleccionar Licencia Emitida del Histórico:
+            </label>
+            <select id="drawerQrCodeSelector" class="form-control" style="width:100%; font-size:0.85rem; font-family:inherit;"></select>
+          </div>
+
+          <div style="display:flex; flex-direction:column; align-items:center; background:var(--bg-card); border:1px solid var(--border-color); border-radius:12px; padding:1.25rem; gap:0.75rem;">
+            <div class="quick-qr-white-box" id="drawerQrContainer" style="width:220px; height:220px;"></div>
+            <div class="code-display" id="drawerCodeDisplay" style="font-size:0.82rem; width:100%; text-align:center; word-break:break-all;">ML9-...</div>
+          </div>
+
+          <!-- Metadatos de la licencia seleccionada -->
+          <div class="drawer-meta-grid" id="drawerQrMetaCard">
+            <div><span style="color:var(--text-muted); font-size:0.72rem; text-transform:uppercase; display:block;">Plan:</span> <strong id="drawerQrMetaPlan">-</strong></div>
+            <div><span style="color:var(--text-muted); font-size:0.72rem; text-transform:uppercase; display:block;">Emisión:</span> <span id="drawerQrMetaEmitted">-</span></div>
+            <div><span style="color:var(--text-muted); font-size:0.72rem; text-transform:uppercase; display:block;">Vigencia:</span> <span id="drawerQrMetaExpires">-</span></div>
+            <div><span style="color:var(--text-muted); font-size:0.72rem; text-transform:uppercase; display:block;">Nonce:</span> <code id="drawerQrMetaNonce" style="font-family:var(--font-mono); font-weight:700;">-</code></div>
+            <div><span style="color:var(--text-muted); font-size:0.72rem; text-transform:uppercase; display:block;">Créditos IA:</span> <span id="drawerQrMetaAi" style="color:var(--purple); font-weight:700;">-</span></div>
+            <div><span style="color:var(--text-muted); font-size:0.72rem; text-transform:uppercase; display:block;">Dispositivo:</span> <code id="drawerQrMetaDevice" style="font-family:var(--font-mono); color:var(--primary); font-weight:700;">-</code></div>
+          </div>
+
+          <!-- Botones Vectoriales Oficiales (Cero Emojis) -->
+          <div style="display:flex; gap:0.45rem; flex-wrap:wrap; justify-content:center;">
+            <button type="button" class="btn btn-outline btn-sm" id="btnDrawerCopyCode" title="Copiar código al portapapeles">
+              <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+              Copiar Código
+            </button>
+            <button type="button" class="btn btn-outline btn-sm" id="btnDrawerCopyCredential" title="Copiar imagen PNG oficial al portapapeles para pegar en WhatsApp">
+              <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+              Copiar Imagen
+            </button>
+            <button type="button" class="btn btn-primary btn-sm" id="btnDrawerDownloadCredential" title="Descargar credencial oficial en alta resolución @2x">
+              <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              Descargar Tarjeta (@2x)
+            </button>
+            <button type="button" class="btn btn-outline btn-sm" id="btnDrawerDownloadQr" title="Descargar imagen PNG del QR">
+              <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              Descargar Solo QR
+            </button>
+            <button type="button" class="btn btn-outline btn-sm" id="btnDrawerAuditInspector" title="Auditar en Inspector Forense">
+              <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+              Auditar en Inspector
+            </button>
+            <button type="button" class="btn btn-wa btn-sm" id="btnDrawerSendWa" title="Enviar Licencia por WhatsApp">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" style="width:14px; height:14px; margin-right:4px;"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+              WhatsApp
+            </button>
+            <button type="button" class="btn btn-outline btn-sm" id="btnDrawerQrNewLicense" title="Emitir una nueva licencia para este cliente en el Estudio Generador">
+              <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+              Emitir Nueva Licencia
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- PESTAÑA 3: PAGOS Y FINANZAS -->
+      <div class="drawer-tab-pane" id="drawerTabFinances">
+        <!-- Barra de KPIs Financieros del Cliente -->
+        <div class="drawer-pay-kpis">
+          <div class="drawer-kpi-box">
+            <span class="drawer-kpi-label">Total Recaudado</span>
+            <span class="drawer-kpi-val" id="drawerPayKpiTotal" style="color:var(--success);">S/ 0.00</span>
+          </div>
+          <div class="drawer-kpi-box">
+            <span class="drawer-kpi-label">Pagos Registrados</span>
+            <span class="drawer-kpi-val" id="drawerPayKpiCount">0</span>
+          </div>
+          <div class="drawer-kpi-box">
+            <span class="drawer-kpi-label">Último Cobro</span>
+            <span class="drawer-kpi-val" id="drawerPayKpiLastDate" style="font-size:0.85rem;">-</span>
+          </div>
+          <div class="drawer-kpi-box">
+            <span class="drawer-kpi-label">Medio Habitual</span>
+            <span class="drawer-kpi-val" id="drawerPayKpiMethod" style="font-size:0.85rem;">-</span>
+          </div>
+        </div>
+
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.6rem;">
+          <h4 style="font-size:0.95rem; font-weight:700; color:var(--text-primary); margin:0;">Historial de Cobros</h4>
+          <button type="button" class="btn btn-outline btn-sm" id="btnDrawerAddPayment">
+            <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            Registrar Pago
+          </button>
+        </div>
+        <div id="drawerPaymentsBody" class="drawer-payments-container">
+          <!-- Tarjetas compactas inyectadas dinámicamente -->
+        </div>
+      </div>
+
+      <!-- PESTAÑA 4: HARDWARE Y MIGRACIONES -->
+      <div class="drawer-tab-pane" id="drawerTabHardware">
+        <div id="drawerHardwareCurrentBox" style="padding:0.85rem 1rem; background:rgba(37,99,235,0.08); border:1px solid rgba(37,99,235,0.25); border-radius:10px;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.35rem;">
+            <div style="font-size:0.72rem; color:var(--text-muted); font-weight:700; text-transform:uppercase;">Hardware ID Actual (ANDROID_ID)</div>
+            <button type="button" class="btn-copy-pill" id="btnDrawerCopyCurrentDevId" onclick="copyDeviceIdToClipboard(document.getElementById('drawerCurrentDevIdDisplay').textContent)" title="Copiar Hardware ID">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+              <span>Copiar ID</span>
+            </button>
+          </div>
+          <div id="drawerCurrentDevIdDisplay" style="font-family:var(--font-mono); font-size:1.15rem; font-weight:800; color:var(--primary); margin-top:2px;">-</div>
+
+          <div class="drawer-hw-info-grid">
+            <div>
+              <span style="color:var(--text-muted); font-size:0.72rem; text-transform:uppercase; display:block;">Modelo Celular:</span>
+              <div id="drawerHwModelRow" style="display:flex; align-items:center; gap:0.35rem; margin-top:2px;">
+                <strong id="drawerHwModelDisplay">No registrado</strong>
+                <button type="button" class="btn-micro" id="btnDrawerEditModelInline" title="Editar modelo inline">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" style="width:12px; height:12px;"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                </button>
+              </div>
+              <div id="drawerHwModelInlineForm" style="display:none; align-items:center; gap:0.3rem; margin-top:4px;">
+                <input type="text" id="inputDrawerModelInline" class="form-control" style="font-size:0.78rem; padding:2px 6px; height:26px; width:140px;" placeholder="Ej: Galaxy A54">
+                <button type="button" class="btn btn-primary btn-xs" id="btnSaveDrawerModelInline" style="padding:2px 6px;" title="Guardar">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                </button>
+                <button type="button" class="btn btn-outline btn-xs" id="btnCancelDrawerModelInline" style="padding:2px 6px;" title="Cancelar">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                </button>
+              </div>
+            </div>
+            <div><span style="color:var(--text-muted); font-size:0.72rem; text-transform:uppercase; display:block;">Versión APK:</span> <span id="drawerHwVersionDisplay">-</span></div>
+            <div><span style="color:var(--text-muted); font-size:0.72rem; text-transform:uppercase; display:block;">Next Nonce:</span> <code id="drawerHwNonceDisplay" style="font-family:var(--font-mono); font-weight:700;">1</code></div>
+            <div><span style="color:var(--text-muted); font-size:0.72rem; text-transform:uppercase; display:block;">Vinculado el:</span> <span id="drawerHwLinkedDateDisplay">-</span></div>
+          </div>
+        </div>
+
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-top:0.85rem; margin-bottom:0.4rem;">
+          <h4 style="font-size:0.95rem; font-weight:700; color:var(--text-primary); margin:0;">Historial de Migraciones</h4>
+          <button type="button" class="btn btn-outline btn-sm" id="btnDrawerMigrateDev">
+            <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/></svg>
+            Migrar Teléfono
+          </button>
+        </div>
+        <div class="table-responsive" style="max-height:260px; overflow-y:auto;">
+          <table class="data-table" style="font-size:0.82rem; width:100%;">
+            <thead>
+              <tr>
+                <th style="width:96px; min-width:96px; white-space:nowrap;">Fecha</th>
+                <th>Anterior</th>
+                <th>Nuevo</th>
+                <th style="width:70px;">Tarifa</th>
+                <th>Motivo / Observación</th>
+              </tr>
+            </thead>
+            <tbody id="drawerHardwareBody">
+              <tr><td colspan="5" style="text-align:center;">Sin migraciones registradas.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- PESTAÑA 5: EDICIÓN RÁPIDA & ZONA DE PELIGRO -->
+      <div class="drawer-tab-pane" id="drawerTabEdit">
+        <form id="formDrawerEditClient" style="display:flex; flex-direction:column; gap:0.85rem;">
+          <input type="hidden" id="drawerEditClientId">
+          <div class="form-group">
+            <label for="drawerEditBizName">Nombre Comercial:</label>
+            <input type="text" id="drawerEditBizName" required>
+          </div>
+          <div class="form-group">
+            <label for="drawerEditOwnerName">Propietario:</label>
+            <input type="text" id="drawerEditOwnerName" required>
+          </div>
+          <div style="display:grid; grid-template-columns: 1fr 1fr; gap:0.5rem;">
+            <div class="form-group">
+              <label for="drawerEditDocId">RUC o DNI:</label>
+              <input type="text" id="drawerEditDocId">
+            </div>
+            <div class="form-group">
+              <label for="drawerEditPhone">WhatsApp (+51):</label>
+              <input type="text" id="drawerEditPhone" required>
+            </div>
+          </div>
+          <div style="display:grid; grid-template-columns: 1fr 1fr; gap:0.5rem;">
+            <div class="form-group">
+              <label for="drawerEditDeviceId">Hardware ID (ML-XXXX):</label>
+              <input type="text" id="drawerEditDeviceId" required style="font-family:var(--font-mono); text-transform:uppercase;">
+            </div>
+            <div class="form-group">
+              <label for="drawerEditDeviceModel">Modelo Celular:</label>
+              <input type="text" id="drawerEditDeviceModel" placeholder="Ej: Samsung Galaxy A54 5G">
+            </div>
+          </div>
+          <div style="display:grid; grid-template-columns: 1fr 1fr; gap:0.5rem;">
+            <div class="form-group">
+              <label for="drawerEditPlanSelect">Plan Comercial:</label>
+              <select id="drawerEditPlanSelect">
+                <option value="MENSUAL">MENSUAL (S/ 35.00)</option>
+                <option value="TRIMESTRAL">TRIMESTRAL (S/ 90.00)</option>
+                <option value="SEMESTRAL">SEMESTRAL (S/ 160.00)</option>
+                <option value="ANUAL">ANUAL (S/ 300.00)</option>
+                <option value="PERPETUO_LIBERADO">PERPETUO LIBERADO (S/ 850.00)</option>
+                <option value="EXTENSION_CORTESIA">EXTENSIÓN CORTESÍA (S/ 0.00)</option>
+                <option value="TRIAL">TRIAL GRATUITO (S/ 0.00)</option>
+                <option value="PROSPECTO">PROSPECTO (S/ 0.00)</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="drawerEditInstalledVersion">Versión Instalada:</label>
+              <input type="text" id="drawerEditInstalledVersion">
+            </div>
+          </div>
+          <div style="display:grid; grid-template-columns: 1fr 1fr; gap:0.5rem;">
+            <div class="form-group" id="grpDrawerEditExpires">
+              <label for="drawerEditExpires">Fecha Vencimiento:</label>
+              <input type="date" id="drawerEditExpires">
+            </div>
+            <div class="form-group" id="grpDrawerEditUpdates">
+              <label for="drawerEditUpdates">Ventana Updates:</label>
+              <input type="date" id="drawerEditUpdates">
+            </div>
+          </div>
+          <div class="form-group" id="grpDrawerEditFollowup">
+            <label for="drawerEditFollowupDate">Fecha de Próximo Seguimiento (Opcional):</label>
+            <input type="date" id="drawerEditFollowupDate">
+          </div>
+          <div style="display:grid; grid-template-columns: 1fr 1fr; gap:0.5rem;">
+            <div class="form-group">
+              <label for="drawerEditAiReported">Créditos IA Reportados:</label>
+              <input type="number" id="drawerEditAiReported" min="0">
+            </div>
+            <div class="form-group">
+              <label for="drawerEditAiPendingBonus">Bono IA Pendiente:</label>
+              <input type="number" id="drawerEditAiPendingBonus" min="0">
+            </div>
+          </div>
+          <div class="form-group">
+            <label for="drawerEditNotes">Notas y Acuerdos:</label>
+            <textarea id="drawerEditNotes" rows="2"></textarea>
+          </div>
+          <button type="submit" class="btn btn-primary" id="btnDrawerSaveEdit" style="justify-content:center; padding:0.75rem; margin-top:0.25rem;">
+            Guardar Cambios Inmediatos
+          </button>
+        </form>
+
+        <!-- ZONA DE PELIGRO: ELIMINAR CLIENTE -->
+        <div class="drawer-danger-zone">
+          <div style="display:flex; align-items:center; gap:0.5rem;">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" style="width:18px; height:18px; color:var(--danger);"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+            <strong style="color:var(--danger); font-size:0.88rem;">Zona de Peligro: Eliminar Cliente Definitivamente</strong>
+          </div>
+          <div style="font-size:0.78rem; color:var(--text-secondary);">
+            Esta acción remueve al cliente de la cartera. Se genera un respaldo automático de seguridad antes de proceder.
+          </div>
+          <button type="button" class="btn btn-danger" id="btnDrawerDeleteClient" onclick="deleteClientFromDrawer()" style="width:100%; justify-content:center; margin-top:0.25rem;">
+            <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
+            Eliminar Cliente Definitivamente
+          </button>
+        </div>
+      </div>
+    </div>
+  </aside>
+

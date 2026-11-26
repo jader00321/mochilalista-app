@@ -1,0 +1,341 @@
+    <section id="tabSecurityVault" class="tab-pane">
+      <div class="content-card">
+        <div class="card-header" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:1rem;">
+          <div>
+            <h2>
+              <svg class="icon-svg" style="color:var(--primary);" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                <rect x="9" y="11" width="6" height="5" rx="1"/>
+                <path d="M10 11V9a2 2 0 1 1 4 0v2"/>
+              </svg>
+              Centro de Seguridad, Bóveda Cifrada y Portabilidad
+            </h2>
+            <p class="subtitle" style="margin-top:0.25rem;">
+              Resguardo cifrado en disco y espejo automático en <code>%APPDATA%</code>, portabilidad multi-PC en 1 clic y recuperación multi-llave sin depender del navegador.
+            </p>
+          </div>
+          <div style="display:flex; gap:0.5rem; flex-wrap:wrap;">
+            <button type="button" class="btn btn-outline" id="btnRefreshVaultHealth" title="Ejecutar auditoría integral de archivos, paridad SHA-256 y factores">
+              <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+              Auditar Estado
+            </button>
+            <button type="button" class="btn btn-primary" id="btnForceSyncMirrorTop" title="Forzar sincronización inmediata del espejo cifrado (%APPDATA% y nube)">
+              <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/></svg>
+              Sincronizar Espejo
+            </button>
+          </div>
+        </div>
+
+        <!-- 1. BANNER DE SALUD DE SEGURIDAD Y BARRA DE PROGRESO -->
+        <div class="vault-health-banner" style="margin-top:1.25rem; padding:1.25rem; background:var(--bg-secondary); border:1px solid var(--border-color); border-radius:12px;">
+          <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:1rem;">
+            <div>
+              <div style="display:flex; align-items:center; gap:0.75rem; flex-wrap:wrap;">
+                <span class="badge" id="vaultHealthBadge" style="font-size:0.9rem; padding:0.35rem 0.85rem; border-radius:8px; font-weight:700;">CALCULANDO...</span>
+                <span style="font-size:1.4rem; font-weight:800;" id="vaultHealthScore">0%</span>
+                <span style="color:var(--text-muted); font-size:0.9rem;">Índice de Resguardo y Recuperabilidad (4 Factores)</span>
+              </div>
+              <p style="font-size:0.85rem; color:var(--text-secondary); margin-top:0.4rem;" id="vaultHealthStatusText">
+                Evaluación de los 4 factores criptográficos de acceso y recuperación.
+              </p>
+              <div id="vaultSecondaryMirrorSummary" style="font-size:0.78rem; color:var(--text-muted); margin-top:0.25rem;">
+                Espejo automático (%APPDATA%): Verificando... · Nube Local: No configurada
+              </div>
+            </div>
+            <div id="vaultRecoveryWarning" style="display:none; padding:0.5rem 0.85rem; background:rgba(239, 68, 68, 0.15); border:1px solid var(--danger); border-radius:8px; color:var(--danger); font-size:0.85rem; font-weight:600; align-items:center; gap:0.45rem;">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0;"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+              <span>Recuperación disponible desde el espejo local</span>
+            </div>
+          </div>
+
+          <div class="vault-progress-track" style="margin-top:1rem; height:10px; background:var(--bg-card); border-radius:5px; overflow:hidden; border:1px solid var(--border-color);">
+            <div class="vault-progress-fill" id="vaultProgressBar" style="width:0%; height:100%; background:linear-gradient(90deg, var(--warning), var(--primary), var(--success)); transition:width 0.4s ease;"></div>
+          </div>
+
+          <!-- REJILLA DE 4 FACTORES CRIPTOGRÁFICOS -->
+          <div class="vault-factors-grid" style="display:grid; grid-template-columns:repeat(auto-fit, minmax(210px, 1fr)); gap:0.75rem; margin-top:1.25rem;">
+            <div class="factor-card" style="padding:0.85rem; background:var(--bg-card); border:1px solid var(--border-color); border-radius:8px;">
+              <div style="font-size:0.75rem; text-transform:uppercase; color:var(--text-muted); font-weight:700;">Factor 1 (Hardware · 25%)</div>
+              <div style="font-size:0.95rem; font-weight:600; margin-top:0.25rem;">Windows DPAPI</div>
+              <div style="margin-top:0.4rem;" id="badgeFactorDpapi"><span class="badge badge-info" id="factorMirrorStatus">Verificando...</span></div>
+              <div style="font-size:0.72rem; color:var(--text-muted); margin-top:0.3rem;">Desbloqueo transparente en tu sesión de Windows</div>
+            </div>
+
+            <div class="factor-card" style="padding:0.85rem; background:var(--bg-card); border:1px solid var(--border-color); border-radius:8px;">
+              <div style="font-size:0.75rem; text-transform:uppercase; color:var(--text-muted); font-weight:700;">Factor 2 (Archivo USB · 25%)</div>
+              <div style="font-size:0.95rem; font-weight:600; margin-top:0.25rem;">Llave Maestra .mlkey</div>
+              <div style="margin-top:0.4rem;" id="badgeFactorMlKey"><span class="badge badge-warning" id="factorKeyStatus">Pendiente</span></div>
+              <div style="font-size:0.72rem; color:var(--text-muted); margin-top:0.3rem;">Llave portátil para abrir en cualquier nueva PC</div>
+            </div>
+
+            <div class="factor-card" style="padding:0.85rem; background:var(--bg-card); border:1px solid var(--border-color); border-radius:8px;">
+              <div style="font-size:0.75rem; text-transform:uppercase; color:var(--text-muted); font-weight:700;">Factor 3 (Rescate Frío · 25%)</div>
+              <div style="font-size:0.95rem; font-weight:600; margin-top:0.25rem;">Kit 8 Códigos + QR</div>
+              <div style="margin-top:0.4rem;" id="badgeFactorRescueKit"><span class="badge badge-warning" id="factorRescueStatus">Pendiente</span></div>
+              <div style="font-size:0.72rem; color:var(--text-muted); margin-top:0.3rem;">Hoja impresa PDF para emergencias sin USB</div>
+            </div>
+
+            <div class="factor-card" style="padding:0.85rem; background:var(--bg-card); border:1px solid var(--border-color); border-radius:8px;">
+              <div style="font-size:0.75rem; text-transform:uppercase; color:var(--text-muted); font-weight:700;">Factor 4 (Bloqueo Local · 25%)</div>
+              <div style="font-size:0.95rem; font-weight:600; margin-top:0.25rem;">PIN de Consola</div>
+              <div style="margin-top:0.4rem;" id="badgeFactorPin"><span class="badge badge-secondary" id="factorPinStatus">Desactivado</span></div>
+              <div style="font-size:0.72rem; color:var(--text-muted); margin-top:0.3rem;">Protección ante accesos físicos al navegador</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 2. PANEL DE TRANSPARENCIA FÍSICA DE ALMACENAMIENTO (CERO MITO DE CACHÉ) -->
+        <div class="vault-section" style="margin-top:1.5rem;">
+          <h3 style="font-size:1.1rem; display:flex; align-items:center; gap:0.5rem;">
+            <svg class="btn-icon" style="color:var(--cyan);" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+            Transparencia Física de Almacenamiento (Cero Mito de Caché)
+          </h3>
+
+          <div style="padding:0.85rem 1rem; margin-top:0.75rem; background:rgba(37, 99, 235, 0.08); border-left:4px solid var(--primary); border-radius:4px; font-size:0.85rem; line-height:1.5;">
+            <strong>Seguridad Verificable:</strong> Toda tu información vive 100% en archivos físicos de tu disco duro (<code>.json</code>, <code>.key</code> y <code>.mlvault</code>). <strong>Tu información de negocio nunca depende de cookies, LocalStorage ni caché del navegador</strong>; limpiar el historial de Chrome jamás afectará tus licencias, clientes ni balances. <em>(Si activas el PIN opcional, solo tu sesión temporal usa una cookie HttpOnly segura).</em>
+          </div>
+
+          <!-- TARJETAS DE RUTAS FÍSICAS COPIABLES -->
+          <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(280px, 1fr)); gap:0.75rem; margin-top:1rem;">
+            <div class="vault-path-card">
+              <div style="font-size:0.75rem; color:var(--text-muted); font-weight:700;">CARPETA DEL PROYECTO (LOCAL)</div>
+              <div class="vault-path-row">
+                <input type="text" id="txtLocalPath" readonly value="data/ y private_keys/" style="background:transparent; border:none; color:var(--text-primary);">
+                <button type="button" class="btn btn-outline btn-sm" id="btnCopyLocalPath" title="Copiar ruta">Copiar</button>
+              </div>
+            </div>
+
+            <div class="vault-path-card">
+              <div style="font-size:0.75rem; color:var(--text-muted); font-weight:700;">BÓVEDA ESPEJO CIFRADA (%APPDATA%)</div>
+              <div class="vault-path-row">
+                <input type="text" id="txtMirrorPath" readonly value="%APPDATA%\MochilaListaAdminVault" style="background:transparent; border:none; color:var(--text-primary);">
+                <button type="button" class="btn btn-outline btn-sm" id="btnCopyMirrorPath" title="Copiar ruta">Copiar</button>
+              </div>
+            </div>
+
+            <div class="vault-path-card">
+              <div style="font-size:0.75rem; color:var(--text-muted); font-weight:700;">ESPEJO DE NUBE LOCAL</div>
+              <div class="vault-path-row">
+                <code id="pathCloudDir" style="color:var(--text-muted);">No configurada</code>
+                <button type="button" class="btn btn-outline btn-sm" id="btnCopyCloudPath" title="Copiar ruta configurada" disabled>Copiar</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- TABLA DE ARCHIVOS FÍSICOS REALES -->
+          <div class="table-responsive" style="margin-top:1rem; border:1px solid var(--border-color); border-radius:8px;">
+            <table class="data-table" style="width:100%; font-size:0.83rem;">
+              <thead>
+                <tr>
+                  <th>Archivo Físico</th>
+                  <th>Propósito Crítico</th>
+                  <th>Estado</th>
+                  <th>Tamaño</th>
+                  <th>Última Modificación</th>
+                  <th>Huella SHA-256</th>
+                </tr>
+              </thead>
+              <tbody id="tbodyVaultFiles">
+                <tr><td colspan="6" style="text-align:center; padding:1.5rem; color:var(--text-muted);">Cargando estado de archivos físicos...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- 3. ASISTENTE VISUAL DE BLINDAJE EN 3 PASOS -->
+        <div class="vault-section" style="margin-top:2rem;">
+          <h3 style="font-size:1.1rem; display:flex; align-items:center; gap:0.5rem;">
+            <svg class="btn-icon" style="color:var(--primary);" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+            Asistente Visual de Blindaje en 3 Pasos
+          </h3>
+          <p class="subtitle" style="margin-top:0.25rem;">
+            Sigue estos 3 pasos ordenados para blindar tu base de datos y garantizar recuperación inmediata si cambias de laptop o ocurre un fallo de disco.
+          </p>
+
+          <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(320px, 1fr)); gap:1rem; margin-top:1rem;">
+            <!-- PASO 1 -->
+            <div class="vault-card" style="padding:1.25rem; background:var(--bg-secondary); border:1px solid var(--border-color); border-radius:10px; display:flex; flex-direction:column; justify-content:space-between;">
+              <div>
+                <div style="display:flex; justify-content:space-between; align-items:center; gap:0.5rem;">
+                  <span class="badge badge-primary" style="font-weight:700;">PASO 1</span>
+                  <span class="badge badge-success" id="badgeStep1Status">Bóveda Espejo Activa</span>
+                </div>
+                <h4 style="margin-top:0.75rem; font-size:1rem;">Bóveda Externa &amp; Espejo Automático</h4>
+                <p style="font-size:0.83rem; color:var(--text-secondary); margin-top:0.4rem; line-height:1.45;">
+                  <strong>Qué hace:</strong> Guarda una copia cifrada en <code>%APPDATA%</code> tras cada venta, licencia o cambio.<br>
+                  <strong>Cómo mejorarlo:</strong> Elige una carpeta de Dropbox, Google Drive u OneDrive para tener copia externa automática ante robo o rotura del disco.
+                </p>
+                <div style="margin-top:0.75rem;">
+                  <label for="inputCloudSyncPath" style="font-size:0.78rem; font-weight:600; color:var(--text-muted); display:block; margin-bottom:0.25rem;">Carpeta Local de Nube (Opcional):</label>
+                  <div style="display:flex; gap:0.4rem; flex-wrap:wrap;">
+                    <input type="text" id="inputCloudSyncPath" placeholder="Ej: C:\Users\...\Dropbox\MochilaLista" style="flex:1; min-width:160px; font-size:0.8rem; padding:0.4rem 0.6rem; background:var(--bg-card); border:1px solid var(--border-color); border-radius:6px; color:var(--text-primary);">
+                    <button type="button" class="btn btn-outline btn-sm" id="btnBrowseCloudSyncPath" title="Abrir selector nativo de carpetas de Windows">
+                      <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" style="width:14px; height:14px;"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+                      Examinar...
+                    </button>
+                    <button type="button" class="btn btn-outline btn-sm" id="btnSaveCloudSyncPath">Guardar</button>
+                  </div>
+                </div>
+              </div>
+              <div style="margin-top:1rem; border-top:1px solid var(--border-color); padding-top:0.75rem; display:flex; justify-content:space-between; align-items:center; gap:0.5rem; flex-wrap:wrap;">
+                <span id="mirrorLastSyncLabel" style="font-size:0.75rem; color:var(--text-muted);">Última sinc: Verificando...</span>
+                <button type="button" class="btn btn-primary btn-sm" id="btnSyncMirrorNow">Forzar Sincronización</button>
+              </div>
+            </div>
+
+            <!-- PASO 2 -->
+            <div class="vault-card" style="padding:1.25rem; background:var(--bg-secondary); border:1px solid var(--border-color); border-radius:10px; display:flex; flex-direction:column; justify-content:space-between;">
+              <div>
+                <div style="display:flex; justify-content:space-between; align-items:center; gap:0.5rem;">
+                  <span class="badge badge-primary" style="font-weight:700;">PASO 2</span>
+                  <span class="badge" id="badgeStep2Status">Pendiente</span>
+                </div>
+                <h4 style="margin-top:0.75rem; font-size:1rem;">Archivo Llave Física (.mlkey)</h4>
+                <p style="font-size:0.83rem; color:var(--text-secondary); margin-top:0.4rem; line-height:1.45;">
+                  <strong>Qué es:</strong> Tu llave digital invariante <code>llave_maestra_mochilalista.mlkey</code>.<br>
+                  <strong>Cuándo usarla:</strong> Guárdala en un USB o en tu celular. Permite abrir cualquier archivo <code>.mlvault</code> en una laptop nueva o recuperar tu PIN si lo olvidas. <em>(Regenerarla invalida la anterior).</em>
+                </p>
+                <div style="padding:0.6rem 0.8rem; margin-top:0.75rem; background:var(--bg-card); border:1px dashed var(--border-color); border-radius:6px; font-size:0.78rem; color:var(--text-muted); display:flex; align-items:center; gap:0.45rem;">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0;"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                  <span>Llave USB portátil independiente de la sesión de Windows.</span>
+                </div>
+              </div>
+              <div style="margin-top:1rem; border-top:1px solid var(--border-color); padding-top:0.75rem; display:flex; justify-content:space-between; align-items:center; gap:0.5rem;">
+                <span style="font-size:0.75rem; color:var(--text-muted);">Formato MLKEY v1.0.0</span>
+                <button type="button" class="btn btn-success btn-sm" id="btnDownloadMlKey">
+                  <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                  Descargar .mlkey
+                </button>
+              </div>
+            </div>
+
+            <!-- PASO 3 -->
+            <div class="vault-card" style="padding:1.25rem; background:var(--bg-secondary); border:1px solid var(--border-color); border-radius:10px; display:flex; flex-direction:column; justify-content:space-between;">
+              <div>
+                <div style="display:flex; justify-content:space-between; align-items:center; gap:0.5rem;">
+                  <span class="badge badge-primary" style="font-weight:700;">PASO 3</span>
+                  <span class="badge" id="badgeStep3Status">Pendiente</span>
+                </div>
+                <h4 style="margin-top:0.75rem; font-size:1rem;">Kit de Rescate Imprimible / PDF</h4>
+                <p style="font-size:0.83rem; color:var(--text-secondary); margin-top:0.4rem; line-height:1.45;">
+                  <strong>Qué es:</strong> Hoja A4 con <strong>8 Códigos de Rescate</strong> y QR de emergencia.<br>
+                  <strong>Para emergencias:</strong> Imprímela o guárdala en PDF fuera de tu laptop. Cualquiera de los 8 códigos recupera el acceso si pierdes el equipo y tu USB. <em>(Regenerar invalida la hoja anterior).</em>
+                </p>
+                <div style="padding:0.6rem 0.8rem; margin-top:0.75rem; background:var(--bg-card); border:1px dashed var(--border-color); border-radius:6px; font-size:0.78rem; color:var(--text-muted); display:flex; align-items:center; gap:0.45rem;">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0;"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                  <span>Custodia fría offline en papel o PDF (D.L. 822 / INDECOPI).</span>
+                </div>
+              </div>
+              <div style="margin-top:1rem; border-top:1px solid var(--border-color); padding-top:0.75rem; display:flex; justify-content:space-between; align-items:center; gap:0.5rem;">
+                <span style="font-size:0.75rem; color:var(--text-muted);">8 Códigos + QR Vectorial</span>
+                <button type="button" class="btn btn-outline btn-sm" id="btnOpenRescueKitModal" style="color:var(--primary); border-color:var(--primary);">
+                  <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+                  Ver Kit Imprimible
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 4. TARJETA DE MUDANZA Y PORTABILIDAD MULTI-PC (.mlvault) -->
+        <div class="vault-section" style="margin-top:2rem;">
+          <h3 style="font-size:1.1rem; display:flex; align-items:center; gap:0.5rem;">
+            <svg class="btn-icon" style="color:var(--purple);" viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+            Mudanza Rápida y Portabilidad Multi-PC (.mlvault)
+          </h3>
+          <p class="subtitle" style="margin-top:0.25rem;">
+            Exporta todo tu entorno cifrado en un archivo único <code>.mlvault</code> o impórtalo en otra computadora sin reiniciar el servidor.
+          </p>
+
+          <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(320px, 1fr)); gap:1rem; margin-top:1rem;">
+            <!-- EXPORTAR BÓVEDA -->
+            <div class="vault-card" style="padding:1.25rem; background:var(--bg-secondary); border:1px solid var(--border-color); border-radius:10px;">
+              <h4 style="font-size:1rem; display:flex; align-items:center; gap:0.5rem;">
+                <svg class="btn-icon" style="color:var(--primary);" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                Exportar Bóveda Portable
+              </h4>
+              <p style="font-size:0.83rem; color:var(--text-secondary); margin-top:0.4rem; line-height:1.45;">
+                Genera un archivo cifrado <code>.mlvault</code> con clientes, cobranzas, catálogo de versiones y configuración comercial.
+              </p>
+              <div style="margin-top:0.75rem;">
+                <label style="display:flex; align-items:center; gap:0.5rem; font-size:0.83rem; cursor:pointer;">
+                  <input type="checkbox" id="chkExportIncludeKey" checked>
+                  <span>Incluir Clave Maestra Privada Ed25519 (Recomendado para mudanza)</span>
+                </label>
+              </div>
+              <button type="button" class="btn btn-primary" id="btnExportVault" style="margin-top:1rem; width:100%; justify-content:center;">
+                <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                Descargar Bóveda Portable (.mlvault)
+              </button>
+            </div>
+
+            <!-- IMPORTAR BÓVEDA -->
+            <div class="vault-card" style="padding:1.25rem; background:var(--bg-secondary); border:1px solid var(--border-color); border-radius:10px;">
+              <h4 style="font-size:1rem; display:flex; align-items:center; gap:0.5rem;">
+                <svg class="btn-icon" style="color:var(--success);" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                Importar Bóveda Portable
+              </h4>
+              <p style="font-size:0.83rem; color:var(--text-secondary); margin-top:0.4rem; line-height:1.45;">
+                Carga un archivo <code>.mlvault</code> en una PC nueva para restaurar clientes, firmas y tarifas en caliente y vincularlos al DPAPI local.
+              </p>
+              <div style="padding:0.75rem; margin-top:0.75rem; background:var(--bg-card); border:1px solid var(--border-color); border-radius:6px; font-size:0.8rem; color:var(--text-muted);">
+                Compatible con desbloqueo por <code>.mlkey</code>, 1 Código de Rescate o PIN personal.
+              </div>
+              <button type="button" class="btn btn-success" id="btnOpenImportVaultModal" style="margin-top:1rem; width:100%; justify-content:center;">
+                <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4 16v1a3 3 0 0 0 3 3h10a3 3 0 0 0 3-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
+                Importar Bóveda Portable (Mudanza en 5s)
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- 5. TARJETA DE BLOQUEO LOCAL CON PIN OPCIONAL (HTTP 423 LOCKED) -->
+        <div class="vault-section" style="margin-top:2rem; margin-bottom:1rem;">
+          <h3 style="font-size:1.1rem; display:flex; align-items:center; gap:0.5rem;">
+            <svg class="btn-icon" style="color:var(--warning);" viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+            Bloqueo Local de Consola con PIN Opcional
+          </h3>
+          <p class="subtitle" style="margin-top:0.25rem;">
+            Exige PIN antes de consultar clientes, emitir licencias o descargar respaldos si dejas la consola abierta. Incluye protección anti-fuerza bruta y recuperación con <code>.mlkey</code>, Códigos de Rescate o DPAPI.
+          </p>
+
+          <div class="vault-card" style="padding:1.25rem; margin-top:1rem; background:var(--bg-secondary); border:1px solid var(--border-color); border-radius:10px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:1rem;">
+              <div>
+                <label style="display:flex; align-items:center; gap:0.6rem; cursor:pointer; font-weight:700; font-size:0.95rem;">
+                  <input type="checkbox" id="chkEnablePin" style="width:18px; height:18px;">
+                  <span>Activar Bloqueo por PIN de Consola en este equipo</span>
+                </label>
+                <div style="font-size:0.8rem; color:var(--text-muted); margin-top:0.25rem; margin-left:1.75rem;">
+                  Protege todas las rutas de datos y descargas con token de sesión + cookie HttpOnly.
+                </div>
+              </div>
+              <div id="pinLockActionsContainer">
+                <button type="button" class="btn btn-outline" id="btnLockConsoleNow" style="display:none; color:var(--warning); border-color:var(--warning);">
+                  <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                  Bloquear Consola Ahora
+                </button>
+              </div>
+            </div>
+
+            <div id="pinSetupContainer" style="display:none; margin-top:1rem; padding-top:1rem; border-top:1px solid var(--border-color);">
+              <div style="display:flex; gap:1rem; flex-wrap:wrap; align-items:flex-end;">
+                <div>
+                  <label for="inputVaultPin" style="font-size:0.8rem; font-weight:600; color:var(--text-muted); display:block; margin-bottom:0.25rem;">Nuevo PIN (mínimo 4 caracteres):</label>
+                  <input type="password" id="inputVaultPin" maxlength="12" placeholder="****" style="font-family:var(--font-mono); font-size:1.1rem; width:160px; padding:0.4rem 0.6rem; background:var(--bg-card); border:1px solid var(--border-color); border-radius:6px; color:var(--text-primary); text-align:center;">
+                </div>
+                <div>
+                  <label for="inputVaultPinConfirm" style="font-size:0.8rem; font-weight:600; color:var(--text-muted); display:block; margin-bottom:0.25rem;">Confirmar PIN:</label>
+                  <input type="password" id="inputVaultPinConfirm" maxlength="12" placeholder="****" style="font-family:var(--font-mono); font-size:1.1rem; width:160px; padding:0.4rem 0.6rem; background:var(--bg-card); border:1px solid var(--border-color); border-radius:6px; color:var(--text-primary); text-align:center;">
+                </div>
+                <button type="button" class="btn btn-primary" id="btnSavePinConfig">
+                  Guardar Configuración de PIN
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </section>
+

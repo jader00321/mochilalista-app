@@ -21,18 +21,29 @@ void main() {
 
     test('1. WebBundleLoader resuelve rutas reales y mantiene paridad exacta HTML/CSS/JS + node --check', () {
       final htmlFile = WebBundleLoader.resolveWebAssetFile('index.html');
-      final cssFile = WebBundleLoader.resolveWebAssetFile('css/styles.css');
-      final jsFile = WebBundleLoader.resolveWebAssetFile('js/admin_app.js');
+      final cssPaths = WebBundleLoader.cssFilePaths();
+      final jsPaths = WebBundleLoader.jsFilePaths();
 
       expect(htmlFile.existsSync(), isTrue);
-      expect(cssFile.existsSync(), isTrue);
-      expect(jsFile.existsSync(), isTrue);
+      expect(cssPaths, isNotEmpty);
+      for (final path in cssPaths) {
+        expect(File(path).existsSync(), isTrue, reason: 'Debe existir $path');
+      }
+      expect(jsPaths, isNotEmpty);
+      for (final path in jsPaths) {
+        expect(File(path).existsSync(), isTrue, reason: 'Debe existir $path');
+      }
 
-      expect(WebBundleLoader.loadHtml(), equals(htmlFile.readAsStringSync()));
-      expect(WebBundleLoader.cssFilePaths(), isNotEmpty);
-      expect(WebBundleLoader.loadCss(), equals(cssFile.readAsStringSync()));
-      expect(WebBundleLoader.jsFilePaths(), isNotEmpty);
-      expect(WebBundleLoader.loadJs(), equals(jsFile.readAsStringSync()));
+      final expectedConcatCss = cssPaths
+          .map((p) => File(p).readAsStringSync())
+          .join('\n');
+      final expectedConcatJs = jsPaths
+          .map((p) => File(p).readAsStringSync())
+          .join('\n');
+      expect(WebBundleLoader.loadHtml(), contains('<section id="tabDashboard"'));
+      expect(WebBundleLoader.loadHtml(), isNot(contains('<!-- @PARTIAL:')));
+      expect(WebBundleLoader.loadCss(), equals(expectedConcatCss));
+      expect(WebBundleLoader.loadJs(), equals(expectedConcatJs));
 
       final bundleOut = WebBundleLoader.writeConcatenatedJsTo(
         tempDir,

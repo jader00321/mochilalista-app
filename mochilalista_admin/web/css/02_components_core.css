@@ -1,0 +1,537 @@
+/* === LAYER: css/02_components_core.css === */
+
+/* Dashboard KPIs Grid (Simétrica 4 + 4) */
+.kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1.25rem;
+  margin-bottom: 2rem;
+}
+
+.kpi-card {
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 14px;
+  padding: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  position: relative;
+  overflow: hidden;
+}
+
+.kpi-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 4px;
+  height: 100%;
+  background-color: var(--primary);
+}
+
+.kpi-card.green::before { background-color: var(--success); }
+
+.kpi-card.yellow::before { background-color: var(--warning); }
+
+.kpi-card.red::before { background-color: var(--danger); }
+
+.kpi-card.purple::before { background-color: var(--purple); }
+
+.kpi-card.indigo::before { background-color: #6366f1; }
+
+.kpi-title {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.kpi-value {
+  font-size: 1.85rem;
+  font-weight: 800;
+  color: var(--text-primary);
+}
+
+.kpi-subtitle {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+/* Sections & Cards */
+.content-card {
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 14px;
+  padding: 1.5rem;
+  margin-bottom: 2rem;
+}
+
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-bottom: 1.25rem;
+}
+
+.card-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.card-header h2 {
+  font-size: 1.2rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* Buttons */
+.btn {
+  padding: 0.6rem 1.2rem;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  border: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  transition: all 0.2s ease;
+  text-decoration: none;
+}
+
+.btn-primary {
+  background-color: var(--primary);
+  color: #ffffff;
+}
+
+.btn-primary:hover {
+  background-color: var(--primary-hover);
+}
+
+.btn-success {
+  background-color: var(--success);
+  color: #ffffff;
+}
+
+.btn-outline {
+  background: none;
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+}
+
+.btn-outline:hover {
+  background-color: var(--bg-hover);
+}
+
+.btn-sm {
+  padding: 0.4rem 0.8rem;
+  font-size: 0.8rem;
+}
+
+.btn-xs {
+  padding: 0.26rem 0.45rem;
+  font-size: 0.74rem;
+  border-radius: 6px;
+  gap: 0.25rem;
+  line-height: 1.2;
+}
+
+.btn-xs .btn-icon {
+  width: 13px;
+  height: 13px;
+  margin-right: 0.2rem;
+}
+
+.btn svg:only-child {
+  margin-right: 0;
+}
+
+.btn-wa {
+  background-color: #25D366;
+  color: #ffffff;
+  font-weight: 700;
+}
+
+.btn-wa:hover {
+  background-color: #20bd5a;
+}
+
+/* Tables */
+.table-responsive {
+  overflow-x: auto;
+}
+
+table.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+  font-size: 0.9rem;
+}
+
+table.data-table th {
+  background-color: var(--bg-secondary);
+  color: var(--text-secondary);
+  padding: 0.85rem 1rem;
+  font-weight: 700;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  border-bottom: 1px solid var(--border-color);
+}
+
+table.data-table td {
+  padding: 0.85rem 1rem;
+  border-bottom: 1px solid var(--border-color);
+  color: var(--text-primary);
+}
+
+table.data-table tr:hover td {
+  background-color: var(--bg-hover);
+}
+
+/* Status Badges */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.25rem 0.6rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.badge-green {
+  background-color: rgba(16, 185, 129, 0.15);
+  color: var(--success);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.badge-yellow {
+  background-color: rgba(245, 158, 11, 0.15);
+  color: var(--warning);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+.badge-red {
+  background-color: rgba(239, 68, 68, 0.15);
+  color: var(--danger);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.badge-purple {
+  background-color: rgba(139, 92, 246, 0.15);
+  color: var(--purple);
+  border: 1px solid rgba(139, 92, 246, 0.3);
+}
+
+.badge-blue {
+  background-color: rgba(59, 130, 246, 0.15);
+  color: #60a5fa;
+  border: 1px solid rgba(59, 130, 246, 0.35);
+}
+
+.badge-mono {
+  font-family: var(--font-mono);
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+}
+
+.badge-prospect {
+  background-color: rgba(99, 102, 241, 0.15);
+  color: #818cf8;
+  border: 1px solid rgba(99, 102, 241, 0.3);
+}
+
+.badge-unlinked {
+  background-color: rgba(148, 163, 184, 0.12);
+  color: #94a3b8;
+  border: 1px dashed rgba(148, 163, 184, 0.35);
+  font-style: italic;
+  font-size: 0.75rem;
+  padding: 0.2rem 0.5rem;
+  border-radius: 6px;
+}
+
+.badge-pending-bonus {
+  display: inline-block;
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: #a78bfa;
+  background-color: rgba(139, 92, 246, 0.15);
+  border: 1px solid rgba(139, 92, 246, 0.35);
+  padding: 1px 5px;
+  border-radius: 4px;
+  margin-top: 2px;
+}
+
+.form-control-highlight {
+  font-weight: 700;
+  border-color: var(--primary) !important;
+  background-color: rgba(37, 99, 235, 0.08) !important;
+}
+
+.required-star {
+  color: var(--danger);
+  font-weight: 700;
+}
+
+/* FASE 3: Notice Box Offline AI */
+.notice-box {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  background-color: rgba(59, 130, 246, 0.1);
+  border: 1px solid rgba(59, 130, 246, 0.3);
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+  color: var(--text-primary);
+  font-size: 0.82rem;
+  line-height: 1.4;
+}
+
+.notice-box .notice-icon {
+  width: 18px;
+  height: 18px;
+  color: var(--primary);
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+/* Forms */
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1.25rem;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.form-group label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  display: block;
+  min-height: 1.25rem;
+  line-height: 1.25;
+}
+
+.form-group input,
+.form-group select,
+.form-group textarea {
+  padding: 0.7rem 0.9rem;
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  color: var(--text-primary);
+  font-size: 0.9rem;
+  font-family: inherit;
+}
+
+.form-group input:focus,
+.form-group select:focus,
+.form-group textarea:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.2);
+}
+
+/* =================== FASE 4, 5 Y 6: ICONOGRAFÍA SVG Y COMPONENTES AVANZADOS =================== */
+
+.icon-svg {
+  width: 18px;
+  height: 18px;
+  vertical-align: middle;
+  stroke-width: 2;
+  display: inline-block;
+  flex-shrink: 0;
+}
+
+.nav-icon {
+  width: 18px;
+  height: 18px;
+  margin-right: 0.45rem;
+  vertical-align: middle;
+  display: inline-block;
+}
+
+.btn-icon {
+  width: 15px;
+  height: 15px;
+  margin-right: 0.35rem;
+  vertical-align: middle;
+  display: inline-block;
+}
+
+/* ==========================================================================
+   BOTÓN DISCRETO "APAGAR SERVIDOR" EN SIDEBAR FOOTER (PLAN MAESTRO 15 - FASE 7)
+   ========================================================================== */
+.btn-shutdown-server {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 12px;
+  margin-bottom: 0;
+  background: rgba(239, 68, 68, 0.08);
+  color: #f87171;
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.2s ease;
+  outline: none;
+}
+
+.btn-shutdown-server:hover {
+  background: rgba(239, 68, 68, 0.18);
+  border-color: rgba(239, 68, 68, 0.4);
+  color: #ef4444;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(239, 68, 68, 0.15);
+}
+
+.btn-shutdown-server:active {
+  transform: translateY(0);
+}
+
+.btn-shutdown-server .shutdown-icon {
+  flex-shrink: 0;
+  transition: transform 0.25s ease;
+}
+
+.btn-shutdown-server:hover .shutdown-icon {
+  transform: rotate(90deg);
+}
+
+/* Modo Colapsado del Sidebar */
+.app-sidebar.collapsed .btn-shutdown-server {
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  margin: 0 auto;
+  border-radius: 8px;
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.app-sidebar.collapsed .btn-shutdown-server .shutdown-text {
+  display: none;
+}
+
+/* ==========================================================================
+   BOTÓN DISCRETO "ABRIR EN CHROME" EN SIDEBAR FOOTER (PLAN MAESTRO 18 - FASE 1)
+   ========================================================================== */
+.btn-open-in-chrome {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 12px;
+  margin-bottom: 0;
+  background: rgba(59, 130, 246, 0.08);
+  color: #60a5fa;
+  border: 1px solid rgba(59, 130, 246, 0.2);
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.2s ease;
+}
+
+.btn-open-in-chrome:hover {
+  background: rgba(59, 130, 246, 0.18);
+  border-color: rgba(59, 130, 246, 0.4);
+  color: #3b82f6;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.15);
+}
+
+.btn-open-in-chrome:active {
+  transform: translateY(0);
+}
+
+.btn-open-in-chrome .chrome-icon {
+  flex-shrink: 0;
+  transition: transform 0.25s ease;
+}
+
+.btn-open-in-chrome:hover .chrome-icon {
+  transform: rotate(30deg);
+}
+
+/* Modo Colapsado del Sidebar */
+.app-sidebar.collapsed .btn-open-in-chrome {
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  margin: 0 auto;
+  border-radius: 8px;
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.app-sidebar.collapsed .btn-open-in-chrome .open-chrome-text {
+  display: none;
+}
+
+/* ==========================================================================
+   MODAL EDITAR PAGO REGISTRADO & COMPROBANTES (PLAN MAESTRO 18 - FASE 4)
+   ========================================================================== */
+.checkbox-row-styled {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0.75rem 1rem;
+  border-radius: 8px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  margin-top: 0.35rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.checkbox-row-styled:hover {
+  background: var(--bg-hover);
+  border-color: rgba(37, 99, 235, 0.4);
+}
+
+.receipt-notice-banner {
+  background: rgba(37, 99, 235, 0.08);
+  border: 1px solid rgba(37, 99, 235, 0.25);
+  border-radius: 10px;
+  padding: 0.75rem 1rem;
+  animation: fadeIn 0.3s ease;
+}
+
+.badge-edited-payment {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 0.68rem;
+  font-weight: 600;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: rgba(148, 163, 184, 0.12);
+  color: var(--text-muted);
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  cursor: default;
+}

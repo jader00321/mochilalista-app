@@ -1,0 +1,308 @@
+    <section id="tabLicenseStudio" class="tab-pane">
+      <div class="content-card">
+        <div class="card-header">
+          <h2>
+            <svg class="icon-svg" style="color:var(--primary);" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="m21 2-2 2m-6 6 7 7-4 4-7-7m2-2L9 14l-5 5L2 17l5-5-2-2 7-7Z"/></svg>
+            Estudio Generador de Licencias Asimétricas Ed25519
+          </h2>
+        </div>
+
+        <div class="form-grid">
+          <!-- Columna Formulario -->
+          <div style="display:flex; flex-direction:column; gap:1.25rem;">
+            <div class="form-group">
+              <label for="licClientSelect">Seleccionar Cliente Registrado:</label>
+              <select id="licClientSelect">
+                <option value="">-- Elige un cliente --</option>
+              </select>
+            </div>
+
+            <!-- TARJETA EJECUTIVA DE RESUMEN DEL CLIENTE SELECCIONADO -->
+            <div id="licClientSummaryCard" class="client-summary-card" style="display:none;">
+              <div class="client-summary-header">
+                <div>
+                  <strong id="sumBizName" style="color:var(--text-primary); font-size:0.95rem;">-</strong>
+                  <span id="sumOwnerName" style="color:var(--text-secondary); font-size:0.8rem; margin-left:0.4rem;">-</span>
+                </div>
+                <span id="sumStatusBadge" class="badge badge-green">ACTIVA</span>
+              </div>
+              <div class="client-summary-grid">
+                <div class="client-summary-item">
+                  <span class="client-summary-label">Device ID Vinculado</span>
+                  <span class="client-summary-val" id="sumDeviceId" style="font-family:var(--font-mono); color:var(--primary);">-</span>
+                </div>
+                <div class="client-summary-item">
+                  <span class="client-summary-label">Plan & Siguiente Nonce</span>
+                  <span class="client-summary-val" id="sumPlanNonce">-</span>
+                </div>
+                <div class="client-summary-item">
+                  <span class="client-summary-label">Vencimiento Actual</span>
+                  <span class="client-summary-val" id="sumExpiresDate">-</span>
+                </div>
+                <div class="client-summary-item">
+                  <span class="client-summary-label">Créditos IA Extra</span>
+                  <span class="client-summary-val" id="sumAiCredits">-</span>
+                </div>
+                <div class="client-summary-item">
+                  <span class="client-summary-label">Versión de App Instalada</span>
+                  <span class="client-summary-val" id="sumInstalledVersion">-</span>
+                </div>
+                <div class="client-summary-item">
+                  <span class="client-summary-label">Ventana de Updates</span>
+                  <span class="client-summary-val" id="sumUpdatesUntil">-</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label for="licPlanSelect">Plan de Licencia Oficial (Precios Perú):</label>
+              <select id="licPlanSelect">
+                <option value="MENSUAL" data-days="30" data-price="35.00">MENSUAL (+30 días) — S/ 35.00</option>
+                <option value="TRIMESTRAL" data-days="90" data-price="90.00">TRIMESTRAL (+90 días) — S/ 90.00 (1 solo código)</option>
+                <option value="SEMESTRAL" data-days="180" data-price="160.00">SEMESTRAL (+180 días) — S/ 160.00 (1 solo código)</option>
+                <option value="ANUAL" data-days="365" data-price="280.00">ANUAL (+365 días) — S/ 280.00 (1 solo código)</option>
+                <option value="PERPETUO_LIBERADO" data-days="99999" data-price="850.00">PERPETUO LIBERADO (De por Vida + 12m Updates) — S/ 850.00</option>
+                <option value="PASE_ACTUALIZACION_ANUAL" data-days="0" data-price="150.00">PASE ANUAL DE UPDATES (Clientes Perpetuos) — S/ 150.00</option>
+                <option value="RECARGA_IA_150" data-days="0" data-price="20.00">BOLSA EXTRA IA (+150 escaneos sin vencimiento) — S/ 20.00</option>
+                <option value="BONO_IA_PERSONALIZADO" data-days="0" data-price="0.00">Bono / Recarga IA Personalizada (0 días — Sin alterar suscripción)</option>
+                <option value="EXTENSION_CORTESIA" data-days="7" data-price="0.00">EXTENSIÓN CORTESÍA (+7 días gracia) — S/ 0.00</option>
+              </select>
+              <div id="licPlanImpactBadge" class="plan-impact-badge" style="display:none; margin-top:0.5rem; padding:0.6rem 0.8rem; border-radius:8px; font-size:0.82rem; font-weight:600; line-height:1.4;"></div>
+              <div id="licPlanProjection" class="plan-projection-text" style="display:none; font-size:0.8rem; color:var(--text-secondary); margin-top:0.35rem; font-family:var(--font-mono);"></div>
+
+              <!-- PANEL DEDICADO: BONO / RECARGA IA PERSONALIZADA -->
+              <div id="panelCustomAiBonus" class="custom-ai-panel" style="display:none; margin-top:0.75rem; padding:1rem; background:var(--bg-card); border:1px solid var(--border-color); border-radius:10px;">
+                <div style="font-weight:700; font-size:0.9rem; color:var(--text-primary); margin-bottom:0.6rem; display:flex; align-items:center; gap:0.4rem;">
+                  <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+                  Configuración del Bono o Recarga IA
+                </div>
+                
+                <!-- Chips rápidos de escaneos IA -->
+                <div class="form-group" style="margin-bottom:0.75rem;">
+                  <label style="font-size:0.82rem;">Cantidad de Escaneos IA a Otorgar:</label>
+                  <div class="ai-chips-bar" style="display:flex; gap:0.4rem; flex-wrap:wrap; margin-bottom:0.5rem;">
+                    <button type="button" class="btn btn-outline btn-sm ai-chip-btn" data-ai="20">+20 IA</button>
+                    <button type="button" class="btn btn-outline btn-sm ai-chip-btn" data-ai="50">+50 IA</button>
+                    <button type="button" class="btn btn-outline btn-sm ai-chip-btn" data-ai="100">+100 IA</button>
+                    <button type="button" class="btn btn-outline btn-sm ai-chip-btn" data-ai="150">+150 IA</button>
+                  </div>
+                  <div style="display:flex; align-items:center; gap:0.5rem;">
+                    <input type="number" id="licCustomAiAmount" value="20" min="1" step="1" style="max-width:140px; font-weight:700; font-size:1rem;" placeholder="Ej: 20">
+                    <span style="font-size:0.85rem; color:var(--text-secondary);">escaneos acumulativos vitalicios</span>
+                  </div>
+                </div>
+
+                <!-- Selector de Modalidad Económica (2 opciones en 1 clic) -->
+                <div class="form-group" style="margin-bottom:0.75rem;">
+                  <label style="font-size:0.82rem;">Modalidad Comercial de Entrega:</label>
+                  <div class="economic-mode-switch" style="display:flex; gap:0.5rem;">
+                    <label class="radio-chip" id="lblEcoModeFree" style="flex:1; cursor:pointer; padding:0.6rem; border:1px solid var(--primary); border-radius:8px; background:rgba(37,99,235,0.1); font-size:0.85rem; font-weight:600; display:flex; align-items:center; gap:0.4rem;">
+                      <input type="radio" name="licEcoMode" id="ecoModeFree" value="free" checked style="accent-color:var(--primary);">
+                      <span>Entrega Gratuita / Cortesía (S/ 0.00)</span>
+                    </label>
+                    <label class="radio-chip" id="lblEcoModePaid" style="flex:1; cursor:pointer; padding:0.6rem; border:1px solid var(--border-color); border-radius:8px; background:var(--bg-secondary); font-size:0.85rem; font-weight:600; display:flex; align-items:center; gap:0.4rem;">
+                      <input type="radio" name="licEcoMode" id="ecoModePaid" value="paid" style="accent-color:var(--primary);">
+                      <span>Con Cobro Personalizado</span>
+                    </label>
+                  </div>
+                </div>
+
+                <!-- Calculadora de Precio Sugerido (Visible sólo con Cobro) -->
+                <div id="boxSuggestedPrice" style="display:none; padding:0.75rem; background:var(--bg-secondary); border-radius:8px; border:1px dashed var(--border-color); margin-bottom:0.75rem;">
+                  <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.5rem;">
+                    <div>
+                      <span id="txtSuggestedCalc" style="font-size:0.82rem; color:var(--text-secondary); display:block;">Calculando precio sugerido...</span>
+                      <strong id="valSuggestedPrice" style="font-size:1.05rem; color:var(--primary);">S/ 0.00</strong>
+                    </div>
+                    <button type="button" class="btn btn-outline btn-sm" id="btnApplySuggestedPrice" style="border-color:var(--primary); color:var(--primary);">
+                      Aplicar sugerido
+                    </button>
+                  </div>
+                </div>
+
+                <!-- Nota informativa v9.35+ -->
+                <div style="font-size:0.78rem; color:var(--text-muted); line-height:1.4; display:flex; gap:0.35rem; align-items:flex-start;">
+                  <svg style="width:14px; height:14px; min-width:14px; margin-top:2px;" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+                  <span>Los tokens de bono puro (0 días) se acreditan con total compatibilidad en la app móvil v9.35+ sumando créditos a su celular sin alterar la suscripción vigente ni los días de Trial.</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- ACORDEÓN: AJUSTES COMERCIALES PERSONALIZADOS -->
+            <div class="accordion-box">
+              <div class="accordion-header" id="btnToggleCustomSettings">
+                <span style="display:flex; align-items:center; gap:0.4rem;">
+                  <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+                  Habilitar Ajustes Comerciales Personalizados
+                </span>
+                <span id="accordionArrow">▼</span>
+              </div>
+              <div class="accordion-content" id="licCustomContent">
+                <div style="display:flex; justify-content:space-between; align-items:center; background:rgba(37,99,235,0.06); border:1px solid rgba(37,99,235,0.2); border-radius:8px; padding:0.6rem 0.8rem; margin-bottom:0.75rem; flex-wrap:wrap; gap:0.5rem;">
+                  <label style="display:flex; align-items:center; gap:0.5rem; font-size:0.85rem; font-weight:600; cursor:pointer; margin:0;">
+                    <input type="checkbox" id="chkEnableCustomSettings" style="accent-color:var(--primary); width:16px; height:16px;">
+                    <span>Aplicar ajustes personalizados en esta emisión</span>
+                  </label>
+                  <button type="button" class="btn btn-outline btn-sm" id="btnResetCustomSettings" style="font-size:0.75rem; padding:3px 8px;">
+                    Restablecer valores del plan
+                  </button>
+                </div>
+                <div class="form-group" id="grpLicCustomDays">
+                  <label for="licCustomDays">Días a Otorgar Personalizados (dejar vacío para usar los del plan):</label>
+                  <input type="number" id="licCustomDays" placeholder="Ej: 15, 45, 60...">
+                </div>
+                <div class="form-group" id="grpLicCustomAiBonus">
+                  <label for="licCustomAiBonus">Bono de Créditos IA de Regalo (+X escaneos sin vencimiento):</label>
+                  <input type="number" id="licCustomAiBonus" value="0" min="0" placeholder="0">
+                </div>
+                <div class="form-group" id="grpLicCustomComputationMode">
+                  <label for="licCustomComputationMode">Modo de Cómputo de Caducidad:</label>
+                  <select id="licCustomComputationMode">
+                    <option value="cumulative">Regla Acumulativa (Sumar a la fecha de vencimiento vigente)</option>
+                    <option value="from_today">Reiniciar Vigencia (Comenzar a contar desde hoy)</option>
+                  </select>
+                </div>
+                <div class="form-group" id="grpLicCustomExactDate">
+                  <label for="licCustomExactDate">Sobrescribir Fecha de Expiración Exacta (Opcional):</label>
+                  <input type="date" id="licCustomExactDate">
+                </div>
+              </div>
+            </div>
+
+            <div class="form-group" id="grpLicPaymentAmount">
+              <label for="licPaymentAmount">Monto Cobrado (S/):</label>
+              <input type="number" id="licPaymentAmount" step="0.5" value="35.00">
+            </div>
+
+            <div class="form-group" id="grpLicPaymentMethod">
+              <label for="licPaymentMethod">Medio de Pago:</label>
+              <select id="licPaymentMethod">
+                <option value="Yape">Yape</option>
+                <option value="Plin">Plin</option>
+                <option value="Transferencia BCP">Transferencia BCP</option>
+                <option value="Transferencia BBVA / Interbank">Transferencia BBVA / Interbank</option>
+                <option value="Efectivo">Efectivo en Tienda</option>
+                <option value="Cortesia / Promocion">Cortesía / Promoción</option>
+              </select>
+            </div>
+
+            <div class="form-group" id="grpLicPaymentRef">
+              <label for="licPaymentRef">N° de Operación / Referencia:</label>
+              <input type="text" id="licPaymentRef" placeholder="Ej: Op. 849201">
+            </div>
+
+            <button class="btn btn-primary" id="btnGenerateLicense" style="margin-top:0.5rem; justify-content:center; padding:0.8rem;">
+              <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+              Firmar Criptográficamente y Emitir Licencia
+            </button>
+          </div>
+
+          <!-- Columna Resultado de Código & QR -->
+          <div class="license-result-box" id="licenseResultContainer">
+            <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid var(--border-color); padding-bottom:0.6rem;">
+              <h3 style="font-size:1.1rem; color:var(--text-primary); margin:0;">
+                Licencia Emitida & Credencial Oficial
+              </h3>
+              <span id="licResultBadgeStatus" class="badge badge-green" style="display:none;">ACTIVA / VIGENTE</span>
+            </div>
+            <p id="licResultSubtext" style="font-size:0.85rem; color:var(--text-secondary); margin:0.4rem 0;">
+              El código y QR generado se firman con tu clave privada maestra Ed25519 y son válidos exclusivamente para el teléfono del cliente.
+            </p>
+
+            <div id="resultContent" style="display:none; flex-direction:column; gap:1rem;">
+              <div class="code-display" id="generatedCodeDisplay">ML9-...</div>
+
+              <!-- Metadatos de la licencia seleccionada / activa -->
+              <div id="genLicenseMetaGrid" class="client-summary-grid" style="grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); margin-top:0.25rem;">
+                <div class="client-summary-item">
+                  <span class="client-summary-label">Plan</span>
+                  <span class="client-summary-val" id="metaGenPlan">-</span>
+                </div>
+                <div class="client-summary-item">
+                  <span class="client-summary-label">Nonce</span>
+                  <span class="client-summary-val" id="metaGenNonce">-</span>
+                </div>
+                <div class="client-summary-item">
+                  <span class="client-summary-label">Emisión</span>
+                  <span class="client-summary-val" id="metaGenEmitted">-</span>
+                </div>
+                <div class="client-summary-item">
+                  <span class="client-summary-label">Vigencia</span>
+                  <span class="client-summary-val" id="metaGenExpires">-</span>
+                </div>
+                <div class="client-summary-item">
+                  <span class="client-summary-label">Créditos IA</span>
+                  <span class="client-summary-val" id="metaGenAi">-</span>
+                </div>
+                <div class="client-summary-item">
+                  <span class="client-summary-label">Device ID</span>
+                  <span class="client-summary-val" id="metaGenDeviceId" style="font-family:var(--font-mono); color:var(--primary);">-</span>
+                </div>
+              </div>
+
+              <div style="display:flex; gap:0.5rem; flex-wrap:wrap;">
+                <button class="btn btn-outline btn-sm" id="btnCopyCode" title="Copiar código Ed25519">
+                  <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                  Copiar Código
+                </button>
+                <button class="btn btn-outline btn-sm" id="btnGenCopyMessageAndCode" title="Copiar mensaje listo para pegar en WhatsApp">
+                  <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></svg>
+                  Copiar Mensaje + Código
+                </button>
+                <button class="btn btn-outline btn-sm" id="btnDownloadQr" title="Descargar solo la imagen del QR">
+                  <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                  Descargar Solo QR
+                </button>
+                <button class="btn btn-outline btn-sm" id="btnCopyCredentialImage" title="Copiar imagen para pegar directamente con Ctrl+V en WhatsApp">
+                  <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                  Copiar Imagen Credencial
+                </button>
+                <button class="btn btn-primary btn-sm" id="btnDownloadCredential" title="Descargar archivo PNG">
+                  <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                  Descargar Tarjeta PNG @2x
+                </button>
+                <button class="btn btn-wa btn-sm" id="btnSendWa" title="Enviar licencia por WhatsApp">
+                  <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+                  Enviar por WhatsApp
+                </button>
+                <button class="btn btn-outline btn-sm" id="btnGenOpenReceipt" style="display:none;" title="Generar o consultar el comprobante de este pago">
+                  <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+                  <span id="btnGenOpenReceiptText">Generar / Ver Boleta</span>
+                </button>
+                <button class="btn btn-outline btn-sm" id="btnAuditInInspector" title="Auditar en el Inspector Forense en 1 clic">
+                  <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+                  Auditar en Inspector
+                </button>
+              </div>
+
+              <div class="qr-container" id="qrContainer"></div>
+
+              <!-- CREDENCIAL OFICIAL EN CANVAS PNG DE ALTA RESOLUCIÓN (@2x / 900x520) -->
+              <div class="credential-box" style="margin-top:0.5rem; border-top:1px solid var(--border-color); padding-top:0.75rem;">
+                <div style="display:flex; justify-content:center; background:rgba(0,0,0,0.25); border-radius:12px; padding:0.75rem; overflow-x:auto;">
+                  <canvas id="credentialCanvas" width="900" height="520" style="width:100%; max-width:540px; border-radius:8px; display:block; box-shadow:0 6px 18px rgba(0,0,0,0.3);"></canvas>
+                </div>
+              </div>
+            </div>
+
+            <!-- HISTORIAL DE LICENCIAS EMITIDAS DEL CLIENTE SELECCIONADO -->
+            <div id="genHistorySection" style="display:none; margin-top:1.25rem; border-top:1px solid var(--border-color); padding-top:1rem;">
+              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.6rem;">
+                <h4 style="font-size:0.92rem; font-weight:700; color:var(--text-primary); margin:0; display:flex; align-items:center; gap:0.4rem;">
+                  <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                  Historial de Licencias Emitidas (<span id="genHistoryCount">0</span>)
+                </h4>
+                <small style="font-size:0.75rem; color:var(--text-muted);">Clic para visualizar QR / Credencial</small>
+              </div>
+              <div id="genHistoryList" style="display:flex; flex-direction:column; gap:0.5rem; max-height:260px; overflow-y:auto; padding-right:0.25rem;"></div>
+            </div>
+
+            <div id="resultPlaceholder" style="text-align:center; padding:3rem 1rem; color:var(--text-muted);">
+              Selecciona un cliente y presiona <strong>Firmar y Emitir Licencia</strong> para generar el código, el QR y la credencial oficial.
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 4: RELEASE MANAGER (GESTOR DE VERSIONES) -->

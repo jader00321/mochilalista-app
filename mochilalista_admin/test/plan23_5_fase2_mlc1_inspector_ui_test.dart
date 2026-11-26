@@ -146,6 +146,11 @@ void main() {
         'function formatLimaDateTime(',
         'function formatLimaIsoDate(',
       );
+      final rescueHelperSlice = _extractSection(
+        js,
+        'function renderMigrationRescueCard(',
+        'function openSyncReportedModal(',
+      );
       final inspSection = _extractSection(
         js,
         '// =================== 5. INSPECTOR FORENSE DUAL',
@@ -160,6 +165,8 @@ void main() {
       final harness = File('${tempDir.path}/p23_5_fase2_ui_test.js');
       await harness.writeAsString('''
 const assert = require('assert');
+// Inyectar helper único D-ADM-07 usado por renderInspectClientSync
+${rescueHelperSlice.trim()}
 
 class MockClassList {
   constructor(initial = []) { this.set = new Set(initial); }

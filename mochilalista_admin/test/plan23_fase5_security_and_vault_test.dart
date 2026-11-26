@@ -550,6 +550,11 @@ void main() {
         'function formatLimaDateTime(',
         'function formatLimaIsoDate(',
       );
+      final clipboardJs = _extractJsBetween(
+        js,
+        'async function copyPlainTextToClipboard(',
+        'async function copyPngBlobToClipboard(',
+      );
       final vaultStart = js.indexOf(
         '// ==========================================================================\n// FASE 3 PLAN MAESTRO 10 & PLAN MAESTRO 23 FASE 5: BÓVEDA Y PORTABILIDAD (#tabSecurityVault)',
       );
@@ -772,6 +777,7 @@ global.fetch = async (url, opts = {}) => {
 };
 
 $formatLimaJs
+$clipboardJs
 $vaultJs
 
 (async () => {

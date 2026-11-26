@@ -1,0 +1,70 @@
+  <!-- MODAL EJECUTIVO: VISTA PREVIA ANTES DE RESTAURAR RESPALDO (PLAN 23 - FASE 1) -->
+  <div class="modal-overlay" id="modalBackupPreview">
+    <div class="modal-dialog modal-backup-preview-dialog">
+      <div class="modal-header">
+        <div style="display:flex; align-items:center; gap:0.55rem;">
+          <svg class="icon-svg" style="color:var(--warning);" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><polyline points="3 3 3 8 8 8"/><polyline points="12 7 12 12 15 14"/></svg>
+          <h3>Vista Previa antes de Restaurar Respaldo</h3>
+        </div>
+        <button type="button" class="btn btn-outline btn-sm" id="btnCloseBackupPreview" title="Cerrar vista previa">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div class="backup-preview-meta-card">
+          <div class="backup-preview-file-row">
+            <code id="bpFilename" class="backup-preview-filename">-</code>
+            <div style="display:flex; gap:0.4rem; flex-wrap:wrap;">
+              <span id="bpEnvironmentBadge" class="badge badge-mono">-</span>
+              <span id="bpScopeBadge" class="badge badge-blue">-</span>
+            </div>
+          </div>
+          <div class="backup-preview-meta-grid">
+            <div>
+              <span class="bp-meta-label">Fecha (Perú GMT-5)</span>
+              <span class="bp-meta-value" id="bpModifiedLima">-</span>
+            </div>
+            <div>
+              <span class="bp-meta-label">Tamaño en disco</span>
+              <span class="bp-meta-value" id="bpSizeKb">-</span>
+            </div>
+            <div>
+              <span class="bp-meta-label">Marca UTC original</span>
+              <span class="bp-meta-value bp-mono" id="bpModifiedUtc">-</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="backup-preview-compare-wrap">
+          <h4 class="bp-section-title">Comparativa del Respaldo frente al Estado Actual</h4>
+          <table class="data-table backup-preview-compare-table">
+            <thead>
+              <tr>
+                <th>Métrica / Alcance</th>
+                <th>Contenido del Snapshot</th>
+                <th>Estado Actual en Disco</th>
+              </tr>
+            </thead>
+            <tbody id="bpComparisonBody">
+              <tr><td colspan="3" style="text-align:center;">Analizando respaldo...</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="backup-preview-callout" id="bpSafetyNotice">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          <div>
+            <strong>Resguardo Atómico Garantizado:</strong> Antes de aplicar este snapshot, el servidor creará automáticamente un respaldo protegido <code>pre_restore</code> del estado actual en <code>backups/</code> para que puedas revertir en cualquier momento.
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer" style="display:flex; justify-content:flex-end; gap:0.65rem;">
+        <button type="button" class="btn btn-outline" id="btnCancelBackupPreview">Cancelar</button>
+        <button type="button" class="btn btn-primary" id="btnConfirmBackupPreview">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
+          Confirmar y Restaurar Sistema
+        </button>
+      </div>
+    </div>
+  </div>
+

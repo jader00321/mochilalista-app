@@ -1,0 +1,275 @@
+  <!-- MODAL: GENERADOR Y PERSONALIZADOR DE BOLETAS DE PAGO (FASE 5) -->
+  <!-- MODAL: GENERADOR Y PERSONALIZADOR DE BOLETAS Y FACTURAS (FASE 5) -->
+  <div class="modal-overlay" id="modalPaymentReceipt">
+    <div class="modal-dialog modal-receipt-dialog">
+      <div class="modal-header">
+        <div style="display:flex; align-items:center; gap:0.6rem;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" style="width:22px; height:22px; color:var(--primary);"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+          <h3 style="margin:0;" id="receiptModalMainTitle">Generador de Comprobante de Pago</h3>
+          <span id="receiptModalBadge" class="badge badge-blue" style="font-family:var(--font-mono); font-size:0.85rem; padding:0.25rem 0.6rem;">BOL-0001</span>
+        </div>
+        <button class="btn btn-outline btn-sm" onclick="closeReceiptModal()" aria-label="Cerrar">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" style="width:16px; height:16px;"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      <div class="modal-body" style="padding: 0.75rem 1.25rem 1rem 1.25rem;">
+        <div class="receipt-split-container">
+          <!-- Columna Izquierda: Vista Previa Real y Documento Imprimible -->
+          <div class="receipt-preview-pane">
+            <div class="receipt-preview-header">
+              <span style="font-size:0.8rem; font-weight:600; color:var(--text-muted); text-transform:uppercase;">Vista Previa • Alta Resolución @2x</span>
+              <span id="receiptIssuedNotice" class="badge badge-mono" style="font-size:0.75rem;">Modo Offline</span>
+            </div>
+            <div class="receipt-doc-wrapper" id="receiptDocWrapper">
+              <!-- Documento Renderizado Imprimible -->
+              <div class="receipt-doc-paper" id="receiptPrintableDoc">
+                <!-- Cabecera del Documento -->
+                <div class="rdoc-header" id="rdocHeader">
+                  <div class="rdoc-logo-wrap" id="rdocLogoWrap">
+                    <img src="/icon_192.png" alt="MochilaLista" class="rdoc-logo-img" id="rdocLogoImg" onerror="this.style.display='none'; document.getElementById('rdocLogoSvgFallback').style.display='block';">
+                    <svg id="rdocLogoSvgFallback" style="display:none; width:44px; height:44px; color:var(--primary);" viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/><circle cx="7" cy="15" r="1"/></svg>
+                  </div>
+                  <div class="rdoc-title-wrap">
+                    <h2 class="rdoc-doc-title" id="rdocDocTitle">BOLETA DE PAGO ADMINISTRATIVA</h2>
+                    <div class="rdoc-commercial" id="rdocCommercialName">MochilaLista</div>
+                  </div>
+                  <div class="rdoc-correlative-box">
+                    <div class="rdoc-correlative-label">COMPROBANTE N.°</div>
+                    <div class="rdoc-correlative-num" id="rdocCorrelativeNum">BOL-0001</div>
+                    <div class="rdoc-date-time" id="rdocDateTime">21/11/2026 13:00</div>
+                  </div>
+                </div>
+
+                <div class="rdoc-divider" id="rdocDivider"></div>
+
+                <!-- Emisor y Cliente en dos columnas -->
+                <div class="rdoc-parties-grid">
+                  <div class="rdoc-party-box">
+                    <div class="rdoc-party-tag">EMISOR DEL COMPROBANTE</div>
+                    <div class="rdoc-party-name" id="rdocIssuerName">Julio Angello Vasquez Navarro</div>
+                    <div class="rdoc-party-meta" id="rdocIssuerDocRow"><span class="rdoc-lbl">Documento:</span> <span id="rdocIssuerDoc">D.N.I. / R.U.C. Registrado</span></div>
+                    <div class="rdoc-party-meta" id="rdocIssuerPhoneRow"><span class="rdoc-lbl">WhatsApp:</span> <span id="rdocIssuerPhone">+51 922 836 879</span></div>
+                    <div class="rdoc-party-meta"><span class="rdoc-lbl">Ciudad:</span> <span id="rdocIssuerCity">Piura, Perú</span></div>
+                  </div>
+                  <div class="rdoc-party-box">
+                    <div class="rdoc-party-tag" id="rdocClientPartyTag">DATOS DEL CLIENTE</div>
+                    <div class="rdoc-party-name" id="rdocClientBiz">Comercial Luzam</div>
+                    <div class="rdoc-party-meta" id="rdocClientOwnerRow"><span class="rdoc-lbl">Titular:</span> <span id="rdocClientOwner">Angello Vasquez</span></div>
+                    <div class="rdoc-party-meta" id="rdocClientDocRow"><span class="rdoc-lbl" id="rdocClientDocLbl">RUC / DNI:</span> <span id="rdocClientDoc">-</span></div>
+                    <div class="rdoc-party-meta" id="rdocClientAddressRow" style="display:none;"><span class="rdoc-lbl">Dirección:</span> <span id="rdocClientAddress">-</span></div>
+                    <div class="rdoc-party-meta" id="rdocClientDevIdRow"><span class="rdoc-lbl">Hardware ID:</span> <code id="rdocClientDevId" class="rdoc-dev-code">ML-379E</code></div>
+                  </div>
+                </div>
+
+                <!-- Tabla de Detalle del Pago -->
+                <div class="rdoc-table-wrap">
+                  <table class="rdoc-table">
+                    <thead>
+                      <tr>
+                        <th>Descripción / Concepto</th>
+                        <th>Medio</th>
+                        <th id="rdocTableOpHead">N.° Operación</th>
+                        <th>Fecha</th>
+                        <th style="text-align:right;">Total (S/)</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr>
+                        <td>
+                          <strong id="rdocPaymentConcept">Renovación Mensual</strong>
+                          <div id="rdocPaymentCustomNote" style="font-size:0.75rem; color:#64748b; margin-top:2px;"></div>
+                        </td>
+                        <td id="rdocPaymentMethod">Yape</td>
+                        <td id="rdocPaymentRefCell"><span id="rdocPaymentRef">Op. 849201</span></td>
+                        <td id="rdocPaymentDate">21/11/2026</td>
+                        <td style="text-align:right;"><strong id="rdocPaymentRowAmount">S/ 35.00</strong></td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+
+                <!-- Total Callout Box -->
+                <div class="rdoc-total-section" id="rdocTotalSection">
+                  <div class="rdoc-total-box" id="rdocTotalBox">
+                    <span class="rdoc-total-label">TOTAL RECIBIDO:</span>
+                    <span class="rdoc-total-value" id="rdocPaymentTotal">S/ 35.00</span>
+                  </div>
+                </div>
+
+                <!-- Pie Legal y Firma -->
+                <div class="rdoc-footer">
+                  <div class="rdoc-legal-notes" id="rdocFooterNotes">
+                    Software de Punto de Venta Offline. Comprobante de control administrativo y soporte técnico.
+                  </div>
+                  <div class="rdoc-signature-wrap" id="rdocSignatureWrap">
+                    <div class="rdoc-signature-line"></div>
+                    <div class="rdoc-signature-text" id="rdocSignatureText">Administración Comercial — MochilaLista</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <!-- Canvas Oculto para Generación @2x -->
+            <canvas id="receiptExportCanvas" style="display:none;"></canvas>
+          </div>
+
+          <!-- Columna Derecha: Panel de Personalización y Acciones -->
+          <div class="receipt-controls-pane">
+            <div class="rc-section-title">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" style="width:16px; height:16px; color:var(--primary);"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+              <span>Personalizar Diseño de Comprobante</span>
+            </div>
+
+            <div class="rc-form-group">
+              <label for="rcSelectVoucherType" style="font-weight:700; color:var(--text-primary);">Tipo de Comprobante Oficial:</label>
+              <select id="rcSelectVoucherType" style="font-weight:700; color:var(--primary);">
+                <option value="BOL">Boleta de Pago (BOL-XXXX)</option>
+                <option value="FAC">Factura de Pago (FAC-XXXX)</option>
+              </select>
+            </div>
+
+            <!-- Bloque de Datos Fiscales para Factura (Oculto por defecto en Boleta) -->
+            <div class="rc-invoice-block" id="rcInvoiceFieldsBlock" style="display:none;">
+              <div class="rc-invoice-title">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/></svg>
+                <span>Datos Fiscales para Factura</span>
+              </div>
+              <div class="rc-form-group">
+                <label for="rcInputInvoiceRuc">RUC del Cliente (11 dígitos):</label>
+                <input type="text" id="rcInputInvoiceRuc" maxlength="11" placeholder="Ej: 20601234567">
+              </div>
+              <div class="rc-form-group">
+                <label for="rcInputInvoiceBizName">Razón Social Oficial:</label>
+                <input type="text" id="rcInputInvoiceBizName" placeholder="Razón Social / Empresa">
+              </div>
+              <div class="rc-form-group">
+                <label for="rcInputInvoiceAddress">Dirección Fiscal (Opcional):</label>
+                <input type="text" id="rcInputInvoiceAddress" placeholder="Ej: Av. Grau 123, Piura">
+              </div>
+              <div class="checkbox-row-styled" style="margin-top:0.25rem;">
+                <input type="checkbox" id="rcCheckShowIgv" style="width:16px; height:16px; cursor:pointer;">
+                <label for="rcCheckShowIgv" style="margin:0; cursor:pointer; font-size:0.82rem; font-weight:600;">Desglosar IGV (18%) [Subtotal + IGV = Total]</label>
+              </div>
+            </div>
+
+            <div class="rc-form-group">
+              <label for="rcInputTitle">Título del Comprobante:</label>
+              <input type="text" id="rcInputTitle" value="BOLETA DE PAGO ADMINISTRATIVA">
+            </div>
+
+            <div class="rc-form-row">
+              <div class="rc-form-group">
+                <label for="rcInputCommercialName">Nombre Comercial:</label>
+                <input type="text" id="rcInputCommercialName" value="MochilaLista">
+              </div>
+              <div class="rc-form-group">
+                <label for="rcInputIssuerCity">Ciudad:</label>
+                <input type="text" id="rcInputIssuerCity" value="Piura, Perú">
+              </div>
+            </div>
+
+            <div class="rc-form-row">
+              <div class="rc-form-group">
+                <label for="rcInputIssuerName">Titular Emisor:</label>
+                <input type="text" id="rcInputIssuerName" value="Julio Angello Vasquez Navarro">
+              </div>
+              <div class="rc-form-group">
+                <label for="rcInputIssuerPhone">WhatsApp / Soporte:</label>
+                <input type="text" id="rcInputIssuerPhone" value="+51 922 836 879">
+              </div>
+            </div>
+
+            <div class="rc-form-row">
+              <div class="rc-form-group">
+                <label for="rcInputIssuerDoc">RUC / DNI Emisor:</label>
+                <input type="text" id="rcInputIssuerDoc" value="D.N.I. / R.U.C. Registrado">
+              </div>
+              <div class="rc-form-group">
+                <label>Color de Acento:</label>
+                <div style="display:flex; align-items:center; gap:0.5rem;">
+                  <input type="color" id="rcInputAccentColor" value="#2563eb" style="width:36px; height:32px; padding:0; border:none; border-radius:6px; cursor:pointer;">
+                  <div class="rc-swatches">
+                    <span class="rc-swatch" data-color="#2563eb" style="background:#2563eb;"></span>
+                    <span class="rc-swatch" data-color="#059669" style="background:#059669;"></span>
+                    <span class="rc-swatch" data-color="#7c3aed" style="background:#7c3aed;"></span>
+                    <span class="rc-swatch" data-color="#dc2626" style="background:#dc2626;"></span>
+                    <span class="rc-swatch" data-color="#0284c7" style="background:#0284c7;"></span>
+                    <span class="rc-swatch" data-color="#1e293b" style="background:#1e293b;"></span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="rc-form-group">
+              <label for="rcInputCustomNote">Observación o Detalle para este Comprobante:</label>
+              <input type="text" id="rcInputCustomNote" placeholder="Ej: Pago adelantado con descuento promocional...">
+            </div>
+
+            <div class="rc-form-group">
+              <label for="rcInputFooterNotes">Nota Legal / Soporte al Pie:</label>
+              <textarea id="rcInputFooterNotes" rows="3" style="padding-top:0.45rem;">Software de Punto de Venta Offline. Comprobante de control administrativo y soporte técnico.</textarea>
+            </div>
+
+            <div class="rc-form-group">
+              <label for="rcInputSignature">Texto de Firma:</label>
+              <input type="text" id="rcInputSignature" value="Administración Comercial — MochilaLista">
+            </div>
+
+            <!-- 9 Interruptores de Visibilidad Personalizables -->
+            <div style="font-size:0.76rem; font-weight:700; text-transform:uppercase; color:var(--text-muted); margin-top:0.4rem; letter-spacing:0.5px;">Elementos Visibles en Comprobante</div>
+            <div class="rc-toggles-grid">
+              <label class="rc-toggle-item"><input type="checkbox" id="rcCheckShowLogo" checked> Logotipo Oficial</label>
+              <label class="rc-toggle-item"><input type="checkbox" id="rcCheckShowIssuerDoc" checked> Doc. Emisor (RUC/DNI)</label>
+              <label class="rc-toggle-item"><input type="checkbox" id="rcCheckShowIssuerPhone" checked> WhatsApp Soporte</label>
+              <label class="rc-toggle-item"><input type="checkbox" id="rcCheckShowClientDoc" checked> RUC / DNI Cliente</label>
+              <label class="rc-toggle-item"><input type="checkbox" id="rcCheckShowHardwareId" checked> Hardware ID</label>
+              <label class="rc-toggle-item"><input type="checkbox" id="rcCheckShowOperationNumber" checked> N.° de Operación</label>
+              <label class="rc-toggle-item"><input type="checkbox" id="rcCheckShowObservation" checked> Observación / Detalle</label>
+              <label class="rc-toggle-item"><input type="checkbox" id="rcCheckShowSignature" checked> Firma / Sello</label>
+              <label class="rc-toggle-item" style="grid-column: span 2;"><input type="checkbox" id="rcCheckShowFooterNotes" checked> Nota Legal al Pie</label>
+            </div>
+
+            <div style="display:flex; gap:0.5rem; margin-top:0.5rem; margin-bottom:0.8rem;">
+              <button type="button" class="btn btn-outline btn-sm" id="btnRcSaveDefault" style="flex:1;">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" style="width:14px; height:14px;"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+                Guardar Diseño Predeterminado
+              </button>
+              <button type="button" class="btn btn-outline btn-sm" id="btnRcResetDefault">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" style="width:14px; height:14px;"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
+                Restaurar
+              </button>
+            </div>
+
+            <!-- Acciones de Entrega Sticky Fijas Abajo -->
+            <div class="receipt-actions-sticky">
+              <div style="font-size:0.75rem; font-weight:700; text-transform:uppercase; color:var(--text-muted); margin-bottom:0.15rem; letter-spacing:0.4px;">Acciones de Entrega</div>
+              <div style="display:grid; grid-template-columns: 1fr 1fr; gap:0.45rem;">
+                <button type="button" class="btn btn-primary" id="btnRcDownloadPdf" style="justify-content:center; font-weight:700;">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" style="width:15px; height:15px;"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><polyline points="9 15 12 18 15 15"/></svg>
+                  Descargar PDF
+                </button>
+                <button type="button" class="btn btn-secondary" id="btnRcDownloadPng" style="justify-content:center; font-weight:700;">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" style="width:15px; height:15px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                  Descargar PNG (@2x)
+                </button>
+              </div>
+              <div style="display:grid; grid-template-columns: 1fr 1fr 1.15fr; gap:0.45rem;">
+                <button type="button" class="btn btn-outline" id="btnRcCopyClipboard" style="justify-content:center; font-size:0.8rem;" title="Copiar al portapapeles">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" style="width:14px; height:14px;"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                  Copiar (Ctrl+V)
+                </button>
+                <button type="button" class="btn btn-outline" id="btnRcPrintDoc" style="justify-content:center; font-size:0.8rem;" title="Imprimir documento">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" style="width:14px; height:14px;"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+                  Imprimir
+                </button>
+                <button type="button" class="btn btn-success" id="btnRcSendWhatsapp" style="justify-content:center; font-size:0.8rem;" title="Enviar por WhatsApp">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" style="width:14px; height:14px;"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+                  WhatsApp
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+

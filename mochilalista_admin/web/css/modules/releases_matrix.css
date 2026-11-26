@@ -1,0 +1,575 @@
+/* === LAYER: css/modules/releases_matrix.css === */
+
+/* Plan Maestro 22 - Fase 2: Matriz, Catálogo, Autodetección y Modal Edición */
+.badge-unverified-sig {
+  background: rgba(245, 158, 11, 0.15);
+  color: #f59e0b;
+  border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+.badge-origin-lib {
+  background: rgba(16, 185, 129, 0.12);
+  color: #10b981;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.badge-origin-local {
+  background: rgba(59, 130, 246, 0.12);
+  color: #60a5fa;
+  border: 1px solid rgba(59, 130, 246, 0.3);
+}
+
+.local-build-dup {
+  font-size: 0.71rem;
+  color: var(--text-muted);
+  background: rgba(148, 163, 184, 0.08);
+  border: 1px dashed rgba(148, 163, 184, 0.25);
+  border-radius: 6px;
+  padding: 0.25rem 0.45rem;
+}
+
+.matrix-installed-ver-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  white-space: nowrap;
+}
+
+.btn-micro-edit-ver {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border-radius: 6px;
+  border: 1px solid var(--border-color);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.18s ease;
+  flex-shrink: 0;
+}
+
+.btn-micro-edit-ver:hover {
+  color: var(--primary);
+  border-color: var(--primary);
+  background: rgba(37, 99, 235, 0.1);
+}
+
+.release-actions-row {
+  display: flex;
+  gap: 0.25rem;
+  flex-wrap: nowrap;
+  align-items: center;
+  white-space: nowrap;
+}
+
+.release-version-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.25rem;
+}
+
+.release-adoption-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.12rem 0.48rem;
+  border-radius: 9999px;
+  font-size: 0.69rem;
+  font-weight: 600;
+  background: rgba(148, 163, 184, 0.12);
+  color: var(--text-muted);
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  white-space: nowrap;
+}
+
+.release-adoption-pill.has-clients {
+  background: rgba(16, 185, 129, 0.12);
+  color: #10b981;
+  border-color: rgba(16, 185, 129, 0.3);
+}
+
+.field-label-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.field-label-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+.textarea-meta-counter {
+  font-family: var(--font-mono, monospace);
+  font-size: 0.71rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  background: rgba(148, 163, 184, 0.08);
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 999px;
+  padding: 0.1rem 0.48rem;
+  white-space: nowrap;
+}
+
+.btn-load-companion,
+.btn-toggle-textarea {
+  padding: 0.18rem 0.52rem;
+  font-size: 0.72rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.btn-toggle-textarea {
+  transition: all 0.18s ease;
+}
+
+.btn-toggle-textarea[aria-expanded="true"] {
+  background: rgba(37, 99, 235, 0.14);
+  border-color: rgba(59, 130, 246, 0.45);
+  color: #60a5fa;
+}
+
+.expandable-textarea {
+  width: 100%;
+  min-height: 78px;
+  height: 86px;
+  resize: vertical;
+  overflow-y: auto;
+  transition: height 0.24s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.2s ease, box-shadow 0.2s ease;
+  line-height: 1.48;
+}
+
+.expandable-textarea.is-expanded {
+  height: 290px;
+  min-height: 240px;
+  border-color: rgba(59, 130, 246, 0.5);
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.12);
+}
+
+.edit-variant-card {
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 0.75rem 0.85rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.edit-variant-meta-row {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+  font-size: 0.74rem;
+}
+
+.edit-variant-local-picker {
+  margin-top: 0.35rem;
+  padding: 0.65rem;
+  border-radius: 6px;
+  background: var(--bg-secondary);
+  border: 1px dashed rgba(37, 99, 235, 0.35);
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.edit-variant-picker-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+}
+
+.edit-picker-header-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+
+.edit-variant-picker-empty {
+  font-size: 0.76rem;
+  color: var(--text-secondary);
+  background: rgba(148, 163, 184, 0.08);
+  border: 1px dashed rgba(148, 163, 184, 0.3);
+  border-radius: 6px;
+  padding: 0.55rem 0.65rem;
+  line-height: 1.45;
+}
+
+.edit-variant-optional-note {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  line-height: 1.45;
+}
+
+.edit-variant-missing-note {
+  font-size: 0.75rem;
+  color: #fca5a5;
+  background: rgba(239, 68, 68, 0.08);
+  border: 1px solid rgba(239, 68, 68, 0.28);
+  border-radius: 6px;
+  padding: 0.4rem 0.55rem;
+  line-height: 1.45;
+}
+
+.edit-variant-unlink-btn {
+  color: #ef4444;
+  border-color: rgba(239, 68, 68, 0.38);
+}
+
+.edit-variant-unlink-btn:hover {
+  background: rgba(239, 68, 68, 0.12);
+  border-color: #ef4444;
+}
+
+.badge-variant-optional {
+  background: rgba(148, 163, 184, 0.14);
+  color: var(--text-secondary);
+  border: 1px solid rgba(148, 163, 184, 0.32);
+}
+
+.badge-disk-ok {
+  background: rgba(16, 185, 129, 0.12);
+  color: #10b981;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.badge-disk-missing {
+  background: rgba(239, 68, 68, 0.12);
+  color: #ef4444;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.search-input:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.2);
+}
+
+.btn-clear-search {
+  position: absolute;
+  right: 0.6rem;
+  top: 50%;
+  transform: translateY(-50%);
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-size: 1.1rem;
+  cursor: pointer;
+  display: none;
+}
+
+.btn-clear-search:hover {
+  color: var(--text-primary);
+}
+
+/* ========================================================
+   PLAN MAESTRO 23 - FASE 6: BANNER AUDITORÍA MASIVA DE CATÁLOGO
+   ======================================================== */
+.catalog-verify-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+  padding: 0.78rem 1rem;
+  border-radius: 10px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  font-size: 0.85rem;
+}
+
+.catalog-verify-banner.is-running {
+  border-color: rgba(59, 130, 246, 0.45);
+  background: rgba(59, 130, 246, 0.12);
+}
+
+.catalog-verify-banner.is-success {
+  border-color: rgba(16, 185, 129, 0.4);
+  background: rgba(16, 185, 129, 0.12);
+}
+
+.catalog-verify-banner.is-warning {
+  border-color: rgba(245, 158, 11, 0.45);
+  background: rgba(245, 158, 11, 0.12);
+}
+
+.catalog-verify-banner.is-error {
+  border-color: rgba(239, 68, 68, 0.45);
+  background: rgba(239, 68, 68, 0.12);
+}
+
+.catalog-verify-banner-main {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+  min-width: 0;
+  flex: 1;
+}
+
+.catalog-verify-banner-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: var(--primary);
+}
+
+.catalog-verify-banner.is-running .catalog-verify-banner-icon svg {
+  animation: vaultBtnSpin 0.85s linear infinite;
+}
+
+.catalog-verify-banner.is-success .catalog-verify-banner-icon {
+  color: #34d399;
+}
+
+.catalog-verify-banner.is-warning .catalog-verify-banner-icon {
+  color: #fbbf24;
+}
+
+.catalog-verify-banner.is-error .catalog-verify-banner-icon {
+  color: #f87171;
+}
+
+.catalog-verify-summary-text {
+  font-weight: 600;
+  color: var(--text-primary);
+  line-height: 1.4;
+}
+
+.catalog-verify-meta-pills {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.catalog-verify-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.15rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.74rem;
+  font-weight: 600;
+  background: rgba(148, 163, 184, 0.16);
+  color: var(--text-secondary);
+  border: 1px solid rgba(148, 163, 184, 0.25);
+}
+
+.catalog-verify-dismiss {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  padding: 0.28rem;
+  color: var(--text-muted);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.catalog-verify-dismiss:hover {
+  background: rgba(148, 163, 184, 0.16);
+  color: var(--text-primary);
+}
+
+/* ========================================================
+   PLAN MAESTRO 23.5 - FASE 4: MINI-GUÍA COMPILACIÓN DUAL (#tabReleaseManager)
+   ======================================================== */
+.dual-build-guide-panel {
+  margin-bottom: 1.25rem;
+  padding: 1.05rem 1.15rem;
+  border-radius: 12px;
+  border: 1px solid rgba(59, 130, 246, 0.3);
+  background: rgba(15, 23, 42, 0.45);
+}
+
+.dual-build-guide-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.9rem;
+}
+
+.dual-build-guide-head h3 {
+  margin: 0 0 0.25rem 0;
+  font-size: 0.96rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.dual-build-guide-sub {
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+  line-height: 1.45;
+}
+
+.dual-build-guide-dest {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-secondary);
+  font-size: 0.76rem;
+}
+
+.dual-build-dest-label {
+  font-size: 0.69rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--text-muted);
+}
+
+.dual-build-variants-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 0.85rem;
+  margin-bottom: 0.95rem;
+}
+
+.dual-build-variant-card {
+  padding: 0.85rem 0.95rem;
+  border-radius: 10px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-secondary);
+}
+
+.dual-build-variant-card.is-universal {
+  border-top: 3px solid #6366f1;
+}
+
+.dual-build-variant-card.is-arm64 {
+  border-top: 3px solid #10b981;
+}
+
+.dual-build-variant-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.35rem;
+  font-size: 0.9rem;
+  color: var(--text-primary);
+}
+
+.dual-build-size-pill {
+  padding: 0.14rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  font-family: var(--font-mono);
+  background: rgba(99, 102, 241, 0.16);
+  color: #a5b4fc;
+}
+
+.dual-build-size-pill.is-highlight {
+  background: rgba(16, 185, 129, 0.16);
+  color: #34d399;
+}
+
+.dual-build-variant-file {
+  margin-bottom: 0.35rem;
+  font-size: 0.78rem;
+}
+
+.dual-build-variant-card p {
+  margin: 0;
+  font-size: 0.79rem;
+  line-height: 1.45;
+  color: var(--text-secondary);
+}
+
+.dual-build-commands-box,
+.dual-build-steps-box {
+  padding: 0.85rem 0.95rem;
+  border-radius: 10px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-secondary);
+}
+
+.dual-build-commands-box {
+  margin-bottom: 0.85rem;
+}
+
+.dual-build-section-title {
+  font-size: 0.81rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 0.6rem;
+}
+
+.dual-build-cmd-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.dual-build-cmd-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.55rem 0.7rem;
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-primary);
+  flex-wrap: wrap;
+}
+
+.dual-build-cmd-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  min-width: 240px;
+  flex: 1;
+}
+
+.dual-build-cmd-code {
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #60a5fa;
+}
+
+.dual-build-cmd-desc {
+  font-size: 0.76rem;
+  color: var(--text-secondary);
+}
+
+.btn-copy-dual-cmd.is-copied {
+  border-color: rgba(16, 185, 129, 0.55);
+  color: #34d399;
+}
+
+.dual-build-steps-list {
+  margin: 0;
+  padding-left: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.32rem;
+  font-size: 0.8rem;
+  line-height: 1.48;
+  color: var(--text-secondary);
+}

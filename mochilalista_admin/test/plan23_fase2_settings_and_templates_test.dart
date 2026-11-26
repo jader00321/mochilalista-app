@@ -326,14 +326,16 @@ void main() {
       }
     });
 
-    test('3. Auditoría HTML/CSS: ?v=23, grilla 2x2, 9 plantillas, tooltips, sin reset duplicado ni emojis crudos', () {
+    test('3. Auditoría HTML/CSS: ?v=25, grilla 2x2, 9 plantillas, tooltips, sin reset duplicado ni emojis crudos', () {
       final html = WebBundleLoader.loadHtml();
       final css = WebBundleLoader.loadCss();
       final js = WebBundleLoader.loadJs();
 
-      // Cache bust ?v=23
-      expect(html, contains('href="css/styles.css?v=23"'));
-      expect(html, contains('src="js/admin_app.js?v=23"'));
+      // Cache bust ?v=25 unificado en hojas CSS modulares y JS
+      expect(html, contains('href="css/00_tokens.css?v=25"'));
+      expect(html, contains('href="css/99_print.css?v=25"'));
+      expect(html, contains('src="js/bootstrap.js?v=25"'));
+      expect(html, contains('src="js/modules/settings_core_and_dirty.js?v=25"'));
 
       // Controles nuevos en cabecera y Tab 2/3/4
       expect(html, contains('id="settingsDirtyBadge"'));
@@ -418,6 +420,11 @@ void main() {
         js,
         'function initTheme()',
         '// =================== FASE 1: ARQUITECTURA',
+      );
+      final fmtPlanSection = _extractSection(
+        js,
+        'const CANONICAL_PLAN_LABELS = {',
+        'function normalizePlanToSlug(',
       );
       final waSection = _extractSection(
         js,
@@ -723,6 +730,7 @@ global.fetch = async (url, opts = {}) => {
 };
 
 ${themeSection}
+${fmtPlanSection}
 ${waSection}
 ${canvasSection}
 ${settingsSection}

@@ -466,7 +466,9 @@ runTests().catch(err => {
       final toastEnd = js.indexOf('let confirmCallback = null;');
       final drawerJsStart = js.indexOf('async function openClient360Drawer(');
       final drawerJsEnd = js.indexOf("document.getElementById('drawerEditNotes')", drawerJsStart);
-      final syncJsStart = js.indexOf('function formatLimaDateTime(');
+      final limaJsStart = js.indexOf('function formatLimaDateTime(');
+      final limaJsEnd = js.indexOf('function formatLimaReceiptStamp(');
+      final syncJsStart = js.indexOf('function openSyncReportedModal(');
       final syncJsEnd = js.indexOf('// =================== 3B.');
       final inspJsStart = js.indexOf('// =================== 5. INSPECTOR FORENSE DUAL');
       final inspJsEnd = js.indexOf('// =================== 6. FINANZAS');
@@ -476,6 +478,7 @@ runTests().catch(err => {
       for (final chunk in [
         js.substring(toastStart, toastEnd),
         js.substring(drawerJsStart, drawerJsEnd),
+        js.substring(limaJsStart, limaJsEnd),
         js.substring(syncJsStart, syncJsEnd),
         js.substring(inspJsStart, inspJsEnd),
         js.substring(modalHistStart, modalHistEnd),
@@ -489,18 +492,26 @@ runTests().catch(err => {
 }
 
 String _extractPhase4JsSlices(String js) {
-  final fmtStart = js.indexOf('function formatLimaDateTime(');
+  final limaStart = js.indexOf('function formatLimaDateTime(');
+  final limaEnd = js.indexOf('function formatLimaReceiptStamp(');
+  final rescueStart = js.indexOf('function renderMigrationRescueCard(');
+  final rescueEnd = js.indexOf('function openSyncReportedModal(');
+  final syncStart = js.indexOf('function humanizeSyncFieldValue(');
   final renderDiffEnd = js.indexOf('/**\n * Analizar Ficha de Sincronización');
   final altRenderDiffEnd = js.indexOf('async function analyzeSyncReported(');
   final inspStart = js.indexOf('// =================== 5. INSPECTOR FORENSE DUAL');
   final inspEnd = js.indexOf('// =================== 6. FINANZAS');
 
-  final effectiveSyncEnd = renderDiffEnd > fmtStart ? renderDiffEnd : altRenderDiffEnd;
-  assert(fmtStart > 0 && effectiveSyncEnd > fmtStart);
+  final effectiveSyncEnd = renderDiffEnd > syncStart ? renderDiffEnd : altRenderDiffEnd;
+  assert(limaStart >= 0 && limaEnd > limaStart);
+  assert(rescueStart >= 0 && rescueEnd > rescueStart);
+  assert(syncStart > 0 && effectiveSyncEnd > syncStart);
   assert(inspStart > 0 && inspEnd > inspStart);
 
   return [
-    js.substring(fmtStart, effectiveSyncEnd),
+    js.substring(limaStart, limaEnd),
+    js.substring(rescueStart, rescueEnd),
+    js.substring(syncStart, effectiveSyncEnd),
     js.substring(inspStart, inspEnd),
   ].join('\n\n');
 }

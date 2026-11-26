@@ -21,7 +21,26 @@ class HtmlTemplateAssembler {
     return _expandContent(
       rawIndex,
       webRootCanon: rootCanon,
-      visited: {PathSecurity.cacheKeyForPath(PathSecurity.canonicalizePath(indexFile.path))},
+      visited: {
+        PathSecurity.cacheKeyForPath(PathSecurity.canonicalizePath(indexFile.path))
+      },
+      depth: 0,
+    );
+  }
+
+  /// Variante síncrona compartida para pruebas de unidad (`WebBundleLoader.loadHtml()`).
+  static String? assembleSync(String webRoot) {
+    final rootCanon = PathSecurity.canonicalizePath(webRoot);
+    final indexFile = File('$rootCanon${Platform.pathSeparator}index.html');
+    if (!indexFile.existsSync()) return null;
+
+    final rawIndex = indexFile.readAsStringSync();
+    return _expandContentSync(
+      rawIndex,
+      webRootCanon: rootCanon,
+      visited: {
+        PathSecurity.cacheKeyForPath(PathSecurity.canonicalizePath(indexFile.path))
+      },
       depth: 0,
     );
   }
@@ -48,12 +67,8 @@ class HtmlTemplateAssembler {
       buffer.write(template.substring(cursor, match.start));
       cursor = match.end;
 
-      final rawRel = (match.group(1) ?? '').trim();
-      final resolvedPath = _resolveSafePartialPath(webRootCanon, rawRel);
-      final canonKey = PathSecurity.cacheKeyForPath(resolvedPath);
-      if (visited.contains(canonKey)) {
-        throw FormatException('Inclusión @PARTIAL circular detectada: $rawRel');
-      }
+      final (:resolvedPath, :canonKey) =
+          _preparePartialTarget(webRootCanon, match.group(1) ?? '', visited);
 
       final partialFile = File(resolvedPath);
       if (!await partialFile.exists()) {
@@ -76,6 +91,68 @@ class HtmlTemplateAssembler {
 
     buffer.write(template.substring(cursor));
     return buffer.toString();
+  }
+
+  static String _expandContentSync(
+    String template, {
+    required String webRootCanon,
+    required Set<String> visited,
+    required int depth,
+  }) {
+    if (depth > 8) {
+      throw const FormatException(
+        'Profundidad máxima de inclusión @PARTIAL excedida.',
+      );
+    }
+
+    final matches = _partialRegex.allMatches(template).toList();
+    if (matches.isEmpty) return template;
+
+    final buffer = StringBuffer();
+    int cursor = 0;
+
+    for (final match in matches) {
+      buffer.write(template.substring(cursor, match.start));
+      cursor = match.end;
+
+      final (:resolvedPath, :canonKey) =
+          _preparePartialTarget(webRootCanon, match.group(1) ?? '', visited);
+
+      final partialFile = File(resolvedPath);
+      if (!partialFile.existsSync()) {
+        throw FileSystemException(
+          'Archivo @PARTIAL no encontrado',
+          resolvedPath,
+        );
+      }
+
+      final partialContent = partialFile.readAsStringSync();
+      final nextVisited = <String>{...visited, canonKey};
+      final expanded = _expandContentSync(
+        partialContent,
+        webRootCanon: webRootCanon,
+        visited: nextVisited,
+        depth: depth + 1,
+      );
+      buffer.write(expanded);
+    }
+
+    buffer.write(template.substring(cursor));
+    return buffer.toString();
+  }
+
+  static ({String resolvedPath, String canonKey}) _preparePartialTarget(
+    String webRootCanon,
+    String rawGroup,
+    Set<String> visited,
+  ) {
+    final rawRel = rawGroup.trim();
+    final resolvedPath = _resolveSafePartialPath(webRootCanon, rawRel);
+    final canonKey = PathSecurity.cacheKeyForPath(resolvedPath);
+    if (visited.contains(canonKey)) {
+      throw FormatException('Inclusión @PARTIAL circular detectada: $rawRel');
+    }
+    return (resolvedPath: resolvedPath, canonKey: canonKey);
   }
 
   static String _resolveSafePartialPath(String webRootCanon, String rawRel) {

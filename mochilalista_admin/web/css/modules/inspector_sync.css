@@ -1,0 +1,574 @@
+/* === LAYER: css/modules/inspector_sync.css === */
+
+/* Inspector y Auditoría */
+.inspect-field-card {
+  background: var(--bg-hover);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  padding: 0.75rem 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.inspect-field-label {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+
+.inspect-field-val {
+  font-size: 0.95rem;
+  color: var(--text-primary);
+  font-weight: 600;
+  word-break: break-all;
+}
+
+.inspect-field-val.mono {
+  font-family: var(--font-mono);
+}
+
+/* Zona de Drag & Drop para Lector Óptico de QR en Inspector */
+.qr-optical-drop-zone {
+  border: 2px dashed rgba(37, 99, 235, 0.4);
+  border-radius: 12px;
+  padding: 1.25rem 1rem;
+  text-align: center;
+  background: rgba(37, 99, 235, 0.04);
+  cursor: pointer;
+  transition: all 0.25s ease;
+  margin-bottom: 1rem;
+}
+
+.qr-optical-drop-zone:hover,
+.qr-optical-drop-zone.dragover {
+  border-color: var(--primary);
+  background: rgba(37, 99, 235, 0.1);
+}
+
+/* Tabla Unificada de Claims en el Inspector */
+.claims-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.84rem;
+  margin-top: 0.75rem;
+}
+
+.claims-table th,
+.claims-table td {
+  padding: 0.6rem 0.8rem;
+  border-bottom: 1px solid var(--border-color);
+  text-align: left;
+}
+
+.claims-table th {
+  background-color: rgba(255, 255, 255, 0.02);
+  color: var(--text-secondary);
+  font-weight: 700;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+}
+
+.claims-compact-key {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  color: var(--primary);
+  background: rgba(37, 99, 235, 0.1);
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+/* ==========================================================================
+   FASE 4 PLAN 19: SINCRONIZACIÓN OFFLINE (.mlsync / MLS1) Y RESCATE MIGRACIÓN
+   ========================================================================== */
+
+/* Zona de Drag & Drop para archivos .mlsync */
+.sync-drop-zone {
+  border: 2px dashed rgba(37, 99, 235, 0.4);
+  border-radius: 12px;
+  padding: 1.25rem 1rem;
+  text-align: center;
+  background: rgba(37, 99, 235, 0.04);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  user-select: none;
+}
+
+.sync-drop-zone:hover,
+.sync-drop-zone.dragover {
+  border-color: var(--primary);
+  background: rgba(37, 99, 235, 0.1);
+}
+
+/* Sello de Integridad HMAC-SHA256 */
+.sync-hmac-badge {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.75rem 1rem;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.sync-hmac-badge.valid {
+  background: rgba(16, 185, 129, 0.12);
+  border: 1px solid rgba(16, 185, 129, 0.35);
+  color: #10b981;
+}
+
+.sync-hmac-badge.invalid {
+  background: rgba(239, 68, 68, 0.12);
+  border: 1px solid rgba(239, 68, 68, 0.35);
+  color: #ef4444;
+}
+
+.sync-hmac-icon {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+}
+
+/* Tarjeta Destacada de Rescate 1-Clic PENDIENTE_MIGRACION */
+.sync-migration-rescue-card {
+  background: rgba(245, 158, 11, 0.08);
+  border: 1.5px solid rgba(245, 158, 11, 0.4);
+  border-radius: 10px;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.sync-rescue-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: #f59e0b;
+  font-weight: 700;
+  font-size: 0.95rem;
+}
+
+.sync-rescue-body {
+  font-size: 0.84rem;
+  color: var(--text-primary);
+  line-height: 1.45;
+}
+
+.sync-rescue-hw-flow {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0.4rem 0;
+  font-family: var(--font-mono, monospace);
+  font-weight: 700;
+  font-size: 0.9rem;
+}
+
+.sync-rescue-hw-old {
+  color: var(--text-muted);
+  text-decoration: line-through;
+}
+
+.sync-rescue-hw-arrow {
+  color: #f59e0b;
+}
+
+.sync-rescue-hw-new {
+  color: var(--primary);
+  background: rgba(37, 99, 235, 0.15);
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+/* Tabla Comparativa: Antes (Admin) -> Real (Celular) */
+.sync-diff-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.82rem;
+  margin-top: 0.5rem;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid var(--border-color);
+}
+
+.sync-diff-table th {
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  font-weight: 700;
+  padding: 0.5rem 0.75rem;
+  text-align: left;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.sync-diff-table td {
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid var(--border-color);
+  color: var(--text-primary);
+}
+
+.sync-diff-table tr:last-child td {
+  border-bottom: none;
+}
+
+.sync-diff-row-changed {
+  background: rgba(37, 99, 235, 0.05);
+}
+
+.sync-diff-before {
+  color: var(--text-muted);
+  font-family: var(--font-mono, monospace);
+}
+
+.sync-diff-after {
+  color: var(--primary);
+  font-weight: 700;
+  font-family: var(--font-mono, monospace);
+}
+
+.sync-diff-badge-changed {
+  display: inline-block;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  background: rgba(37, 99, 235, 0.15);
+  color: var(--primary);
+}
+
+.sync-diff-badge-same {
+  display: inline-block;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+
+/* Banner de Alerta Anti-Sobreescritura */
+.sync-stale-banner {
+  background: rgba(245, 158, 11, 0.1);
+  border: 1px solid rgba(245, 158, 11, 0.4);
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+  color: var(--text-primary);
+  font-size: 0.84rem;
+}
+
+.sync-stale-banner strong {
+  color: #f59e0b;
+}
+
+/* Tarjeta de Coincidencia de Cliente en Global Sync */
+.sync-client-match-card {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  padding: 0.85rem 1rem;
+}
+
+/* ========================================================
+   PLAN MAESTRO 22 - FASE 4: SYNC SIN CAMBIOS, INSPECTOR E HISTORIAL
+   ======================================================== */
+.sync-all-unchanged-banner {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-bottom: 0.75rem;
+  padding: 0.7rem 0.95rem;
+  border-radius: 8px;
+  background: rgba(16, 185, 129, 0.12);
+  border: 1px solid rgba(16, 185, 129, 0.35);
+  color: #34d399;
+  font-size: 0.84rem;
+  font-weight: 600;
+}
+
+.sync-diff-delta-pill {
+  display: inline-block;
+  margin-left: 0.35rem;
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-size: 0.71rem;
+  font-weight: 700;
+  background: rgba(139, 92, 246, 0.15);
+  color: #a78bfa;
+}
+
+.inspector-actions-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin-top: 0.75rem;
+  padding-top: 0.65rem;
+  border-top: 1px solid rgba(37, 99, 235, 0.2);
+}
+
+.inspector-history-panel {
+  margin-top: 1.25rem;
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  background: var(--bg-secondary);
+  overflow: hidden;
+}
+
+.inspector-history-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.7rem 0.95rem;
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  list-style: none;
+  user-select: none;
+}
+
+.inspector-history-summary::-webkit-details-marker {
+  display: none;
+}
+
+.inspector-history-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  padding: 0 0.85rem 0.85rem 0.85rem;
+}
+
+.inspector-history-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  padding: 0.5rem 0.7rem;
+  border-radius: 8px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  cursor: pointer;
+  transition: border-color 0.16s ease, background 0.16s ease;
+  text-align: left;
+  width: 100%;
+  color: var(--text-primary);
+}
+
+.inspector-history-item:hover {
+  border-color: var(--primary);
+  background: var(--bg-hover);
+}
+
+/* ========================================================
+   PLAN MAESTRO 23.5 - FASE 2: INSPECTOR TRI-PROTOCOLO MLC1 Y GUÍA VISUAL
+   ======================================================== */
+.badge-mlc1 {
+  background-color: rgba(20, 184, 166, 0.16);
+  color: #2dd4bf;
+  border: 1px solid rgba(20, 184, 166, 0.4);
+  font-family: var(--font-mono);
+}
+
+.inspector-protocol-guide {
+  margin-bottom: 1.25rem;
+  padding: 1rem 1.1rem;
+  border-radius: 12px;
+  border: 1px solid rgba(59, 130, 246, 0.28);
+  background: rgba(15, 23, 42, 0.45);
+}
+
+.inspector-guide-intro {
+  font-size: 0.84rem;
+  line-height: 1.48;
+  color: var(--text-secondary);
+  margin-bottom: 0.85rem;
+}
+
+.inspector-guide-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 0.85rem;
+  margin-bottom: 0.9rem;
+}
+
+.inspector-guide-card {
+  padding: 0.85rem 0.95rem;
+  border-radius: 10px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-secondary);
+}
+
+.inspector-guide-card.tone-ml9 {
+  border-top: 3px solid #6366f1;
+}
+
+.inspector-guide-card.tone-mls1 {
+  border-top: 3px solid #3b82f6;
+}
+
+.inspector-guide-card.tone-mlc1 {
+  border-top: 3px solid #14b8a6;
+}
+
+.inspector-guide-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.45rem;
+}
+
+.inspector-guide-dir {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--text-muted);
+}
+
+.inspector-guide-card h4 {
+  margin: 0 0 0.45rem 0;
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.inspector-guide-card ul {
+  margin: 0;
+  padding-left: 1.05rem;
+  font-size: 0.79rem;
+  line-height: 1.45;
+  color: var(--text-secondary);
+  display: flex;
+  flex-direction: column;
+  gap: 0.28rem;
+}
+
+.inspector-guide-tools {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 0.55rem 0.95rem;
+  padding-top: 0.75rem;
+  border-top: 1px dashed var(--border-color);
+}
+
+.inspector-guide-tool-item {
+  font-size: 0.78rem;
+  line-height: 1.45;
+  color: var(--text-secondary);
+}
+
+.mlc1-audit-guidance-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.65rem;
+  padding: 0.85rem 1rem;
+  border-radius: 10px;
+  border: 1px solid var(--border-color);
+  margin-bottom: 1rem;
+  font-size: 0.84rem;
+  line-height: 1.45;
+}
+
+.mlc1-audit-guidance-banner.is-current {
+  background: rgba(16, 185, 129, 0.11);
+  border-color: rgba(16, 185, 129, 0.35);
+  color: #34d399;
+}
+
+.mlc1-audit-guidance-banner.is-superseded {
+  background: rgba(245, 158, 11, 0.12);
+  border-color: rgba(245, 158, 11, 0.38);
+  color: #fbbf24;
+}
+
+.mlc1-audit-guidance-banner.is-ahead {
+  background: rgba(59, 130, 246, 0.12);
+  border-color: rgba(59, 130, 246, 0.38);
+  color: #60a5fa;
+}
+
+.mlc1-audit-guidance-banner.is-invalid {
+  background: rgba(239, 68, 68, 0.13);
+  border-color: rgba(239, 68, 68, 0.42);
+  color: #f87171;
+}
+
+.inspect-mlc1-meta-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.inspect-mlc1-meta-card {
+  padding: 0.75rem 0.9rem;
+  border-radius: 10px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.inspect-mlc1-meta-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--text-muted);
+}
+
+.inspect-mlc1-meta-val {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.inspect-mlc1-meta-sub {
+  font-size: 0.74rem;
+  color: var(--text-secondary);
+}
+
+.inspect-mlc1-channels-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 0.65rem;
+  margin-top: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.inspect-mlc1-channel-card {
+  padding: 0.7rem 0.85rem;
+  border-radius: 9px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-secondary);
+  font-size: 0.8rem;
+}
+
+.inspect-mlc1-channel-card.has-diff {
+  border-color: rgba(245, 158, 11, 0.45);
+}
+
+.inspect-mlc1-diagnostic-box {
+  margin-top: 0.9rem;
+  padding: 0.85rem 0.95rem;
+  border-radius: 10px;
+  border: 1px dashed rgba(239, 68, 68, 0.45);
+  background: rgba(239, 68, 68, 0.06);
+}
+
+.inspect-mlc1-diagnostic-pre {
+  margin: 0.5rem 0 0 0;
+  padding: 0.65rem 0.75rem;
+  border-radius: 8px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  max-height: 220px;
+  overflow: auto;
+  color: var(--text-secondary);
+}

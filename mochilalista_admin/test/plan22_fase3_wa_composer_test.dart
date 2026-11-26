@@ -77,7 +77,11 @@ void main() {
       expect(cssWaSection, contains('max-width: 760px'));
       expect(cssWaSection, contains('.wa-insert-chip.active'));
       expect(cssWaSection, contains('#25d366'));
-      expect(cssWaSection, contains('[data-theme="light"] .wa-insert-chip.active'));
+      expect(css, contains('[data-theme="light"] .wa-insert-chip.active'));
+      expect(
+        css.indexOf('[data-theme="light"] .wa-insert-chip.active'),
+        greaterThan(cssWaStart),
+      );
       expect(cssWaSection, contains('flex-wrap: wrap'));
       expect(cssWaSection, contains('.wa-apk-version-select'));
       expect(cssWaSection, contains('.wa-apk-size-warning'));
@@ -346,23 +350,32 @@ runTests().catch(err => {
 }
 
 String _extractJsSlices(String js) {
+  final fmtPlanStart = js.indexOf('const CANONICAL_PLAN_LABELS = {');
+  final fmtPlanEnd = js.indexOf('function normalizePlanToSlug(');
+  final semverStart = js.indexOf('function compareSemVer(a, b)');
+  final semverEnd = js.indexOf('function getLatestPublishedVersion(');
+  final waCoreStart = js.indexOf('function sanitizeWhatsAppDigits(');
+  final waCoreEnd = js.indexOf('// =================== UTILIDADES QR VECTORIALES');
   final sec3bStart = js.indexOf('// =================== 3B. COMPOSITOR UNIVERSAL DE WHATSAPP');
   final sec4Start = js.indexOf('// =================== 4. RELEASE MANAGER');
   final fmtStart = js.indexOf('function formatApkSizeMb(');
-  final sigEnd = js.indexOf('async function copyPlainTextToClipboard(');
-  final semverStart = js.indexOf('function compareSemVer(a, b)');
-  final semverEnd = js.indexOf('async function loadReleases(');
+  final sigEnd = js.indexOf('/**\n * Carga el catálogo de versiones publicadas');
   final dispatchStart = js.indexOf('function parseApkSizeMbNumber(');
   final dispatchEnd = js.indexOf('function revealCurrentDispatchApkFolder(');
 
+  assert(fmtPlanStart >= 0 && fmtPlanEnd > fmtPlanStart);
+  assert(semverStart >= 0 && semverEnd > semverStart);
+  assert(waCoreStart >= 0 && waCoreEnd > waCoreStart);
   assert(sec3bStart > 0 && sec4Start > sec3bStart);
   assert(fmtStart > 0 && sigEnd > fmtStart);
-  assert(semverStart > 0 && semverEnd > semverStart);
   assert(dispatchStart > 0 && dispatchEnd > dispatchStart);
 
   return [
-    js.substring(fmtStart, sigEnd),
+    'let currentWaComposerClientId = null;',
+    js.substring(fmtPlanStart, fmtPlanEnd),
     js.substring(semverStart, semverEnd),
+    js.substring(waCoreStart, waCoreEnd),
+    js.substring(fmtStart, sigEnd),
     js.substring(sec3bStart, sec4Start),
     js.substring(dispatchStart, dispatchEnd),
   ].join('\n\n');

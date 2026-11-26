@@ -424,6 +424,11 @@ void main() {
       );
 
       // Prueba real en Node.js de openCommercialConfigSyncModal, Dirty Guard y generateMlc1SyncToken
+      final whatsappSection = _extractSection(
+        js,
+        'function sanitizeWhatsAppDigits(',
+        '// =================== UTILIDADES QR',
+      );
       final waSection = _extractSection(
         js,
         '// =================== 3B. COMPOSITOR UNIVERSAL DE WHATSAPP',
@@ -618,6 +623,7 @@ global.fetch = async (url, opts = {}) => {
   return { ok: true, status: 200, json: async () => ({}) };
 };
 
+$whatsappSection
 $waSection
 $settingsSection
 

@@ -1,0 +1,445 @@
+  <!-- CANVAS OCULTO PARA RE-DESCARGAS DE CREDENCIALES HISTÓRICAS -->
+  <canvas id="historyCredentialCanvas" width="900" height="520" style="display:none;"></canvas>
+
+  <!-- MODAL: REGISTRAR CLIENTE (FASE 3: MODELO OFFLINE-FIRST) -->
+  <div class="modal-overlay" id="modalCreateClient">
+    <div class="modal-dialog" style="max-width:720px;">
+      <div class="modal-header">
+        <h3>Registrar Nuevo Cliente</h3>
+        <button class="btn btn-outline btn-sm" onclick="closeModal('modalCreateClient')">✕</button>
+      </div>
+      <div class="modal-body">
+        <form id="formCreateClient" class="form-grid">
+          <!-- SELECTOR DE SITUACIÓN INICIAL -->
+          <div class="form-group" style="grid-column: 1 / -1;">
+            <label for="newClientSituation"><strong>Situación Inicial del Cliente:</strong></label>
+            <select id="newClientSituation" class="form-control-highlight">
+              <option value="PROSPECTO">Prospecto / Por Suscribirse (Aún sin app vinculada)</option>
+              <option value="TRIAL" selected>Trial en Evaluación (App ya instalada en celular)</option>
+              <option value="COMMERCIAL">Cliente con Licencia / Emisión Inmediata (Pago acordado)</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label for="newBizName">Nombre Comercial / Librería: <span class="required-star">*</span></label>
+            <input type="text" id="newBizName" required placeholder="Ej: Librería & Bazar Central">
+          </div>
+          <div class="form-group">
+            <label for="newOwnerName">Nombre del Propietario: <span class="required-star">*</span></label>
+            <input type="text" id="newOwnerName" required placeholder="Ej: Juan Pérez">
+          </div>
+          <div class="form-group">
+            <label for="newDocId">RUC o DNI:</label>
+            <input type="text" id="newDocId" placeholder="Ej: 10458796321">
+          </div>
+          <div class="form-group">
+            <label for="newPhone">Teléfono WhatsApp: <span class="required-star">*</span></label>
+            <input type="text" id="newPhone" required placeholder="Ej: 987654321 o +51987654321">
+            <small class="field-hint" id="hintPhonePreview">Se normalizará automáticamente con prefijo Perú +51</small>
+          </div>
+
+          <!-- HARDWARE ID (DINÁMICO SEGÚN MODO) -->
+          <div class="form-group" id="grpNewDeviceId">
+            <label for="newDeviceId" id="lblNewDeviceId">Hardware ID del Celular (ML-XXXX): <span class="required-star" id="reqStarDeviceId">*</span></label>
+            <input type="text" id="newDeviceId" placeholder="Ej: ML-9K4B" style="font-family:var(--font-mono); text-transform:uppercase;">
+            <small class="field-hint" id="hintDeviceId">Código de 4 caracteres que figura en pantalla de la app.</small>
+          </div>
+
+          <!-- PLAN COMERCIAL (OCULTO EN TRIAL/PROSPECTO) -->
+          <div class="form-group" id="grpNewPlan" style="display:none;">
+            <label for="newPlan">Plan Comercial:</label>
+            <select id="newPlan">
+              <option value="MENSUAL" selected>MENSUAL (30 días — S/ 35.00)</option>
+              <option value="TRIMESTRAL">TRIMESTRAL (90 días — S/ 90.00)</option>
+              <option value="SEMESTRAL">SEMESTRAL (180 días — S/ 160.00)</option>
+              <option value="ANUAL">ANUAL (365 días — S/ 280.00)</option>
+              <option value="PERPETUO_LIBERADO">PERPETUO LIBERADO (S/ 850.00)</option>
+              <option value="EXTENSION_CORTESIA">EXTENSIÓN DE CORTESÍA (7 días — S/ 0.00)</option>
+            </select>
+          </div>
+
+          <!-- DÍAS RESTANTES DE TRIAL (SOLO EN TRIAL) -->
+          <div class="form-group" id="grpTrialDaysRemaining">
+            <label for="newTrialDaysRemaining">Días Restantes en su Celular (Trial):</label>
+            <input type="number" id="newTrialDaysRemaining" value="30" min="1" max="30">
+            <small class="field-hint" id="hintTrialExpires">Vencerá aproximadamente en 30 días.</small>
+          </div>
+
+          <!-- FECHA ESTIMADA DE SEGUIMIENTO (SOLO EN PROSPECTO) -->
+          <div class="form-group" id="grpExpectedSubscriptionDate" style="display:none;">
+            <label for="newExpectedSubscriptionDate">Fecha Estimada de Seguimiento / Suscripción:</label>
+            <input type="date" id="newExpectedSubscriptionDate">
+            <small class="field-hint">Fecha límite para contactar o cerrar acuerdo comercial.</small>
+          </div>
+
+          <!-- FECHA DE PRÓXIMO SEGUIMIENTO -->
+          <div class="form-group" id="grpNewFollowupDate">
+            <label for="newFollowupDate">Fecha de Próximo Seguimiento (Opcional):</label>
+            <input type="date" id="newFollowupDate">
+            <small class="field-hint">Agenda la próxima fecha de contacto comercial o post-venta.</small>
+          </div>
+
+          <!-- MODELO DEL CELULAR (OPCIONAL) -->
+          <div class="form-group" id="grpNewDeviceModel">
+            <label for="newDeviceModel">Modelo del Celular (Opcional):</label>
+            <input type="text" id="newDeviceModel" placeholder="Ej: Samsung Galaxy A54 5G">
+            <small class="field-hint">Referencia física del equipo del cliente.</small>
+          </div>
+
+          <!-- VERSIÓN DE APP INSTALADA (PLAN 19: DINÁMICA SEGÚN ÚLTIMO RELEASE) -->
+          <div class="form-group" id="grpInstalledVersion">
+            <label for="newInstalledVersion">Versión de App Instalada:</label>
+            <input type="text" id="newInstalledVersion" placeholder="Última versión oficial">
+            <small class="field-hint">Versión APK reportada o instalada (autocompleta con el último lanzamiento).</small>
+          </div>
+
+          <!-- BLOQUE DE CRÉDITOS IA TRANSPARENTE -->
+          <div class="form-group" id="grpAiReported">
+            <label for="newAiReportedBalance">Saldo IA actual en celular (Informativo):</label>
+            <input type="number" id="newAiReportedBalance" value="50" min="0">
+            <small class="field-hint">Referencia de escaneos que el cliente ya tiene en su celular.</small>
+          </div>
+
+          <div class="form-group" id="grpAiBonus">
+            <label for="newAiPendingBonus">Bono IA adicional a entregar en token:</label>
+            <input type="number" id="newAiPendingBonus" value="0" min="0">
+            <small class="field-hint">Créditos extra acordados pendientes de emitir en token.</small>
+          </div>
+
+          <!-- AVISO CONTEXTUAL DE CRÉDITOS IA OFFLINE -->
+          <div class="form-group notice-offline-ai" id="noticeAiBonus" style="grid-column: 1 / -1; display:none;">
+            <div class="notice-box">
+              <svg class="notice-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                <circle cx="12" cy="12" r="10"/>
+                <line x1="12" y1="16" x2="12" y2="12"/>
+                <line x1="12" y1="8" x2="12.01" y2="8"/>
+              </svg>
+              <div class="notice-text">
+                <strong>Atención arquitectura 100% Offline:</strong> Los créditos extra solo ingresarán al celular cuando emitas y el cliente canjee un código Ed25519 (ML9-...). Usa <em>"Guardar y Emitir Licencia"</em> para generar el token de inmediato.
+              </div>
+            </div>
+          </div>
+
+          <div class="form-group" style="grid-column: 1 / -1;">
+            <label for="newNotes">Notas del Cliente / Acuerdos Comerciales:</label>
+            <textarea id="newNotes" rows="2" placeholder="Observaciones, acuerdos de pago, fecha de próximo contacto, etc."></textarea>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer" style="display:flex; justify-content:space-between; width:100%;">
+        <button type="button" class="btn btn-outline" onclick="closeModal('modalCreateClient')">Cancelar</button>
+        <div style="display:flex; gap:0.5rem;">
+          <button type="button" class="btn btn-primary" id="btnSubmitCreateClient">Guardar Cliente</button>
+          <button type="button" class="btn btn-success" id="btnSubmitAndEmit" title="Guardar cliente y emitir su primera licencia de inmediato">
+            <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+            Guardar y Emitir Licencia
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: EDITAR CLIENTE (CONTROL TOTAL) -->
+  <div class="modal-overlay" id="modalEditClient">
+    <div class="modal-dialog" style="max-width:760px;">
+      <div class="modal-header">
+        <h3>Editar Cliente (Control Total & Configuración Criptográfica)</h3>
+        <button class="btn btn-outline btn-sm" onclick="closeModal('modalEditClient')">✕</button>
+      </div>
+      <div class="modal-body">
+        <form id="formEditClient" class="form-grid">
+          <input type="hidden" id="editClientId">
+          <div class="form-group">
+            <label for="editBizName">Nombre Comercial / Negocio:</label>
+            <input type="text" id="editBizName" required>
+          </div>
+          <div class="form-group">
+            <label for="editOwnerName">Nombre del Propietario:</label>
+            <input type="text" id="editOwnerName" required>
+          </div>
+          <div class="form-group">
+            <label for="editDocId">RUC o DNI:</label>
+            <input type="text" id="editDocId">
+          </div>
+          <div class="form-group">
+            <label for="editPhone">Teléfono WhatsApp (+51):</label>
+            <input type="text" id="editPhone" required>
+          </div>
+          <div class="form-group">
+            <label for="editDeviceId">Hardware ID del Teléfono (ANDROID_ID):</label>
+            <input type="text" id="editDeviceId" required style="font-family:var(--font-mono); text-transform:uppercase;">
+          </div>
+          <div class="form-group">
+            <label for="editInstalledVersion">Versión Instalada:</label>
+            <input type="text" id="editInstalledVersion" placeholder="Ej: 9.24.0">
+          </div>
+          <div class="form-group">
+            <label for="editLicenseType">Plan de Licencia:</label>
+            <select id="editLicenseType">
+              <option value="TRIAL">TRIAL (30 días)</option>
+              <option value="MENSUAL">MENSUAL</option>
+              <option value="TRIMESTRAL">TRIMESTRAL</option>
+              <option value="SEMESTRAL">SEMESTRAL</option>
+              <option value="ANUAL">ANUAL</option>
+              <option value="PERPETUO_LIBERADO">PERPETUO LIBERADO</option>
+              <option value="PASE_ACTUALIZACION_ANUAL">PASE ACTUALIZACIÓN ANUAL</option>
+              <option value="EXTENSION_CORTESIA">EXTENSIÓN CORTESÍA</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="editLicenseStatus">Estado de Licencia:</label>
+            <select id="editLicenseStatus">
+              <option value="ACTIVE">ACTIVE (Activa)</option>
+              <option value="EXPIRING_SOON">EXPIRING_SOON (Por Vencer ≤ 7 días)</option>
+              <option value="EXPIRED">EXPIRED (Vencida)</option>
+              <option value="PERPETUAL">PERPETUAL (Perpetua)</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="editLicenseExpires">Fecha Exacta de Expiración:</label>
+            <input type="date" id="editLicenseExpires">
+          </div>
+          <div class="form-group">
+            <label for="editUpdatesUntil">Ventana de Actualizaciones (Updates):</label>
+            <input type="date" id="editUpdatesUntil">
+          </div>
+          <div class="form-group">
+            <label for="editAiExtraCredits">Bolsa de Créditos IA Extra (+150):</label>
+            <input type="number" id="editAiExtraCredits" min="0">
+          </div>
+          <div class="form-group">
+            <label for="editNextNonce">Contador Nonce Anti-Replay:</label>
+            <input type="number" id="editNextNonce" min="1">
+          </div>
+          <div class="form-group" style="grid-column: 1 / -1;">
+            <label for="editNotes">Notas y Acuerdos:</label>
+            <textarea id="editNotes" rows="2"></textarea>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer" style="display:flex; justify-content:space-between; width:100%;">
+        <button type="button" class="btn btn-outline" style="color:var(--danger); border-color:var(--danger);" id="btnDeleteClient">
+          <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+          Eliminar Cliente
+        </button>
+        <div style="display:flex; gap:0.5rem;">
+          <button class="btn btn-outline" onclick="closeModal('modalEditClient')">Cancelar</button>
+          <button class="btn btn-primary" id="btnSubmitEditClient">Guardar Cambios</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: HISTORIAL DETALLADO MULTI-PESTAÑA (PAGOS & HARDWARE) -->
+  <div class="modal-overlay" id="modalClientHistory">
+    <div class="modal-dialog" style="max-width:880px;">
+      <div class="modal-header">
+        <h3 id="historyModalTitle">Historial Comercial del Cliente</h3>
+        <button class="btn btn-outline btn-sm" onclick="closeModal('modalClientHistory')">✕</button>
+      </div>
+      <div class="modal-body" style="display:flex; flex-direction:column; gap:1.25rem;">
+        <div id="historyClientSummary" style="padding:0.75rem 1rem; background:rgba(37,99,235,0.08); border:1px solid rgba(37,99,235,0.2); border-radius:10px; font-size:0.88rem;"></div>
+
+        <!-- TABS INTERNAS DEL HISTORIAL -->
+        <div class="modal-tab-bar">
+          <button class="modal-tab-btn active" id="tabBtnHistoryPayments" onclick="switchHistoryTab('payments')">
+            Pagos y Licencias Emitidas
+          </button>
+          <button class="modal-tab-btn" id="tabBtnHistoryHardware" onclick="switchHistoryTab('hardware')">
+            Historial de Hardware y Migraciones
+          </button>
+        </div>
+
+        <!-- TAB INTERNA 1: PAGOS Y LICENCIAS -->
+        <div id="historyViewPayments" style="display:flex; flex-direction:column; gap:1.25rem;">
+          <div>
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.5rem;">
+              <h4 style="font-size:0.95rem; font-weight:700; color:var(--text-primary);">Pagos Registrados</h4>
+              <button class="btn btn-outline btn-sm" id="btnOpenManualPayment">
+                <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                Registrar Pago Manual
+              </button>
+            </div>
+            <div class="table-responsive" style="max-height:180px; overflow-y:auto;">
+              <table class="data-table" style="font-size:0.82rem;">
+                <thead>
+                  <tr>
+                    <th>Fecha</th>
+                    <th>Monto</th>
+                    <th>Plan</th>
+                    <th>Medio</th>
+                    <th>Referencia</th>
+                    <th>Acción</th>
+                  </tr>
+                </thead>
+                <tbody id="historyPaymentsBody">
+                  <tr><td colspan="6" style="text-align:center;">Sin pagos registrados</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div>
+            <h4 style="font-size:0.95rem; font-weight:700; margin-bottom:0.5rem; color:var(--text-primary);">Códigos Ed25519 Emitidos</h4>
+            <div class="table-responsive" style="max-height:180px; overflow-y:auto;">
+              <table class="data-table" style="font-size:0.82rem;">
+                <thead>
+                  <tr>
+                    <th>Fecha</th>
+                    <th>Plan</th>
+                    <th>Días</th>
+                    <th>Device ID</th>
+                    <th>Token Generado</th>
+                    <th>Acciones</th>
+                  </tr>
+                </thead>
+                <tbody id="historyCodesBody">
+                  <tr><td colspan="6" style="text-align:center;">Sin códigos emitidos</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- TAB INTERNA 2: HARDWARE Y MIGRACIONES -->
+        <div id="historyViewHardware" style="display:none; flex-direction:column; gap:1rem;">
+          <div id="historyCurrentDeviceBox" style="padding:0.75rem 1rem; background:rgba(16,185,129,0.08); border:1px solid rgba(16,185,129,0.25); border-radius:10px;"></div>
+          <h4 style="font-size:0.95rem; font-weight:700; color:var(--text-primary);">Registro Histórico de Teléfonos Vinculados</h4>
+          <div class="table-responsive" style="max-height:220px; overflow-y:auto;">
+            <table class="data-table" style="font-size:0.82rem;">
+              <thead>
+                <tr>
+                  <th>Fecha de Migración</th>
+                  <th>Device ID Anterior</th>
+                  <th>Nuevo Device ID</th>
+                  <th>Tarifa</th>
+                  <th>Medio</th>
+                  <th>Motivo de Cambio</th>
+                </tr>
+              </thead>
+              <tbody id="historyHardwareBody">
+                <tr><td colspan="6" style="text-align:center;">Sin migraciones registradas para este cliente.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-primary" onclick="closeModal('modalClientHistory')">Cerrar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: REGISTRAR / EDITAR PAGO MANUAL (FASE 5) -->
+  <div class="modal-overlay" id="modalManualPayment">
+    <div class="modal-dialog" style="max-width: 580px;">
+      <div class="modal-header">
+        <div style="display:flex; align-items:center; gap:0.5rem;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" style="width:20px; height:20px; color:var(--primary);"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
+          <h3 id="manualPayTitle" style="margin:0;">Registrar Pago</h3>
+        </div>
+        <button class="btn btn-outline btn-sm" onclick="closeModal('modalManualPayment')">✕</button>
+      </div>
+      <div class="modal-body" style="padding: 1.25rem 1.5rem 1.5rem 1.5rem;">
+        <!-- Tarjeta Resumen del Cliente en Cabecera -->
+        <div class="modal-client-summary-card" id="manualPayClientSummary" style="margin-bottom:1rem; padding:0.75rem 1rem; border-radius:10px; background:var(--bg-secondary); border:1px solid var(--border-color);">
+          <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:0.5rem;">
+            <div>
+              <div style="display:flex; align-items:center; gap:0.5rem;">
+                <strong id="manualPayBizName" style="font-size:1.05rem;">-</strong>
+                <span id="manualPayStatusBadge" class="badge badge-green">Activa</span>
+              </div>
+              <div style="font-size:0.83rem; color:var(--text-secondary); margin-top:3px;">
+                <span id="manualPayOwnerName">-</span> • <code id="manualPayDevId" style="font-family:var(--font-mono); color:var(--primary); font-weight:700;">-</code>
+              </div>
+            </div>
+            <div style="text-align:right;">
+              <div style="font-size:0.75rem; text-transform:uppercase; color:var(--text-muted); font-weight:600;">Vencimiento Vigente</div>
+              <div id="manualPayExpiresText" style="font-size:0.88rem; font-weight:600; color:var(--text-primary);">-</div>
+              <div style="font-size:0.75rem; color:var(--text-muted); margin-top:2px;">Recaudado: <strong id="manualPayTotalPaid" style="color:var(--success);">S/ 0.00</strong></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- AVISO DE COMPROBANTE EMITIDO PREVIAMENTE (FASE 4) -->
+        <div id="manualPayReceiptNotice" class="receipt-notice-banner" style="display:none; margin-bottom:1rem; padding:0.75rem 1rem; border-radius:10px; background:rgba(37,99,235,0.08); border:1px solid rgba(37,99,235,0.25);">
+          <div style="display:flex; align-items:flex-start; gap:0.6rem;">
+            <svg style="width:18px; height:18px; color:var(--primary); flex-shrink:0; margin-top:2px;" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+            <div style="font-size:0.83rem; line-height:1.45; color:var(--text-primary);">
+              Este pago ya cuenta con comprobante emitido (<strong id="manualPayReceiptNumberBadge" style="font-family:var(--font-mono); color:var(--primary);">BOL-0001</strong>). Al guardar los cambios se actualizarán los datos reflejados en el comprobante preservando exactamente el mismo correlativo.
+            </div>
+          </div>
+        </div>
+
+        <form id="formManualPayment" class="form-grid">
+          <input type="hidden" id="manualPayClientId">
+          <input type="hidden" id="manualPayId">
+          <input type="hidden" id="manualPayPlan">
+
+          <div class="form-group" style="grid-column: 1 / -1;">
+            <label for="manualPayPlanPreset">Concepto / Plan Oficial:</label>
+            <select id="manualPayPlanPreset" style="width: 100%;">
+              <option value="MENSUAL" data-price="35.00">Plan Mensual (S/ 35.00)</option>
+              <option value="TRIMESTRAL" data-price="90.00">Plan Trimestral (S/ 90.00)</option>
+              <option value="SEMESTRAL" data-price="160.00">Plan Semestral (S/ 160.00)</option>
+              <option value="ANUAL" data-price="280.00">Plan Anual (S/ 280.00)</option>
+              <option value="PERPETUO_LIBERADO" data-price="850.00">Licencia Perpetua Liberada (S/ 850.00)</option>
+              <option value="PASE_ACTUALIZACION_ANUAL" data-price="150.00">Pase Anual de Updates (S/ 150.00)</option>
+              <option value="RECARGA_IA_150" data-price="20.00">Bolsa Extra IA (+150 escaneos) (S/ 20.00)</option>
+              <option value="BONO_IA_PERSONALIZADO" data-price="0.00">Bono IA Personalizado (S/ 0.00)</option>
+              <option value="SERVICIO_MIGRACION" data-price="40.00">Servicio Técnico de Migración de Celular (S/ 40.00)</option>
+              <option value="EXTENSION_CORTESIA" data-price="0.00">Extensión de Cortesía (S/ 0.00)</option>
+              <option value="ABONO_PARCIAL" data-price="0.00">Abono / Pago Parcial</option>
+              <option value="CUSTOM">Otro Concepto Personalizado...</option>
+            </select>
+            <input type="text" id="manualPayCustomConcept" placeholder="Describe el concepto personalizado..." style="display:none; margin-top:0.5rem; width:100%;">
+          </div>
+
+          <div class="form-group">
+            <label for="manualPayAmount">Monto Cobrado (S/):</label>
+            <input type="number" id="manualPayAmount" step="0.01" min="0" required placeholder="35.00">
+          </div>
+
+          <div class="form-group">
+            <label for="manualPayMethod">Medio de Pago:</label>
+            <select id="manualPayMethod">
+              <option value="Yape">Yape</option>
+              <option value="Plin">Plin</option>
+              <option value="Transferencia BCP">Transferencia BCP</option>
+              <option value="Transferencia BBVA / Interbank">Transferencia BBVA / Interbank</option>
+              <option value="Efectivo">Efectivo en Tienda</option>
+              <option value="Otro">Otro</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label for="manualPayRef">N° de Operación / Referencia:</label>
+            <input type="text" id="manualPayRef" placeholder="Ej: Op. 849201">
+          </div>
+
+          <div class="form-group">
+            <label for="manualPayDate">Fecha del Pago:</label>
+            <input type="date" id="manualPayDate">
+          </div>
+
+          <div class="form-group" style="grid-column: 1 / -1;">
+            <label for="manualPayNotes">Notas Adicionales:</label>
+            <textarea id="manualPayNotes" rows="2" placeholder="Detalle contable o acuerdo..."></textarea>
+          </div>
+
+          <div class="checkbox-row-styled" style="grid-column: 1 / -1;">
+            <input type="checkbox" id="manualPayGenerateReceipt" style="width:18px; height:18px; cursor:pointer; accent-color:var(--primary); margin:0;" checked>
+            <label for="manualPayGenerateReceipt" id="manualPayGenerateReceiptLabel" style="margin:0; cursor:pointer; font-size:0.88rem; font-weight:600; color:var(--text-primary); line-height:1.4;">
+              Generar Boleta de Pago al guardar (Abre comprobante BOL-XXXX de inmediato)
+            </label>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-outline" onclick="closeModal('modalManualPayment')">Cancelar</button>
+        <button class="btn btn-primary" id="btnSubmitManualPayment">Guardar Pago</button>
+      </div>
+    </div>
+  </div>
+

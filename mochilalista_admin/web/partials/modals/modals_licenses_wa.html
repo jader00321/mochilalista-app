@@ -1,0 +1,403 @@
+  <!-- MODAL: CONFIRMAR EMISIÓN DE LICENCIA CRIPTOGRÁFICA ED25519 (PLAN 18.5) -->
+  <div class="modal-overlay" id="modalConfirmLicenseEmission" onclick="if(event.target===this) closeModal('modalConfirmLicenseEmission')">
+    <div class="modal-dialog" style="max-width: 580px;">
+      <div class="modal-header">
+        <div style="display:flex; align-items:center; gap:0.5rem;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:20px; height:20px; color:var(--primary);"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          <h3 style="margin:0;">Confirmar Emisión de Licencia Ed25519</h3>
+        </div>
+        <button type="button" class="btn btn-outline btn-sm" onclick="closeModal('modalConfirmLicenseEmission')">&times;</button>
+      </div>
+      <div class="modal-body" style="padding: 1.25rem 1.5rem 1.5rem 1.5rem;">
+        <!-- Vista de Resumen Pre-Emisión -->
+        <div id="confirmEmissionSummaryState">
+          <p style="font-size:0.85rem; color:var(--text-secondary); margin-bottom:1rem; line-height:1.45;">
+            Revisa el resumen técnico y contable antes de firmar con la clave maestra privada Ed25519. Esta acción incrementará el Nonce criptográfico y registrará la emisión en la base de datos.
+          </p>
+
+          <div class="confirm-emission-card">
+            <!-- 1. Cliente y Dispositivo -->
+            <div class="confirm-row">
+              <span class="confirm-label">Cliente / Negocio</span>
+              <span class="confirm-value" id="confirmLicClientName">-</span>
+            </div>
+            <div class="confirm-row">
+              <span class="confirm-label">Titular & Documento</span>
+              <span class="confirm-value" id="confirmLicOwnerDoc">-</span>
+            </div>
+            <div class="confirm-row">
+              <span class="confirm-label">Hardware ID Vinculado</span>
+              <span class="confirm-value"><code id="confirmLicHardwareId" style="font-family:var(--font-mono); font-weight:700; color:var(--primary);">-</code> <small id="confirmLicAppVersion" style="color:var(--text-muted); margin-left:4px;">(v9.34.0)</small></span>
+            </div>
+
+            <div class="confirm-divider"></div>
+
+            <!-- 2. Plan / Modalidad y Beneficios -->
+            <div class="confirm-row">
+              <span class="confirm-label">Plan / Modalidad</span>
+              <span class="confirm-value" id="confirmLicPlanLabel"><strong>-</strong></span>
+            </div>
+            <div class="confirm-row">
+              <span class="confirm-label">Vigencia Proyectada</span>
+              <span class="confirm-value" id="confirmLicExpiration">-</span>
+            </div>
+            <div class="confirm-row">
+              <span class="confirm-label">Créditos IA Celular</span>
+              <span class="confirm-value" id="confirmLicAiCredits" style="color:var(--purple); font-weight:700;">-</span>
+            </div>
+            <div class="confirm-row">
+              <span class="confirm-label">Nonce Criptográfico</span>
+              <span class="confirm-value"><code id="confirmLicNonce" style="font-family:var(--font-mono); font-weight:700;">-</code></span>
+            </div>
+
+            <div class="confirm-divider"></div>
+
+            <!-- 3. Impacto Financiero -->
+            <div class="confirm-row">
+              <span class="confirm-label">Cobro Contable</span>
+              <span class="confirm-value" id="confirmLicFinancial">-</span>
+            </div>
+
+            <!-- 4. Badge de Ajustes Personalizados -->
+            <div id="confirmLicCustomBadgeBox" style="display:none; margin-top:0.75rem; padding:0.6rem 0.8rem; background:rgba(168,85,247,0.1); border:1px solid rgba(168,85,247,0.3); border-radius:8px;">
+              <div style="display:flex; align-items:center; gap:0.4rem; font-size:0.75rem; font-weight:700; color:var(--purple); text-transform:uppercase;">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+                <span>Ajustes Comerciales Personalizados Aplicados</span>
+              </div>
+              <div id="confirmLicCustomDetails" style="font-size:0.8rem; color:var(--text-secondary); margin-top:0.35rem; line-height:1.35;"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Vista Animada de Firma Criptográfica Ed25519 -->
+        <div id="confirmEmissionAnimState" style="display:none; text-align:center; padding:1.75rem 1rem;">
+          <div class="ed25519-shield-anim">
+            <div class="shield-pulse-ring"></div>
+            <svg class="shield-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+              <path d="m9 12 2 2 4-4" id="shieldCheckPath" style="display:none;"/>
+              <circle cx="12" cy="12" r="3" id="shieldKeyHole"/>
+            </svg>
+          </div>
+          <h4 id="confirmEmissionAnimTitle" style="font-size:1.05rem; font-weight:700; color:var(--text-primary); margin-top:1.25rem; margin-bottom:0.35rem;">
+            Validando correlativo Nonce y vinculación de Hardware...
+          </h4>
+          <p id="confirmEmissionAnimSubtitle" style="font-size:0.83rem; color:var(--text-secondary); margin:0;">
+            Sincronizando estado criptográfico seguro con la bóveda
+          </p>
+        </div>
+      </div>
+
+      <div class="modal-footer" id="confirmEmissionFooter" style="display:flex; justify-content:space-between; align-items:center;">
+        <button type="button" class="btn btn-outline" id="btnCancelConfirmEmission" onclick="closeModal('modalConfirmLicenseEmission')">
+          Volver y Corregir
+        </button>
+        <button type="button" class="btn btn-primary" id="btnExecuteConfirmEmission" style="padding:0.65rem 1.25rem;">
+          <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+          Confirmar y Firmar Licencia
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL DE CONFIRMACIÓN PROFESIONAL (REEMPLAZO TOTAL DE WINDOW.CONFIRM) -->
+  <div class="modal-overlay" id="modalConfirm">
+    <div class="modal-dialog" style="max-width:440px;">
+      <div class="modal-header">
+        <h3 id="confirmModalTitle">Confirmar Acción</h3>
+        <button class="btn btn-outline btn-sm" id="btnConfirmClose">✕</button>
+      </div>
+      <div class="modal-body">
+        <p id="confirmModalMessage" style="font-size:0.92rem; color:var(--text-secondary); line-height:1.5;">¿Estás seguro de continuar?</p>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-outline" id="btnConfirmCancel">Cancelar</button>
+        <button class="btn btn-primary" id="btnConfirmOk">Confirmar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: COMPOSITOR UNIVERSAL DE WHATSAPP (FASE 4) -->
+  <div class="modal-overlay" id="modalWaComposer" onclick="if(event.target===this) closeModal('modalWaComposer')">
+    <div class="modal-dialog modal-wa-dialog">
+      <div class="modal-header">
+        <div style="display:flex; align-items:center; gap:0.6rem;">
+          <div class="wa-composer-icon-bubble">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" style="width:20px; height:20px; color:#25d366;"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+          </div>
+          <div>
+            <h3 style="margin:0; font-size:1.1rem;">Compositor Universal de WhatsApp</h3>
+            <div style="font-size:0.8rem; color:var(--text-secondary); margin-top:2px;">Envío asistido con plantillas inteligentes y sustitución dinámica</div>
+          </div>
+        </div>
+        <button type="button" class="btn btn-outline btn-sm" onclick="closeModal('modalWaComposer')" title="Cerrar">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+
+      <div class="modal-body" style="display:flex; flex-direction:column; gap:1rem;">
+        <!-- Tarjeta de Identidad del Cliente -->
+        <div class="wa-client-card" id="waClientCard">
+          <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:0.5rem;">
+            <div>
+              <div style="display:flex; align-items:center; gap:0.5rem;">
+                <strong id="waCompBizName" style="font-size:1.05rem;">-</strong>
+                <span id="waCompPlanBadge" class="badge badge-green">Activa</span>
+              </div>
+              <div style="font-size:0.83rem; color:var(--text-secondary); margin-top:3px;">
+                <span id="waCompOwnerName">-</span> • <code id="waCompDeviceId" style="font-family:var(--font-mono); color:var(--primary);">-</code>
+              </div>
+            </div>
+            <div style="text-align:right;">
+              <div style="font-size:0.75rem; color:var(--text-muted); text-transform:uppercase; font-weight:700;">WhatsApp Oficial</div>
+              <div id="waCompPhoneDisplay" style="font-family:var(--font-mono); font-weight:700; color:#25d366; font-size:0.95rem;">-</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Banner de advertencia si teléfono no existe o no es válido -->
+        <div id="waCompPhoneWarning" class="alert-banner warning" style="display:none; padding:0.6rem 0.85rem; font-size:0.82rem; border-radius:8px; align-items:center; gap:0.5rem;">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" style="width:18px; height:18px; flex-shrink:0;"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+          <span><strong>Teléfono no registrado:</strong> Este cliente no tiene un teléfono válido. Puedes redactar y copiar el mensaje, pero para abrir WhatsApp debes actualizar el teléfono en la Ficha 360°.</span>
+        </div>
+
+        <!-- PANEL EXCLUSIVO: DESPACHO ASISTIDO DE APK (PLAN 19 / 22 FASE 3) -->
+        <div id="waApkDispatchPanel" style="display:none; background:var(--bg-secondary); border:1.5px solid var(--border-color); border-radius:10px; padding:0.85rem 1.1rem;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.65rem; flex-wrap:wrap; gap:0.5rem;">
+            <div style="display:flex; align-items:center; gap:0.5rem; flex-wrap:wrap;">
+              <svg class="icon-svg" width="20" height="20" style="color:var(--primary); width:20px; height:20px;" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
+              <strong id="waApkVersionTitle" style="font-size:0.95rem; color:var(--text-primary);">Despacho de APK: v9.40.0 (Build 84)</strong>
+            </div>
+            <div style="display:flex; align-items:center; gap:0.5rem; flex-wrap:wrap;">
+              <div class="wa-apk-version-selector-wrap">
+                <label for="waApkVersionSelect" class="wa-apk-select-label">Versión:</label>
+                <select id="waApkVersionSelect" class="wa-apk-version-select" onchange="onChangeDispatchReleaseVersion(this.value)"></select>
+              </div>
+              <div id="waApkSigBadge" style="display:flex; align-items:center; gap:0.35rem;"></div>
+            </div>
+          </div>
+
+          <div id="waApkDetailsRow" style="font-size:0.8rem; color:var(--text-secondary); margin-bottom:0.75rem; display:flex; gap:1.25rem; flex-wrap:wrap;">
+            <div>Tamaño: <span id="waApkSizeText" style="font-weight:600; color:var(--text-primary);">-</span></div>
+            <div>Esquema DB: <span id="waApkDbSchema" style="font-weight:600; color:var(--text-primary);">-</span></div>
+            <div>Estado en Disco: <span id="waApkDiskStatus" style="font-weight:600; color:#22c55e;">Verificado</span></div>
+          </div>
+
+          <!-- Aviso informativo límite 100 MB WhatsApp Web vs Desktop -->
+          <div id="waApkSizeWarning" class="wa-apk-size-warning" style="display:none;">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0; margin-top:1px;"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+            <div>
+              <strong>Límite de adjuntos WhatsApp Web (100 MB):</strong> Este binario pesa <span id="waApkWarningSizeLabel">~109 MB</span>. WhatsApp Web limita adjuntos a <strong>100 MB</strong>, mientras <strong>WhatsApp Desktop</strong> permite hasta <strong>2 GB</strong>. <span id="waApkWarningAdvice">Usa WhatsApp Desktop, elige la variante ARM64 Ligero si está disponible o comparte el enlace externo de Drive.</span>
+            </div>
+          </div>
+
+          <div>
+            <label style="display:block; font-size:0.8rem; font-weight:700; margin-bottom:0.4rem; color:var(--text-secondary); text-transform:uppercase;">
+              Variante del Binario a Despachar:
+            </label>
+            <div class="wa-variant-selector-grid" id="waVariantSelectorGrid">
+              <div class="wa-variant-card active" id="waVariantCardUniversal" onclick="setDispatchVariant('universal')">
+                <div class="wa-variant-title">
+                  <svg class="btn-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+                  <span>Universal (~110 MB)</span>
+                </div>
+                <div class="wa-variant-desc" id="waVariantDescUniversal">Compatible con cualquier procesador y celular Android</div>
+              </div>
+              <div class="wa-variant-card" id="waVariantCardArm64" onclick="setDispatchVariant('arm64')">
+                <div class="wa-variant-title">
+                  <svg class="btn-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="4" y="4" width="16" height="16" rx="2" ry="2"/><rect x="9" y="9" width="6" height="6"/><line x1="9" y1="1" x2="9" y2="4"/><line x1="15" y1="1" x2="15" y2="4"/><line x1="9" y1="20" x2="9" y2="23"/><line x1="15" y1="20" x2="15" y2="23"/><line x1="20" y1="9" x2="23" y2="9"/><line x1="20" y1="14" x2="23" y2="14"/><line x1="1" y1="9" x2="4" y2="9"/><line x1="1" y1="14" x2="4" y2="14"/></svg>
+                  <span>ARM64 Ligero (~30 MB)</span>
+                </div>
+                <div class="wa-variant-desc" id="waVariantDescArm64">Rápido para transferir por WhatsApp (celulares modernos)</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Confirmación post-copia con botón directo de re-copia -->
+          <div id="waApkCopySuccessHint" class="wa-apk-copy-success-hint" style="display:none;">
+            <div style="display:flex; align-items:center; gap:0.45rem; flex:1; min-width:220px;">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" style="flex-shrink:0;"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+              <span id="waApkCopySuccessText">Listo en portapapeles de Windows: presiona Ctrl + V en el chat de WhatsApp para adjuntar el archivo.</span>
+            </div>
+            <button type="button" class="btn btn-outline btn-xs" id="btnWaReCopyApk" onclick="reCopyCurrentDispatchApk()">
+              <svg class="btn-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+              Volver a Copiar .APK
+            </button>
+          </div>
+        </div>
+
+        <!-- Selector de Plantillas Rápidas -->
+        <div>
+          <label style="display:block; font-size:0.82rem; font-weight:700; margin-bottom:0.4rem; color:var(--text-secondary); text-transform:uppercase;">
+            Plantillas Rápidas de 1 Clic
+          </label>
+          <div class="wa-templates-bar">
+            <button type="button" class="wa-template-btn active" data-tpl="welcome" onclick="selectWaTemplate('welcome')">
+              <svg class="btn-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+              <span>Saludo y Bienvenida</span>
+            </button>
+            <button type="button" class="wa-template-btn" data-tpl="expiring" onclick="selectWaTemplate('expiring')">
+              <svg class="btn-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+              <span>Renovación Preventiva</span>
+            </button>
+            <button type="button" class="wa-template-btn" data-tpl="prospect" onclick="selectWaTemplate('prospect')">
+              <svg class="btn-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
+              <span>Seguimiento Prospecto</span>
+            </button>
+            <button type="button" class="wa-template-btn" data-tpl="license" onclick="selectWaTemplate('license')">
+              <svg class="btn-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>
+              <span>Entrega de Licencia</span>
+            </button>
+            <button type="button" class="wa-template-btn" data-tpl="update" onclick="selectWaTemplate('update')">
+              <svg class="btn-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"/><path d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"/><path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0"/><path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"/></svg>
+              <span>Nueva Versión APK</span>
+            </button>
+            <button type="button" class="wa-template-btn" data-tpl="empty" onclick="selectWaTemplate('empty')">
+              <svg class="btn-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+              <span>Chat Vacío</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Editor de Mensaje -->
+        <div>
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.35rem; flex-wrap:wrap; gap:0.4rem;">
+            <label for="waCompMessage" style="font-size:0.82rem; font-weight:700; color:var(--text-secondary); text-transform:uppercase;">
+              Mensaje Personalizado
+            </label>
+            <div style="display:flex; align-items:center; gap:0.5rem;">
+              <button type="button" class="btn btn-outline btn-xs" id="btnWaSaveTemplate" onclick="saveCurrentWaTemplate()" title="Guardar este texto como plantilla oficial en la configuración del propietario" style="font-size:0.75rem; padding:2px 8px;">
+                <svg class="btn-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" style="width:12px; height:12px;"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+                Guardar plantilla
+              </button>
+              <button type="button" class="btn btn-outline btn-xs" id="btnWaResetTemplate" onclick="resetCurrentWaTemplate()" title="Restablecer plantilla a su contenido original por defecto" style="font-size:0.75rem; padding:2px 8px;">
+                Restaurar por defecto
+              </button>
+              <span id="waCompCharCounter" style="font-size:0.75rem; color:var(--text-muted); font-family:var(--font-mono); margin-left:0.25rem;">0 caracteres</span>
+            </div>
+          </div>
+          <textarea id="waCompMessage" rows="7" placeholder="Escribe el mensaje o selecciona una plantilla..."></textarea>
+
+          <!-- Barra de Inserción Rápida Multi-Select Idempotente en 1 Clic -->
+          <div class="wa-quick-insert-bar">
+            <span style="font-size:0.75rem; color:var(--text-muted); font-weight:700; margin-right:0.25rem;">Insertar:</span>
+            <button type="button" class="wa-insert-chip" data-snippet="payment" onclick="insertWaSnippet('payment')" title="Activar o retirar cuentas de cobro Yape / Plin configuradas">
+              <svg class="wa-chip-base-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
+              <svg class="wa-chip-check-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+              <span>+ Datos Yape / Plin</span>
+            </button>
+            <button type="button" class="wa-insert-chip" data-snippet="device" onclick="insertWaSnippet('device')" title="Activar o retirar Hardware ID del cliente">
+              <svg class="wa-chip-base-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>
+              <svg class="wa-chip-check-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+              <span>+ Hardware ID</span>
+            </button>
+            <button type="button" class="wa-insert-chip" data-snippet="expiration" onclick="insertWaSnippet('expiration')" title="Activar o retirar fecha y días de vencimiento">
+              <svg class="wa-chip-base-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+              <svg class="wa-chip-check-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+              <span>+ Vencimiento</span>
+            </button>
+            <button type="button" class="wa-insert-chip" data-snippet="token" onclick="insertWaSnippet('token')" title="Activar o retirar último código de licencia emitido">
+              <svg class="wa-chip-base-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>
+              <svg class="wa-chip-check-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+              <span>+ Último Token</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline" onclick="closeModal('modalWaComposer')">Cancelar</button>
+        <!-- Acciones estándar del Compositor (CRM, Licencias, Comprobantes) -->
+        <div id="waStandardFooterActions">
+          <button type="button" class="btn btn-outline" id="btnWaCompCopy" onclick="copyWaComposerMessage()" title="Copiar texto al portapapeles">
+            <svg class="btn-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+            Copiar Mensaje
+          </button>
+          <a id="btnWaCompOpenEmpty" class="btn btn-outline" href="#" target="_blank" rel="noopener noreferrer" title="Abrir chat de WhatsApp sin mensaje precargado">
+            Abrir Chat Vacío
+          </a>
+          <a id="btnWaCompSend" class="btn btn-wa" href="#" target="_blank" rel="noopener noreferrer" title="Abrir WhatsApp con el mensaje cargado">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" style="width:16px; height:16px;"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+            Abrir en WhatsApp
+          </a>
+        </div>
+        <!-- Acciones exclusivas de Despacho Asistido de APK (Plan 19 / 22 Fase 3) -->
+        <div id="waApkDispatchFooterActions" style="display:none;">
+          <button type="button" class="btn btn-outline" id="btnWaCopyTextOnly" onclick="copyWaComposerMessage()" title="Copiar únicamente el texto del mensaje al portapapeles">
+            <svg class="btn-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+            Copiar Solo Texto
+          </button>
+          <button type="button" class="btn btn-outline" id="btnWaRevealApkFolder" onclick="revealCurrentDispatchApkFolder()" title="Abrir la carpeta en Windows donde se encuentra el binario .APK">
+            <svg class="btn-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+            Abrir Carpeta
+          </button>
+          <button type="button" class="btn btn-outline" id="btnWaSendTextOnly" onclick="sendWaDispatchTextOnly()" title="Abrir WhatsApp únicamente con el mensaje de texto sin copiar archivo">
+            Solo Abrir WhatsApp
+          </button>
+          <button type="button" class="btn btn-wa" id="btnWaCopyApkAndSend" onclick="copyApkAndOpenWhatsApp()" title="Copiar el archivo .APK al portapapeles y abrir WhatsApp">
+            <svg class="btn-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+            Copiar Archivo .APK y Abrir WhatsApp
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL RÁPIDO: VER QR / CREDENCIAL OFICIAL (FASE 4A: ACCESO DIRECTO DESDE CRM) -->
+  <div class="modal-overlay" id="modalQuickQr">
+    <div class="modal-dialog" style="max-width:680px;">
+      <div class="modal-header">
+        <div>
+          <h3 id="quickQrTitle">Credencial & Código QR Oficial</h3>
+          <div id="quickQrSubtitle" style="font-size:0.82rem; color:var(--text-secondary); margin-top:2px;">-</div>
+        </div>
+        <button class="btn btn-outline btn-sm" onclick="closeModal('modalQuickQr')">✕</button>
+      </div>
+      <div class="modal-body" style="display:flex; flex-direction:column; gap:1.25rem;">
+        <!-- Tarjeta QR Centrada sobre fondo blanco de alto contraste -->
+        <div style="display:flex; flex-direction:column; align-items:center; background:var(--bg-secondary); border:1px solid var(--border-color); border-radius:12px; padding:1.25rem;">
+          <div class="quick-qr-white-box" id="quickQrContainer">
+            <!-- Renderizado dinámico a 236x236 px -->
+          </div>
+          <div class="code-display" id="quickQrCodeDisplay" style="margin-top:1rem; width:100%; max-width:520px; text-align:center; font-size:0.88rem;">ML9-...</div>
+        </div>
+
+        <!-- Barra de Acciones de 1 Clic -->
+        <div style="display:flex; gap:0.5rem; justify-content:center; flex-wrap:wrap;">
+          <button class="btn btn-outline btn-sm" id="btnQuickCopyCode" title="Copiar código al portapapeles">
+            <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+            Copiar Código
+          </button>
+          <button class="btn btn-outline btn-sm" id="btnQuickDownloadQr" title="Descargar imagen PNG del QR">
+            <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            Descargar QR
+          </button>
+          <button class="btn btn-outline btn-sm" id="btnQuickCopyCredential" title="Copiar credencial para pegar con Ctrl+V en WhatsApp">
+            <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+            Copiar Credencial
+          </button>
+          <button class="btn btn-primary btn-sm" id="btnQuickDownloadCredential" title="Descargar credencial oficial en alta resolución @2x">
+            <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            Descargar Credencial (@2x)
+          </button>
+          <a class="btn btn-wa btn-sm" id="btnQuickSendWa" target="_blank" href="#" title="Enviar por WhatsApp">
+            <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+            <span>WhatsApp</span>
+          </a>
+        </div>
+
+        <!-- Preview de Credencial Canvas Oficial @2x -->
+        <div style="background:rgba(0,0,0,0.25); border-radius:12px; padding:0.75rem; overflow-x:auto; display:flex; justify-content:center;">
+          <canvas id="quickCredentialCanvas" width="900" height="520" style="width:100%; max-width:540px; border-radius:8px; display:block; box-shadow:0 6px 18px rgba(0,0,0,0.3);"></canvas>
+        </div>
+      </div>
+      <div class="modal-footer" style="display:flex; justify-content:space-between; width:100%;">
+        <button class="btn btn-outline" id="btnQuickAuditInInspector">
+          <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+          Auditar en Inspector Forense
+        </button>
+        <button class="btn btn-primary" onclick="closeModal('modalQuickQr')">Cerrar</button>
+      </div>
+    </div>
+  </div>
+

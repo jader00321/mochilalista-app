@@ -1,0 +1,240 @@
+/* === LAYER: css/modules/security_vault.css === */
+
+/* ==========================================================================
+   FASE 3 PLAN MAESTRO 10: BÓVEDA DE SEGURIDAD Y PORTABILIDAD (#tabSecurityVault)
+   ========================================================================== */
+
+/* 1. Banner de Salud de Seguridad */
+.vault-health-banner {
+  background: linear-gradient(135deg, rgba(37, 99, 235, 0.12) 0%, rgba(16, 185, 129, 0.08) 100%);
+  border: 1px solid rgba(37, 99, 235, 0.35);
+  border-radius: 12px;
+  padding: 1.5rem;
+  margin-bottom: 1.5rem;
+  position: relative;
+  overflow: hidden;
+}
+
+.vault-progress-track {
+  width: 100%;
+  height: 12px;
+  background: var(--bg-card);
+  border-radius: 6px;
+  overflow: hidden;
+  border: 1px solid var(--border-color);
+  margin: 0.75rem 0;
+}
+
+.vault-progress-fill {
+  height: 100%;
+  border-radius: 6px;
+  transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.4s ease;
+  background: linear-gradient(90deg, var(--warning), var(--success));
+}
+
+/* 2. Tarjetas de Factores de Seguridad */
+.vault-factor-card {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  padding: 1rem;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.85rem;
+  transition: transform 0.2s ease, border-color 0.2s ease;
+}
+
+.vault-factor-card:hover {
+  border-color: var(--primary);
+  transform: translateY(-2px);
+}
+
+.vault-factor-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+/* 3. Zona Drag & Drop (.vault-drop-zone) */
+.vault-drop-zone {
+  border: 2px dashed var(--border-color);
+  border-radius: 12px;
+  padding: 2.25rem 1.5rem;
+  text-align: center;
+  cursor: pointer;
+  background: var(--bg-secondary);
+  transition: border-color 0.2s ease, background-color 0.2s ease;
+}
+
+.vault-drop-zone:hover,
+.vault-drop-zone.dragover {
+  border-color: var(--primary);
+  background: rgba(37, 99, 235, 0.05);
+}
+
+/* 4. Selector de Filas de Factor en Modal */
+.factor-choice-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 0.75rem;
+  border-radius: 8px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  cursor: pointer;
+  transition: border-color 0.2s ease;
+}
+
+.factor-choice-row:hover {
+  border-color: var(--primary);
+}
+
+.factor-choice-row input[type="radio"] {
+  margin-top: 0.25rem;
+}
+
+/* 5. Pantalla de Bloqueo PIN a Pantalla Completa (#vaultPinLockOverlay) */
+.vault-lock-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(15, 17, 23, 0.94);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  z-index: 99999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+}
+
+.vault-lock-card {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 16px;
+  max-width: 440px;
+  width: 100%;
+  padding: 2.5rem 2rem;
+  text-align: center;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+}
+
+.vault-lock-icon {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: rgba(245, 158, 11, 0.15);
+  color: var(--warning);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto;
+}
+
+.vault-lock-icon svg {
+  width: 32px;
+  height: 32px;
+}
+
+@keyframes vaultBtnSpin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.btn.is-spinning svg,
+button.is-spinning svg {
+  animation: vaultBtnSpin 0.85s linear infinite;
+}
+
+.vault-path-card {
+  padding: 0.85rem;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  min-width: 0;
+}
+
+.vault-path-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.35rem;
+  min-width: 0;
+}
+
+#txtLocalPath,
+#txtMirrorPath,
+#pathCloudDir {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.8rem;
+  font-family: var(--font-mono);
+}
+
+#btnCopyLocalPath,
+#btnCopyMirrorPath,
+#btnCopyCloudPath {
+  flex-shrink: 0;
+}
+
+.vault-sha-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  max-width: 100%;
+}
+
+.btn-copy-vault-sha {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.2rem 0.45rem;
+  font-size: 0.72rem;
+  border-radius: 6px;
+}
+
+.vault-audit-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(175px, 1fr));
+  gap: 0.65rem;
+  margin-bottom: 1rem;
+}
+
+.vault-audit-kpi {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 0.7rem 0.85rem;
+}
+
+/* 6. Grilla de Códigos de Rescate */
+.rescue-codes-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.6rem;
+}
+
+.rescue-code-item {
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #0f172a;
+  background: #f1f5f9;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  padding: 0.5rem 0.65rem;
+  text-align: center;
+  letter-spacing: 0.05rem;
+  user-select: all;
+  white-space: nowrap;
+}

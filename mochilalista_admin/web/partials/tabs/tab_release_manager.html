@@ -1,0 +1,216 @@
+    <section id="tabReleaseManager" class="tab-pane">
+      <div class="content-card">
+        <div class="card-header">
+          <h2>
+            <svg class="icon-svg" style="color:var(--primary);" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"/><path d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"/><path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0"/><path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"/></svg>
+            Gestor de Versiones & Matriz Inteligente de Distribución
+          </h2>
+          <div class="card-header-actions">
+            <button type="button" class="btn btn-outline btn-sm" id="btnToggleDualBuildGuide" aria-expanded="false" aria-controls="dualBuildGuidePanel">
+              <svg class="btn-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+              Guía de Compilación Dual
+            </button>
+            <button class="btn btn-primary" id="btnOpenCreateRelease">
+              <svg class="btn-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              Subir / Registrar Nueva Versión del APK
+            </button>
+          </div>
+        </div>
+
+        <p style="font-size:0.88rem; color:var(--text-secondary); margin-bottom:1rem;">
+          Compara en tiempo real la versión instalada de cada cliente contra el último APK lanzado. Los <strong>HOTFIX</strong> son gratuitos vitalicios para todos los clientes; los <strong>FEATURE RELEASE</strong> aplican a suscripciones activas o licencias perpetuas con pase de actualización vigente.
+        </p>
+
+        <!-- MINI-GUÍA RÁPIDA DE COMPILACIÓN DUAL OFICIAL (PLAN MAESTRO 23.5 - FASE 4) -->
+        <div id="dualBuildGuidePanel" class="dual-build-guide-panel" style="display:none;">
+          <div class="dual-build-guide-head">
+            <div>
+              <h3>Compilador Dual Oficial Único y Guiado</h3>
+              <p class="dual-build-guide-sub">Genera, certifica con <code>aapt2</code> + <code>apksigner</code> (RSA-4096 y anti-debug) y entrega ambas variantes oficiales desde la raíz del proyecto.</p>
+            </div>
+            <div class="dual-build-guide-dest">
+              <span class="dual-build-dest-label">Carpeta automática de entrega</span>
+              <code>C:\Users\vjuli\Documents\v-app-offline apks\</code>
+            </div>
+          </div>
+
+          <div class="dual-build-variants-grid">
+            <div class="dual-build-variant-card is-universal">
+              <div class="dual-build-variant-top">
+                <strong>APK Universal</strong>
+                <span class="dual-build-size-pill">~108 MB</span>
+              </div>
+              <div class="dual-build-variant-file"><code>mochilalista_v&lt;tag&gt;_atp.apk</code></div>
+              <p>Compatible con cualquier Android (<code>arm64-v8a</code>, <code>armeabi-v7a</code>, <code>x86_64</code>). Ideal como respaldo maestro o instalación directa por USB.</p>
+            </div>
+
+            <div class="dual-build-variant-card is-arm64">
+              <div class="dual-build-variant-top">
+                <strong>APK ARM64 Ligero</strong>
+                <span class="dual-build-size-pill is-highlight">~39 MB</span>
+              </div>
+              <div class="dual-build-variant-file"><code>mochilalista_v&lt;tag&gt;_arm64_atp.apk</code></div>
+              <p>Optimizado para el 99 % de celulares Android modernos de 64 bits. Pesa por debajo de 100 MB, ideal para envío directo por WhatsApp Web.</p>
+            </div>
+          </div>
+
+          <div class="dual-build-commands-box">
+            <div class="dual-build-section-title">4 comandos listos para copiar y ejecutar en la raíz de MochilaLista</div>
+            <div class="dual-build-cmd-list">
+              <div class="dual-build-cmd-row">
+                <div class="dual-build-cmd-meta">
+                  <code class="dual-build-cmd-code">compilar_release_dual.bat</code>
+                  <span class="dual-build-cmd-desc">Compilar versión nueva completa (Universal + ARM64 + análisis + certificación <code>aapt2</code>/<code>apksigner</code>).</span>
+                </div>
+                <button type="button" class="btn btn-outline btn-xs btn-copy-dual-cmd" data-cmd="compilar_release_dual.bat" title="Copiar comando compilar_release_dual.bat">
+                  <svg class="btn-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                  <span data-copy-label>Copiar</span>
+                </button>
+              </div>
+              <div class="dual-build-cmd-row">
+                <div class="dual-build-cmd-meta">
+                  <code class="dual-build-cmd-code">compilar_release_dual.bat --verify-only --no-pause</code>
+                  <span class="dual-build-cmd-desc">Auditar criptográficamente los APKs ya generados de la versión actual sin recompilar Flutter.</span>
+                </div>
+                <button type="button" class="btn btn-outline btn-xs btn-copy-dual-cmd" data-cmd="compilar_release_dual.bat --verify-only --no-pause" title="Copiar comando --verify-only">
+                  <svg class="btn-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                  <span data-copy-label>Copiar</span>
+                </button>
+              </div>
+              <div class="dual-build-cmd-row">
+                <div class="dual-build-cmd-meta">
+                  <code class="dual-build-cmd-code">compilar_release_dual.bat --verify-only --init-notes --no-pause</code>
+                  <span class="dual-build-cmd-desc">Auditar APKs y generar borradores de notas (solo si faltan, sin sobrescribir archivos existentes).</span>
+                </div>
+                <button type="button" class="btn btn-outline btn-xs btn-copy-dual-cmd" data-cmd="compilar_release_dual.bat --verify-only --init-notes --no-pause" title="Copiar comando --verify-only --init-notes">
+                  <svg class="btn-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                  <span data-copy-label>Copiar</span>
+                </button>
+              </div>
+              <div class="dual-build-cmd-row">
+                <div class="dual-build-cmd-meta">
+                  <code class="dual-build-cmd-code">compilar_release_dual.bat --dry-run --no-pause</code>
+                  <span class="dual-build-cmd-desc">Validar entorno, <code>pubspec.yaml</code>, keystore, SDK Android y rutas destino antes de compilar.</span>
+                </div>
+                <button type="button" class="btn btn-outline btn-xs btn-copy-dual-cmd" data-cmd="compilar_release_dual.bat --dry-run --no-pause" title="Copiar comando --dry-run">
+                  <svg class="btn-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                  <span data-copy-label>Copiar</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div class="dual-build-steps-box">
+            <div class="dual-build-section-title">Flujo guiado en 4 pasos para publicar una nueva versión</div>
+            <ol class="dual-build-steps-list">
+              <li>Actualiza la versión en <code>app_movil/pubspec.yaml</code> y redacta sus notas compañeras <code>*_atp.txt</code> y <code>*_cambios.txt</code> (o usa <code>--init-notes</code> para prellenar borradores sin sobrescribir notas existentes).</li>
+              <li>Ejecuta <code>compilar_release_dual.bat</code> desde la raíz del proyecto hasta ver la certificación dual en verde.</li>
+              <li>Pulsa <strong>Subir / Registrar Nueva Versión del APK</strong>, selecciona el APK <strong>Universal</strong> en <em>Biblioteca Oficial</em> y publica el lanzamiento.</li>
+              <li>Abre <strong>Editar Versión</strong> sobre la versión recién creada y vincula la variante <strong>ARM64 Ligero</strong> en su tarjeta correspondiente.</li>
+            </ol>
+          </div>
+        </div>
+
+        <!-- BARRA DE PROGRESO DE DESPLIEGUE GLOBAL (PLAN 19) -->
+        <div class="rollout-card" id="releasesRolloutProgress">
+          <div class="rollout-kpis">
+            <div class="rollout-kpi-item" onclick="setMatrixFilter('ALL')" title="Mostrar todos los clientes evaluados">
+              <span class="rollout-kpi-label">Clientes en Cartera:</span>
+              <span class="rollout-kpi-val" id="rolloutTotal">0</span>
+            </div>
+            <div class="rollout-kpi-item" onclick="setMatrixFilter('UP_TO_DATE')" title="Filtrar clientes al día o con versión superior">
+              <span class="rollout-dot green"></span>
+              <span class="rollout-kpi-label">Al Día / Superior:</span>
+              <span class="rollout-kpi-val" id="rolloutUpToDate">0 (0%)</span>
+            </div>
+            <div class="rollout-kpi-item" onclick="setMatrixFilter('SENT')" title="Filtrar clientes con APK enviado pendiente de confirmar">
+              <span class="rollout-dot blue"></span>
+              <span class="rollout-kpi-label">APK Enviado:</span>
+              <span class="rollout-kpi-val" id="rolloutSent">0 (0%)</span>
+            </div>
+            <div class="rollout-kpi-item" onclick="setMatrixFilter('OUTDATED')" title="Filtrar clientes pendientes de actualización">
+              <span class="rollout-dot amber"></span>
+              <span class="rollout-kpi-label">Pendientes:</span>
+              <span class="rollout-kpi-val" id="rolloutPending">0 (0%)</span>
+            </div>
+          </div>
+          <div class="rollout-segmented-bar">
+            <div class="rollout-segment green" id="segmentUpToDate" style="width:0%;" onclick="setMatrixFilter('UP_TO_DATE')" title="Al Día"></div>
+            <div class="rollout-segment blue" id="segmentSent" style="width:0%;" onclick="setMatrixFilter('SENT')" title="APK Enviado"></div>
+            <div class="rollout-segment amber" id="segmentPending" style="width:100%;" onclick="setMatrixFilter('OUTDATED')" title="Pendientes"></div>
+          </div>
+        </div>
+
+        <!-- TOOLBAR DE BÚSQUEDA Y FILTROS RÁPIDOS DE MATRIZ -->
+        <div class="rel-matrix-toolbar">
+          <div class="search-input-wrap" style="max-width:340px;">
+            <input type="text" id="inputRelMatrixSearch" class="search-input" placeholder="Buscar por cliente, WhatsApp o versión...">
+            <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+          </div>
+          <div class="rel-filter-chips" id="matrixFilterChips">
+            <button type="button" class="rel-chip active" data-filter="ALL" onclick="setMatrixFilter('ALL')">Todos</button>
+            <button type="button" class="rel-chip" data-filter="OUTDATED" onclick="setMatrixFilter('OUTDATED')">Solo Desactualizados</button>
+            <button type="button" class="rel-chip" data-filter="REQUIRES_PASS" onclick="setMatrixFilter('REQUIRES_PASS')">Requieren Pase</button>
+            <button type="button" class="rel-chip" data-filter="SENT" onclick="setMatrixFilter('SENT')">APK Enviado</button>
+            <button type="button" class="rel-chip" data-filter="UP_TO_DATE" onclick="setMatrixFilter('UP_TO_DATE')">Al Día</button>
+          </div>
+        </div>
+
+        <div class="table-responsive">
+          <table class="data-table" id="matrixTable">
+            <thead>
+              <tr>
+                <th>Cliente / Negocio</th>
+                <th>WhatsApp</th>
+                <th>Versión Actual</th>
+                <th>Última Disponible</th>
+                <th>Tipo de Versión</th>
+                <th>Estado & Derecho</th>
+                <th>Acción Comercial</th>
+              </tr>
+            </thead>
+            <tbody id="matrixTableBody">
+              <tr><td colspan="7" style="text-align:center;">Cargando matriz de versiones...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- HISTORIAL DE VERSIONES REGISTRADAS -->
+      <div class="content-card">
+        <div class="card-header">
+          <h2>
+            <svg class="icon-svg" style="color:var(--primary);" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
+            Catálogo de Versiones Publicadas
+          </h2>
+          <div class="card-header-actions">
+            <button type="button" class="btn btn-outline btn-sm" id="btnVerifyAllReleases" title="Verificar existencia física en disco y firma RSA-4096 de todo el catálogo">
+              <svg class="btn-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><polyline points="9 12 11 14 15 10"/></svg>
+              <span>Verificar Todo el Catálogo</span>
+            </button>
+          </div>
+        </div>
+        <div id="catalogVerifyAllBanner" class="catalog-verify-banner" style="display:none;" role="status" aria-live="polite"></div>
+        <div class="table-responsive">
+          <table class="data-table" id="releasesTable">
+            <thead>
+              <tr>
+                <th>Versión</th>
+                <th>Build Code</th>
+                <th>Esquema DB</th>
+                <th>Tipo</th>
+                <th>Fecha</th>
+                <th>Variantes & Integridad</th>
+                <th>Tamaño / SHA-256</th>
+                <th>Acciones APK</th>
+              </tr>
+            </thead>
+            <tbody id="releasesTableBody">
+              <tr><td colspan="8" style="text-align:center;">Cargando catálogo...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 5: INSPECTOR FORENSE TRI-PROTOCOlO (ML9 / MLS1 / MLC1) CON LECTOR ÓPTICO QR -->

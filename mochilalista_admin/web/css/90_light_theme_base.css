@@ -1,0 +1,238 @@
+/* === LAYER: css/90_light_theme_base.css === */
+
+[data-theme="light"] {
+  color-scheme: light;
+  --bg-primary: #f8fafc;
+  --bg-secondary: #ffffff;
+  --bg-card: #ffffff;
+  --bg-hover: #f1f5f9;
+  --text-primary: #0f172a;
+  --text-secondary: #475569;
+  --text-muted: #94a3b8;
+  --border-color: #e2e8f0;
+  --primary: #2563eb;
+  --primary-hover: #1d4ed8;
+}
+
+[data-theme="light"] select {
+  color-scheme: light;
+  background-color: var(--bg-secondary);
+}
+
+[data-theme="light"] select option,
+[data-theme="light"] select optgroup {
+  background-color: var(--bg-secondary);
+  color: var(--text-primary);
+}
+
+[data-theme="light"] .sidebar-floating-tooltip {
+  background-color: #0f172a;
+  color: #ffffff;
+  border-color: rgba(0, 0, 0, 0.15);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+[data-theme="light"] .badge-blue {
+  background-color: rgba(37, 99, 235, 0.12);
+  color: #1d4ed8;
+  border-color: rgba(37, 99, 235, 0.3);
+}
+
+[data-theme="light"] .notice-box {
+  background-color: #eff6ff;
+  border-color: #bfdbfe;
+  color: #1e3a8a;
+}
+
+[data-theme="light"] .mode-btn.mode-sandbox.active {
+  background-color: rgba(245, 158, 11, 0.16);
+  color: #b45309;
+  border-color: rgba(217, 119, 6, 0.6);
+  box-shadow: 0 0 10px rgba(245, 158, 11, 0.25);
+}
+
+[data-theme="light"] .mode-btn.mode-prod.active {
+  background-color: rgba(16, 185, 129, 0.16);
+  color: #047857;
+  border-color: rgba(16, 185, 129, 0.6);
+  box-shadow: 0 0 10px rgba(16, 185, 129, 0.25);
+}
+
+[data-theme="light"] .apk-drop-zone.has-manual-apk {
+  background: linear-gradient(135deg, rgba(14, 165, 233, 0.1), rgba(37, 99, 235, 0.06));
+  border-color: #0284c7;
+}
+
+[data-theme="light"] .badge-source-manual {
+  background: rgba(2, 132, 199, 0.12);
+  color: #0369a1;
+  border-color: rgba(2, 132, 199, 0.35);
+}
+
+[data-theme="light"] .badge-source-autodetect {
+  background: rgba(5, 150, 105, 0.12);
+  color: #047857;
+  border-color: rgba(5, 150, 105, 0.35);
+}
+
+[data-theme="light"] .active-apk-card {
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.08), rgba(37, 99, 235, 0.04));
+}
+
+[data-theme="light"] .active-apk-card.source-manual {
+  background: linear-gradient(135deg, rgba(14, 165, 233, 0.09), rgba(37, 99, 235, 0.04));
+}
+
+[data-theme="light"] .badge-dir-exists {
+  color: #047857;
+  background: rgba(16, 185, 129, 0.12);
+}
+
+[data-theme="light"] .badge-dir-missing {
+  color: #b45309;
+  background: rgba(245, 158, 11, 0.14);
+}
+
+[data-theme="light"] .local-build-card.is-selected {
+  border-color: #059669;
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.1), rgba(37, 99, 235, 0.04));
+}
+
+[data-theme="light"] .local-build-selected-pill {
+  color: #047857;
+  background: rgba(16, 185, 129, 0.15);
+}
+
+[data-theme="light"] .btn-selected-apk {
+  color: #047857;
+  border-color: #059669;
+  background: rgba(16, 185, 129, 0.14);
+}
+
+[data-theme="light"] .badge-origin-lib,
+[data-theme="light"] .release-adoption-pill.has-clients,
+[data-theme="light"] .badge-disk-ok {
+  color: #047857;
+}
+
+[data-theme="light"] .badge-origin-local {
+  color: #1d4ed8;
+}
+
+[data-theme="light"] .badge-unverified-sig {
+  color: #b45309;
+}
+
+[data-theme="light"] .textarea-meta-counter {
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+  color: #475569;
+}
+
+[data-theme="light"] .btn-toggle-textarea[aria-expanded="true"] {
+  background: #dbeafe;
+  border-color: #3b82f6;
+  color: #1d4ed8;
+}
+
+[data-theme="light"] .badge-variant-optional {
+  background: #f1f5f9;
+  color: #475569;
+  border-color: #cbd5e1;
+}
+
+[data-theme="light"] .edit-variant-missing-note {
+  color: #b91c1c;
+  background: #fef2f2;
+  border-color: #fecaca;
+}
+
+[data-theme="light"] .edit-variant-picker-empty {
+  background: #f8fafc;
+  border-color: #cbd5e1;
+  color: #334155;
+}
+
+[data-theme="light"] .edit-variant-unlink-btn {
+  color: #dc2626;
+  border-color: rgba(220, 38, 38, 0.4);
+}
+
+[data-theme="light"] .badge-disk-missing {
+  color: #dc2626;
+}
+
+[data-theme="light"] .finance-filters-bar {
+  background: #f8fafc;
+}
+
+[data-theme="light"] .finance-filter-group input,
+[data-theme="light"] .finance-filter-group select {
+  background: #ffffff;
+  border-color: #cbd5e1;
+  color: #0f172a;
+}
+
+[data-theme="light"] .backups-filter-bar,
+[data-theme="light"] .backup-preview-meta-card {
+  background: #f8fafc;
+}
+
+[data-theme="light"] .backup-pill {
+  background: #ffffff;
+  color: #334155;
+  border-color: #cbd5e1;
+}
+
+[data-theme="light"] .backup-pill.active {
+  background: var(--primary);
+  color: #ffffff;
+  border-color: var(--primary);
+}
+
+[data-theme="light"] .backup-pill .pill-count {
+  background: rgba(15, 23, 42, 0.08);
+}
+
+[data-theme="light"] .backup-pill.active .pill-count {
+  background: rgba(255, 255, 255, 0.22);
+}
+
+[data-theme="light"] .backups-search-wrap input {
+  background: #ffffff;
+  border-color: #cbd5e1;
+  color: #0f172a;
+}
+
+[data-theme="light"] .backup-protected-tag {
+  background: #dbeafe;
+  color: #1d4ed8;
+  border-color: #93c5fd;
+}
+
+[data-theme="light"] .backups-mode-banner {
+  background: #fffbeb;
+  border-color: #fcd34d;
+  color: #92400e;
+}
+
+[data-theme="light"] .backup-preview-callout {
+  background: #ecfdf5;
+  border-color: #a7f3d0;
+  color: #065f46;
+}
+
+[data-theme="light"] .wa-insert-chip.active {
+  background: rgba(22, 163, 74, 0.12);
+  border-color: #16a34a;
+  color: #15803d;
+}
+
+[data-theme="light"] .wa-apk-size-warning {
+  background: rgba(245, 158, 11, 0.12);
+  color: #b45309;
+}
+
+[data-theme="light"] .wa-apk-copy-success-hint {
+  color: #047857;
+}

@@ -1,5 +1,7 @@
 import 'dart:io';
 
+import '../../lib/http/html_assembler.dart';
+
 /// Central loader for `mochilalista_admin/web` assets in automated tests.
 ///
 /// Decouples tests from the internal file layout (single monolith vs. split
@@ -87,24 +89,61 @@ class WebBundleLoader {
     return resolveWebAssetFile(relativePath).absolute.path;
   }
 
-  /// Ordered CSS files loaded by the admin web console.
+  /// Ordered CSS files loaded by the admin web console, matching the exact
+  /// `<link rel="stylesheet">` cascade declared in `web/index.html`.
   static List<String> cssFilePaths() {
-    return [resolveWebAssetPath('css/styles.css')];
+    final indexFile = resolveWebAssetFile('index.html');
+    if (!indexFile.existsSync()) {
+      throw StateError('No existe ${indexFile.path}');
+    }
+    final rawIndex = indexFile.readAsStringSync();
+    final linkRegex = RegExp(
+      r'''<link\b[^>]*rel=["\x27]stylesheet["\x27][^>]*href=["\x27](css/[^"?\x27]+)(?:\?[^"\x27]*)?["\x27]''',
+      caseSensitive: false,
+    );
+    final paths = linkRegex
+        .allMatches(rawIndex)
+        .map((m) => resolveWebAssetPath(m.group(1)!))
+        .toList();
+    if (paths.isEmpty) {
+      throw StateError('No se detectaron hojas CSS en ${indexFile.path}');
+    }
+    return paths;
   }
 
   /// Ordered application JS files loaded by the admin web console
   /// (excludes third-party vendor bundles such as `qrcode.min.js`/`jsqr.min.js`).
   static List<String> jsFilePaths() {
-    return [resolveWebAssetPath('js/admin_app.js')];
-  }
-
-  /// Loads the assembled HTML of the admin web console.
-  static String loadHtml() {
     final indexFile = resolveWebAssetFile('index.html');
     if (!indexFile.existsSync()) {
       throw StateError('No existe ${indexFile.path}');
     }
-    return indexFile.readAsStringSync();
+    final rawIndex = indexFile.readAsStringSync();
+    final scriptRegex = RegExp(
+      r'''<script\b[^>]*src=["\x27](js/[^"?\x27]+)(?:\?[^"\x27]*)?["\x27]''',
+      caseSensitive: false,
+    );
+    const vendorScripts = {'js/qrcode.min.js', 'js/jsqr.min.js'};
+    final paths = scriptRegex
+        .allMatches(rawIndex)
+        .map((m) => m.group(1)!)
+        .where((rel) => !vendorScripts.contains(rel.toLowerCase()))
+        .map(resolveWebAssetPath)
+        .toList();
+    if (paths.isEmpty) {
+      throw StateError('No se detectaron scripts JS en ${indexFile.path}');
+    }
+    return paths;
+  }
+
+  /// Loads the assembled HTML of the admin web console via [HtmlTemplateAssembler].
+  static String loadHtml() {
+    final webRoot = resolveWebRoot();
+    final assembled = HtmlTemplateAssembler.assembleSync(webRoot.path);
+    if (assembled == null) {
+      throw StateError('No existe ${webRoot.path}/index.html');
+    }
+    return assembled;
   }
 
   /// Loads the concatenated CSS of the admin web console in load order.

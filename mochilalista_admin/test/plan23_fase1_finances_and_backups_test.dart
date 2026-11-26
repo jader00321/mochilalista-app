@@ -463,7 +463,7 @@ void main() {
       final finSectionHtml = html.substring(secStart, secEnd);
 
       final modalStart = html.indexOf('<div class="modal-overlay" id="modalBackupPreview"');
-      final modalEnd = html.indexOf('<script src="js/admin_app.js', modalStart);
+      final modalEnd = html.indexOf('<script src="js/core/', modalStart);
       final previewModalHtml = html.substring(modalStart, modalEnd);
 
       final rawEmojiRegex = RegExp(

@@ -1,0 +1,201 @@
+    <section id="tabFinancesAndBackups" class="tab-pane">
+      
+      <!-- SUBMÓDULO 1: LIBRO CONTABLE DE INGRESOS Y COBRANZAS -->
+      <div class="content-card">
+        <div class="card-header">
+          <h2>
+            <svg class="icon-svg" style="color:var(--success);" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10"/><path d="M16 8h-6a2 2 0 1 0 0 4h4a2 2 0 1 1 0 4H8"/><path d="M12 18V6"/></svg>
+            Libro Contable de Ingresos y Cobranzas
+          </h2>
+          <div style="display:flex; gap:0.5rem; flex-wrap:wrap;">
+            <button class="btn btn-primary btn-sm" id="btnExportFinancesExcel" title="Exportar Libro Contable a Microsoft Excel (.xlsx)">
+              <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="16" y2="17"/><line x1="10" y1="9" x2="8" y2="9"/></svg>
+              Exportar Excel Contable (.xlsx)
+            </button>
+            <button class="btn btn-outline btn-sm" id="btnExportFinancesCsv" title="Exportar Libro Contable a CSV con BOM UTF-8">
+              <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              Exportar CSV
+            </button>
+          </div>
+        </div>
+
+        <!-- FILTROS CONTABLES EN VIVO -->
+        <div class="finance-filters-bar">
+          <div class="finance-filter-group search-group">
+            <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" style="position: absolute; left: 10px; top: 50%; transform: translateY(-50%); width: 14px; height: 14px; color: var(--text-muted); pointer-events: none;"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            <input type="text" id="inputFinSearch" placeholder="Buscar por comprobante (BOL/FAC), negocio, titular o RUC/DNI..." style="width: 100%; padding-left: 32px; padding-right: 28px;">
+            <button type="button" id="btnFinSearchClear" title="Limpiar búsqueda" style="position: absolute; right: 6px; top: 50%; transform: translateY(-50%); background: none; border: none; color: var(--text-muted); cursor: pointer; display: none; padding: 2px;">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 13px; height: 13px;"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+          </div>
+          <div class="finance-filter-group">
+            <label for="finFilterFrom">Desde:</label>
+            <input type="date" id="finFilterFrom">
+          </div>
+          <div class="finance-filter-group">
+            <label for="finFilterTo">Hasta:</label>
+            <input type="date" id="finFilterTo">
+          </div>
+          <div class="finance-filter-group">
+            <label for="finFilterPlan">Plan:</label>
+            <select id="finFilterPlan">
+              <option value="all">Todos los planes</option>
+              <option value="MENSUAL">MENSUAL</option>
+              <option value="TRIMESTRAL">TRIMESTRAL</option>
+              <option value="SEMESTRAL">SEMESTRAL</option>
+              <option value="ANUAL">ANUAL</option>
+              <option value="PERPETUO">PERPETUO LIBERADO</option>
+              <option value="PASE">PASE UPDATES</option>
+              <option value="RECARGA">BOLSA EXTRA IA</option>
+              <option value="BONO_IA">BONO IA</option>
+              <option value="MIGRACION">MIGRACIÓN</option>
+              <option value="ABONO">ABONO PARCIAL</option>
+            </select>
+          </div>
+          <div class="finance-filter-group">
+            <label for="finFilterMethod">Medio de Pago:</label>
+            <select id="finFilterMethod">
+              <option value="all">Todos los medios</option>
+              <option value="Yape">Yape</option>
+              <option value="Plin">Plin</option>
+              <option value="BCP">BCP</option>
+              <option value="BBVA">BBVA / Interbank</option>
+              <option value="Efectivo">Efectivo</option>
+            </select>
+          </div>
+          <button class="btn btn-outline btn-sm" id="btnFinFilterClear" style="margin-left:auto;">
+            Limpiar Filtros
+          </button>
+        </div>
+
+        <!-- KPIS CONTABLES DINÁMICOS -->
+        <div class="kpi-grid" style="margin-bottom:1.25rem;">
+          <div class="kpi-card green">
+            <span class="kpi-title">Total Recaudado</span>
+            <span class="kpi-value" id="finKpiTotalRevenue">S/ 0.00</span>
+            <span class="kpi-subtitle">Periodo seleccionado</span>
+          </div>
+          <div class="kpi-card green">
+            <span class="kpi-title">Ticket Promedio</span>
+            <span class="kpi-value" id="finKpiAverageTicket">S/ 0.00</span>
+            <span class="kpi-subtitle">Por transacción</span>
+          </div>
+          <div class="kpi-card">
+            <span class="kpi-title">N.° Transacciones</span>
+            <span class="kpi-value" id="finKpiCount">0</span>
+            <span class="kpi-subtitle">Cobros registrados</span>
+          </div>
+          <div class="kpi-card purple">
+            <span class="kpi-title">Canal Principal</span>
+            <span class="kpi-value" id="finKpiTopMethod" style="font-size:1.3rem;">-</span>
+            <span class="kpi-subtitle">Mayor volumen</span>
+          </div>
+        </div>
+
+        <!-- TABLA CONTABLE COMPLETA -->
+        <div class="table-responsive">
+          <table class="data-table" id="financesTable">
+            <thead>
+              <tr>
+                <th>Fecha</th>
+                <th>ID Cliente</th>
+                <th>Negocio</th>
+                <th>Titular</th>
+                <th>Plan</th>
+                <th>Medio</th>
+                <th>Referencia</th>
+                <th>Monto</th>
+                <th>Comprobante</th>
+              </tr>
+            </thead>
+            <tbody id="financesTableBody">
+              <tr><td colspan="9" style="text-align:center;">Cargando transacciones contables...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- SUBMÓDULO 2: CENTRO DE GESTIÓN DE RESPALDOS EN DISCO DURO (backups/) -->
+      <div class="content-card">
+        <div class="card-header">
+          <h2>
+            <svg class="icon-svg" style="color:var(--primary);" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+            Centro de Gestión de Respaldos en Disco Duro (backups/)
+          </h2>
+        </div>
+
+        <div class="backups-toolbar">
+          <div class="backups-toolbar-group">
+            <button type="button" class="btn btn-primary" id="btnCreateBackupNow">
+              <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+              Crear Snapshot Manual Ahora
+            </button>
+            <button type="button" class="btn btn-outline" id="btnOpenBackupsFolder" title="Abrir carpeta en el Explorador de Windows">
+              <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+              Abrir Carpeta backups/ en Windows
+            </button>
+          </div>
+          <button type="button" class="btn btn-outline btn-purge-sandbox" id="btnPurgeSandboxBackups" title="Eliminar snapshots automáticos antiguos de Pruebas (Sandbox), conservando siempre PROD, GLOBAL y manuales">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
+            Limpiar snapshots antiguos de Pruebas (Sandbox)
+          </button>
+        </div>
+
+        <p style="font-size:0.85rem; color:var(--text-secondary); margin-bottom:0.85rem;">
+          Cada vez que emites una licencia, modificas un cliente o creas un lanzamiento, el motor crea un snapshot atómico en la carpeta <code>backups/</code> (mostrado en hora oficial Perú GMT-5). Puedes descargar copias a tu memoria USB o inspeccionar la vista previa antes de restaurar.
+        </p>
+
+        <div class="backups-filter-bar" id="backupsFilterBar">
+          <div class="backups-filter-pills" id="backupsFilterPills">
+            <button type="button" class="backup-pill active" data-bfilter="all">Todos <span class="pill-count" id="bCountAll">0</span></button>
+            <button type="button" class="backup-pill" data-bfilter="prod">PROD <span class="pill-count" id="bCountProd">0</span></button>
+            <button type="button" class="backup-pill" data-bfilter="sandbox">SANDBOX <span class="pill-count" id="bCountSandbox">0</span></button>
+            <button type="button" class="backup-pill" data-bfilter="global">GLOBAL <span class="pill-count" id="bCountGlobal">0</span></button>
+            <button type="button" class="backup-pill" data-bfilter="manual">Manuales <span class="pill-count" id="bCountManual">0</span></button>
+          </div>
+          <div class="backups-search-wrap">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14" class="backups-search-icon"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            <input type="text" id="inputBackupsSearch" placeholder="Buscar snapshot por nombre, cliente u operación...">
+            <button type="button" id="btnBackupsSearchClear" title="Limpiar búsqueda de respaldos" style="display:none;">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+          </div>
+        </div>
+
+        <div class="backups-mode-banner" id="backupsModeBanner" style="display:none;">
+          <div class="backups-mode-banner-text">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+            <span>Estás operando en <strong>Modo Real</strong> y la vista incluye snapshots de <strong>SANDBOX</strong>. Puedes aislar solo tus copias reales para evitar mezclas visuales.</span>
+          </div>
+          <button type="button" class="btn btn-outline btn-xs" id="btnFilterOnlyProdBackups">Filtrar solo PROD</button>
+        </div>
+
+        <div class="table-responsive">
+          <table class="data-table" id="backupsTable">
+            <thead>
+              <tr>
+                <th>Archivo</th>
+                <th>Fecha y Hora (Perú GMT-5)</th>
+                <th>Tamaño</th>
+                <th>Entorno</th>
+                <th>Acciones</th>
+              </tr>
+            </thead>
+            <tbody id="backupsTableBody">
+              <tr><td colspan="5" style="text-align:center;">Cargando lista de respaldos...</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="backups-pagination-footer" id="backupsPaginationFooter" style="display:none;">
+          <span class="backups-pagination-info" id="backupsPaginationInfo">Mostrando 0 de 0 respaldos</span>
+          <button type="button" class="btn btn-outline btn-sm" id="btnLoadMoreBackups">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+            <span id="btnLoadMoreBackupsText">Cargar 20 respaldos más</span>
+          </button>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- TAB 7: CONFIGURACIÓN Y PERSONALIZACIÓN (CENTRO TOTAL DEL PROPIETARIO — PLAN 23 FASE 2) -->

@@ -30,7 +30,8 @@ class StaticHandler {
         .split('/')
         .where((s) => s.isNotEmpty)
         .toList();
-    if (relSegments.any((s) => s == '..' || s.contains(r'\'))) {
+    if (relSegments.any((s) => s == '..' || s.contains(r'\')) ||
+        (relSegments.isNotEmpty && relSegments.first.toLowerCase() == 'partials')) {
       await _sendForbidden(request);
       return;
     }

@@ -171,6 +171,11 @@ void main() {
         '2. Ejecución Node.js real: toggleDualBuildGuide() y copyDualBuildCommand() sobre los 3 comandos oficiales',
         () async {
       final js = WebBundleLoader.loadJs();
+      final clipboardSlice = _extractSection(
+        js,
+        'async function copyPlainTextToClipboard(',
+        'async function copyPngBlobToClipboard(',
+      );
       final dualJsSlice = _extractSection(
         js,
         '// =================== MINI-GUÍA RÁPIDA DE COMPILACIÓN DUAL',
@@ -268,6 +273,7 @@ global.document = {
   },
 };
 
+$clipboardSlice
 $dualJsSlice
 
 initDualBuildGuide();

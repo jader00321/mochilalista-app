@@ -219,7 +219,7 @@ void main() {
       // 2. renderPlanDistributionChart ejecutado en loadClients()
       final loadClientsFuncIdx = js.indexOf('async function loadClients()');
       expect(loadClientsFuncIdx, isPositive);
-      final nextFuncIdx = js.indexOf('function compareSemVer', loadClientsFuncIdx);
+      final nextFuncIdx = js.indexOf('function updateFilterCounts', loadClientsFuncIdx);
       final loadClientsBlock = js.substring(loadClientsFuncIdx, nextFuncIdx);
       expect(loadClientsBlock.contains('renderPlanDistributionChart(globalClients)'), isTrue,
           reason: 'loadClients() debe actualizar la dona de cartera');

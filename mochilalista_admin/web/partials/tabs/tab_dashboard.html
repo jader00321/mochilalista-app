@@ -1,0 +1,133 @@
+    <!-- TAB 1: DASHBOARD FINANCIERO & SEMÁFORO -->
+    <section id="tabDashboard" class="tab-pane active">
+      <!-- ALERTA DISCRETA DE ACCIONES PENDIENTES CRM (FASE 3) -->
+      <div id="dashPendingActionsAlert" class="dash-pending-alert" style="display:none; margin-bottom:1.25rem;">
+        <div class="dash-alert-content">
+          <div class="dash-alert-icon">
+            <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+          </div>
+          <div class="dash-alert-text">
+            <strong>Atención Comercial Pendiente:</strong>
+            <span id="dashFollowupAlertItem" class="dash-alert-pill" style="display:none;" title="Clic para filtrar seguimientos pendientes en Cartera CRM">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+              <span id="dashFollowupAlertCount">0</span> seguimiento(s) pendiente(s)
+            </span>
+            <span id="dashBonusAlertItem" class="dash-alert-pill bonus" style="display:none;" title="Clic para filtrar bonos IA por emitir en Cartera CRM">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+              <span id="dashBonusAlertCount">0</span> bono(s) IA por emitir
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <div class="kpi-grid">
+        <!-- Fila 1: Finanzas y Cartera Comercial -->
+        <div class="kpi-card green interactive" data-kpi-tab="tabFinancesAndBackups" title="Clic para ver detalle de ingresos y cobros">
+          <span class="kpi-title">Ingresos del Mes</span>
+          <span class="kpi-value" id="kpiRevenueMonth">S/ 0.00</span>
+          <span class="kpi-subtitle">Mes en curso</span>
+        </div>
+        <div class="kpi-card green interactive" data-kpi-tab="tabFinancesAndBackups" title="Clic para ver histórico financiero y respaldos">
+          <span class="kpi-title">Ingresos Totales</span>
+          <span class="kpi-value" id="kpiRevenueTotal">S/ 0.00</span>
+          <span class="kpi-subtitle">Histórico cobrado</span>
+        </div>
+        <div class="kpi-card interactive" data-kpi-filter="active" title="Clic para filtrar clientes activos en el CRM">
+          <span class="kpi-title">Clientes Activos</span>
+          <span class="kpi-value" id="kpiActiveClients">0</span>
+          <span class="kpi-subtitle" id="kpiActiveClientsSubtitle">En producción (Real)</span>
+        </div>
+        <div class="kpi-card indigo interactive" data-kpi-filter="prospect" title="Clic para filtrar prospectos por suscribir en el CRM">
+          <span class="kpi-title">Prospectos / Por Suscribir</span>
+          <span class="kpi-value" id="kpiProspects">0</span>
+          <span class="kpi-subtitle">En evaluación / Pipeline</span>
+        </div>
+
+        <!-- Fila 2: Operaciones y Salud del Parque -->
+        <div class="kpi-card yellow interactive" data-kpi-filter="expiring" title="Clic para filtrar licencias por vencer en el CRM">
+          <span class="kpi-title">Por Vencer (≤ 7 días)</span>
+          <span class="kpi-value" id="kpiExpiringSoon">0</span>
+          <span class="kpi-subtitle">Alerta de renovación</span>
+        </div>
+        <div class="kpi-card red interactive" data-kpi-filter="expired" title="Clic para filtrar licencias vencidas en el CRM">
+          <span class="kpi-title">Licencias Vencidas</span>
+          <span class="kpi-value" id="kpiExpired">0</span>
+          <span class="kpi-subtitle">Bloqueo activo</span>
+        </div>
+        <div class="kpi-card purple interactive" data-kpi-filter="perpetual" title="Clic para filtrar licencias perpetuas en el CRM">
+          <span class="kpi-title">Licencias Perpetuas</span>
+          <span class="kpi-value" id="kpiPerpetual">0</span>
+          <span class="kpi-subtitle">Uso liberado</span>
+        </div>
+        <div class="kpi-card yellow interactive" data-kpi-filter="outdated" title="Clic para filtrar clientes con APK desactualizado">
+          <span class="kpi-title">APK Desactualizado</span>
+          <span class="kpi-value" id="kpiOutdated">0</span>
+          <span class="kpi-subtitle">Versión anterior</span>
+        </div>
+      </div>
+
+      <!-- MICRO-GRÁFICOS SVG NATIVOS (FASE 4A) -->
+      <div class="dashboard-charts-grid">
+        <div class="content-card chart-card">
+          <div class="card-header">
+            <h2>
+              <svg class="icon-svg" style="color:var(--success);" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                <line x1="18" y1="20" x2="18" y2="10"/>
+                <line x1="12" y1="20" x2="12" y2="4"/>
+                <line x1="6" y1="20" x2="6" y2="14"/>
+              </svg>
+              Evolución de Ingresos Mensuales (S/)
+            </h2>
+            <span class="chart-badge">Últimos 6 meses</span>
+          </div>
+          <div id="chartMonthlyRevenue" class="chart-container">
+            <!-- Renderizado dinámico con SVG puro -->
+          </div>
+        </div>
+
+        <div class="content-card chart-card">
+          <div class="card-header">
+            <h2>
+              <svg class="icon-svg" style="color:var(--purple);" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                <circle cx="12" cy="12" r="10"/>
+                <path d="M12 2a10 10 0 0 1 10 10h-10z"/>
+              </svg>
+              Distribución de Cartera por Plan
+            </h2>
+            <span class="chart-badge">Cartera Activa</span>
+          </div>
+          <div id="chartPlanDistribution" class="chart-container">
+            <!-- Renderizado dinámico con SVG puro -->
+          </div>
+        </div>
+      </div>
+
+      <!-- ACCIONES URGENTES (SEMÁFORO) -->
+      <div class="content-card">
+        <div class="card-header">
+          <h2>
+            <svg class="icon-svg" style="color:var(--danger);" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+            Acciones Urgentes — Vencimientos Próximos (≤ 7 días)
+          </h2>
+        </div>
+        <div class="table-responsive">
+          <table class="data-table" id="urgentTable">
+            <thead>
+              <tr>
+                <th>Cliente / Negocio</th>
+                <th>Propietario</th>
+                <th>Hardware ID (ANDROID_ID)</th>
+                <th>Días Restantes</th>
+                <th>Vence El</th>
+                <th>Acción Rápida</th>
+              </tr>
+            </thead>
+            <tbody id="urgentTableBody">
+              <tr><td colspan="6" style="text-align:center;">Cargando acciones...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 2: CRM DE CLIENTES -->

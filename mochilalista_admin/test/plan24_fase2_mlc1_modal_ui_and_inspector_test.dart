@@ -40,7 +40,7 @@ void main() {
       final modalHtml = _extractSection(
         html,
         'id="modalCommercialConfigSync"',
-        '<script src="js/admin_app.js',
+        '<script src="js/core/',
       );
 
       // Pestañas Vía 1 y Vía 2
@@ -92,20 +92,21 @@ void main() {
         '.mlc1-security-banner',
         '/* 5. Densidad Compacta de Tablas',
       );
+      final afterModalCss = css.substring(css.indexOf('.mlc1-security-banner'));
       expect(modalCss, contains('display: grid;'));
       expect(
         modalCss,
         contains('grid-template-columns: repeat(2, minmax(0, 1fr));'),
       );
-      expect(modalCss, contains('@media (max-width: 640px)'));
-      expect(modalCss, contains('[data-theme="light"] .mlc1-tab-btn'));
-      expect(modalCss, contains('[data-theme="light"] .mlc1-tab-btn.active'));
-      expect(modalCss, contains('[data-theme="light"] .mlc1-summary-card'));
-      expect(modalCss, contains('[data-theme="light"] .mlc1-plans-mini-table'));
-      expect(modalCss, contains('[data-theme="light"] .mlc1-client-steps-box'));
-      expect(modalCss, contains('[data-theme="light"] .mlc1-qr-card'));
-      expect(modalCss, contains('[data-theme="light"] .mlc1-qr-meta-badge.is-ready'));
-      expect(modalCss, contains('[data-theme="light"] .mlc1-qr-meta-badge.is-error'));
+      expect(afterModalCss, contains('@media (max-width: 640px)'));
+      expect(afterModalCss, contains('[data-theme="light"] .mlc1-tab-btn'));
+      expect(afterModalCss, contains('[data-theme="light"] .mlc1-tab-btn.active'));
+      expect(afterModalCss, contains('[data-theme="light"] .mlc1-summary-card'));
+      expect(afterModalCss, contains('[data-theme="light"] .mlc1-plans-mini-table'));
+      expect(afterModalCss, contains('[data-theme="light"] .mlc1-client-steps-box'));
+      expect(afterModalCss, contains('[data-theme="light"] .mlc1-qr-card'));
+      expect(afterModalCss, contains('[data-theme="light"] .mlc1-qr-meta-badge.is-ready'));
+      expect(afterModalCss, contains('[data-theme="light"] .mlc1-qr-meta-badge.is-error'));
       expect(modalCss, contains('width: 220px !important;'));
       expect(modalCss, contains('image-rendering: pixelated;'));
 
@@ -165,7 +166,7 @@ void main() {
       final safeQrSnippet = _extractSection(
         js,
         'function getUtf8ByteLength(',
-        'let globalClients = [];',
+        'function downloadQrWithQuietZone(',
       );
       final settingsSection = _extractSection(
         js,

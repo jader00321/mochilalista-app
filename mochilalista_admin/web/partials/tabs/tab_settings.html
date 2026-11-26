@@ -1,0 +1,348 @@
+    <section id="tabSettings" class="tab-pane">
+      <div class="content-card">
+        <div class="card-header" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:1rem;">
+          <div>
+            <h2>
+              <svg class="icon-svg" style="color:var(--primary);" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+              Centro de Personalización Total del Propietario
+            </h2>
+            <p style="font-size:0.85rem; color:var(--text-secondary); margin-top:0.25rem;">
+              Personaliza tarifas en Soles, bolsas IA, plantillas de WhatsApp y medios de pago con persistencia directa en disco y respaldos automáticos.
+            </p>
+          </div>
+          <div class="settings-header-actions">
+            <span id="settingsDirtyBadge" class="settings-dirty-pill" style="display:none;">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+              <span id="settingsDirtyBadgeText">Cambios sin guardar</span>
+            </span>
+            <button type="button" class="btn btn-outline btn-sync-mlc1" id="btnOpenCommercialSyncModal" title="Generar ficha criptográfica declarativa MLC1 o copiar constantes Dart para app móvil">
+              <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><path d="M12 18h.01"/><path d="M9 9l2 2 4-4"/></svg>
+              Sincronizar con App Móvil (MLC1)
+            </button>
+            <button type="button" class="btn btn-outline" id="btnResetSettings" title="Elegir si restablecer solo la pestaña actual o toda la configuración a valores de fábrica">
+              <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+              Restablecer...
+            </button>
+            <button type="button" class="btn btn-outline" id="btnSaveSettingsTab" title="Guardar únicamente los cambios de la pestaña visible actual">
+              <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="20 6 9 17 4 12"/></svg>
+              Guardar esta pestaña
+            </button>
+            <button type="button" class="btn btn-primary" id="btnSaveSettings" title="Guardar todas las pestañas de configuración en owner_config.json">
+              <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+              Guardar todo
+            </button>
+          </div>
+        </div>
+
+        <!-- BARRA DE PESTAÑAS INTERNAS DE CONFIGURACIÓN -->
+        <div class="settings-tab-bar">
+          <button type="button" class="settings-tab-btn active" data-stab="stabPricing">
+            <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+            <span>1. Tarifario & Bolsas IA</span>
+            <span class="stab-dirty-dot" data-dirty-for="stabPricing" title="Cambios sin guardar en Tarifario"></span>
+          </button>
+          <button type="button" class="settings-tab-btn" data-stab="stabTemplates">
+            <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+            <span>2. Plantillas WhatsApp & Chat en Vivo</span>
+            <span class="stab-dirty-dot" data-dirty-for="stabTemplates" title="Cambios sin guardar en Plantillas"></span>
+          </button>
+          <button type="button" class="settings-tab-btn" data-stab="stabPayment">
+            <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
+            <span>3. Medios de Pago & Legal (Perú)</span>
+            <span class="stab-dirty-dot" data-dirty-for="stabPayment" title="Cambios sin guardar en Medios de Pago"></span>
+          </button>
+          <button type="button" class="settings-tab-btn" data-stab="stabPreferences">
+            <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+            <span>4. Preferencias del Sistema</span>
+            <span class="stab-dirty-dot" data-dirty-for="stabPreferences" title="Cambios sin guardar en Preferencias"></span>
+          </button>
+        </div>
+
+        <!-- CONTENEDOR DE PANELES DE CONFIGURACIÓN -->
+        <div class="settings-tab-content">
+
+          <!-- PANE 1: TARIFARIO & BOLSAS IA -->
+          <div class="settings-pane active" id="stabPricing">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem; flex-wrap:wrap; gap:0.75rem;">
+              <div>
+                <h3 style="font-size:1.05rem; font-weight:700; color:var(--text-primary); margin:0;">Catálogo Oficial de Productos y Cuotas IA Acumulativas</h3>
+                <span style="font-size:0.8rem; color:var(--text-secondary);">Ajusta los precios comerciales en Soles (PEN), días base, cuotas IA y ventana de updates. Se propagan al Generador, Pagos y Migración.</span>
+              </div>
+              <div style="display:flex; align-items:center; gap:0.55rem; background:rgba(37,99,235,0.08); padding:0.45rem 0.85rem; border-radius:8px; border:1px solid rgba(37,99,235,0.22); flex-wrap:wrap;">
+                <label for="cfgMigrationFee" style="font-size:0.85rem; font-weight:600; color:var(--primary); margin:0;">Tarifa Cambio de Celular (S/):</label>
+                <input type="number" id="cfgMigrationFee" step="0.5" min="0" style="width:92px; padding:0.25rem 0.5rem; font-weight:700; text-align:right;" value="40.00">
+                <span class="settings-sync-pill" title="Sincronizado bidireccionalmente en vivo con la fila HARDWARE_MIGRATION_FEE">Enlace vivo</span>
+              </div>
+            </div>
+
+            <div class="table-responsive">
+              <table class="data-table" id="tableConfigCatalog">
+                <thead>
+                  <tr>
+                    <th>Slug Producto</th>
+                    <th>Nombre Comercial</th>
+                    <th style="width:120px;">Precio (S/)</th>
+                    <th style="width:100px;">Días Base</th>
+                    <th style="width:120px;">Bolsa IA (Vitalicia)</th>
+                    <th style="width:110px;">Updates (Meses)</th>
+                    <th>Descripción Comercial</th>
+                  </tr>
+                </thead>
+                <tbody id="catalogConfigTableBody">
+                  <!-- Llenado dinámico por JS desde owner_config.json -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- PANE 2: PLANTILLAS WHATSAPP CON VISTA PREVIA CHAT EN VIVO -->
+          <div class="settings-pane" id="stabTemplates">
+            <div class="templates-editor-layout">
+              <div class="template-editor-form">
+                <div class="form-group" style="margin-bottom:0.75rem;">
+                  <label for="cfgTemplateSelect" style="font-weight:700;">Seleccionar Plantilla Oficial de Mensaje (Sincronizada con Compositor CRM):</label>
+                  <select id="cfgTemplateSelect">
+                    <option value="license_issued">1. Emisión / Renovación de Licencia (license_issued)</option>
+                    <option value="expiring_reminder">2. Recordatorio de Vencimiento Próximo (expiring_reminder)</option>
+                    <option value="trial_welcome">3. Bienvenida / Trial 30 Días (trial_welcome)</option>
+                    <option value="prospect">4. Seguimiento a Prospecto Comercial (prospect)</option>
+                    <option value="ai_bonus">5. Entrega de Bono / Recarga IA (ai_bonus)</option>
+                    <option value="courtesy_extension">6. Extensión de Cortesía Temporal (courtesy_extension)</option>
+                    <option value="apk_update_eligible">7. Nueva Versión APK - Elegible Gratis (apk_update_eligible)</option>
+                    <option value="apk_update_quote">8. Cotización de Nueva Versión / Pase Anual (apk_update_quote)</option>
+                    <option value="device_migration">9. Migración de Celular / Nuevo Hardware ID (device_migration)</option>
+                  </select>
+                </div>
+
+                <!-- CHIPS DE VARIABLES DISPONIBLES CON TOOLTIPS EXPLICATIVOS -->
+                <div class="template-vars-toolbar">
+                  <div style="display:flex; justify-content:space-between; align-items:center; gap:0.5rem; flex-wrap:wrap;">
+                    <span style="font-size:0.75rem; color:var(--text-secondary); font-weight:700; text-transform:uppercase;">Insertar Variable Dinámica (clic en la posición del cursor):</span>
+                    <span id="templateVarTooltipText" class="template-var-hint">Pasa el cursor o haz clic sobre una variable para ver su significado</span>
+                  </div>
+                  <div class="template-chips-grid">
+                    <button type="button" class="var-chip" data-var="{titular}" title="Nombre del titular o representante del negocio">{titular}</button>
+                    <button type="button" class="var-chip" data-var="{negocio}" title="Nombre comercial de la tienda o librería cliente">{negocio}</button>
+                    <button type="button" class="var-chip" data-var="{plan}" title="Nombre legible del plan comercial asignado">{plan}</button>
+                    <button type="button" class="var-chip" data-var="{dias}" title="Cantidad de días otorgados por la licencia o extensión">{dias}</button>
+                    <button type="button" class="var-chip" data-var="{dias_restantes}" title="Días calendario que restan antes del vencimiento actual">{dias_restantes}</button>
+                    <button type="button" class="var-chip" data-var="{vencimiento}" title="Fecha exacta de expiración o vigencia (YYYY-MM-DD)">{vencimiento}</button>
+                    <button type="button" class="var-chip" data-var="{creditos_ia}" title="Créditos acumulados o acreditados de escáner IA">{creditos_ia}</button>
+                    <button type="button" class="var-chip" data-var="{codigo}" title="Token oficial firmado Ed25519 listo para pegar en la app">{codigo}</button>
+                    <button type="button" class="var-chip" data-var="{version}" title="Versión destino de MochilaLista APK (ej. 9.41.0)">{version}</button>
+                    <button type="button" class="var-chip" data-var="{device_id}" title="Hardware ID único (ANDROID_ID) del celular vinculado">{device_id}</button>
+                    <button type="button" class="var-chip" data-var="{autor}" title="Nombre legal del propietario / autor configurado en Tab 3">{autor}</button>
+                    <button type="button" class="var-chip" data-var="{yape_phone}" title="Número celular oficial Yape / Plin del propietario">{yape_phone}</button>
+                    <button type="button" class="var-chip" data-var="{yape_titular}" title="Titular registrado para pagos por Yape / Plin">{yape_titular}</button>
+                    <button type="button" class="var-chip" data-var="{bloque_banco_bcp}" title="Inserta cuenta y CCI BCP solo si están configurados (auto-suprimido si vacío)">{bloque_banco_bcp}</button>
+                    <button type="button" class="var-chip" data-var="{bloque_banco_bbva}" title="Inserta cuenta y CCI BBVA solo si están configurados (auto-suprimido si vacío)">{bloque_banco_bbva}</button>
+                  </div>
+                </div>
+
+                <div class="form-group" style="margin-top:0.75rem;">
+                  <label for="cfgTemplateContent">Contenido del Mensaje (los cambios en otras plantillas se mantienen en borrador hasta guardar):</label>
+                  <textarea id="cfgTemplateContent" rows="11" style="font-family:var(--font-mono); font-size:0.85rem; line-height:1.5;"></textarea>
+                  <div class="wa-markdown-guide">
+                    <span>Formato WhatsApp:</span>
+                    <span><code>*negrita*</code> = <strong>negrita</strong></span>
+                    <span><code>_cursiva_</code> = <em>cursiva</em></span>
+                    <span><code>~tachado~</code> = <del>tachado</del></span>
+                    <span><code>`código`</code> = monoespaciado</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- BURBUJA DE VISTA PREVIA CHAT WHATSAPP EN VIVO -->
+              <div class="wa-preview-container">
+                <div class="wa-preview-header">
+                  <div class="wa-preview-header-meta">
+                    <div class="wa-avatar">ML</div>
+                    <div>
+                      <div class="wa-header-name">MochilaLista Oficial</div>
+                      <div class="wa-header-status">en línea (Vista previa en vivo)</div>
+                    </div>
+                  </div>
+                  <button type="button" class="btn-wa-copy-preview" id="btnCopyWaPreview" title="Copiar texto renderizado de la vista previa al portapapeles">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                    <span>Copiar Vista Previa</span>
+                  </button>
+                </div>
+                <div class="wa-preview-body" id="waPreviewBody">
+                  <div class="wa-bubble" id="waBubbleContent">
+                    Cargando vista previa interactiva...
+                  </div>
+                </div>
+                <div class="wa-preview-footer">
+                  <span>Renderizado reactivo mediante API con supresión de cuentas vacías y cambios sincronizados con el Compositor CRM</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- PANE 3: MEDIOS DE PAGO & IDENTIDAD LEGAL (CUADRÍCULA EQUILIBRADA 2x2) -->
+          <div class="settings-pane" id="stabPayment">
+            <div class="settings-payment-grid">
+              
+              <!-- BLOQUE 1: IDENTIDAD LEGAL Y MARCA -->
+              <div class="settings-subcard">
+                <h4 style="font-size:0.95rem; font-weight:700; color:var(--text-primary); margin-bottom:0.25rem; display:flex; align-items:center; gap:0.45rem;">
+                  <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                  Identidad Legal & Marca Comercial
+                </h4>
+                <div class="form-group">
+                  <label for="cfgLegalOwner">Nombre del Titular Legal / Autor (D.L. 822):</label>
+                  <input type="text" id="cfgLegalOwner" value="Julio Angello Vasquez Navarro">
+                </div>
+                <div class="form-group">
+                  <label for="cfgBrandName">Marca Comercial:</label>
+                  <input type="text" id="cfgBrandName" value="MochilaLista">
+                </div>
+                <div class="form-group">
+                  <label for="cfgSupportPhone">Teléfono de Soporte Oficial (+51):</label>
+                  <input type="text" id="cfgSupportPhone" value="+51 922 836 879">
+                </div>
+              </div>
+
+              <!-- BLOQUE 2: BILLETERAS DIGITALES (YAPE / PLIN) -->
+              <div class="settings-subcard">
+                <h4 style="font-size:0.95rem; font-weight:700; color:var(--text-primary); margin-bottom:0.25rem; display:flex; align-items:center; gap:0.45rem;">
+                  <svg class="btn-icon" style="color:var(--purple);" viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>
+                  Billetera Digital Yape / Plin
+                </h4>
+                <div class="form-group">
+                  <label for="cfgYapePhone">Número Yape / Plin:</label>
+                  <input type="text" id="cfgYapePhone" value="922836879">
+                </div>
+                <div class="form-group">
+                  <label for="cfgYapeHolder">Titular de la Cuenta Yape / Plin:</label>
+                  <input type="text" id="cfgYapeHolder" value="Julio Angello Vasquez Navarro">
+                </div>
+                <p style="font-size:0.8rem; color:var(--text-muted); margin-top:0.35rem;">
+                  Se propaga automáticamente a Boletas, Facturas, Credenciales PNG y tokens <code>{yape_phone}</code> / <code>{yape_titular}</code>.
+                </p>
+              </div>
+
+              <!-- BLOQUE 3: CUENTA BANCARIA BCP (OPCIONAL) -->
+              <div class="settings-subcard">
+                <h4 style="font-size:0.95rem; font-weight:700; color:var(--text-primary); margin-bottom:0.25rem; display:flex; align-items:center; gap:0.45rem;">
+                  <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 21h18M3 10h18M5 10v11M19 10v11M9 10v11M15 10v11M12 2 2 7h20L12 2z"/></svg>
+                  Banco de Crédito BCP (Opcional)
+                </h4>
+                <div class="form-group">
+                  <label for="cfgBcpHolder">Titular Cuenta BCP:</label>
+                  <input type="text" id="cfgBcpHolder" placeholder="Opcional">
+                </div>
+                <div class="form-group">
+                  <label for="cfgBcpAccount">Número de Cuenta Corriente / Ahorros BCP:</label>
+                  <input type="text" id="cfgBcpAccount" placeholder="Dejar vacío para omitir">
+                </div>
+                <div class="form-group">
+                  <label for="cfgBcpCci">Código Interbancario (CCI) BCP:</label>
+                  <input type="text" id="cfgBcpCci" placeholder="Dejar vacío para omitir">
+                </div>
+              </div>
+
+              <!-- BLOQUE 4: CUENTA BANCARIA BBVA (OPCIONAL) -->
+              <div class="settings-subcard">
+                <h4 style="font-size:0.95rem; font-weight:700; color:var(--text-primary); margin-bottom:0.25rem; display:flex; align-items:center; gap:0.45rem;">
+                  <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 21h18M3 10h18M5 10v11M19 10v11M9 10v11M15 10v11M12 2 2 7h20L12 2z"/></svg>
+                  Banco BBVA Perú (Opcional)
+                </h4>
+                <div class="form-group">
+                  <label for="cfgBbvaHolder">Titular Cuenta BBVA:</label>
+                  <input type="text" id="cfgBbvaHolder" placeholder="Opcional">
+                </div>
+                <div class="form-group">
+                  <label for="cfgBbvaAccount">Número de Cuenta BBVA:</label>
+                  <input type="text" id="cfgBbvaAccount" placeholder="Dejar vacío para omitir">
+                </div>
+                <div class="form-group">
+                  <label for="cfgBbvaCci">Código Interbancario (CCI) BBVA:</label>
+                  <input type="text" id="cfgBbvaCci" placeholder="Dejar vacío para omitir">
+                </div>
+              </div>
+
+            </div>
+            <div class="settings-callout-banner">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--success); flex-shrink:0; margin-top:2px;"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+              <div style="display:flex; justify-content:space-between; align-items:center; gap:0.75rem; flex-wrap:wrap; width:100%;">
+                <span><strong>Regla de Supresión Automática y Propagación Reactiva:</strong> Si las cuentas de BCP o BBVA se dejan vacías, no ocuparán espacio en WhatsApp. Los cambios de Titular, Marca o Teléfono se reflejan al instante en la cabecera, Boletas/Facturas y Credenciales PNG.</span>
+                <button type="button" class="btn btn-outline btn-sm btn-open-commercial-sync" title="Emitir ficha MLC1 o bloque Dart con tus cuentas y tarifas actualizadas">
+                  <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><path d="M9 9l2 2 4-4"/></svg>
+                  Sincronizar Cuentas a App Móvil
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- PANE 4: PREFERENCIAS DEL SISTEMA -->
+          <div class="settings-pane" id="stabPreferences">
+            <div class="settings-preferences-grid">
+              <div class="settings-pref-card">
+                <div class="form-group" style="margin-bottom:0;">
+                  <label for="cfgDefaultEnv" style="font-weight:700;">Entorno Inicial al Abrir la Plataforma:</label>
+                  <select id="cfgDefaultEnv">
+                    <option value="sandbox">Modo Pruebas (Sandbox con datos demo)</option>
+                    <option value="prod">Modo Real (Base de Clientes Producción)</option>
+                  </select>
+                </div>
+                <p class="settings-pref-help">
+                  Determina con qué base de datos arranca el servidor (<code>Modo Pruebas</code> o <code>Modo Real</code>) cada vez que inicias MochilaLista Admin.
+                </p>
+              </div>
+
+              <div class="settings-pref-card">
+                <div class="form-group" style="margin-bottom:0;">
+                  <label for="cfgDefaultTheme" style="font-weight:700;">Tema Visual Predeterminado:</label>
+                  <select id="cfgDefaultTheme">
+                    <option value="dark">Deep Obsidian (Oscuro Ejecutivo)</option>
+                    <option value="light">Executive Slate (Claro Nítido)</option>
+                  </select>
+                </div>
+                <p class="settings-pref-help">
+                  Define el esquema de colores aplicado automáticamente al iniciar la consola. Puedes alternarlo momentáneamente desde el botón Tema en la barra superior.
+                </p>
+              </div>
+
+              <div class="settings-pref-card">
+                <div class="form-group" style="margin-bottom:0;">
+                  <label for="cfgTableDensity" style="font-weight:700;">Densidad Visual de Tablas:</label>
+                  <select id="cfgTableDensity">
+                    <option value="comfortable">Cómoda (Espaciado estándar - Recomendado)</option>
+                    <option value="compact">Compacta (Mayor cantidad de filas por pantalla)</option>
+                  </select>
+                </div>
+                <p class="settings-pref-help">
+                  Controla el relleno vertical de filas en Cartera CRM, Lanzamientos, Finanzas, Respaldos y Auditoría de Bóveda en tiempo real.
+                </p>
+              </div>
+            </div>
+
+            <!-- RESUMEN DE RUTAS DE BÚSQUEDA DE APKs (PLAN 22.5) -->
+            <div class="settings-apk-dirs-card" id="settingsApkDirsCard">
+              <div class="settings-apk-dirs-header">
+                <div>
+                  <h4 style="font-size:0.95rem; font-weight:700; color:var(--text-primary); margin:0; display:flex; align-items:center; gap:0.45rem;">
+                    <svg class="btn-icon" style="color:var(--primary);" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+                    Rutas de Búsqueda de APKs Activas (Solo Lectura)
+                  </h4>
+                  <p style="font-size:0.8rem; color:var(--text-secondary); margin:0.2rem 0 0 0;">
+                    Estas carpetas configuradas en Plan 22.5 se preservan automáticamente al guardar o restablecer preferencias.
+                  </p>
+                </div>
+                <button type="button" class="btn btn-outline btn-sm" id="btnGoToApkSearchDirs" title="Abrir el gestor de carpetas APK dentro de Versiones APK">
+                  <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+                  Administrar Rutas en Versiones APK
+                </button>
+              </div>
+              <div class="settings-apk-dirs-list" id="settingsApkDirsSummary">
+                <div style="font-size:0.82rem; color:var(--text-muted);">Cargando rutas configuradas...</div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 8: SEGURIDAD, BÓVEDA CIFRADA Y PORTABILIDAD (PLAN 10 + PLAN 23 FASE 5) -->

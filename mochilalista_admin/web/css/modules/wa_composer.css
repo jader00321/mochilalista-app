@@ -1,0 +1,293 @@
+/* === LAYER: css/modules/wa_composer.css === */
+
+/* Modal Compositor Universal de WhatsApp (Plan 22 Fase 3) */
+.modal-wa-dialog {
+  max-width: 760px;
+  width: 95%;
+}
+
+.wa-composer-icon-bubble {
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  background: rgba(37, 211, 102, 0.12);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.wa-client-card {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  padding: 0.85rem 1.1rem;
+}
+
+.wa-templates-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.wa-template-btn {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+  font-weight: 500;
+  padding: 0.4rem 0.75rem;
+  border-radius: 20px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.wa-template-btn svg {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+}
+
+.wa-template-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+  border-color: rgba(37, 211, 102, 0.4);
+}
+
+.wa-template-btn.active {
+  background: rgba(37, 211, 102, 0.15);
+  color: #25d366;
+  border-color: #25d366;
+  font-weight: 600;
+}
+
+/* Barra de inserción rápida de WhatsApp */
+.wa-quick-insert-bar {
+  display: flex;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+  align-items: center;
+  margin-top: 0.45rem;
+}
+
+.wa-insert-chip {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  font-size: 0.76rem;
+  font-weight: 600;
+  padding: 0.35rem 0.65rem;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.wa-insert-chip svg {
+  width: 13px;
+  height: 13px;
+  flex-shrink: 0;
+}
+
+.wa-insert-chip .wa-chip-check-icon {
+  display: none;
+}
+
+.wa-insert-chip:hover {
+  background: var(--bg-hover);
+  color: var(--primary);
+  border-color: var(--primary);
+}
+
+.wa-insert-chip.active {
+  background: rgba(37, 211, 102, 0.14);
+  border-color: #25d366;
+  color: #25d366;
+}
+
+.wa-insert-chip.active .wa-chip-base-icon {
+  display: none;
+}
+
+.wa-insert-chip.active .wa-chip-check-icon {
+  display: inline-block;
+}
+
+/* Editor de texto amplio de WhatsApp */
+#waCompMessage {
+  width: 100%;
+  box-sizing: border-box;
+  display: block;
+  min-height: 160px;
+  resize: vertical;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 0.75rem;
+  font-family: inherit;
+  font-size: 0.88rem;
+  line-height: 1.5;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+#waCompMessage:focus {
+  outline: none;
+  border-color: #25d366;
+  box-shadow: 0 0 0 2px rgba(37, 211, 102, 0.2);
+}
+
+#modalWaComposer .modal-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+}
+
+#waStandardFooterActions,
+#waApkDispatchFooterActions {
+  display: flex;
+  gap: 0.45rem;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.wa-apk-version-selector-wrap {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+}
+
+.wa-apk-select-label {
+  font-size: 0.74rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+}
+
+.wa-apk-version-select {
+  padding: 0.32rem 0.6rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  border-radius: 7px;
+  min-width: 215px;
+}
+
+.wa-apk-size-warning {
+  display: none;
+  align-items: flex-start;
+  gap: 0.55rem;
+  margin-bottom: 0.7rem;
+  padding: 0.6rem 0.75rem;
+  border-radius: 8px;
+  background: rgba(245, 158, 11, 0.12);
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  color: #fbbf24;
+  font-size: 0.78rem;
+  line-height: 1.4;
+}
+
+.wa-apk-copy-success-hint {
+  display: none;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.7rem;
+  padding: 0.6rem 0.8rem;
+  border-radius: 8px;
+  background: rgba(16, 185, 129, 0.12);
+  border: 1px solid rgba(16, 185, 129, 0.35);
+  color: #34d399;
+  font-size: 0.79rem;
+  line-height: 1.4;
+}
+
+/* ========================================================
+   SELECTOR DE VARIANTES: DESPACHO APK WHATSAPP (PLAN 19 FASE 3)
+   ======================================================== */
+.wa-variant-selector-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.65rem;
+}
+
+.wa-variant-card {
+  background: var(--bg-primary);
+  border: 1.5px solid var(--border-color);
+  border-radius: 8px;
+  padding: 0.65rem 0.85rem;
+  cursor: pointer;
+  transition: all 0.18s ease;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  user-select: none;
+}
+
+.wa-variant-card:hover {
+  border-color: var(--primary);
+  background: var(--bg-hover);
+}
+
+.wa-variant-card.active {
+  border-color: var(--primary);
+  background: rgba(37, 99, 235, 0.09);
+  box-shadow: 0 0 0 1px var(--primary);
+}
+
+.wa-variant-card.disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  pointer-events: none;
+  border-style: dashed;
+}
+
+.wa-variant-title {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-weight: 700;
+  font-size: 0.84rem;
+  color: var(--text-primary);
+}
+
+.wa-variant-title svg {
+  width: 15px;
+  height: 15px;
+  color: var(--primary);
+  flex-shrink: 0;
+}
+
+.wa-variant-desc {
+  font-size: 0.74rem;
+  color: var(--text-secondary);
+  line-height: 1.35;
+}
+
+/* Grupos compactos de botones de variante para catálogo */
+.variant-btn-group {
+  display: inline-flex;
+  border-radius: 6px;
+  overflow: hidden;
+  border: 1px solid var(--border-color);
+}
+
+.variant-btn-group .btn {
+  border: none;
+  border-radius: 0;
+  padding: 0.25rem 0.5rem;
+  font-size: 0.72rem;
+}
+
+.variant-btn-group .btn:not(:last-child) {
+  border-right: 1px solid var(--border-color);
+}

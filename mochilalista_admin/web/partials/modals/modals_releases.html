@@ -1,0 +1,354 @@
+  <!-- MODAL: REGISTRAR / SUBIR NUEVA VERSIÓN DEL APK (PLAN 19) -->
+  <div class="modal-overlay" id="modalCreateRelease">
+    <div class="modal-dialog" style="max-width:780px;">
+      <div class="modal-header">
+        <div style="display:flex; align-items:center; gap:0.5rem;">
+          <svg class="icon-svg" style="color:var(--primary); width:20px; height:20px;" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
+          <h3 style="margin:0;">Subir y Registrar Nueva Versión del APK</h3>
+        </div>
+        <button type="button" class="btn btn-outline btn-sm" onclick="closeModal('modalCreateRelease')" title="Cerrar">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      <div class="modal-body">
+
+        <!-- ZONA DRAG & DROP DE APK DIRECTO -->
+        <div class="apk-drop-zone" id="apkDropZone">
+          <div class="drop-icon" id="apkDropZoneIcon">
+            <svg width="38" height="38" style="width:38px; height:38px; color:var(--primary);" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          </div>
+          <div class="drop-title" id="apkDropZoneTitle">Arrastra tu archivo .APK aquí o haz clic para seleccionarlo</div>
+          <div class="drop-subtitle" id="apkDropZoneSubtitle">Compatible con APK Universal (~110 MB) y APK Ligero ARM64 (~30 MB)</div>
+          <input type="file" id="apkFileInput" accept=".apk" style="display:none;">
+          <div id="apkUploadProgress" style="display:none; width:100%; margin-top:0.5rem;">
+            <div style="background:rgba(148,163,184,0.2); border-radius:4px; height:8px; overflow:hidden;">
+              <div id="apkProgressBar" style="width:0%; background:var(--primary); height:100%; transition:width 0.2s;"></div>
+            </div>
+            <span id="apkUploadStatusText" style="font-size:0.75rem; color:var(--text-secondary); margin-top:0.25rem; display:block;">Procesando archivo e inspeccionando metadatos...</span>
+          </div>
+        </div>
+
+        <!-- TARJETA UNÍVOCA DE APK ACTIVO LISTO PARA PUBLICAR (PLAN 22.5 FASE 2) -->
+        <div id="activeCreateApkCard" class="active-apk-card" style="display:none;" aria-live="polite"></div>
+
+        <!-- ESCUDO ANTI-DEBUG.APK BANNER DINÁMICO -->
+        <div id="apkSignatureBanner" style="display:none;" class="apk-signature-banner"></div>
+
+        <!-- SECCIÓN DE AUTODETECCIÓN TRANSPARENTE DESDE RUTAS CONFIGURABLES -->
+        <div class="autodetect-container">
+          <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.5rem;">
+            <div style="flex:1; min-width:220px;">
+              <strong style="color:var(--primary); font-size:0.88rem;">Autodetección Transparente de APKs Locales:</strong>
+              <p style="font-size:0.78rem; color:var(--text-secondary); margin:0;" id="detectApkStatus">Escanea tus rutas configuradas (Biblioteca Oficial, compilaciones locales o carpetas personalizadas) con fecha, SHA-256 y firma real.</p>
+            </div>
+            <div style="display:flex; align-items:center; gap:0.45rem; flex-wrap:wrap;">
+              <button type="button" class="btn btn-outline btn-sm" id="btnToggleSearchDirsPanel" title="Configurar carpetas donde buscar archivos .APK">
+                <svg class="btn-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="2"/></svg>
+                Rutas de búsqueda
+              </button>
+              <button type="button" class="btn btn-outline btn-sm" id="btnDetectLocalBuild">
+                <svg class="btn-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+                Autodetectar APKs Locales
+              </button>
+            </div>
+          </div>
+
+          <!-- MINI-PANEL COLAPSABLE: CONFIGURAR RUTAS DE BÚSQUEDA -->
+          <div id="createSearchDirsPanel" class="search-dirs-panel" style="display:none;">
+            <div class="search-dirs-header">
+              <div>
+                <strong style="font-size:0.82rem; color:var(--text-primary);">Rutas de búsqueda configuradas</strong>
+                <div style="font-size:0.72rem; color:var(--text-muted);">Escaneo recursivo inteligente (máx. 3 subniveles) con protección de rutas sensibles.</div>
+              </div>
+              <button type="button" class="btn btn-outline btn-xs" id="btnResetApkSearchDirs" title="Restablecer rutas por defecto">
+                <svg class="btn-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
+                Restablecer rutas por defecto
+              </button>
+            </div>
+            <div id="createSearchDirsList" class="search-dirs-list"></div>
+            <div class="search-dir-add-row">
+              <input type="text" id="inputNewApkSearchDir" placeholder="Ej: D:\Compilaciones\MochilaLista (carpeta con archivos .APK)">
+              <button type="button" class="btn btn-outline btn-sm" id="btnBrowseApkSearchDir" title="Seleccionar carpeta en el Explorador de Windows">
+                <svg class="btn-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+                Examinar carpeta...
+              </button>
+              <button type="button" class="btn btn-primary btn-sm" id="btnAddApkSearchDir">
+                <svg class="btn-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                Agregar ruta
+              </button>
+            </div>
+          </div>
+
+          <!-- BARRA DE FILTROS RÁPIDOS DE AUTODETECCIÓN -->
+          <div id="localBuildsToolbar" class="local-builds-toolbar" style="display:none;">
+            <div class="local-abi-chips" id="localBuildsAbiChips">
+              <button type="button" class="local-abi-chip active" data-abi="ALL">Todos</button>
+              <button type="button" class="local-abi-chip" data-abi="UNIVERSAL">Universal</button>
+              <button type="button" class="local-abi-chip" data-abi="ARM64">ARM64</button>
+            </div>
+            <div class="local-builds-toolbar-right">
+              <input type="text" id="inputLocalBuildsFilter" class="local-builds-filter-input" placeholder="Filtrar versión, archivo o ruta...">
+              <select id="selectLocalBuildsLimit" class="local-builds-limit-select" title="Cantidad máxima de APKs a mostrar">
+                <option value="6" selected>6 APKs</option>
+                <option value="12">12 APKs</option>
+                <option value="24">24 APKs</option>
+              </select>
+            </div>
+          </div>
+
+          <div id="localBuildsGrid" class="local-builds-grid" style="display:none;"></div>
+        </div>
+
+        <form id="formCreateRelease" class="form-grid">
+          <input type="hidden" id="relUploadedPath">
+          <input type="hidden" id="relAbiVariant" value="UNIVERSAL">
+          <input type="hidden" id="relSignatureVerified">
+          <input type="hidden" id="relSignatureStatus">
+          <input type="hidden" id="relSignerSha256">
+          <input type="hidden" id="relSignerDn">
+
+          <div class="form-group">
+            <label for="relVersionName">Versión (Version Name):</label>
+            <input type="text" id="relVersionName" required placeholder="Ej: 9.38.0">
+          </div>
+          <div class="form-group">
+            <label for="relVersionCode">Código de Build (Version Code):</label>
+            <input type="number" id="relVersionCode" required placeholder="Ej: 82">
+          </div>
+          <div class="form-group">
+            <label for="relMinRequiredVersion">Versión Mínima Requerida:</label>
+            <input type="text" id="relMinRequiredVersion" value="9.0.0" placeholder="9.0.0">
+          </div>
+          <div class="form-group">
+            <label for="relDbSchema">Esquema SQLite Requerido:</label>
+            <input type="number" id="relDbSchema" required value="36">
+          </div>
+          <div class="form-group" style="grid-column: 1 / -1;">
+            <label for="relType">Tipo de Lanzamiento:</label>
+            <select id="relType">
+              <option value="FEATURE_RELEASE">FEATURE_RELEASE (Nuevas Funciones Comerciales)</option>
+              <option value="HOTFIX">HOTFIX (Parche de Corrección Gratuito Vitalicio)</option>
+            </select>
+            <div id="relTypeInfoCard" class="release-type-info-card">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+              <span id="relTypeInfoText">Nuevas funciones comerciales. Gratis para suscripciones activas, Trial y Perpetuos con pase de updates vigente; requiere Pase Anual (S/ 150.00) o cortesía para Perpetuos con pase vencido.</span>
+            </div>
+          </div>
+          <div class="form-group">
+            <label for="relSizeMb">Tamaño del APK (MB):</label>
+            <input type="text" id="relSizeMb" placeholder="Ej: 109.05 MB">
+          </div>
+          <div class="form-group">
+            <label>Variante Arquitectura Detectada:</label>
+            <div style="display:flex; align-items:center; height:38px;">
+              <span id="badgeRelVariantDisplay" class="badge badge-universal">UNIVERSAL</span>
+            </div>
+          </div>
+          <div class="form-group" style="grid-column: 1 / -1;">
+            <label for="relSha256">Hash Criptográfico SHA-256 del APK:</label>
+            <input type="text" id="relSha256" placeholder="Ej: 4a5b6c7d... (64 caracteres hex)" style="font-family:var(--font-mono);">
+          </div>
+          <div class="form-group" style="grid-column: 1 / -1;">
+            <label for="relDownloadUrl">Enlace de Descarga Externo (Opcional - Google Drive / Web):</label>
+            <input type="url" id="relDownloadUrl" placeholder="https://drive.google.com/file/d/.../view">
+          </div>
+          <div class="form-group" style="grid-column: 1 / -1;">
+            <div class="field-label-row">
+              <label for="relChangelog" style="margin:0;">Novedades y Mejoras Comerciales (Changelog para Clientes):</label>
+              <div class="field-label-actions">
+                <span id="relChangelogCounter" class="textarea-meta-counter" aria-live="polite">0 lín. · 0 car.</span>
+                <button type="button" class="btn btn-outline btn-xs btn-load-companion" id="btnCreateLoadCambiosTxt" title="Cargar texto comercial desde *_cambios.txt">
+                  <svg class="btn-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                  Cargar *_cambios.txt
+                </button>
+                <button type="button" class="btn btn-outline btn-xs btn-toggle-textarea" data-target="relChangelog" aria-expanded="false" aria-controls="relChangelog" title="Expandir o contraer campo de changelog">
+                  <svg class="btn-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
+                  <span class="btn-toggle-textarea-label">Expandir</span>
+                </button>
+              </div>
+            </div>
+            <textarea id="relChangelog" class="expandable-textarea" rows="3" placeholder="Detalla los puntos nuevos que recibirá el usuario por WhatsApp..."></textarea>
+          </div>
+          <div class="form-group" style="grid-column: 1 / -1;">
+            <div class="field-label-row">
+              <label for="relInternalNotes" style="margin:0;">Notas Internas de Ingeniería (Privadas — no se envían al cliente):</label>
+              <div class="field-label-actions">
+                <span id="relInternalNotesCounter" class="textarea-meta-counter" aria-live="polite">0 lín. · 0 car.</span>
+                <button type="button" class="btn btn-outline btn-xs btn-load-companion" id="btnCreateLoadAtpTxt" title="Cargar ficha técnica desde *_atp.txt">
+                  <svg class="btn-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/></svg>
+                  Cargar *_atp.txt
+                </button>
+                <button type="button" class="btn btn-outline btn-xs btn-toggle-textarea" data-target="relInternalNotes" aria-expanded="false" aria-controls="relInternalNotes" title="Expandir o contraer notas internas">
+                  <svg class="btn-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
+                  <span class="btn-toggle-textarea-label">Expandir</span>
+                </button>
+              </div>
+            </div>
+            <textarea id="relInternalNotes" class="expandable-textarea" rows="2" placeholder="Detalles de commits, branches, flags de compilación o notas técnicas..."></textarea>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-outline" onclick="closeModal('modalCreateRelease')">Cancelar</button>
+        <button class="btn btn-primary" id="btnSubmitCreateRelease">Publicar Versión</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: EDITAR VERSIÓN / CHANGELOG (PLAN 19) -->
+  <div class="modal-overlay" id="modalEditRelease">
+    <div class="modal-dialog" style="max-width:760px;">
+      <div class="modal-header">
+        <div style="display:flex; align-items:center; gap:0.5rem;">
+          <svg class="icon-svg" style="color:var(--primary); width:20px; height:20px;" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+          <h3 style="margin:0;">Editar Versión Publicada & Changelog</h3>
+        </div>
+        <button type="button" class="btn btn-outline btn-sm" onclick="closeModal('modalEditRelease')" title="Cerrar">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <form id="formEditRelease" class="form-grid">
+          <input type="hidden" id="editRelVersionName">
+          <div class="form-group">
+            <label>Versión (Inmutable):</label>
+            <input type="text" id="editRelVersionDisplay" readonly style="opacity:0.85; font-weight:700;">
+          </div>
+          <div class="form-group">
+            <label for="editRelVersionCode">Código de Build (Version Code):</label>
+            <input type="number" id="editRelVersionCode" required placeholder="Ej: 82">
+          </div>
+          <div class="form-group">
+            <label for="editRelDbSchema">Esquema SQLite Requerido:</label>
+            <input type="number" id="editRelDbSchema" required placeholder="36">
+          </div>
+          <div class="form-group">
+            <label for="editRelMinRequiredVersion">Versión Mínima Requerida:</label>
+            <input type="text" id="editRelMinRequiredVersion" placeholder="9.0.0">
+          </div>
+          <div class="form-group" style="grid-column: 1 / -1;">
+            <label for="editRelType">Tipo de Lanzamiento:</label>
+            <select id="editRelType">
+              <option value="FEATURE_RELEASE">FEATURE_RELEASE (Nuevas Funciones Comerciales)</option>
+              <option value="HOTFIX">HOTFIX (Parche Gratuito Vitalicio)</option>
+            </select>
+            <div id="editRelTypeInfoCard" class="release-type-info-card">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+              <span id="editRelTypeInfoText">Nuevas funciones comerciales. Aplica a suscripciones activas y perpetuos con pase vigente.</span>
+            </div>
+          </div>
+          <div class="form-group" style="grid-column: 1 / -1;">
+            <label for="editRelDownloadUrl">Enlace de Descarga Externo (Google Drive / Web):</label>
+            <input type="url" id="editRelDownloadUrl" placeholder="https://drive.google.com/file/d/.../view">
+          </div>
+          <div class="form-group" style="grid-column: 1 / -1;">
+            <div class="field-label-row">
+              <label for="editRelChangelog" style="margin:0;">Changelog Comercial para Clientes:</label>
+              <div class="field-label-actions">
+                <span id="editRelChangelogCounter" class="textarea-meta-counter" aria-live="polite">0 lín. · 0 car.</span>
+                <button type="button" class="btn btn-outline btn-xs btn-load-companion" id="btnEditLoadCambiosTxt" title="Importar changelog comercial desde archivo *_cambios.txt local">
+                  <svg class="btn-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                  Cargar *_cambios.txt
+                </button>
+                <button type="button" class="btn btn-outline btn-xs btn-toggle-textarea" data-target="editRelChangelog" aria-expanded="false" aria-controls="editRelChangelog" title="Expandir o contraer changelog comercial">
+                  <svg class="btn-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
+                  <span class="btn-toggle-textarea-label">Expandir</span>
+                </button>
+              </div>
+            </div>
+            <textarea id="editRelChangelog" class="expandable-textarea" rows="4" placeholder="Novedades que se enviarán por WhatsApp..."></textarea>
+          </div>
+          <div class="form-group" style="grid-column: 1 / -1;">
+            <div class="field-label-row">
+              <label for="editRelInternalNotes" style="margin:0;">Notas Internas de Ingeniería (Privadas):</label>
+              <div class="field-label-actions">
+                <span id="editRelInternalNotesCounter" class="textarea-meta-counter" aria-live="polite">0 lín. · 0 car.</span>
+                <button type="button" class="btn btn-outline btn-xs btn-load-companion" id="btnEditLoadAtpTxt" title="Importar ficha técnica desde archivo *_atp.txt local">
+                  <svg class="btn-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/></svg>
+                  Cargar *_atp.txt
+                </button>
+                <button type="button" class="btn btn-outline btn-xs btn-toggle-textarea" data-target="editRelInternalNotes" aria-expanded="false" aria-controls="editRelInternalNotes" title="Expandir o contraer notas internas">
+                  <svg class="btn-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
+                  <span class="btn-toggle-textarea-label">Expandir</span>
+                </button>
+              </div>
+            </div>
+            <textarea id="editRelInternalNotes" class="expandable-textarea" rows="2" placeholder="Notas de build, branches o incidencias resueltas..."></textarea>
+          </div>
+          <div class="form-group" style="grid-column: 1 / -1;">
+            <label>Archivos APK Físicos en Disco (Variantes Universal & ARM64):</label>
+            <input type="file" id="editRelUniversalInput" accept=".apk" style="display:none;">
+            <input type="file" id="editRelArm64Input" accept=".apk" style="display:none;">
+            <div id="editSearchDirsPanel" class="search-dirs-panel" style="display:none; margin-bottom:0.65rem;">
+              <div class="field-label-row">
+                <strong style="font-size:0.78rem; color:var(--text-primary);">Rutas Activas de Autodetección APK:</strong>
+                <div style="display:flex; gap:0.35rem; flex-wrap:wrap;">
+                  <button type="button" class="btn btn-outline btn-xs" id="btnEditResetApkSearchDirs" title="Restablecer rutas predeterminadas">
+                    Restablecer predeterminadas
+                  </button>
+                  <button type="button" class="btn btn-outline btn-xs" id="btnCloseEditSearchDirsPanel" title="Cerrar panel de rutas">
+                    <svg class="btn-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                    Cerrar
+                  </button>
+                </div>
+              </div>
+              <div id="editSearchDirsList" style="display:flex; flex-direction:column; gap:0.4rem;"></div>
+              <div style="display:flex; gap:0.4rem; flex-wrap:wrap; align-items:center;">
+                <input type="text" id="inputEditNewApkSearchDir" placeholder="Ej: C:\Users\vjuli\Downloads\APKs o selecciona una carpeta..." style="flex:1; min-width:200px; font-size:0.78rem; padding:0.42rem 0.6rem; border-radius:6px; border:1px solid var(--border-color); background:var(--bg-primary); color:var(--text-primary);">
+                <button type="button" class="btn btn-outline btn-xs" id="btnEditBrowseApkSearchDir" title="Examinar carpeta en Windows">
+                  <svg class="btn-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+                  Examinar...
+                </button>
+                <button type="button" class="btn btn-primary btn-xs" id="btnEditAddApkSearchDir">
+                  Agregar ruta
+                </button>
+              </div>
+            </div>
+            <div id="editRelVariantsContainer" style="background:var(--bg-secondary); border:1px solid var(--border-color); border-radius:8px; padding:0.75rem; font-size:0.8rem;">
+              Cargando estado de archivos...
+            </div>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-outline" onclick="closeModal('modalEditRelease')">Cancelar</button>
+        <button class="btn btn-primary" id="btnSubmitEditRelease">Guardar Cambios</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL COMPACTO: CORREGIR VERSIÓN INSTALADA DE CLIENTE (PLAN 22 FASE 2) -->
+  <div class="modal-overlay" id="modalFixClientVersion" onclick="if(event.target===this) closeModal('modalFixClientVersion')">
+    <div class="modal-dialog" style="max-width:450px;">
+      <div class="modal-header">
+        <div style="display:flex; align-items:center; gap:0.5rem;">
+          <svg class="icon-svg" width="18" height="18" style="color:var(--primary);" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+          <h3 style="margin:0;">Corregir Versión Instalada</h3>
+        </div>
+        <button type="button" class="btn btn-outline btn-sm" onclick="closeModal('modalFixClientVersion')">&times;</button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="fixClientVersionId">
+        <div style="margin-bottom:0.85rem; padding:0.65rem 0.85rem; background:var(--bg-secondary); border:1px solid var(--border-color); border-radius:8px; font-size:0.84rem;">
+          <div><strong id="fixClientVersionBiz">Cliente</strong></div>
+          <div style="color:var(--text-muted); font-size:0.78rem; margin-top:0.2rem;">Versión actual registrada: <code id="fixClientVersionCurrent">v9.0.0</code></div>
+        </div>
+        <div class="form-group" style="margin-bottom:0.85rem;">
+          <label for="fixClientVersionSelect">Seleccionar versión del catálogo:</label>
+          <select id="fixClientVersionSelect"></select>
+        </div>
+        <div class="form-group">
+          <label for="fixClientVersionInput">Versión a registrar (SemVer):</label>
+          <input type="text" id="fixClientVersionInput" placeholder="Ej: 9.38.0" style="font-family:var(--font-mono);">
+        </div>
+        <p style="font-size:0.76rem; color:var(--text-muted); margin-top:0.6rem; line-height:1.4;">
+          Permite corregir la versión instalada hacia arriba o hacia abajo (con <code>force: true</code>) si se marcó actualizado por error.
+        </p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline" onclick="closeModal('modalFixClientVersion')">Cancelar</button>
+        <button type="button" class="btn btn-primary" id="btnSubmitFixClientVersion">Guardar Versión</button>
+      </div>
+    </div>
+  </div>
+

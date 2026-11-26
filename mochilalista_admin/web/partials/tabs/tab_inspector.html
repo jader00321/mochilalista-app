@@ -1,0 +1,164 @@
+    <section id="tabInspector" class="tab-pane">
+      <div class="content-card">
+        <div class="card-header">
+          <h2>
+            <svg class="icon-svg" width="20" height="20" style="color:var(--primary);" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/><path d="M11 8v6"/><path d="M8 11h6"/></svg>
+            Inspector Forense Tri-Protocolo (ML9 / MLS1 / MLC1)
+          </h2>
+          <div class="card-header-actions">
+            <button type="button" class="btn btn-outline btn-sm" id="btnToggleInspectorGuide" aria-expanded="false" aria-controls="inspectorProtocolGuide" title="Ver explicación de los protocolos ML9, MLS1 y MLC1 y herramientas del Inspector">
+              <svg class="btn-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+              <span>Guía de Protocolos (ML9 / MLS1 / MLC1)</span>
+            </button>
+          </div>
+        </div>
+        <p style="font-size:0.88rem; color:var(--text-secondary); margin-bottom:1.1rem;">
+          Pega cualquier código o ficha oficial de MochilaLista (licencias Ed25519 <strong>ML9-...</strong>, reportes offline <strong>MLS1-... / .mlsync</strong> o fichas comerciales de tarifas y cuentas <strong>MLC1-...</strong>), arrastra una imagen QR PNG o sube un archivo <code>.mlsync</code> para auditar matemáticamente su firma y contenido.
+        </p>
+
+        <!-- PANEL GUÍA VISUAL DE LOS 3 PROTOCOLOS Y HERRAMIENTAS (COLAPSABLE) -->
+        <div id="inspectorProtocolGuide" class="inspector-protocol-guide" style="display:none;">
+          <div class="inspector-guide-intro">
+            <strong>Cómo leer esta ventana sin confusiones:</strong> MochilaLista utiliza <strong>3 protocolos offline distintos</strong> según qué viaja entre tu PC Admin y el celular del cliente. El Inspector detecta automáticamente cuál pegaste.
+          </div>
+
+          <div class="inspector-guide-grid">
+            <div class="inspector-guide-card tone-ml9">
+              <div class="inspector-guide-card-head">
+                <span class="badge badge-mono">ML9-...</span>
+                <span class="inspector-guide-dir">Admin -> Celular</span>
+              </div>
+              <h4>Licencias y Bonos IA</h4>
+              <ul>
+                <li><strong>Qué es:</strong> Llave criptográfica Ed25519 que activa planes comerciales o acredita escaneos IA.</li>
+                <li><strong>Dónde se genera:</strong> Pestaña <em>Generar Licencia</em>.</li>
+                <li><strong>Uso del cliente:</strong> Pega el código o escanea el QR en <code>Perfil &gt; Licencia</code>.</li>
+                <li><strong>Qué valida el Inspector:</strong> Firma Ed25519 auténtica, días/créditos IA y si el Nonce ya fue canjeado o sigue pendiente.</li>
+              </ul>
+            </div>
+
+            <div class="inspector-guide-card tone-mls1">
+              <div class="inspector-guide-card-head">
+                <span class="badge badge-blue">MLS1-... / .mlsync</span>
+                <span class="inspector-guide-dir">Celular -> Admin</span>
+              </div>
+              <h4>Diagnóstico y Telemetría</h4>
+              <ul>
+                <li><strong>Qué es:</strong> Reporte del estado real del teléfono firmado con HMAC-SHA256.</li>
+                <li><strong>Quién lo genera:</strong> La app móvil del cliente desde soporte o pedidos por WhatsApp.</li>
+                <li><strong>Qué haces con él:</strong> Impórtalo en Cartera CRM / Ficha 360° o audítalo aquí para ver saldo IA real, versión APK, respaldo Drive y rescatar migraciones <code>PENDIENTE_MIGRACION</code>.</li>
+              </ul>
+            </div>
+
+            <div class="inspector-guide-card tone-mlc1">
+              <div class="inspector-guide-card-head">
+                <span class="badge badge-mlc1">MLC1-...</span>
+                <span class="inspector-guide-dir">Admin -> Celular</span>
+              </div>
+              <h4>Tarifas y Medios de Pago</h4>
+              <ul>
+                <li><strong>Qué es:</strong> Ficha 100 % declarativa de precios y cuentas Yape/Plin/BCP/BBVA firmada con Ed25519 (<strong>cero scripts ejecutables</strong>).</li>
+                <li><strong>Dónde se genera:</strong> <em>Configuración &gt; Sincronizar con App Móvil</em>.</li>
+                <li><strong>Uso del cliente:</strong> Pega el código o escanea el QR en <code>Licencia y Activación</code>.</li>
+                <li><strong>Qué valida el Inspector:</strong> Firma Ed25519 con separación de dominio <code>MLC1-</code>, estado de revisión anti-downgrade y diferencias contra tu configuración actual.</li>
+              </ul>
+            </div>
+          </div>
+
+          <div class="inspector-guide-tools">
+            <div class="inspector-guide-tool-item">
+              <strong>Lector Óptico QR:</strong> Arrastra capturas PNG (de <code>ML9</code>, <code>MLS1</code> o <code>MLC1</code>) o archivos <code>.mlsync</code> / <code>.json</code> para decodificar 100 % sin internet.
+            </div>
+            <div class="inspector-guide-tool-item">
+              <strong>4 Estados de Nonce (<code>ML9</code>):</strong> <span class="badge badge-green">Canjeado en celular</span> (verde), <span class="badge badge-blue">Emitido — Pendiente de canje</span> (azul), <span class="badge badge-yellow">Nonce futuro listo</span> (ámbar) y <span class="badge badge-purple">Superado / Histórico</span> (púrpura).
+            </div>
+            <div class="inspector-guide-tool-item">
+              <strong>Copiar Informe Forense:</strong> Copia un resumen técnico estructurado (de <code>ML9</code>, <code>MLS1</code> o <code>MLC1</code>) listo para soporte o registro.
+            </div>
+            <div class="inspector-guide-tool-item">
+              <strong>Historial de Sesión:</strong> Conserva las últimas 10 auditorías en memoria de sesión para recargarlas con 1 clic sin alterar la base de datos.
+            </div>
+          </div>
+        </div>
+
+        <!-- LECTOR ÓPTICO DE IMAGEN QR / CREDENCIAL PNG / ARCHIVO MLSYNC -->
+        <div class="qr-optical-drop-zone" id="qrOpticalDropZone">
+          <svg width="36" height="36" style="width:36px; height:36px; color:var(--primary); margin-bottom:0.35rem;" viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+          <div style="font-weight:700; color:var(--text-primary); font-size:0.92rem;">Arrastra aquí una imagen QR (ML9 / MLS1 / MLC1), Credencial PNG o archivo .mlsync (o haz clic para subir)</div>
+          <div style="font-size:0.78rem; color:var(--text-muted); margin-top:0.25rem;">Decodificación óptica instantánea 100 % offline de códigos QR PNG y análisis criptográfico tri-protocolo</div>
+          <input type="file" id="qrOpticalFileInput" accept="image/*,.mlsync,.json" style="display:none;">
+        </div>
+
+        <div style="display:flex; flex-direction:column; gap:1rem;">
+          <div class="form-group">
+            <label for="inspectTokenInput">Código o Ficha a Inspeccionar (<code>ML9-...</code>, <code>MLS1-...</code> / <code>.mlsync</code> o <code>MLC1-...</code>):</label>
+            <textarea id="inspectTokenInput" rows="3" placeholder="Pega aquí un código ML9-..., ficha MLS1-..., ficha comercial MLC1-..., mensaje de WhatsApp o suelta un archivo arriba" style="font-family:var(--font-mono); font-size:0.85rem;"></textarea>
+          </div>
+          <div style="display:flex; gap:0.75rem; flex-wrap:wrap;">
+            <button class="btn btn-primary" id="btnInspectToken">
+              <svg class="btn-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+              Auditar y Decodificar Token / Ficha
+            </button>
+            <button class="btn btn-outline" id="btnClearInspectToken">
+              Limpiar
+            </button>
+          </div>
+        </div>
+
+        <!-- RESULTADO DE INSPECCIÓN -->
+        <div id="inspectResultContainer" style="display:none; margin-top:1.5rem; border-top:1px solid var(--border-color); padding-top:1.25rem;">
+          <div id="inspectStatusBadge" style="padding:0.75rem 1rem; border-radius:10px; font-weight:700; margin-bottom:1rem; display:flex; align-items:center; gap:0.5rem;"></div>
+
+          <!-- CONTENEDOR ESPECÍFICO PARA FICHAS COMERCIALES DECLARATIVAS MLC1 -->
+          <div id="inspectMlc1AuditCard" style="display:none; margin-bottom:1rem;">
+            <!-- Renderizado dinámico para COMMERCIAL_CONFIG (MLC1) -->
+          </div>
+
+          <!-- CONTENEDOR ESPECÍFICO PARA FICHAS DE SINCRONIZACIÓN CLIENT_SYNC -->
+          <div id="inspectSyncAuditCard" style="display:none; margin-bottom:1rem;">
+            <!-- Renderizado dinámico para CLIENT_SYNC -->
+          </div>
+
+          <!-- TABLA UNIFICADA DE CLAIMS DE LICENCIA (Ed25519) -->
+          <div id="inspectLicenseClaimsWrapper">
+            <h4 style="font-size:0.95rem; font-weight:700; color:var(--text-primary); margin-bottom:0.5rem;">
+              Directivas Criptográficas Decodificadas (Claims Ed25519)
+            </h4>
+            <div class="table-responsive">
+              <table class="claims-table" id="inspectClaimsTable">
+                <thead>
+                  <tr>
+                    <th style="width:100px;">Clave</th>
+                    <th style="width:160px;">Nombre Técnico</th>
+                    <th>Descripción del Claim</th>
+                    <th style="width:240px;">Valor Decodificado</th>
+                  </tr>
+                </thead>
+                <tbody id="inspectClaimsTableBody">
+                  <!-- Rellenado dinámicamente -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div id="inspectMatchingClientBox" style="display:none; margin-top:1rem; padding:1rem; background:rgba(37,99,235,0.08); border:1px solid rgba(37,99,235,0.25); border-radius:10px;"></div>
+        </div>
+
+        <!-- HISTORIAL DE AUDITORÍAS DE LA SESIÓN (PLAN 22 FASE 4) -->
+        <details id="inspectorSessionHistoryPanel" class="inspector-history-panel" open style="display:none;">
+          <summary class="inspector-history-summary">
+            <div style="display:flex; align-items:center; gap:0.5rem;">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--primary); flex-shrink:0;"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+              <span>Historial de Auditorías de la Sesión</span>
+              <span class="badge badge-mono" id="inspectorHistoryCount">0</span>
+            </div>
+            <button type="button" class="btn btn-outline btn-xs" id="btnClearInspectorHistory" onclick="event.preventDefault(); event.stopPropagation(); clearInspectorSessionHistory();">
+              Limpiar historial
+            </button>
+          </summary>
+          <div id="inspectorSessionHistoryList" class="inspector-history-list"></div>
+        </details>
+      </div>
+    </section>
+
+    <!-- TAB 6: FINANZAS, AUDITORÍA Y RESPALDOS EN DISCO (NUEVA PESTAÑA OFICIAL) -->
