@@ -4,6 +4,7 @@ import 'package:test/test.dart';
 
 import '../server.dart';
 import '../lib/database_service.dart';
+import 'support/web_bundle_loader.dart';
 
 void main() {
   group('FASE 7: Certificación Integral UX, CRM Offline-First, Ficha 360° y WhatsApp', () {
@@ -382,12 +383,12 @@ void main() {
       late String ps1Content;
 
       setUpAll(() {
-        html = File('web/index.html').readAsStringSync();
-        css = File('web/css/styles.css').readAsStringSync();
-        js = File('web/js/admin_app.js').readAsStringSync();
-        qrJs = File('web/js/qrcode.min.js').readAsStringSync();
-        batContent = File('../Iniciar_MochilaLista_Admin.bat').readAsStringSync();
-        ps1Content = File('../Crear_Acceso_Directo_Escritorio.ps1').readAsStringSync();
+        html = WebBundleLoader.loadHtml();
+        css = WebBundleLoader.loadCss();
+        js = WebBundleLoader.loadJs();
+        qrJs = WebBundleLoader.resolveWebAssetFile('js/qrcode.min.js').readAsStringSync();
+        batContent = WebBundleLoader.resolveRepoFile('Iniciar_MochilaLista_Admin.bat').readAsStringSync();
+        ps1Content = WebBundleLoader.resolveRepoFile('Crear_Acceso_Directo_Escritorio.ps1').readAsStringSync();
       });
 
       test('5.1 index.html contiene todos los componentes creados en las Fases 1 a 6', () {
@@ -457,11 +458,11 @@ void main() {
       });
 
       test('5.7 Existencia e integridad de recursos de identidad visual oficial', () {
-        final favicon = File('web/favicon.ico');
-        final appIcon = File('web/app_icon.ico');
-        final icon192 = File('web/icon_192.png');
-        final icon512 = File('web/icon_512.png');
-        final manifest = File('web/manifest.json');
+        final favicon = WebBundleLoader.resolveWebAssetFile('favicon.ico');
+        final appIcon = WebBundleLoader.resolveWebAssetFile('app_icon.ico');
+        final icon192 = WebBundleLoader.resolveWebAssetFile('icon_192.png');
+        final icon512 = WebBundleLoader.resolveWebAssetFile('icon_512.png');
+        final manifest = WebBundleLoader.resolveWebAssetFile('manifest.json');
 
         expect(favicon.existsSync(), isTrue, reason: 'web/favicon.ico debe existir');
         expect(appIcon.existsSync(), isTrue, reason: 'web/app_icon.ico debe existir');

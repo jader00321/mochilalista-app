@@ -7,6 +7,7 @@ import '../lib/config_service.dart';
 import '../lib/excel_export_service.dart';
 import '../lib/vault_storage_service.dart';
 import '../server.dart';
+import 'support/web_bundle_loader.dart';
 
 void main() {
   group('Fase 4 - Plan Maestro 18: Reingeniería de Edición de Pagos, Slugs y Blindaje Contable', () {
@@ -339,9 +340,8 @@ void main() {
     });
 
     test('6. Inspección Estática: Slugs canónicos, formatos y UI limpia en index.html', () {
-      final htmlFile = File('web/index.html');
-      expect(htmlFile.existsSync(), isTrue, reason: 'index.html debe existir en web/');
-      final html = htmlFile.readAsStringSync();
+      final html = WebBundleLoader.loadHtml();
+      expect(html, isNotEmpty, reason: 'index.html debe existir en web/');
 
       // Slugs canónicos obligatorios en manualPayPlanPreset
       final canonicalSlugs = [
@@ -380,9 +380,8 @@ void main() {
     });
 
     test('7. Inspección Estática: Funciones de normalización y formateo en admin_app.js', () {
-      final jsFile = File('web/js/admin_app.js');
-      expect(jsFile.existsSync(), isTrue, reason: 'admin_app.js debe existir en web/js/');
-      final js = jsFile.readAsStringSync();
+      final js = WebBundleLoader.loadJs();
+      expect(js, isNotEmpty, reason: 'admin_app.js debe existir en web/js/');
 
       // Existencia de la función normalizePlanToSlug
       expect(js.contains('function normalizePlanToSlug(rawPlan)'), isTrue);
@@ -401,9 +400,8 @@ void main() {
     });
 
     test('8. Inspección Estática: Reglas CSS para tema Oscuro y Claro en styles.css', () {
-      final cssFile = File('web/css/styles.css');
-      expect(cssFile.existsSync(), isTrue, reason: 'styles.css debe existir en web/css/');
-      final css = cssFile.readAsStringSync();
+      final css = WebBundleLoader.loadCss();
+      expect(css, isNotEmpty, reason: 'styles.css debe existir en web/css/');
 
       expect(css.contains('.checkbox-row-styled'), isTrue);
       expect(css.contains('.receipt-notice-banner'), isTrue);

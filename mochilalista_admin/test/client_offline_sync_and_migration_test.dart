@@ -9,6 +9,7 @@ import '../lib/excel_export_service.dart';
 import '../lib/license_signer.dart';
 import '../lib/vault_storage_service.dart';
 import '../server.dart';
+import 'support/web_bundle_loader.dart';
 
 void main() {
   group('FASE 4 - Plan Maestro 19: Protocolo Dual .mlsync/MLS1, Sincronización Offline y Rescate PENDIENTE_MIGRACION', () {
@@ -543,9 +544,9 @@ Por favor confírmame si llegó bien. ¡Muchas gracias!
     // 6. Inspección Estática Frontend: 3 Puntos de Entrada, Rescate y Cero Emojis
     // =========================================================================
     test('6. Inspección Estática Frontend: 3 puntos de entrada, rescate 1-clic y CERO emojis crudos', () {
-      final indexHtml = File('web/index.html').readAsStringSync();
-      final stylesCss = File('web/css/styles.css').readAsStringSync();
-      final adminAppJs = File('web/js/admin_app.js').readAsStringSync();
+      final indexHtml = WebBundleLoader.loadHtml();
+      final stylesCss = WebBundleLoader.loadCss();
+      final adminAppJs = WebBundleLoader.loadJs();
 
       // Punto 1: modalSyncReported con tabs y comparador
       expect(indexHtml, contains('id="modalSyncReported"'));

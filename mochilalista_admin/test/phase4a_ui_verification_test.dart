@@ -1,5 +1,5 @@
-import 'dart:io';
 import 'package:test/test.dart';
+import 'support/web_bundle_loader.dart';
 
 void main() {
   group('FASE 4A: Verificación Estructural de Interfaz, CSS y Lógica JS', () {
@@ -8,17 +8,13 @@ void main() {
     late String jsContent;
 
     setUpAll(() {
-      final htmlFile = File('web/index.html');
-      final cssFile = File('web/css/styles.css');
-      final jsFile = File('web/js/admin_app.js');
+      htmlContent = WebBundleLoader.loadHtml();
+      cssContent = WebBundleLoader.loadCss();
+      jsContent = WebBundleLoader.loadJs();
 
-      expect(htmlFile.existsSync(), isTrue, reason: 'index.html debe existir');
-      expect(cssFile.existsSync(), isTrue, reason: 'styles.css debe existir');
-      expect(jsFile.existsSync(), isTrue, reason: 'admin_app.js debe existir');
-
-      htmlContent = htmlFile.readAsStringSync();
-      cssContent = cssFile.readAsStringSync();
-      jsContent = jsFile.readAsStringSync();
+      expect(htmlContent, isNotEmpty, reason: 'index.html debe existir');
+      expect(cssContent, isNotEmpty, reason: 'styles.css debe existir');
+      expect(jsContent, isNotEmpty, reason: 'admin_app.js debe existir');
     });
 
     test('1. Sidebar Lateral Colapsable y Header Ejecutivo (HTML & CSS)', () {

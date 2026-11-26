@@ -12,6 +12,7 @@ import '../lib/license_signer.dart';
 import '../lib/vault_storage_service.dart';
 import '../server.dart';
 import 'apk_inspector_and_releases_test.dart' show createTestZip;
+import 'support/web_bundle_loader.dart';
 
 void main() {
   group('PLAN MAESTRO 23 - FASE 6: Caché APK Persistente, Verify-All e Higiene Git', () {
@@ -483,9 +484,9 @@ void main() {
       final rootGitignore = File('../.gitignore').readAsStringSync();
       expect(rootGitignore, contains('mochilalista_admin/data/.apk_inspection_cache.json'));
 
-      final html = File('web/index.html').readAsStringSync();
-      final css = File('web/css/styles.css').readAsStringSync();
-      final js = File('web/js/admin_app.js').readAsStringSync();
+      final html = WebBundleLoader.loadHtml();
+      final css = WebBundleLoader.loadCss();
+      final js = WebBundleLoader.loadJs();
 
       final releaseTabStart = html.indexOf('<section id="tabReleaseManager"');
       final releaseTabEnd = html.indexOf('</section>', releaseTabStart);

@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:test/test.dart';
+import 'support/web_bundle_loader.dart';
 
 String _extractSection(String source, String startMarker, String endMarker) {
   final start = source.indexOf(startMarker);
@@ -31,9 +32,9 @@ void main() {
     test(
         '1. Auditoría estática HTML/CSS/JS: tabs horizontales, tabla 8 productos sin 0 d, guía cliente, #mlc1QrMetaBadge, #btnAuditMlc1InInspector, Dark/Light y 0 emojis',
         () {
-      final html = File('web/index.html').readAsStringSync();
-      final css = File('web/css/styles.css').readAsStringSync();
-      final js = File('web/js/admin_app.js').readAsStringSync();
+      final html = WebBundleLoader.loadHtml();
+      final css = WebBundleLoader.loadCss();
+      final js = WebBundleLoader.loadJs();
 
       // Sección exacta del modal MLC1 en index.html
       final modalHtml = _extractSection(
@@ -157,9 +158,9 @@ void main() {
     test(
         '2. Ejecución Node.js real: renderMlc1CommercialSummary sin 0 d (8 productos + 12 meses), generateMlc1SyncToken QR 512px y auditMlc1TokenInInspector()',
         () async {
-      final js = File('web/js/admin_app.js').readAsStringSync();
-      final qrCodeSrc = File('web/js/qrcode.min.js').readAsStringSync();
-      final jsQrSrc = File('web/js/jsqr.min.js').readAsStringSync();
+      final js = WebBundleLoader.loadJs();
+      final qrCodeSrc = WebBundleLoader.resolveWebAssetFile('js/qrcode.min.js').readAsStringSync();
+      final jsQrSrc = WebBundleLoader.resolveWebAssetFile('js/jsqr.min.js').readAsStringSync();
 
       final safeQrSnippet = _extractSection(
         js,

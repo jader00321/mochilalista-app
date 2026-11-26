@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:test/test.dart';
+import 'support/web_bundle_loader.dart';
 
 String _extractSection(String source, String startMarker, String endMarker) {
   final start = source.indexOf(startMarker);
@@ -31,9 +32,9 @@ void main() {
     test(
         '1. Auditoría estática HTML/CSS/JS de #btnToggleDualBuildGuide y #dualBuildGuidePanel (Dark/Light, SVG acotados, 0 emojis y contratos intactos)',
         () {
-      final html = File('web/index.html').readAsStringSync();
-      final css = File('web/css/styles.css').readAsStringSync();
-      final js = File('web/js/admin_app.js').readAsStringSync();
+      final html = WebBundleLoader.loadHtml();
+      final css = WebBundleLoader.loadCss();
+      final js = WebBundleLoader.loadJs();
 
       final releaseTabHtml = _extractSection(
         html,
@@ -169,7 +170,7 @@ void main() {
     test(
         '2. Ejecución Node.js real: toggleDualBuildGuide() y copyDualBuildCommand() sobre los 3 comandos oficiales',
         () async {
-      final js = File('web/js/admin_app.js').readAsStringSync();
+      final js = WebBundleLoader.loadJs();
       final dualJsSlice = _extractSection(
         js,
         '// =================== MINI-GUÍA RÁPIDA DE COMPILACIÓN DUAL',

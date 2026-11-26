@@ -6,26 +6,15 @@ import 'package:test/test.dart';
 import '../lib/commercial_config_sync_service.dart';
 import '../lib/config_service.dart';
 import '../lib/license_signer.dart';
-
-String _resolveAdminRoot() {
-  if (File('web/js/qrcode.min.js').existsSync()) {
-    return Directory.current.path;
-  }
-  if (File('mochilalista_admin/web/js/qrcode.min.js').existsSync()) {
-    return '${Directory.current.path}/mochilalista_admin';
-  }
-  throw StateError('No se pudo ubicar la raíz de mochilalista_admin.');
-}
+import 'support/web_bundle_loader.dart';
 
 void main() {
   group('PLAN MAESTRO 24 - FASE 1: Motor QR ISO/IEC 18004 V1-V40 y Saneamiento Updates 12 meses', () {
     late Directory tempDir;
     late Directory dataDir;
     late Directory backupsDir;
-    late String adminRoot;
 
     setUp(() {
-      adminRoot = _resolveAdminRoot();
       tempDir = Directory.systemTemp.createTempSync('ml_p24_fase1_');
       dataDir = Directory('${tempDir.path}/data')..createSync(recursive: true);
       backupsDir = Directory('${tempDir.path}/backups')
@@ -79,16 +68,17 @@ void main() {
       final runnerFile = File('${tempDir.path}/qr_roundtrip_runner.js');
       runnerFile.writeAsStringSync(r'''
 const fs = require('fs');
-const path = require('path');
 const vm = require('vm');
 
-const adminRoot = process.argv[2];
-const payloadsJson = fs.readFileSync(process.argv[3], 'utf8');
+const qrCodePath = process.argv[2];
+const jsQrPath = process.argv[3];
+const adminBundlePath = process.argv[4];
+const payloadsJson = fs.readFileSync(process.argv[5], 'utf8');
 const inputData = JSON.parse(payloadsJson);
 
-const qrCodeSrc = fs.readFileSync(path.join(adminRoot, 'web/js/qrcode.min.js'), 'utf8');
-const jsQrSrc = fs.readFileSync(path.join(adminRoot, 'web/js/jsqr.min.js'), 'utf8');
-const adminAppSrc = fs.readFileSync(path.join(adminRoot, 'web/js/admin_app.js'), 'utf8');
+const qrCodeSrc = fs.readFileSync(qrCodePath, 'utf8');
+const jsQrSrc = fs.readFileSync(jsQrPath, 'utf8');
+const adminAppSrc = fs.readFileSync(adminBundlePath, 'utf8');
 
 function extractFunction(src, fnName) {
   const marker = `function ${fnName}(`;
@@ -299,9 +289,15 @@ process.stdout.write(JSON.stringify({
         'overflowPayload': deterministicStr('MLC1-', 3100),
       }));
 
+      final adminBundleFile = WebBundleLoader.writeConcatenatedJsTo(
+        tempDir,
+        filename: 'admin_bundle_p24_f1.js',
+      );
       final proc = await Process.run('node', [
         runnerFile.path,
-        adminRoot,
+        WebBundleLoader.resolveWebAssetPath('js/qrcode.min.js'),
+        WebBundleLoader.resolveWebAssetPath('js/jsqr.min.js'),
+        adminBundleFile.path,
         payloadFile.path,
       ]);
       expect(proc.exitCode, equals(0), reason: 'stderr: ${proc.stderr}');

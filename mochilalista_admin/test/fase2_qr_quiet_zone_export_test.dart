@@ -1,5 +1,5 @@
-import 'dart:io';
 import 'package:test/test.dart';
+import 'support/web_bundle_loader.dart';
 
 void main() {
   group('FASE 2 (Admin): Margen Blanco Reglamentario de 32px en Descargas Solo QR', () {
@@ -7,14 +7,11 @@ void main() {
     late String htmlContent;
 
     setUpAll(() {
-      final jsFile = File('web/js/admin_app.js');
-      final htmlFile = File('web/index.html');
+      jsContent = WebBundleLoader.loadJs();
+      htmlContent = WebBundleLoader.loadHtml();
 
-      expect(jsFile.existsSync(), isTrue, reason: 'admin_app.js debe existir');
-      expect(htmlFile.existsSync(), isTrue, reason: 'index.html debe existir');
-
-      jsContent = jsFile.readAsStringSync();
-      htmlContent = htmlFile.readAsStringSync();
+      expect(jsContent, isNotEmpty, reason: 'admin_app.js debe existir');
+      expect(htmlContent, isNotEmpty, reason: 'index.html debe existir');
     });
 
     test('1. Función utilitaria downloadQrWithQuietZone implementada con margen blanco de 32px', () {

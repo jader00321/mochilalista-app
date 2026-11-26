@@ -13,7 +13,7 @@ $OutputEncoding = [System.Text.Encoding]::UTF8
 # Detecta si PowerShell 5.1 leyó literales UTF-8 (sin BOM) con codificación ANSI del sistema
 $script:NeedsUtf8LiteralFix = ('ó'.Length -ne 1)
 
-function T {
+function ConvertTo-Utf8DisplayText {
     param([string]$Text)
     if (-not $script:NeedsUtf8LiteralFix -or [string]::IsNullOrEmpty($Text)) {
         return $Text
@@ -48,14 +48,14 @@ function Wait-IfInteractive {
         if (-not [Environment]::UserInteractive) { return }
         if ([Console]::IsInputRedirected) { return }
         Write-Host ""
-        Write-Host (T "Presiona ENTER para cerrar esta ventana...") -ForegroundColor DarkGray
+        Write-Host (ConvertTo-Utf8DisplayText "Presiona ENTER para cerrar esta ventana...") -ForegroundColor DarkGray
         [void][Console]::ReadLine()
     } catch {
         # En consolas no interactivas no bloquear nunca
     }
 }
 
-function Fail-WithGuidance {
+function Stop-WithGuidance {
     param(
         [string]$WhatFailed,
         [string]$HowToFix,
@@ -63,10 +63,10 @@ function Fail-WithGuidance {
     )
     Write-Host ""
     Write-Host "========================================================================" -ForegroundColor Red
-    Write-Host (T "  ERROR EN COMPILADOR DUAL OFICIAL") -ForegroundColor Red
+    Write-Host (ConvertTo-Utf8DisplayText "  ERROR EN COMPILADOR DUAL OFICIAL") -ForegroundColor Red
     Write-Host "========================================================================" -ForegroundColor Red
-    Write-Host ((T "QUÉ FALL") + [char]0x00D3 + ": " + $WhatFailed) -ForegroundColor Red
-    Write-Host ("C" + [char]0x00D3 + (T "MO SOLUCIONARLO: ") + $HowToFix) -ForegroundColor Yellow
+    Write-Host ((ConvertTo-Utf8DisplayText "QUÉ FALL") + [char]0x00D3 + ": " + $WhatFailed) -ForegroundColor Red
+    Write-Host ("C" + [char]0x00D3 + (ConvertTo-Utf8DisplayText "MO SOLUCIONARLO: ") + $HowToFix) -ForegroundColor Yellow
     Write-Host "========================================================================" -ForegroundColor Red
     Wait-IfInteractive -ForceNoPause $NoPause
     exit $ExitCode
@@ -74,34 +74,34 @@ function Fail-WithGuidance {
 
 function Show-UsageHelp {
     Write-Host "========================================================================" -ForegroundColor Cyan
-    Write-Host (T "  MOCHILALISTA - COMPILADOR DUAL OFICIAL ÚNICO Y GUIADO") -ForegroundColor Cyan
+    Write-Host (ConvertTo-Utf8DisplayText "  MOCHILALISTA - COMPILADOR DUAL OFICIAL ÚNICO Y GUIADO") -ForegroundColor Cyan
     Write-Host "========================================================================" -ForegroundColor Cyan
     Write-Host ""
-    Write-Host (T "QUÉ GENERA ESTE SCRIPT:") -ForegroundColor White
-    Write-Host (T "  1. APK Universal (~108 MB) -> mochilalista_v<tag>_atp.apk") -ForegroundColor Gray
-    Write-Host (T "     Compatible con cualquier teléfono o tablet Android (arm64-v8a,") -ForegroundColor Gray
-    Write-Host (T "     armeabi-v7a y x86_64). Ideal como respaldo maestro o instalación USB.") -ForegroundColor Gray
-    Write-Host (T "  2. APK ARM64 Ligero (~39 MB) -> mochilalista_v<tag>_arm64_atp.apk") -ForegroundColor Gray
-    Write-Host (T "     Optimizado para el 99 % de celulares Android modernos (64 bits)") -ForegroundColor Gray
-    Write-Host (T "     e ideal para enviar directo por WhatsApp Web (< 100 MB).") -ForegroundColor Gray
+    Write-Host (ConvertTo-Utf8DisplayText "QUÉ GENERA ESTE SCRIPT:") -ForegroundColor White
+    Write-Host (ConvertTo-Utf8DisplayText "  1. APK Universal (~108 MB) -> mochilalista_v<tag>_atp.apk") -ForegroundColor Gray
+    Write-Host (ConvertTo-Utf8DisplayText "     Compatible con cualquier teléfono o tablet Android (arm64-v8a,") -ForegroundColor Gray
+    Write-Host (ConvertTo-Utf8DisplayText "     armeabi-v7a y x86_64). Ideal como respaldo maestro o instalación USB.") -ForegroundColor Gray
+    Write-Host (ConvertTo-Utf8DisplayText "  2. APK ARM64 Ligero (~39 MB) -> mochilalista_v<tag>_arm64_atp.apk") -ForegroundColor Gray
+    Write-Host (ConvertTo-Utf8DisplayText "     Optimizado para el 99 % de celulares Android modernos (64 bits)") -ForegroundColor Gray
+    Write-Host (ConvertTo-Utf8DisplayText "     e ideal para enviar directo por WhatsApp Web (< 100 MB).") -ForegroundColor Gray
     Write-Host ""
-    Write-Host (T "CARPETA OFICIAL DE ENTREGA POR DEFECTO:") -ForegroundColor White
+    Write-Host (ConvertTo-Utf8DisplayText "CARPETA OFICIAL DE ENTREGA POR DEFECTO:") -ForegroundColor White
     Write-Host "  $DefaultOutDir" -ForegroundColor Green
     Write-Host ""
-    Write-Host (T "PARÁMETROS DISPONIBLES:") -ForegroundColor White
-    Write-Host (T "  (sin flags)      Ejecuta los 6 pasos: pre-chequeo, análisis,") -ForegroundColor Gray
-    Write-Host (T "                   compilación Universal + ARM64, certificación y resumen.") -ForegroundColor Gray
-    Write-Host (T "  --help, -h, /?   Muestra esta guía rápida y termina sin compilar.") -ForegroundColor Gray
-    Write-Host (T "  --dry-run        Valida entorno y muestra comandos/rutas sin compilar.") -ForegroundColor Gray
-    Write-Host (T "  --verify-only    Audita con aapt2 + apksigner los APKs ya generados") -ForegroundColor Gray
-    Write-Host (T "                   de la versión actual sin recompilar Flutter.") -ForegroundColor Gray
-    Write-Host (T "  --skip-analyze   Omite el análisis estático (flutter analyze --no-pub).") -ForegroundColor Gray
-    Write-Host (T "  --no-pause       Finaliza sin esperar ENTER (ideal para automatización).") -ForegroundColor Gray
-    Write-Host (T "  --init-notes     Crea *_atp.txt y *_atp_cambios.txt en UTF-8 sin BOM solo") -ForegroundColor Gray
-    Write-Host (T "                   si faltan; jamás sobrescribe notas existentes en disco.") -ForegroundColor Gray
-    Write-Host (T "  --out-dir <ruta> Cambia la carpeta destino donde se entregan los APKs.") -ForegroundColor Gray
+    Write-Host (ConvertTo-Utf8DisplayText "PARÁMETROS DISPONIBLES:") -ForegroundColor White
+    Write-Host (ConvertTo-Utf8DisplayText "  (sin flags)      Ejecuta los 6 pasos: pre-chequeo, análisis,") -ForegroundColor Gray
+    Write-Host (ConvertTo-Utf8DisplayText "                   compilación Universal + ARM64, certificación y resumen.") -ForegroundColor Gray
+    Write-Host (ConvertTo-Utf8DisplayText "  --help, -h, /?   Muestra esta guía rápida y termina sin compilar.") -ForegroundColor Gray
+    Write-Host (ConvertTo-Utf8DisplayText "  --dry-run        Valida entorno y muestra comandos/rutas sin compilar.") -ForegroundColor Gray
+    Write-Host (ConvertTo-Utf8DisplayText "  --verify-only    Audita con aapt2 + apksigner los APKs ya generados") -ForegroundColor Gray
+    Write-Host (ConvertTo-Utf8DisplayText "                   de la versión actual sin recompilar Flutter.") -ForegroundColor Gray
+    Write-Host (ConvertTo-Utf8DisplayText "  --skip-analyze   Omite el análisis estático (flutter analyze --no-pub).") -ForegroundColor Gray
+    Write-Host (ConvertTo-Utf8DisplayText "  --no-pause       Finaliza sin esperar ENTER (ideal para automatización).") -ForegroundColor Gray
+    Write-Host (ConvertTo-Utf8DisplayText "  --init-notes     Crea *_atp.txt y *_atp_cambios.txt en UTF-8 sin BOM solo") -ForegroundColor Gray
+    Write-Host (ConvertTo-Utf8DisplayText "                   si faltan; jamás sobrescribe notas existentes en disco.") -ForegroundColor Gray
+    Write-Host (ConvertTo-Utf8DisplayText "  --out-dir <ruta> Cambia la carpeta destino donde se entregan los APKs.") -ForegroundColor Gray
     Write-Host ""
-    Write-Host (T "EJEMPLOS LISTOS PARA COPIAR Y PEGAR:") -ForegroundColor White
+    Write-Host (ConvertTo-Utf8DisplayText "EJEMPLOS LISTOS PARA COPIAR Y PEGAR:") -ForegroundColor White
     Write-Host "  compilar_release_dual.bat" -ForegroundColor Cyan
     Write-Host "  compilar_release_dual.bat --verify-only --no-pause" -ForegroundColor Cyan
     Write-Host "  compilar_release_dual.bat --verify-only --init-notes --no-pause" -ForegroundColor Cyan
@@ -109,13 +109,13 @@ function Show-UsageHelp {
     Write-Host "  compilar_release_dual.bat --skip-analyze --no-pause" -ForegroundColor Cyan
     Write-Host "  compilar_release_dual.bat --out-dir `"D:\Entregas\MochilaLista`"" -ForegroundColor Cyan
     Write-Host ""
-    Write-Host (T "FLUJO GUIADO DE 6 ETAPAS:") -ForegroundColor White
-    Write-Host (T "  [Paso 1/6] Pre-chequeos (pubspec.yaml, key.properties + .jks, Flutter y SDK)") -ForegroundColor Gray
-    Write-Host (T "  [Paso 2/6] Análisis estático (flutter analyze --no-pub)") -ForegroundColor Gray
-    Write-Host (T "  [Paso 3/6] Compilación Universal ofuscada + símbolos debug") -ForegroundColor Gray
-    Write-Host (T "  [Paso 4/6] Compilación ARM64 Ligero ofuscada (--split-per-abi)") -ForegroundColor Gray
-    Write-Host (T "  [Paso 5/6] Certificación forense aapt2 (anti-debug) + apksigner RSA-4096") -ForegroundColor Gray
-    Write-Host (T "  [Paso 6/6] Resumen ejecutivo (MB, ahorro %, SHA-256, notas y checklist)") -ForegroundColor Gray
+    Write-Host (ConvertTo-Utf8DisplayText "FLUJO GUIADO DE 6 ETAPAS:") -ForegroundColor White
+    Write-Host (ConvertTo-Utf8DisplayText "  [Paso 1/6] Pre-chequeos (pubspec.yaml, key.properties + .jks, Flutter y SDK)") -ForegroundColor Gray
+    Write-Host (ConvertTo-Utf8DisplayText "  [Paso 2/6] Análisis estático (flutter analyze --no-pub)") -ForegroundColor Gray
+    Write-Host (ConvertTo-Utf8DisplayText "  [Paso 3/6] Compilación Universal ofuscada + símbolos debug") -ForegroundColor Gray
+    Write-Host (ConvertTo-Utf8DisplayText "  [Paso 4/6] Compilación ARM64 Ligero ofuscada (--split-per-abi)") -ForegroundColor Gray
+    Write-Host (ConvertTo-Utf8DisplayText "  [Paso 5/6] Certificación forense aapt2 (anti-debug) + apksigner RSA-4096") -ForegroundColor Gray
+    Write-Host (ConvertTo-Utf8DisplayText "  [Paso 6/6] Resumen ejecutivo (MB, ahorro %, SHA-256, notas y checklist)") -ForegroundColor Gray
     Write-Host "========================================================================" -ForegroundColor Cyan
 }
 
@@ -153,15 +153,15 @@ for ($i = 0; $i -lt $args.Count; $i++) {
     }
     if ($norm -eq '--out-dir' -or $norm -ieq '-OutDir') {
         if ($i + 1 -ge $args.Count) {
-            Fail-WithGuidance `
-                -WhatFailed (T "El parámetro '$norm' requiere una ruta de carpeta destino.") `
-                -HowToFix (T "Especifica la carpeta entre comillas, por ejemplo: compilar_release_dual.bat --out-dir `"C:\apks`"")
+            Stop-WithGuidance `
+                -WhatFailed (ConvertTo-Utf8DisplayText "El parámetro '$norm' requiere una ruta de carpeta destino.") `
+                -HowToFix (ConvertTo-Utf8DisplayText "Especifica la carpeta entre comillas, por ejemplo: compilar_release_dual.bat --out-dir `"C:\apks`"")
         }
         $nextVal = [string]$args[$i + 1]
         if ([string]::IsNullOrWhiteSpace($nextVal) -or $nextVal.StartsWith('--')) {
-            Fail-WithGuidance `
-                -WhatFailed (T "Falta la ruta destino después de '$norm'.") `
-                -HowToFix (T "Proporciona una ruta válida o ejecuta compilar_release_dual.bat --help para ver ejemplos.")
+            Stop-WithGuidance `
+                -WhatFailed (ConvertTo-Utf8DisplayText "Falta la ruta destino después de '$norm'.") `
+                -HowToFix (ConvertTo-Utf8DisplayText "Proporciona una ruta válida o ejecuta compilar_release_dual.bat --help para ver ejemplos.")
         }
         $OutDir = $nextVal.Trim()
         $i++
@@ -170,17 +170,17 @@ for ($i = 0; $i -lt $args.Count; $i++) {
     if ($norm -like '--out-dir=*') {
         $val = $norm.Substring('--out-dir='.Length).Trim().Trim('"')
         if ([string]::IsNullOrWhiteSpace($val)) {
-            Fail-WithGuidance `
-                -WhatFailed (T "La ruta en '--out-dir=' está vacía.") `
-                -HowToFix (T "Indica una carpeta destino válida o consulta compilar_release_dual.bat --help.")
+            Stop-WithGuidance `
+                -WhatFailed (ConvertTo-Utf8DisplayText "La ruta en '--out-dir=' está vacía.") `
+                -HowToFix (ConvertTo-Utf8DisplayText "Indica una carpeta destino válida o consulta compilar_release_dual.bat --help.")
         }
         $OutDir = $val
         continue
     }
 
-    Fail-WithGuidance `
-        -WhatFailed ((T "Parámetro desconocido o no soportado: ") + $norm) `
-        -HowToFix (T "Ejecuta 'compilar_release_dual.bat --help' para consultar los parámetros válidos.")
+    Stop-WithGuidance `
+        -WhatFailed ((ConvertTo-Utf8DisplayText "Parámetro desconocido o no soportado: ") + $norm) `
+        -HowToFix (ConvertTo-Utf8DisplayText "Ejecuta 'compilar_release_dual.bat --help' para consultar los parámetros válidos.")
 }
 
 if ($ShowHelp) {
@@ -191,12 +191,12 @@ if ($ShowHelp) {
 # ------------------------------------------------------------------------------
 # Funciones auxiliares de descubrimiento y auditoría forense
 # ------------------------------------------------------------------------------
-function Parse-PubspecVersion {
+function ConvertFrom-PubspecVersion {
     param([string]$PubspecPath)
     if (-not (Test-Path -LiteralPath $PubspecPath)) {
-        Fail-WithGuidance `
-            -WhatFailed ((T "No se encontró el archivo pubspec.yaml en: ") + $PubspecPath) `
-            -HowToFix (T "Ejecuta el script desde la raíz de mochilalista-app o verifica que exista app_movil\pubspec.yaml.")
+        Stop-WithGuidance `
+            -WhatFailed ((ConvertTo-Utf8DisplayText "No se encontró el archivo pubspec.yaml en: ") + $PubspecPath) `
+            -HowToFix (ConvertTo-Utf8DisplayText "Ejecuta el script desde la raíz de mochilalista-app o verifica que exista app_movil\pubspec.yaml.")
     }
     $lines = Get-Content -LiteralPath $PubspecPath -Encoding UTF8
     foreach ($line in $lines) {
@@ -219,17 +219,17 @@ function Parse-PubspecVersion {
             }
         }
     }
-    Fail-WithGuidance `
-        -WhatFailed ((T "No se pudo leer una línea 'version: X.Y.Z+B' válida en: ") + $PubspecPath) `
-        -HowToFix (T "Verifica que pubspec.yaml contenga el formato SemVer completo, por ejemplo: version: 9.41.0+85")
+    Stop-WithGuidance `
+        -WhatFailed ((ConvertTo-Utf8DisplayText "No se pudo leer una línea 'version: X.Y.Z+B' válida en: ") + $PubspecPath) `
+        -HowToFix (ConvertTo-Utf8DisplayText "Verifica que pubspec.yaml contenga el formato SemVer completo, por ejemplo: version: 9.41.0+85")
 }
 
-function Verify-KeystoreConfigSafe {
+function Test-KeystoreConfigSafe {
     param([string]$KeyPropertiesPath)
     if (-not (Test-Path -LiteralPath $KeyPropertiesPath)) {
-        Fail-WithGuidance `
-            -WhatFailed ((T "No existe el archivo de configuración de firma android\key.properties en: ") + $KeyPropertiesPath) `
-            -HowToFix (T "Crea app_movil\android\key.properties con storeFile, keyAlias, storePassword y keyPassword antes de compilar.")
+        Stop-WithGuidance `
+            -WhatFailed ((ConvertTo-Utf8DisplayText "No existe el archivo de configuración de firma android\key.properties en: ") + $KeyPropertiesPath) `
+            -HowToFix (ConvertTo-Utf8DisplayText "Crea app_movil\android\key.properties con storeFile, keyAlias, storePassword y keyPassword antes de compilar.")
     }
 
     # Lectura segura: solo inspecciona la línea storeFile= sin almacenar ni imprimir contraseñas
@@ -245,9 +245,9 @@ function Verify-KeystoreConfigSafe {
     }
 
     if ([string]::IsNullOrWhiteSpace($storeFileValue)) {
-        Fail-WithGuidance `
-            -WhatFailed (T "El archivo key.properties no define la propiedad obligatoria 'storeFile='.") `
-            -HowToFix (T "Agrega 'storeFile=mochilalista-release-key.jks' (o la ruta a tu keystore) dentro de app_movil\android\key.properties.")
+        Stop-WithGuidance `
+            -WhatFailed (ConvertTo-Utf8DisplayText "El archivo key.properties no define la propiedad obligatoria 'storeFile='.") `
+            -HowToFix (ConvertTo-Utf8DisplayText "Agrega 'storeFile=mochilalista-release-key.jks' (o la ruta a tu keystore) dentro de app_movil\android\key.properties.")
     }
 
     $androidDir = Split-Path -Parent $KeyPropertiesPath
@@ -258,9 +258,9 @@ function Verify-KeystoreConfigSafe {
     }
 
     if (-not (Test-Path -LiteralPath $resolvedStorePath)) {
-        Fail-WithGuidance `
-            -WhatFailed ((T "El archivo keystore (.jks) configurado en storeFile no existe en disco: ") + $resolvedStorePath) `
-            -HowToFix (T "Coloca tu keystore oficial .jks en la ruta esperada o corrige la propiedad storeFile en app_movil\android\key.properties.")
+        Stop-WithGuidance `
+            -WhatFailed ((ConvertTo-Utf8DisplayText "El archivo keystore (.jks) configurado en storeFile no existe en disco: ") + $resolvedStorePath) `
+            -HowToFix (ConvertTo-Utf8DisplayText "Coloca tu keystore oficial .jks en la ruta esperada o corrige la propiedad storeFile en app_movil\android\key.properties.")
     }
 
     return $resolvedStorePath
@@ -285,14 +285,14 @@ function Resolve-AndroidBuildTools {
 
     if (-not [string]::IsNullOrWhiteSpace($envAapt2) -or -not [string]::IsNullOrWhiteSpace($envSigner)) {
         if ([string]::IsNullOrWhiteSpace($envAapt2) -or -not (Test-Path -LiteralPath $envAapt2)) {
-            Fail-WithGuidance `
-                -WhatFailed ((T "La herramienta aapt2 configurada no existe: ") + $envAapt2) `
-                -HowToFix (T "Verifica Android SDK build-tools o la ruta configurada.")
+            Stop-WithGuidance `
+                -WhatFailed ((ConvertTo-Utf8DisplayText "La herramienta aapt2 configurada no existe: ") + $envAapt2) `
+                -HowToFix (ConvertTo-Utf8DisplayText "Verifica Android SDK build-tools o la ruta configurada.")
         }
         if ([string]::IsNullOrWhiteSpace($envSigner) -or -not (Test-Path -LiteralPath $envSigner)) {
-            Fail-WithGuidance `
-                -WhatFailed ((T "La herramienta apksigner configurada no existe: ") + $envSigner) `
-                -HowToFix (T "Verifica Android SDK build-tools o la ruta configurada.")
+            Stop-WithGuidance `
+                -WhatFailed ((ConvertTo-Utf8DisplayText "La herramienta apksigner configurada no existe: ") + $envSigner) `
+                -HowToFix (ConvertTo-Utf8DisplayText "Verifica Android SDK build-tools o la ruta configurada.")
         }
         return [PSCustomObject]@{
             Version   = 'custom'
@@ -345,9 +345,9 @@ function Resolve-AndroidBuildTools {
         }
     }
 
-    Fail-WithGuidance `
-        -WhatFailed (T "No se encontraron las herramientas 'aapt2' y 'apksigner' en Android SDK build-tools.") `
-        -HowToFix (T "Instala Android SDK Build-Tools desde Android Studio SDK Manager o configura ANDROID_HOME / ANDROID_SDK_ROOT.")
+    Stop-WithGuidance `
+        -WhatFailed (ConvertTo-Utf8DisplayText "No se encontraron las herramientas 'aapt2' y 'apksigner' en Android SDK build-tools.") `
+        -HowToFix (ConvertTo-Utf8DisplayText "Instala Android SDK Build-Tools desde Android Studio SDK Manager o configura ANDROID_HOME / ANDROID_SDK_ROOT.")
 }
 
 function Invoke-ProcessCaptured {
@@ -370,7 +370,7 @@ function Invoke-ProcessCaptured {
     }
 }
 
-function Parse-ApkSignerSummary {
+function ConvertFrom-ApkSignerSummary {
     param([string]$RawOutput)
     $shaRegex = '^(?:V\d+(?:\.\d+)?\s+Signer:|Signer\s*#\d+)\s*certificate\s+SHA-256\s+digest:\s*([0-9a-fA-F:]+)'
     $dnRegex = '^(?:V\d+(?:\.\d+)?\s+Signer:|Signer\s*#\d+)\s*certificate\s+DN:\s*(.+)$'
@@ -401,7 +401,7 @@ function Parse-ApkSignerSummary {
     return $signers
 }
 
-function Certify-ApkForensic {
+function Test-ApkForensic {
     param(
         [string]$ApkPath,
         [string]$VariantLabel,
@@ -412,46 +412,46 @@ function Certify-ApkForensic {
     )
 
     if (-not (Test-Path -LiteralPath $ApkPath)) {
-        Fail-WithGuidance `
-            -WhatFailed ((T "No se encontró el archivo APK de ") + $VariantLabel + ": $ApkPath") `
-            -HowToFix (T "Verifica la ruta de salida (--out-dir) o ejecuta el script sin --verify-only para compilarlo.")
+        Stop-WithGuidance `
+            -WhatFailed ((ConvertTo-Utf8DisplayText "No se encontró el archivo APK de ") + $VariantLabel + ": $ApkPath") `
+            -HowToFix (ConvertTo-Utf8DisplayText "Verifica la ruta de salida (--out-dir) o ejecuta el script sin --verify-only para compilarlo.")
     }
 
-    Write-Host ((T "  -> Inspeccionando binario [") + $VariantLabel + "]: $ApkPath") -ForegroundColor Cyan
+    Write-Host ((ConvertTo-Utf8DisplayText "  -> Inspeccionando binario [") + $VariantLabel + "]: $ApkPath") -ForegroundColor Cyan
 
     # 1. Inspección con aapt2 dump badging
     $aaptRes = Invoke-ProcessCaptured -Executable $BuildTools.Aapt2 -Arguments @('dump', 'badging', $ApkPath)
     if ($aaptRes.ExitCode -ne 0) {
-        Fail-WithGuidance `
-            -WhatFailed ((T "aapt2 dump badging falló sobre ") + $VariantLabel + (T " (código ") + $aaptRes.ExitCode + ").") `
-            -HowToFix ((T "Verifica que el archivo .apk no esté corrupto ni bloqueado por antivirus. Detalle: ") + $aaptRes.Output)
+        Stop-WithGuidance `
+            -WhatFailed ((ConvertTo-Utf8DisplayText "aapt2 dump badging falló sobre ") + $VariantLabel + (ConvertTo-Utf8DisplayText " (código ") + $aaptRes.ExitCode + ").") `
+            -HowToFix ((ConvertTo-Utf8DisplayText "Verifica que el archivo .apk no esté corrupto ni bloqueado por antivirus. Detalle: ") + $aaptRes.Output)
     }
 
     $badging = $aaptRes.Output
     if ($badging -match 'application-debuggable') {
-        Fail-WithGuidance `
-            -WhatFailed ((T "El APK ") + $VariantLabel + (T " contiene la bandera 'application-debuggable' (NO APTO PARA PRODUCCI") + [char]0x00D3 + "N).") `
-            -HowToFix (T "Recompila en modo --release sin flags de depuración y verifica app_movil/android/app/build.gradle.kts.")
+        Stop-WithGuidance `
+            -WhatFailed ((ConvertTo-Utf8DisplayText "El APK ") + $VariantLabel + (ConvertTo-Utf8DisplayText " contiene la bandera 'application-debuggable' (NO APTO PARA PRODUCCI") + [char]0x00D3 + "N).") `
+            -HowToFix (ConvertTo-Utf8DisplayText "Recompila en modo --release sin flags de depuración y verifica app_movil/android/app/build.gradle.kts.")
     }
 
     if ($badging -notmatch "package:\s*name='([^']+)'") {
-        Fail-WithGuidance `
-            -WhatFailed ((T "aapt2 no devolvió el identificador 'package: name=...' en ") + $VariantLabel + ".") `
-            -HowToFix (T "Asegúrate de usar un Android SDK build-tools válido y un APK íntegro.")
+        Stop-WithGuidance `
+            -WhatFailed ((ConvertTo-Utf8DisplayText "aapt2 no devolvió el identificador 'package: name=...' en ") + $VariantLabel + ".") `
+            -HowToFix (ConvertTo-Utf8DisplayText "Asegúrate de usar un Android SDK build-tools válido y un APK íntegro.")
     }
     $pkgName = $matches[1]
     if ($pkgName -ne $ExpectedPackageName) {
-        Fail-WithGuidance `
-            -WhatFailed ((T "El packageName del APK (") + $pkgName + (T ") no coincide con ") + $ExpectedPackageName + ".") `
-            -HowToFix (T "Verifica que el binario pertenezca al proyecto MochilaLista oficial.")
+        Stop-WithGuidance `
+            -WhatFailed ((ConvertTo-Utf8DisplayText "El packageName del APK (") + $pkgName + (ConvertTo-Utf8DisplayText ") no coincide con ") + $ExpectedPackageName + ".") `
+            -HowToFix (ConvertTo-Utf8DisplayText "Verifica que el binario pertenezca al proyecto MochilaLista oficial.")
     }
 
     $apkVerName = $null
     if ($badging -match "versionName='([^']+)'") { $apkVerName = $matches[1] }
     if ($apkVerName -ne $VersionMeta.VersionName) {
-        Fail-WithGuidance `
-            -WhatFailed ((T "versionName del APK (") + $apkVerName + (T ") difiere de pubspec.yaml (") + $VersionMeta.VersionName + ").") `
-            -HowToFix (T "Recompila ambos APKs tras actualizar pubspec.yaml para mantener la paridad exacta de versión.")
+        Stop-WithGuidance `
+            -WhatFailed ((ConvertTo-Utf8DisplayText "versionName del APK (") + $apkVerName + (ConvertTo-Utf8DisplayText ") difiere de pubspec.yaml (") + $VersionMeta.VersionName + ").") `
+            -HowToFix (ConvertTo-Utf8DisplayText "Recompila ambos APKs tras actualizar pubspec.yaml para mantener la paridad exacta de versión.")
     }
 
     $apkVerCode = $null
@@ -463,9 +463,9 @@ function Certify-ApkForensic {
         ($apkVerCode -eq $VersionMeta.BuildCode)
     }
     if (-not $isVerCodeValid) {
-        Fail-WithGuidance `
-            -WhatFailed ((T "versionCode del APK ") + $VariantLabel + " ($apkVerCode) " + (T "no corresponde al build esperado de pubspec.yaml (") + $VersionMeta.BuildCode + ").") `
-            -HowToFix (T "Recompila ambos binarios sin artefactos antiguos en build/.")
+        Stop-WithGuidance `
+            -WhatFailed ((ConvertTo-Utf8DisplayText "versionCode del APK ") + $VariantLabel + " ($apkVerCode) " + (ConvertTo-Utf8DisplayText "no corresponde al build esperado de pubspec.yaml (") + $VersionMeta.BuildCode + ").") `
+            -HowToFix (ConvertTo-Utf8DisplayText "Recompila ambos binarios sin artefactos antiguos en build/.")
     }
 
     $abisText = ''
@@ -482,48 +482,48 @@ function Certify-ApkForensic {
     }
     if ($IsArm64Split) {
         if (-not $abisText.Contains('arm64-v8a') -or $abisText.Contains('armeabi-v7a') -or $abisText.Contains('x86_64')) {
-            Fail-WithGuidance `
-                -WhatFailed ((T "El APK ARM64 Ligero reporta ABIs inesperadas: ") + $abisText) `
-                -HowToFix (T "Asegúrate de compilar el binario ligero con --split-per-abi y copiar app-arm64-v8a-release.apk.")
+            Stop-WithGuidance `
+                -WhatFailed ((ConvertTo-Utf8DisplayText "El APK ARM64 Ligero reporta ABIs inesperadas: ") + $abisText) `
+                -HowToFix (ConvertTo-Utf8DisplayText "Asegúrate de compilar el binario ligero con --split-per-abi y copiar app-arm64-v8a-release.apk.")
         }
     } else {
         if (-not $abisText.Contains('arm64-v8a')) {
-            Fail-WithGuidance `
-                -WhatFailed ((T "El APK Universal no incluye arm64-v8a (ABIs: ") + $abisText + ").") `
-                -HowToFix (T "Asegúrate de compilar el APK Universal sin --split-per-abi.")
+            Stop-WithGuidance `
+                -WhatFailed ((ConvertTo-Utf8DisplayText "El APK Universal no incluye arm64-v8a (ABIs: ") + $abisText + ").") `
+                -HowToFix (ConvertTo-Utf8DisplayText "Asegúrate de compilar el APK Universal sin --split-per-abi.")
         }
     }
 
     # 2. Certificación criptográfica con apksigner (compatible SDK <=36 y 37+)
     $sigRes = Invoke-ProcessCaptured -Executable $BuildTools.ApkSigner -Arguments @('verify', '--verbose', '--print-certs', $ApkPath)
     if ($sigRes.ExitCode -ne 0) {
-        Fail-WithGuidance `
-            -WhatFailed ((T "apksigner verify rechazó la firma digital de ") + $VariantLabel + (T " (código ") + $sigRes.ExitCode + ").") `
-            -HowToFix ((T "Firma nuevamente con el keystore oficial RSA-4096. Detalle: ") + $sigRes.Output)
+        Stop-WithGuidance `
+            -WhatFailed ((ConvertTo-Utf8DisplayText "apksigner verify rechazó la firma digital de ") + $VariantLabel + (ConvertTo-Utf8DisplayText " (código ") + $sigRes.ExitCode + ").") `
+            -HowToFix ((ConvertTo-Utf8DisplayText "Firma nuevamente con el keystore oficial RSA-4096. Detalle: ") + $sigRes.Output)
     }
 
-    $signers = @(Parse-ApkSignerSummary -RawOutput $sigRes.Output)
+    $signers = @(ConvertFrom-ApkSignerSummary -RawOutput $sigRes.Output)
     if ($signers.Count -eq 0) {
-        Fail-WithGuidance `
-            -WhatFailed ((T "apksigner verify finalizó sin reportar una huella SHA-256 legible para ") + $VariantLabel + ".") `
-            -HowToFix (T "Actualiza Android SDK build-tools y verifica la integridad del binario.")
+        Stop-WithGuidance `
+            -WhatFailed ((ConvertTo-Utf8DisplayText "apksigner verify finalizó sin reportar una huella SHA-256 legible para ") + $VariantLabel + ".") `
+            -HowToFix (ConvertTo-Utf8DisplayText "Actualiza Android SDK build-tools y verifica la integridad del binario.")
     }
 
     $normalizedExpected = $ExpectedSha256.Trim().ToLowerInvariant()
     $matchedSigner = $signers | Where-Object { $_.Sha256 -eq $normalizedExpected } | Select-Object -First 1
     if (-not $matchedSigner) {
         $foundSha = $signers[0].Sha256
-        Fail-WithGuidance `
-            -WhatFailed ((T "FIRMA NO OFICIAL en ") + $VariantLabel + (T ". Huella detectada: ") + $foundSha + (T " | Esperada: ") + $normalizedExpected) `
-            -HowToFix (T "El binario no fue firmado con el keystore oficial de Julio Angello Vasquez Navarro (posible debug.apk). Revisa app_movil\android\key.properties.")
+        Stop-WithGuidance `
+            -WhatFailed ((ConvertTo-Utf8DisplayText "FIRMA NO OFICIAL en ") + $VariantLabel + (ConvertTo-Utf8DisplayText ". Huella detectada: ") + $foundSha + (ConvertTo-Utf8DisplayText " | Esperada: ") + $normalizedExpected) `
+            -HowToFix (ConvertTo-Utf8DisplayText "El binario no fue firmado con el keystore oficial de Julio Angello Vasquez Navarro (posible debug.apk). Revisa app_movil\android\key.properties.")
     }
 
     $item = Get-Item -LiteralPath $ApkPath
     $fileSha256 = (Get-FileHash -LiteralPath $ApkPath -Algorithm SHA256).Hash.ToLowerInvariant()
     $sizeMb = [math]::Round($item.Length / 1MB, 2).ToString('0.00', [System.Globalization.CultureInfo]::InvariantCulture)
 
-    Write-Host ((T "     [OK] aapt2: ") + "$pkgName v$apkVerName (code $apkVerCode) | ABIs: $abisText | debuggable: AUSENTE") -ForegroundColor Green
-    Write-Host ((T "     [OK] apksigner: RSA-4096 oficial verificado (") + $matchedSigner.Sha256.Substring(0, 16) + "...)") -ForegroundColor Green
+    Write-Host ((ConvertTo-Utf8DisplayText "     [OK] aapt2: ") + "$pkgName v$apkVerName (code $apkVerCode) | ABIs: $abisText | debuggable: AUSENTE") -ForegroundColor Green
+    Write-Host ((ConvertTo-Utf8DisplayText "     [OK] apksigner: RSA-4096 oficial verificado (") + $matchedSigner.Sha256.Substring(0, 16) + "...)") -ForegroundColor Green
 
     return [PSCustomObject]@{
         Variant      = $VariantLabel
@@ -565,15 +565,15 @@ function New-CompanionAtpTechnicalTemplate {
     $univDisplayAbis = (($CertUniv.Abis -replace "'", '') -replace '\s+', ', ').Trim(', ')
     if ([string]::IsNullOrWhiteSpace($univDisplayAbis)) { $univDisplayAbis = 'arm64-v8a, armeabi-v7a, x86_64' }
 
-    $atpBulletVer = (T "Versión: ") + "v$($VersionMeta.FullVersion) (Build Code $($VersionMeta.BuildCode) | ARM64 split code $($CertArm64.VersionCode))"
-    $atpBulletDate = (T "Fecha de Compilación: ") + $LimaTimestamp
-    $atpBulletEnv = (T "Ambiente: Producción Comercial Oficial (Ofuscado con --dart-define=PRODUCTION=true)")
-    $atpSecIdent = (T "IDENTIFICACI") + [char]0x00D3 + (T "N DE BINARIOS (RELEASE DUAL UNIVERSAL + ARM64 LIGERO)")
-    $atpSecFirm = (T "CERTIFICACI") + [char]0x00D3 + (T "N CRIPTOGR") + [char]0x00C1 + (T "FICA Y FIRMA DIGITAL (AMBOS BINARIOS)")
+    $atpBulletVer = (ConvertTo-Utf8DisplayText "Versión: ") + "v$($VersionMeta.FullVersion) (Build Code $($VersionMeta.BuildCode) | ARM64 split code $($CertArm64.VersionCode))"
+    $atpBulletDate = (ConvertTo-Utf8DisplayText "Fecha de Compilación: ") + $LimaTimestamp
+    $atpBulletEnv = (ConvertTo-Utf8DisplayText "Ambiente: Producción Comercial Oficial (Ofuscado con --dart-define=PRODUCTION=true)")
+    $atpSecIdent = (ConvertTo-Utf8DisplayText "IDENTIFICACI") + [char]0x00D3 + (ConvertTo-Utf8DisplayText "N DE BINARIOS (RELEASE DUAL UNIVERSAL + ARM64 LIGERO)")
+    $atpSecFirm = (ConvertTo-Utf8DisplayText "CERTIFICACI") + [char]0x00D3 + (ConvertTo-Utf8DisplayText "N CRIPTOGR") + [char]0x00C1 + (ConvertTo-Utf8DisplayText "FICA Y FIRMA DIGITAL (AMBOS BINARIOS)")
     $emDash = [char]0x2014
 
     $lines = @(
-        ((T "FICHA T") + [char]0x00C9 + "CNICA DE LANZAMIENTO OFICIAL - MOCHILALISTA POS"),
+        ((ConvertTo-Utf8DisplayText "FICHA T") + [char]0x00C9 + "CNICA DE LANZAMIENTO OFICIAL - MOCHILALISTA POS"),
         $atpBulletVer,
         $atpBulletDate,
         $atpBulletEnv,
@@ -581,45 +581,45 @@ function New-CompanionAtpTechnicalTemplate {
         "================================================================================",
         $atpSecIdent,
         "================================================================================",
-        (T "[1] APK UNIVERSAL (Compatibilidad Completa)"),
+        (ConvertTo-Utf8DisplayText "[1] APK UNIVERSAL (Compatibilidad Completa)"),
         "Archivo: $($CertUniv.FileName)",
         "Ruta de Entrega: $($CertUniv.Path)",
-        ((T "Tamaño: ") + "$($CertUniv.SizeMb) MB ($univBytesFmt bytes)"),
+        ((ConvertTo-Utf8DisplayText "Tamaño: ") + "$($CertUniv.SizeMb) MB ($univBytesFmt bytes)"),
         "Hash SHA-256: $($CertUniv.FileSha256)",
         "Package Name: $ExpectedPackageName",
         "Version Name / Code: $($VersionMeta.VersionName) (versionCode $($CertUniv.VersionCode))",
         "Native Code ABIs: $univDisplayAbis",
         "Target SDK: $($CertUniv.TargetSdk) | Min SDK: $($CertUniv.MinSdk)",
         "Esquema de Base de Datos SQLite: v36",
-        (T "Inspección aapt2: application-debuggable AUSENTE (0 ocurrencias)"),
+        (ConvertTo-Utf8DisplayText "Inspección aapt2: application-debuggable AUSENTE (0 ocurrencias)"),
         "",
-        ((T "[2] APK ARM64 LIGERO (Optimizado para Descarga R") + [char]0x00E1 + "pida por WhatsApp)"),
+        ((ConvertTo-Utf8DisplayText "[2] APK ARM64 LIGERO (Optimizado para Descarga R") + [char]0x00E1 + "pida por WhatsApp)"),
         "Archivo: $($CertArm64.FileName)",
         "Ruta de Entrega: $($CertArm64.Path)",
-        ((T "Tamaño: ") + "$($CertArm64.SizeMb) MB ($armBytesFmt bytes) $emDash Ahorro del -$SavingsPct % frente al Universal ($($CertUniv.SizeMb) MB)"),
+        ((ConvertTo-Utf8DisplayText "Tamaño: ") + "$($CertArm64.SizeMb) MB ($armBytesFmt bytes) $emDash Ahorro del -$SavingsPct % frente al Universal ($($CertUniv.SizeMb) MB)"),
         "Hash SHA-256: $($CertArm64.FileSha256)",
         "Package Name: $ExpectedPackageName",
         ("Version Name / Code: $($VersionMeta.VersionName) (versionCode $($CertArm64.VersionCode) $emDash split ARM64)"),
         "Native Code ABI Exclusiva: arm64-v8a",
         "Target SDK: $($CertArm64.TargetSdk) | Min SDK: $($CertArm64.MinSdk)",
         "Esquema de Base de Datos SQLite: v36",
-        (T "Inspección aapt2: application-debuggable AUSENTE (0 ocurrencias)"),
+        (ConvertTo-Utf8DisplayText "Inspección aapt2: application-debuggable AUSENTE (0 ocurrencias)"),
         "",
         "================================================================================",
         $atpSecFirm,
         "================================================================================",
-        (T "Herramienta de Auditoría: ") + "Android SDK build-tools $($BuildTools.Version) apksigner (APK Signature Scheme v2 verified: true)",
+        (ConvertTo-Utf8DisplayText "Herramienta de Auditoría: ") + "Android SDK build-tools $($BuildTools.Version) apksigner (APK Signature Scheme v2 verified: true)",
         "Titular del Certificado: $($CertUniv.SignerDn)",
         "Algoritmo de Firma: RSA 4096 bits",
         "Huella Digital SHA-256 Oficial: $($CertUniv.SignerSha256)",
-        (T "Estado de Inspección Anti-debug: OFICIAL CERTIFICADO (Verificación exitosa exit code 0 en ambos binarios)"),
+        (ConvertTo-Utf8DisplayText "Estado de Inspección Anti-debug: OFICIAL CERTIFICADO (Verificación exitosa exit code 0 en ambos binarios)"),
         "",
         "================================================================================",
-        ((T "ALCANCE T") + [char]0x00C9 + "CNICO DEL RELEASE v$($VersionMeta.FullVersion)"),
+        ((ConvertTo-Utf8DisplayText "ALCANCE T") + [char]0x00C9 + "CNICO DEL RELEASE v$($VersionMeta.FullVersion)"),
         "================================================================================",
-        (T "1. Mejoras y Alcance Principal:"),
-        (T "   - [Completa aquí el resumen técnico principal de v$($VersionMeta.FullVersion)]."),
-        (T "   - [Integridad verificada con esquema SQLite v36 sin migraciones destructivas]."),
+        (ConvertTo-Utf8DisplayText "1. Mejoras y Alcance Principal:"),
+        (ConvertTo-Utf8DisplayText "   - [Completa aquí el resumen técnico principal de v$($VersionMeta.FullVersion)]."),
+        (ConvertTo-Utf8DisplayText "   - [Integridad verificada con esquema SQLite v36 sin migraciones destructivas]."),
         ""
     )
     return ($lines -join "`r`n")
@@ -629,8 +629,8 @@ function New-CompanionChangesTemplate {
     param($VersionMeta)
     $bullet = [char]0x2022
     $lines = @(
-        ($bullet + (T " Mejora Principal v$($VersionMeta.VersionName): Actualización oficial certificada con optimizaciones de estabilidad y rendimiento diario.")),
-        ($bullet + (T " Compatibilidad y Seguridad Offline: Edición Universal y edición Ligera ARM64 listas para instalar por WhatsApp conservando intactos tus negocios, catálogo y respaldos."))
+        ($bullet + (ConvertTo-Utf8DisplayText " Mejora Principal v$($VersionMeta.VersionName): Actualización oficial certificada con optimizaciones de estabilidad y rendimiento diario.")),
+        ($bullet + (ConvertTo-Utf8DisplayText " Compatibilidad y Seguridad Offline: Edición Universal y edición Ligera ARM64 listas para instalar por WhatsApp conservando intactos tus negocios, catálogo y respaldos."))
     )
     return ($lines -join "`r`n") + "`r`n"
 }
@@ -646,24 +646,24 @@ $ExpectedSignerSha256 = if ($env:ML_DUAL_EXPECTED_SIGNER_SHA256) { $env:ML_DUAL_
 $FlutterCmd = if ($env:ML_DUAL_FLUTTER_CMD) { $env:ML_DUAL_FLUTTER_CMD } else { 'flutter' }
 
 Write-Host "========================================================================" -ForegroundColor Cyan
-Write-Host (T "  MOCHILALISTA - COMPILADOR DUAL OFICIAL (UNIVERSAL + ARM64 LIGERO)") -ForegroundColor Cyan
+Write-Host (ConvertTo-Utf8DisplayText "  MOCHILALISTA - COMPILADOR DUAL OFICIAL (UNIVERSAL + ARM64 LIGERO)") -ForegroundColor Cyan
 Write-Host "========================================================================" -ForegroundColor Cyan
 Write-Host ""
 
 # ------------------------------------------------------------------------------
 # [Paso 1/6] Pre-chequeos de entorno y herramientas
 # ------------------------------------------------------------------------------
-Write-Host (T "[Paso 1/6] Validando entorno, pubspec.yaml, firma y Android SDK...") -ForegroundColor Yellow
+Write-Host (ConvertTo-Utf8DisplayText "[Paso 1/6] Validando entorno, pubspec.yaml, firma y Android SDK...") -ForegroundColor Yellow
 
-$VersionMeta = Parse-PubspecVersion -PubspecPath $PubspecPath
-$ResolvedKeystore = Verify-KeystoreConfigSafe -KeyPropertiesPath $KeyPropertiesPath
+$VersionMeta = ConvertFrom-PubspecVersion -PubspecPath $PubspecPath
+$ResolvedKeystore = Test-KeystoreConfigSafe -KeyPropertiesPath $KeyPropertiesPath
 
 if (-not $VerifyOnly) {
     $flutterFound = Get-Command $FlutterCmd -ErrorAction SilentlyContinue
     if (-not $flutterFound) {
-        Fail-WithGuidance `
-            -WhatFailed ((T "No se encontró el ejecutable '") + $FlutterCmd + (T "' en el PATH del sistema.")) `
-            -HowToFix (T "Instala Flutter SDK o agrega flutter\bin a las Variables de Entorno del sistema y abre una nueva consola.")
+        Stop-WithGuidance `
+            -WhatFailed ((ConvertTo-Utf8DisplayText "No se encontró el ejecutable '") + $FlutterCmd + (ConvertTo-Utf8DisplayText "' en el PATH del sistema.")) `
+            -HowToFix (ConvertTo-Utf8DisplayText "Instala Flutter SDK o agrega flutter\bin a las Variables de Entorno del sistema y abre una nueva consola.")
     }
 }
 
@@ -682,27 +682,27 @@ if (-not $DryRun -and -not $VerifyOnly) {
     }
 }
 
-Write-Host ((T "  [OK] Versión detectada  : v") + "$($VersionMeta.FullVersion) (tag: v$($VersionMeta.Tag))") -ForegroundColor Green
-Write-Host ((T "  [OK] Keystore verificado: ") + $ResolvedKeystore) -ForegroundColor Green
-Write-Host ((T "  [OK] SDK build-tools    : ") + "$($BuildTools.Version) (aapt2 + apksigner listos)") -ForegroundColor Green
-Write-Host ((T "  [OK] Carpeta destino    : ") + $OutDir) -ForegroundColor Green
+Write-Host ((ConvertTo-Utf8DisplayText "  [OK] Versión detectada  : v") + "$($VersionMeta.FullVersion) (tag: v$($VersionMeta.Tag))") -ForegroundColor Green
+Write-Host ((ConvertTo-Utf8DisplayText "  [OK] Keystore verificado: ") + $ResolvedKeystore) -ForegroundColor Green
+Write-Host ((ConvertTo-Utf8DisplayText "  [OK] SDK build-tools    : ") + "$($BuildTools.Version) (aapt2 + apksigner listos)") -ForegroundColor Green
+Write-Host ((ConvertTo-Utf8DisplayText "  [OK] Carpeta destino    : ") + $OutDir) -ForegroundColor Green
 Write-Host ""
 
 if ($DryRun) {
-    Write-Host ((T "[MODO SIMULACI") + [char]0x00D3 + (T "N --dry-run] Pre-chequeos superados. No se compilará ni escribirá en disco.")) -ForegroundColor Cyan
+    Write-Host ((ConvertTo-Utf8DisplayText "[MODO SIMULACI") + [char]0x00D3 + (ConvertTo-Utf8DisplayText "N --dry-run] Pre-chequeos superados. No se compilará ni escribirá en disco.")) -ForegroundColor Cyan
     Write-Host ""
-    Write-Host (T "  [Paso 2/6] Análisis estático : ") -NoNewline; Write-Host $(if ($SkipAnalyze) { T "Omitido por --skip-analyze" } else { "$FlutterCmd analyze --no-pub" }) -ForegroundColor Gray
-    Write-Host (T "  [Paso 3/6] Build Universal   : ") -NoNewline; Write-Host "$FlutterCmd build apk --release --obfuscate --split-debug-info=build/app_symbols --dart-define=PRODUCTION=true" -ForegroundColor Gray
-    Write-Host (T "             Entrega Universal : ") -NoNewline; Write-Host $UniversalTargetPath -ForegroundColor Gray
-    Write-Host (T "  [Paso 4/6] Build ARM64       : ") -NoNewline; Write-Host "$FlutterCmd build apk --release --split-per-abi --obfuscate --split-debug-info=build/app_symbols --dart-define=PRODUCTION=true" -ForegroundColor Gray
-    Write-Host (T "             Entrega ARM64     : ") -NoNewline; Write-Host $Arm64TargetPath -ForegroundColor Gray
-    Write-Host (T "  [Paso 5/6] Certificación     : ") -NoNewline; Write-Host "aapt2 dump badging + apksigner verify (SHA-256 $ExpectedSignerSha256)" -ForegroundColor Gray
+    Write-Host (ConvertTo-Utf8DisplayText "  [Paso 2/6] Análisis estático : ") -NoNewline; Write-Host $(if ($SkipAnalyze) { ConvertTo-Utf8DisplayText "Omitido por --skip-analyze" } else { "$FlutterCmd analyze --no-pub" }) -ForegroundColor Gray
+    Write-Host (ConvertTo-Utf8DisplayText "  [Paso 3/6] Build Universal   : ") -NoNewline; Write-Host "$FlutterCmd build apk --release --obfuscate --split-debug-info=build/app_symbols --dart-define=PRODUCTION=true" -ForegroundColor Gray
+    Write-Host (ConvertTo-Utf8DisplayText "             Entrega Universal : ") -NoNewline; Write-Host $UniversalTargetPath -ForegroundColor Gray
+    Write-Host (ConvertTo-Utf8DisplayText "  [Paso 4/6] Build ARM64       : ") -NoNewline; Write-Host "$FlutterCmd build apk --release --split-per-abi --obfuscate --split-debug-info=build/app_symbols --dart-define=PRODUCTION=true" -ForegroundColor Gray
+    Write-Host (ConvertTo-Utf8DisplayText "             Entrega ARM64     : ") -NoNewline; Write-Host $Arm64TargetPath -ForegroundColor Gray
+    Write-Host (ConvertTo-Utf8DisplayText "  [Paso 5/6] Certificación     : ") -NoNewline; Write-Host "aapt2 dump badging + apksigner verify (SHA-256 $ExpectedSignerSha256)" -ForegroundColor Gray
     if ($InitNotes) {
-        $dryAtp = if (Test-Path -LiteralPath $NotesAtpPath) { T "Ya existe en disco (se respetará sin sobrescribir)" } else { T "Creará plantilla técnica (UTF-8 sin BOM)" }
-        $dryChg = if (Test-Path -LiteralPath $NotesChangesPath) { T "Ya existe en disco (se respetará sin sobrescribir)" } else { T "Creará plantilla de cambios (UTF-8 sin BOM)" }
-        Write-Host (T "  [Paso 6/6] Notas (--init-notes): ") -NoNewline; Write-Host "$NotesAtpPath [$dryAtp] | $NotesChangesPath [$dryChg]" -ForegroundColor Gray
+        $dryAtp = if (Test-Path -LiteralPath $NotesAtpPath) { ConvertTo-Utf8DisplayText "Ya existe en disco (se respetará sin sobrescribir)" } else { ConvertTo-Utf8DisplayText "Creará plantilla técnica (UTF-8 sin BOM)" }
+        $dryChg = if (Test-Path -LiteralPath $NotesChangesPath) { ConvertTo-Utf8DisplayText "Ya existe en disco (se respetará sin sobrescribir)" } else { ConvertTo-Utf8DisplayText "Creará plantilla de cambios (UTF-8 sin BOM)" }
+        Write-Host (ConvertTo-Utf8DisplayText "  [Paso 6/6] Notas (--init-notes): ") -NoNewline; Write-Host "$NotesAtpPath [$dryAtp] | $NotesChangesPath [$dryChg]" -ForegroundColor Gray
     } else {
-        Write-Host (T "  [Paso 6/6] Notas compañeras  : ") -NoNewline; Write-Host "$NotesAtpPath | $NotesChangesPath" -ForegroundColor Gray
+        Write-Host (ConvertTo-Utf8DisplayText "  [Paso 6/6] Notas compañeras  : ") -NoNewline; Write-Host "$NotesAtpPath | $NotesChangesPath" -ForegroundColor Gray
     }
     Write-Host ""
     Wait-IfInteractive -ForceNoPause $NoPause
@@ -713,31 +713,31 @@ if ($DryRun) {
 # [Paso 2/6], [Paso 3/6], [Paso 4/6] Análisis y Compilación (o salto en --verify-only)
 # ------------------------------------------------------------------------------
 if ($VerifyOnly) {
-    Write-Host (T "[Paso 2/6] Análisis estático omitido (modo --verify-only).") -ForegroundColor DarkGray
-    Write-Host (T "[Paso 3/6] Compilación Universal omitida (auditando APK existente en destino).") -ForegroundColor DarkGray
-    Write-Host (T "[Paso 4/6] Compilación ARM64 omitida (auditando APK existente en destino).") -ForegroundColor DarkGray
+    Write-Host (ConvertTo-Utf8DisplayText "[Paso 2/6] Análisis estático omitido (modo --verify-only).") -ForegroundColor DarkGray
+    Write-Host (ConvertTo-Utf8DisplayText "[Paso 3/6] Compilación Universal omitida (auditando APK existente en destino).") -ForegroundColor DarkGray
+    Write-Host (ConvertTo-Utf8DisplayText "[Paso 4/6] Compilación ARM64 omitida (auditando APK existente en destino).") -ForegroundColor DarkGray
     Write-Host ""
 } else {
     if (-not (Test-Path -LiteralPath $AppMovilDir)) {
-        Fail-WithGuidance `
-            -WhatFailed ((T "No se encontró el directorio app_movil en: ") + $AppMovilDir) `
-            -HowToFix (T "Ejecuta el script desde la raíz del proyecto MochilaLista.")
+        Stop-WithGuidance `
+            -WhatFailed ((ConvertTo-Utf8DisplayText "No se encontró el directorio app_movil en: ") + $AppMovilDir) `
+            -HowToFix (ConvertTo-Utf8DisplayText "Ejecuta el script desde la raíz del proyecto MochilaLista.")
     }
 
     Push-Location -LiteralPath $AppMovilDir
     try {
         # [Paso 2/6] Análisis estático
         if ($SkipAnalyze) {
-            Write-Host (T "[Paso 2/6] Análisis estático omitido por --skip-analyze.") -ForegroundColor DarkGray
+            Write-Host (ConvertTo-Utf8DisplayText "[Paso 2/6] Análisis estático omitido por --skip-analyze.") -ForegroundColor DarkGray
         } else {
-            Write-Host (T "[Paso 2/6] Ejecutando análisis estático (flutter analyze --no-pub)...") -ForegroundColor Yellow
+            Write-Host (ConvertTo-Utf8DisplayText "[Paso 2/6] Ejecutando análisis estático (flutter analyze --no-pub)...") -ForegroundColor Yellow
             & $FlutterCmd analyze --no-pub
             if ($LASTEXITCODE -ne 0) {
-                Fail-WithGuidance `
-                    -WhatFailed ((T "flutter analyze --no-pub detectó errores o advertencias (código ") + $LASTEXITCODE + ").") `
-                    -HowToFix (T "Corrige los errores reportados arriba en app_movil/ antes de emitir un release comercial.")
+                Stop-WithGuidance `
+                    -WhatFailed ((ConvertTo-Utf8DisplayText "flutter analyze --no-pub detectó errores o advertencias (código ") + $LASTEXITCODE + ").") `
+                    -HowToFix (ConvertTo-Utf8DisplayText "Corrige los errores reportados arriba en app_movil/ antes de emitir un release comercial.")
             }
-            Write-Host (T "  [OK] Análisis estático limpio.") -ForegroundColor Green
+            Write-Host (ConvertTo-Utf8DisplayText "  [OK] Análisis estático limpio.") -ForegroundColor Green
         }
         Write-Host ""
 
@@ -747,39 +747,39 @@ if ($VerifyOnly) {
         }
 
         # [Paso 3/6] Compilación APK Universal
-        Write-Host (T "[Paso 3/6] Compilando APK Universal ofuscado (compatible con todo Android)...") -ForegroundColor Yellow
+        Write-Host (ConvertTo-Utf8DisplayText "[Paso 3/6] Compilando APK Universal ofuscado (compatible con todo Android)...") -ForegroundColor Yellow
         & $FlutterCmd build apk --release --obfuscate --split-debug-info=build/app_symbols --dart-define=PRODUCTION=true
         if ($LASTEXITCODE -ne 0) {
-            Fail-WithGuidance `
-                -WhatFailed ((T "La compilación del APK Universal falló (código ") + $LASTEXITCODE + ").") `
-                -HowToFix (T "Revisa el error de Gradle/Flutter arriba (SDK, dependencias o key.properties) y vuelve a intentar.")
+            Stop-WithGuidance `
+                -WhatFailed ((ConvertTo-Utf8DisplayText "La compilación del APK Universal falló (código ") + $LASTEXITCODE + ").") `
+                -HowToFix (ConvertTo-Utf8DisplayText "Revisa el error de Gradle/Flutter arriba (SDK, dependencias o key.properties) y vuelve a intentar.")
         }
         $srcUniv = Join-Path $BuildOutputDir 'app-release.apk'
         if (-not (Test-Path -LiteralPath $srcUniv)) {
-            Fail-WithGuidance `
-                -WhatFailed ((T "No se generó app-release.apk en: ") + $srcUniv) `
-                -HowToFix (T "Verifica la salida de Gradle/Flutter y permisos de escritura en app_movil\build.")
+            Stop-WithGuidance `
+                -WhatFailed ((ConvertTo-Utf8DisplayText "No se generó app-release.apk en: ") + $srcUniv) `
+                -HowToFix (ConvertTo-Utf8DisplayText "Verifica la salida de Gradle/Flutter y permisos de escritura en app_movil\build.")
         }
         Copy-Item -LiteralPath $srcUniv -Destination $UniversalTargetPath -Force
-        Write-Host ((T "  [OK] Universal entregado en: ") + $UniversalTargetPath) -ForegroundColor Green
+        Write-Host ((ConvertTo-Utf8DisplayText "  [OK] Universal entregado en: ") + $UniversalTargetPath) -ForegroundColor Green
         Write-Host ""
 
         # [Paso 4/6] Compilación APK ARM64 Ligero
-        Write-Host (T "[Paso 4/6] Compilando APK ARM64 Ligero ofuscado (--split-per-abi para WhatsApp)...") -ForegroundColor Yellow
+        Write-Host (ConvertTo-Utf8DisplayText "[Paso 4/6] Compilando APK ARM64 Ligero ofuscado (--split-per-abi para WhatsApp)...") -ForegroundColor Yellow
         & $FlutterCmd build apk --release --split-per-abi --obfuscate --split-debug-info=build/app_symbols --dart-define=PRODUCTION=true
         if ($LASTEXITCODE -ne 0) {
-            Fail-WithGuidance `
-                -WhatFailed ((T "La compilación del APK ARM64 Ligero falló (código ") + $LASTEXITCODE + ").") `
-                -HowToFix (T "Revisa el error de Gradle/Flutter arriba y vuelve a intentar.")
+            Stop-WithGuidance `
+                -WhatFailed ((ConvertTo-Utf8DisplayText "La compilación del APK ARM64 Ligero falló (código ") + $LASTEXITCODE + ").") `
+                -HowToFix (ConvertTo-Utf8DisplayText "Revisa el error de Gradle/Flutter arriba y vuelve a intentar.")
         }
         $srcArm64 = Join-Path $BuildOutputDir 'app-arm64-v8a-release.apk'
         if (-not (Test-Path -LiteralPath $srcArm64)) {
-            Fail-WithGuidance `
-                -WhatFailed ((T "No se generó app-arm64-v8a-release.apk en: ") + $srcArm64) `
-                -HowToFix (T "Confirma que --split-per-abi haya producido el APK arm64-v8a.")
+            Stop-WithGuidance `
+                -WhatFailed ((ConvertTo-Utf8DisplayText "No se generó app-arm64-v8a-release.apk en: ") + $srcArm64) `
+                -HowToFix (ConvertTo-Utf8DisplayText "Confirma que --split-per-abi haya producido el APK arm64-v8a.")
         }
         Copy-Item -LiteralPath $srcArm64 -Destination $Arm64TargetPath -Force
-        Write-Host ((T "  [OK] ARM64 Ligero entregado en: ") + $Arm64TargetPath) -ForegroundColor Green
+        Write-Host ((ConvertTo-Utf8DisplayText "  [OK] ARM64 Ligero entregado en: ") + $Arm64TargetPath) -ForegroundColor Green
         Write-Host ""
     } finally {
         Pop-Location
@@ -789,9 +789,9 @@ if ($VerifyOnly) {
 # ------------------------------------------------------------------------------
 # [Paso 5/6] Certificación forense obligatoria sobre AMBOS APKs
 # ------------------------------------------------------------------------------
-Write-Host (T "[Paso 5/6] Ejecutando certificación forense (aapt2 + apksigner) sobre ambos APKs...") -ForegroundColor Yellow
+Write-Host (ConvertTo-Utf8DisplayText "[Paso 5/6] Ejecutando certificación forense (aapt2 + apksigner) sobre ambos APKs...") -ForegroundColor Yellow
 
-$CertUniv = Certify-ApkForensic `
+$CertUniv = Test-ApkForensic `
     -ApkPath $UniversalTargetPath `
     -VariantLabel 'Universal' `
     -IsArm64Split $false `
@@ -799,7 +799,7 @@ $CertUniv = Certify-ApkForensic `
     -BuildTools $BuildTools `
     -ExpectedSha256 $ExpectedSignerSha256
 
-$CertArm64 = Certify-ApkForensic `
+$CertArm64 = Test-ApkForensic `
     -ApkPath $Arm64TargetPath `
     -VariantLabel 'ARM64 Ligero' `
     -IsArm64Split $true `
@@ -812,7 +812,7 @@ Write-Host ""
 # ------------------------------------------------------------------------------
 # [Paso 6/6] Resumen Ejecutivo y Checklist de Siguientes Pasos
 # ------------------------------------------------------------------------------
-Write-Host (T "[Paso 6/6] Generando resumen ejecutivo oficial...") -ForegroundColor Yellow
+Write-Host (ConvertTo-Utf8DisplayText "[Paso 6/6] Generando resumen ejecutivo oficial...") -ForegroundColor Yellow
 
 $SavingsPct = if ($CertUniv.SizeBytes -gt 0) {
     [math]::Round((1.0 - ($CertArm64.SizeBytes / [double]$CertUniv.SizeBytes)) * 100.0, 2).ToString('0.00', [System.Globalization.CultureInfo]::InvariantCulture)
@@ -823,7 +823,7 @@ $SavingsPct = if ($CertUniv.SizeBytes -gt 0) {
 if ($InitNotes) {
     $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
     $limaNowStr = Get-LimaTimestampString
-    $alreadyRespectedMsg = (T "Ya existe en disco ") + [char]0x2014 + (T " respetada sin sobrescribir")
+    $alreadyRespectedMsg = (ConvertTo-Utf8DisplayText "Ya existe en disco ") + [char]0x2014 + (ConvertTo-Utf8DisplayText " respetada sin sobrescribir")
 
     if (Test-Path -LiteralPath $NotesAtpPath) {
         $AtpTxtStatus = $alreadyRespectedMsg
@@ -838,7 +838,7 @@ if ($InitNotes) {
             -SavingsPct $SavingsPct `
             -LimaTimestamp $limaNowStr
         [System.IO.File]::WriteAllText($NotesAtpPath, $atpBody, $utf8NoBom)
-        $AtpTxtStatus = T "Creada plantilla técnica en UTF-8 sin BOM"
+        $AtpTxtStatus = ConvertTo-Utf8DisplayText "Creada plantilla técnica en UTF-8 sin BOM"
     }
 
     if (Test-Path -LiteralPath $NotesChangesPath) {
@@ -849,40 +849,40 @@ if ($InitNotes) {
         }
         $changesBody = New-CompanionChangesTemplate -VersionMeta $VersionMeta
         [System.IO.File]::WriteAllText($NotesChangesPath, $changesBody, $utf8NoBom)
-        $CambiosTxtStatus = T "Creada plantilla de cambios en UTF-8 sin BOM"
+        $CambiosTxtStatus = ConvertTo-Utf8DisplayText "Creada plantilla de cambios en UTF-8 sin BOM"
     }
 } else {
-    $AtpTxtStatus = if (Test-Path -LiteralPath $NotesAtpPath) { T "Presente en disco (respetada)" } else { T "No encontrada (opcional crear antes de publicar)" }
-    $CambiosTxtStatus = if (Test-Path -LiteralPath $NotesChangesPath) { T "Presente en disco (respetada)" } else { T "No encontrada (opcional crear antes de publicar)" }
+    $AtpTxtStatus = if (Test-Path -LiteralPath $NotesAtpPath) { ConvertTo-Utf8DisplayText "Presente en disco (respetada)" } else { ConvertTo-Utf8DisplayText "No encontrada (opcional crear antes de publicar)" }
+    $CambiosTxtStatus = if (Test-Path -LiteralPath $NotesChangesPath) { ConvertTo-Utf8DisplayText "Presente en disco (respetada)" } else { ConvertTo-Utf8DisplayText "No encontrada (opcional crear antes de publicar)" }
 }
 
 Write-Host ""
 Write-Host "========================================================================" -ForegroundColor Green
-Write-Host ((T "  CERTIFICACI") + [char]0x00D3 + "N DUAL COMPLETA " + [char]0x2014 + " MOCHILALISTA v" + $VersionMeta.FullVersion) -ForegroundColor Green
+Write-Host ((ConvertTo-Utf8DisplayText "  CERTIFICACI") + [char]0x00D3 + "N DUAL COMPLETA " + [char]0x2014 + " MOCHILALISTA v" + $VersionMeta.FullVersion) -ForegroundColor Green
 Write-Host "========================================================================" -ForegroundColor Green
-Write-Host (T "[1] APK UNIVERSAL (Compatibilidad completa Android):") -ForegroundColor White
-Write-Host ((T "    Archivo   : ") + $CertUniv.Path) -ForegroundColor Gray
-Write-Host ((T "    Tamaño    : ") + "$($CertUniv.SizeMb) MB ($($CertUniv.SizeBytes) bytes)") -ForegroundColor Gray
-Write-Host ((T "    SHA-256   : ") + $CertUniv.FileSha256) -ForegroundColor Gray
-Write-Host ((T "    Metadatos : ") + "versionCode=$($CertUniv.VersionCode) | ABIs=$($CertUniv.Abis)") -ForegroundColor Gray
+Write-Host (ConvertTo-Utf8DisplayText "[1] APK UNIVERSAL (Compatibilidad completa Android):") -ForegroundColor White
+Write-Host ((ConvertTo-Utf8DisplayText "    Archivo   : ") + $CertUniv.Path) -ForegroundColor Gray
+Write-Host ((ConvertTo-Utf8DisplayText "    Tamaño    : ") + "$($CertUniv.SizeMb) MB ($($CertUniv.SizeBytes) bytes)") -ForegroundColor Gray
+Write-Host ((ConvertTo-Utf8DisplayText "    SHA-256   : ") + $CertUniv.FileSha256) -ForegroundColor Gray
+Write-Host ((ConvertTo-Utf8DisplayText "    Metadatos : ") + "versionCode=$($CertUniv.VersionCode) | ABIs=$($CertUniv.Abis)") -ForegroundColor Gray
 Write-Host ""
-Write-Host (T "[2] APK ARM64 LIGERO (Recomendado para envío directo por WhatsApp):") -ForegroundColor White
-Write-Host ((T "    Archivo   : ") + $CertArm64.Path) -ForegroundColor Gray
-Write-Host ((T "    Tamaño    : ") + "$($CertArm64.SizeMb) MB ($($CertArm64.SizeBytes) bytes) " + ([char]0x2014 + (T " Ahorro del ") + "$SavingsPct % ") + (T "frente al Universal")) -ForegroundColor Gray
-Write-Host ((T "    SHA-256   : ") + $CertArm64.FileSha256) -ForegroundColor Gray
-Write-Host ((T "    Metadatos : ") + "versionCode=$($CertArm64.VersionCode) | ABIs=$($CertArm64.Abis)") -ForegroundColor Gray
+Write-Host (ConvertTo-Utf8DisplayText "[2] APK ARM64 LIGERO (Recomendado para envío directo por WhatsApp):") -ForegroundColor White
+Write-Host ((ConvertTo-Utf8DisplayText "    Archivo   : ") + $CertArm64.Path) -ForegroundColor Gray
+Write-Host ((ConvertTo-Utf8DisplayText "    Tamaño    : ") + "$($CertArm64.SizeMb) MB ($($CertArm64.SizeBytes) bytes) " + ([char]0x2014 + (ConvertTo-Utf8DisplayText " Ahorro del ") + "$SavingsPct % ") + (ConvertTo-Utf8DisplayText "frente al Universal")) -ForegroundColor Gray
+Write-Host ((ConvertTo-Utf8DisplayText "    SHA-256   : ") + $CertArm64.FileSha256) -ForegroundColor Gray
+Write-Host ((ConvertTo-Utf8DisplayText "    Metadatos : ") + "versionCode=$($CertArm64.VersionCode) | ABIs=$($CertArm64.Abis)") -ForegroundColor Gray
 Write-Host ""
-Write-Host ((T "[3] FIRMA OFICIAL Y NOTAS COMPA") + [char]0x00D1 + "ERAS:") -ForegroundColor White
-Write-Host ((T "    Certificado    : ") + $CertUniv.SignerDn) -ForegroundColor Gray
-Write-Host ((T "    Huella RSA-4096: ") + $CertUniv.SignerSha256) -ForegroundColor Green
+Write-Host ((ConvertTo-Utf8DisplayText "[3] FIRMA OFICIAL Y NOTAS COMPA") + [char]0x00D1 + "ERAS:") -ForegroundColor White
+Write-Host ((ConvertTo-Utf8DisplayText "    Certificado    : ") + $CertUniv.SignerDn) -ForegroundColor Gray
+Write-Host ((ConvertTo-Utf8DisplayText "    Huella RSA-4096: ") + $CertUniv.SignerSha256) -ForegroundColor Green
 Write-Host ("    mochilalista_v$($VersionMeta.Tag)_atp.txt        : $AtpTxtStatus") -ForegroundColor Gray
 Write-Host ("    mochilalista_v$($VersionMeta.Tag)_atp_cambios.txt: $CambiosTxtStatus") -ForegroundColor Gray
 Write-Host ""
-Write-Host (T "CHECKLIST DE SIGUIENTES PASOS (MochilaLista Admin > Versiones APK):") -ForegroundColor Cyan
-Write-Host (T "  1. Abre MochilaLista Admin (http://localhost:8080) -> pestaña 'Versiones APK'.") -ForegroundColor White
-Write-Host ((T "  2. Pulsa 'Subir / Registrar Nueva Versión del APK' y selecciona ") + $CertUniv.FileName + (T " en Biblioteca Oficial.")) -ForegroundColor White
-Write-Host (T "  3. Revisa que los metadatos, changelog y firma 'Oficial RSA-4096' se carguen y guarda el lanzamiento.") -ForegroundColor White
-Write-Host ((T "  4. Abre 'Editar Versión' sobre v") + $VersionMeta.VersionName + (T " y vincula la variante ARM64 Ligero (") + $CertArm64.FileName + ").") -ForegroundColor White
+Write-Host (ConvertTo-Utf8DisplayText "CHECKLIST DE SIGUIENTES PASOS (MochilaLista Admin > Versiones APK):") -ForegroundColor Cyan
+Write-Host (ConvertTo-Utf8DisplayText "  1. Abre MochilaLista Admin (http://localhost:8080) -> pestaña 'Versiones APK'.") -ForegroundColor White
+Write-Host ((ConvertTo-Utf8DisplayText "  2. Pulsa 'Subir / Registrar Nueva Versión del APK' y selecciona ") + $CertUniv.FileName + (ConvertTo-Utf8DisplayText " en Biblioteca Oficial.")) -ForegroundColor White
+Write-Host (ConvertTo-Utf8DisplayText "  3. Revisa que los metadatos, changelog y firma 'Oficial RSA-4096' se carguen y guarda el lanzamiento.") -ForegroundColor White
+Write-Host ((ConvertTo-Utf8DisplayText "  4. Abre 'Editar Versión' sobre v") + $VersionMeta.VersionName + (ConvertTo-Utf8DisplayText " y vincula la variante ARM64 Ligero (") + $CertArm64.FileName + ").") -ForegroundColor White
 Write-Host "========================================================================" -ForegroundColor Green
 
 Wait-IfInteractive -ForceNoPause $NoPause

@@ -8,6 +8,7 @@ import '../lib/license_signer.dart';
 import '../lib/excel_export_service.dart';
 import '../lib/vault_storage_service.dart';
 import '../server.dart';
+import 'support/web_bundle_loader.dart';
 
 void main() {
   late Directory tempDir;
@@ -532,17 +533,13 @@ void main() {
     });
 
     test('Verificación estructural en disco de CSS, HTML y JS (Plan Maestro 15)', () {
-      final cssFile = File('web/css/styles.css');
-      final htmlFile = File('web/index.html');
-      final jsFile = File('web/js/admin_app.js');
+      final css = WebBundleLoader.loadCss();
+      final html = WebBundleLoader.loadHtml();
+      final js = WebBundleLoader.loadJs();
 
-      expect(cssFile.existsSync(), isTrue);
-      expect(htmlFile.existsSync(), isTrue);
-      expect(jsFile.existsSync(), isTrue);
-
-      final css = cssFile.readAsStringSync();
-      final html = htmlFile.readAsStringSync();
-      final js = jsFile.readAsStringSync();
+      expect(css, isNotEmpty);
+      expect(html, isNotEmpty);
+      expect(js, isNotEmpty);
 
       // 1. CSS
       expect(css.contains('color-scheme: dark'), isTrue, reason: 'Garantiza selects y datepickers oscuros en Chromium');

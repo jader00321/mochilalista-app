@@ -11,6 +11,7 @@ import '../lib/license_signer.dart';
 import '../lib/vault_storage_service.dart';
 import '../server.dart';
 import 'apk_inspector_and_releases_test.dart' show createTestZip;
+import 'support/web_bundle_loader.dart';
 
 void main() {
   group('PLAN MAESTRO 22 - FASE 2: #tabReleaseManager, Matriz, Catálogo y #modalEditRelease', () {
@@ -32,7 +33,7 @@ void main() {
     // 1. CSS: Erradicación de lupa gigante (.search-icon) y utilidades Fase 2
     // =========================================================================
     test('1. CSS: .search-icon acotado (16px), position absolute, padding-left y clases Fase 2', () {
-      final css = File('web/css/styles.css').readAsStringSync();
+      final css = WebBundleLoader.loadCss();
 
       expect(css, contains('.search-input-wrap'));
       expect(css, contains('.search-icon'));
@@ -71,7 +72,7 @@ void main() {
     // 2. HTML: SVG dimensionados y controles de Fase 2 sin emojis crudos
     // =========================================================================
     test('2. HTML: SVG dimensionados en #tabReleaseManager y modales Fase 2 sin emojis crudos', () {
-      final html = File('web/index.html').readAsStringSync();
+      final html = WebBundleLoader.loadHtml();
 
       // Modal corregir versión instalada sin window.prompt
       expect(html, contains('id="modalFixClientVersion"'));
@@ -123,8 +124,7 @@ void main() {
     // 3. JS: Autodetección sin onclick roto, 3 estados, Matriz, Catálogo y #modalEditRelease
     // =========================================================================
     test('3. JS: Sin rutas Windows en onclick, 3 estados de firma, SemVer, Matriz, Catálogo y #modalEditRelease', () async {
-      final jsFile = File('web/js/admin_app.js');
-      final js = jsFile.readAsStringSync();
+      final js = WebBundleLoader.loadJs();
 
       // Prohibición estricta del bug Windows onclick="importLocalApkDirectly(...)"
       expect(js, isNot(contains('onclick="importLocalApkDirectly(')));

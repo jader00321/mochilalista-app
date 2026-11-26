@@ -7,6 +7,7 @@ import '../lib/license_signer.dart';
 import '../lib/excel_export_service.dart';
 import '../lib/vault_storage_service.dart';
 import '../server.dart';
+import 'support/web_bundle_loader.dart';
 
 void main() {
   group('Fase 5 - Plan Maestro 18: Reingeniería de Comprobantes (Boletas BOL, Facturas FAC, IGV, Canvas y PDF)', () {
@@ -240,9 +241,8 @@ void main() {
     });
 
     test('5. Inspección forense estática de admin_app.js: Canvas y PDF 100% blindados', () {
-      final jsFile = File('web/js/admin_app.js');
-      expect(jsFile.existsSync(), isTrue);
-      final jsContent = jsFile.readAsStringSync();
+      final jsContent = WebBundleLoader.loadJs();
+      expect(jsContent, isNotEmpty);
 
       // Verificar aislamiento de tarjetas con ctx.save() y ctx.restore()
       expect(jsContent.contains('clientCardX'), isTrue);
@@ -263,13 +263,10 @@ void main() {
     });
 
     test('6. Inspección forense de UI (styles.css e index.html): Ergonomía y CERO emojis crudos', () {
-      final htmlFile = File('web/index.html');
-      final cssFile = File('web/css/styles.css');
-      expect(htmlFile.existsSync(), isTrue);
-      expect(cssFile.existsSync(), isTrue);
-
-      final htmlContent = htmlFile.readAsStringSync();
-      final cssContent = cssFile.readAsStringSync();
+      final htmlContent = WebBundleLoader.loadHtml();
+      final cssContent = WebBundleLoader.loadCss();
+      expect(htmlContent, isNotEmpty);
+      expect(cssContent, isNotEmpty);
 
       // Selectores CSS ergonómicos
       expect(cssContent.contains('.receipt-actions-sticky'), isTrue);

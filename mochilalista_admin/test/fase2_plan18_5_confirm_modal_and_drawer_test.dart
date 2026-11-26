@@ -1,5 +1,5 @@
-import 'dart:io';
 import 'package:test/test.dart';
+import 'support/web_bundle_loader.dart';
 
 void main() {
   group('Plan Maestro 18.5 - Fase 2: Modal de Confirmación Pre-Emisión, Firma Ed25519 y switchDrawerTab', () {
@@ -8,17 +8,14 @@ void main() {
     late String cssContent;
 
     setUpAll(() {
-      final htmlFile = File('web/index.html');
-      expect(htmlFile.existsSync(), isTrue, reason: 'web/index.html debe existir');
-      htmlContent = htmlFile.readAsStringSync();
+      htmlContent = WebBundleLoader.loadHtml();
+      expect(htmlContent, isNotEmpty, reason: 'web/index.html debe existir');
 
-      final jsFile = File('web/js/admin_app.js');
-      expect(jsFile.existsSync(), isTrue, reason: 'web/js/admin_app.js debe existir');
-      jsContent = jsFile.readAsStringSync();
+      jsContent = WebBundleLoader.loadJs();
+      expect(jsContent, isNotEmpty, reason: 'web/js/admin_app.js debe existir');
 
-      final cssFile = File('web/css/styles.css');
-      expect(cssFile.existsSync(), isTrue, reason: 'web/css/styles.css debe existir');
-      cssContent = cssFile.readAsStringSync();
+      cssContent = WebBundleLoader.loadCss();
+      expect(cssContent, isNotEmpty, reason: 'web/css/styles.css debe existir');
     });
 
     test('2.1. Inspección Estática index.html: Modal #modalConfirmLicenseEmission y cero emojis crudos', () {

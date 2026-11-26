@@ -8,6 +8,7 @@ import '../lib/excel_export_service.dart';
 import '../lib/license_signer.dart';
 import '../lib/vault_storage_service.dart';
 import '../server.dart';
+import 'support/web_bundle_loader.dart';
 
 void main() {
   group('FASE 3 - Plan Maestro 19: Despacho Asistido de APK por WhatsApp y Portapapeles', () {
@@ -246,9 +247,8 @@ void main() {
     // 3. Inspección estática de Frontend (index.html, admin_app.js, styles.css)
     // =========================================================================
     test('3. Inspección Frontend: Panel waApkDispatchPanel, selectores de variante, botones copy y cero localhost:8080', () {
-      final htmlFile = File('web/index.html');
-      expect(htmlFile.existsSync(), isTrue);
-      final html = htmlFile.readAsStringSync();
+      final html = WebBundleLoader.loadHtml();
+      expect(html, isNotEmpty);
 
       // Elementos del panel de despacho en el modal de WhatsApp
       expect(html, contains('id="waApkDispatchPanel"'));
@@ -273,9 +273,8 @@ void main() {
       expect(html, contains('id="editRelVariantsContainer"'));
 
       // Verificación en admin_app.js
-      final jsFile = File('web/js/admin_app.js');
-      expect(jsFile.existsSync(), isTrue);
-      final js = jsFile.readAsStringSync();
+      final js = WebBundleLoader.loadJs();
+      expect(js, isNotEmpty);
 
       expect(js, contains('function openApkDispatchComposer'));
       expect(js, contains('function setDispatchVariant'));
@@ -290,9 +289,8 @@ void main() {
       expect(js, isNot(contains('http://localhost:8080/api/releases/download')));
 
       // Verificación en styles.css
-      final cssFile = File('web/css/styles.css');
-      expect(cssFile.existsSync(), isTrue);
-      final css = cssFile.readAsStringSync();
+      final css = WebBundleLoader.loadCss();
+      expect(css, isNotEmpty);
       expect(css, contains('.wa-variant-selector-grid'));
       expect(css, contains('.wa-variant-card'));
       expect(css, contains('.wa-variant-card.active'));

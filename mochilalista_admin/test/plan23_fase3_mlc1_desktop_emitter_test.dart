@@ -13,6 +13,7 @@ import '../lib/excel_export_service.dart';
 import '../lib/license_signer.dart';
 import '../lib/vault_storage_service.dart';
 import '../server.dart';
+import 'support/web_bundle_loader.dart';
 
 class _TestDpapiService implements DpapiService {
   @override
@@ -386,9 +387,9 @@ void main() {
     });
 
     test('4. Auditoría HTML/CSS/JS y Ejecución Node.js: Dirty Guard pre-emisión, Vía 1 (MLC1+QR+WA) y Vía 2 (Dart sin incremento)', () async {
-      final html = File('web/index.html').readAsStringSync();
-      final css = File('web/css/styles.css').readAsStringSync();
-      final js = File('web/js/admin_app.js').readAsStringSync();
+      final html = WebBundleLoader.loadHtml();
+      final css = WebBundleLoader.loadCss();
+      final js = WebBundleLoader.loadJs();
 
       // Presencia UI y estilos Dark/Light
       expect(html, contains('id="btnOpenCommercialSyncModal"'));

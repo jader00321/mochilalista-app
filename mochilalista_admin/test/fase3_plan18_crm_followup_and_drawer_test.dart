@@ -6,6 +6,7 @@ import '../lib/license_signer.dart';
 import '../lib/config_service.dart';
 import '../lib/excel_export_service.dart';
 import '../lib/vault_storage_service.dart';
+import 'support/web_bundle_loader.dart';
 import '../server.dart';
 
 void main() {
@@ -110,9 +111,8 @@ void main() {
     });
 
     test('4. index.html: Contiene los 3 nuevos chips de filtro CRM y alerta de Dashboard', () {
-      final indexFile = File('web/index.html');
-      expect(indexFile.existsSync(), isTrue);
-      final content = indexFile.readAsStringSync();
+      final content = WebBundleLoader.loadHtml();
+      expect(content, isNotEmpty);
 
       // Chips de filtro nuevos
       expect(content, contains('data-filter="trial"'));
@@ -147,9 +147,8 @@ void main() {
     });
 
     test('5. styles.css: Padding de .drawer-body y estilos de alerta / micro-botones', () {
-      final cssFile = File('web/css/styles.css');
-      expect(cssFile.existsSync(), isTrue);
-      final content = cssFile.readAsStringSync();
+      final content = WebBundleLoader.loadCss();
+      expect(content, isNotEmpty);
 
       expect(content, contains('padding: 1.4rem 1.4rem 3rem 1.4rem;'));
       expect(content, contains('.dash-pending-alert'));
@@ -160,9 +159,8 @@ void main() {
     });
 
     test('6. admin_app.js: Helpers formatPlanHumanLabel, formatPeruvianPhoneDisplay y getLocalIsoDate', () {
-      final jsFile = File('web/js/admin_app.js');
-      expect(jsFile.existsSync(), isTrue);
-      final content = jsFile.readAsStringSync();
+      final content = WebBundleLoader.loadJs();
+      expect(content, isNotEmpty);
 
       expect(content, contains('function getLocalIsoDate('));
       expect(content, contains('function formatPeruvianPhoneDisplay('));
@@ -176,8 +174,7 @@ void main() {
     });
 
     test('7. Blindaje Visual: Cero emojis crudos en los nuevos componentes de Fase 3', () {
-      final indexFile = File('web/index.html');
-      final content = indexFile.readAsStringSync();
+      final content = WebBundleLoader.loadHtml();
 
       // Extraer bloque de la alerta del dashboard
       final startDash = content.indexOf('id="dashPendingActionsAlert"');

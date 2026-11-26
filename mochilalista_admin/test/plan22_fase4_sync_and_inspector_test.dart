@@ -3,6 +3,7 @@ import 'package:test/test.dart';
 
 import '../lib/client_sync_service.dart';
 import '../lib/database_service.dart';
+import 'support/web_bundle_loader.dart';
 
 void main() {
   group('PLAN MAESTRO 22 - FASE 4: Sync .mlsync, Ficha 360°, Inspector Dual y Cero Emojis UI', () {
@@ -230,7 +231,7 @@ void main() {
     // 3. Validación JS real en Node.js: Lima GMT-5, humanización, Nonce 4 estados e historial
     // =========================================================================
     test('3. JS Node.js: formatLimaDateTime, humanizeSyncFieldValue, 4 estados Nonce (Luzam), acciones e historial', () async {
-      final js = File('web/js/admin_app.js').readAsStringSync();
+      final js = WebBundleLoader.loadJs();
       final extracted = _extractPhase4JsSlices(js);
 
       final harness = File('${tempDir.path}/phase4_inspector_and_sync_test.js');
@@ -403,9 +404,9 @@ runTests().catch(err => {
     // 4. Auditoría HTML/CSS/JS: Elementos Fase 4 y cero emojis crudos en controles UI
     // =========================================================================
     test('4. HTML/CSS/JS: Controles Fase 4 completos, #inspectSyncAuditCard intacto y CERO emojis crudos en controles UI', () {
-      final html = File('web/index.html').readAsStringSync();
-      final css = File('web/css/styles.css').readAsStringSync();
-      final js = File('web/js/admin_app.js').readAsStringSync();
+      final html = WebBundleLoader.loadHtml();
+      final css = WebBundleLoader.loadCss();
+      final js = WebBundleLoader.loadJs();
 
       // HTML requerido
       expect(html, contains('id="inspectSyncAuditCard"'));

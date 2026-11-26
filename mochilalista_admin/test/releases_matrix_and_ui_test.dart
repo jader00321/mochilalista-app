@@ -8,6 +8,7 @@ import '../lib/excel_export_service.dart';
 import '../lib/license_signer.dart';
 import '../lib/vault_storage_service.dart';
 import '../server.dart';
+import 'support/web_bundle_loader.dart';
 
 void main() {
   group('FASE 2 - Plan Maestro 19: Reingeniería Visual y Funcional de Versiones APK', () {
@@ -149,9 +150,8 @@ void main() {
     // 3. Inspección Estática de HTML (index.html)
     // =========================================================================
     test('3. UI HTML: Eliminación de (15-40 MB), versión dinámica de cliente y elementos de Fase 2', () async {
-      final indexFile = File('web/index.html');
-      expect(await indexFile.exists(), isTrue);
-      final html = await indexFile.readAsString();
+      final html = WebBundleLoader.loadHtml();
+      expect(html, isNotEmpty);
 
       // Ausencia del texto obsoleto (15-40 MB)
       expect(html, isNot(contains('(15-40 MB)')));
@@ -192,9 +192,8 @@ void main() {
     // 4. Inspección Estática de CSS (styles.css)
     // =========================================================================
     test('4. CSS: Ancho completo de selector, banner de firma y barra de rollout', () async {
-      final cssFile = File('web/css/styles.css');
-      expect(await cssFile.exists(), isTrue);
-      final css = await cssFile.readAsString();
+      final css = WebBundleLoader.loadCss();
+      expect(css, isNotEmpty);
 
       expect(css, contains('#relType'));
       expect(css, contains('#editRelType'));
@@ -217,9 +216,8 @@ void main() {
     // 5. Inspección Estática y Lógica de JavaScript (admin_app.js)
     // =========================================================================
     test('5. JS: compareSemVer, ausencia de || 24, escudo anti-debug y consumo de endpoints', () async {
-      final jsFile = File('web/js/admin_app.js');
-      expect(await jsFile.exists(), isTrue);
-      final js = await jsFile.readAsString();
+      final js = WebBundleLoader.loadJs();
+      expect(js, isNotEmpty);
 
       // Ausencia del fallback obsoleto || 24 en código de build de releases
       expect(js, isNot(contains("document.getElementById('relVersionCode').value) || 24")));
@@ -246,8 +244,12 @@ void main() {
       expect(js, contains("'AHEAD'"));
       expect(js, contains("'PROSPECT'"));
 
-      // Verificación de sintaxis con Node.js
-      final nodeCheck = await Process.run('node', ['--check', jsFile.path]);
+      // Verificación de sintaxis con Node.js sobre todos los módulos JS activos
+      final jsBundle = WebBundleLoader.writeConcatenatedJsTo(
+        tempDir,
+        filename: 'admin_bundle_releases_ui.js',
+      );
+      final nodeCheck = await Process.run('node', ['--check', jsBundle.path]);
       expect(nodeCheck.exitCode, equals(0), reason: 'admin_app.js debe ser sintácticamente válido en JavaScript');
     });
   });

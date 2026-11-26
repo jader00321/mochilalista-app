@@ -8,19 +8,10 @@ import 'package:test/test.dart';
 import '../lib/commercial_config_sync_service.dart';
 import '../lib/config_service.dart';
 import '../lib/license_signer.dart';
+import 'support/web_bundle_loader.dart';
 
 const String _expectedOfficialPublicSha256 =
     '1c3ec0b9d87ff8acb49b1df871b65c0b40e47d1f11c65b348b5407b80a65e106';
-
-String _resolveAdminRoot() {
-  if (File('web/js/qrcode.min.js').existsSync()) {
-    return Directory.current.path;
-  }
-  if (File('mochilalista_admin/web/js/qrcode.min.js').existsSync()) {
-    return '${Directory.current.path}/mochilalista_admin';
-  }
-  throw StateError('No se pudo ubicar mochilalista_admin.');
-}
 
 List<int> _extractMobileEmbeddedPublicKey(String dartValidatorPath) {
   final src = File(dartValidatorPath).readAsStringSync();
@@ -50,7 +41,7 @@ void main() {
     late String adminRoot;
 
     setUp(() {
-      adminRoot = _resolveAdminRoot();
+      adminRoot = WebBundleLoader.resolveAdminRoot().path;
       tempDir = Directory.systemTemp.createTempSync('ml_p24_fase5_parity_');
     });
 
@@ -172,14 +163,12 @@ void main() {
       final nodeRunner = File('${tempDir.path}/qr_cross_check.js');
       nodeRunner.writeAsStringSync(r'''
 const fs = require('fs');
-const path = require('path');
 const vm = require('vm');
 
-const adminRoot = process.argv[2];
-const token = fs.readFileSync(process.argv[3], 'utf8');
-const qrCodeSrc = fs.readFileSync(path.join(adminRoot, 'web/js/qrcode.min.js'), 'utf8');
-const jsQrSrc = fs.readFileSync(path.join(adminRoot, 'web/js/jsqr.min.js'), 'utf8');
-const adminAppSrc = fs.readFileSync(path.join(adminRoot, 'web/js/admin_app.js'), 'utf8');
+const qrCodeSrc = fs.readFileSync(process.argv[2], 'utf8');
+const jsQrSrc = fs.readFileSync(process.argv[3], 'utf8');
+const adminAppSrc = fs.readFileSync(process.argv[4], 'utf8');
+const token = fs.readFileSync(process.argv[5], 'utf8');
 
 function extractFn(src, name) {
   const s = src.indexOf(`function ${name}(`);
@@ -272,11 +261,17 @@ const decoded = sb.jsQR(outCanvas._rgba, 576, 576, { inversionAttempts: 'attempt
 if (!decoded || decoded.data !== token) process.exit(2);
 process.stdout.write(JSON.stringify({ version: qrInst._lastVersion, level: qrInst._lastCorrectLevel, decodedMatch: true }));
 ''');
+      final adminBundleFile = WebBundleLoader.writeConcatenatedJsTo(
+        tempDir,
+        filename: 'admin_bundle_p24_f5.js',
+      );
       final tokFile = File('${tempDir.path}/token.txt')
         ..writeAsStringSync(token);
       final proc = await Process.run('node', [
         nodeRunner.path,
-        adminRoot,
+        WebBundleLoader.resolveWebAssetPath('js/qrcode.min.js'),
+        WebBundleLoader.resolveWebAssetPath('js/jsqr.min.js'),
+        adminBundleFile.path,
         tokFile.path,
       ]);
       expect(proc.exitCode, equals(0), reason: 'stderr: ${proc.stderr}');

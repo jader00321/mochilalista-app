@@ -1,5 +1,5 @@
-import 'dart:io';
 import 'package:test/test.dart';
+import 'support/web_bundle_loader.dart';
 
 void main() {
   group('FASE 4B: Certificación de Interfaz del Centro de Personalización, Plantillas y Excel', () {
@@ -8,17 +8,13 @@ void main() {
     late String jsContent;
 
     setUpAll(() {
-      final htmlFile = File('web/index.html');
-      final cssFile = File('web/css/styles.css');
-      final jsFile = File('web/js/admin_app.js');
+      htmlContent = WebBundleLoader.loadHtml();
+      cssContent = WebBundleLoader.loadCss();
+      jsContent = WebBundleLoader.loadJs();
 
-      expect(htmlFile.existsSync(), isTrue, reason: 'index.html debe existir');
-      expect(cssFile.existsSync(), isTrue, reason: 'styles.css debe existir');
-      expect(jsFile.existsSync(), isTrue, reason: 'admin_app.js debe existir');
-
-      htmlContent = htmlFile.readAsStringSync();
-      cssContent = cssFile.readAsStringSync();
-      jsContent = jsFile.readAsStringSync();
+      expect(htmlContent, isNotEmpty, reason: 'index.html debe existir');
+      expect(cssContent, isNotEmpty, reason: 'styles.css debe existir');
+      expect(jsContent, isNotEmpty, reason: 'admin_app.js debe existir');
     });
 
     test('1. Interfaz Completa de #tabSettings (4 Sub-pestañas operativas y sin placeholders)', () {

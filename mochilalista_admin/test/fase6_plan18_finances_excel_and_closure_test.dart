@@ -5,6 +5,7 @@ import 'package:excel/excel.dart';
 import '../lib/database_service.dart';
 import '../lib/config_service.dart';
 import '../lib/excel_export_service.dart';
+import 'support/web_bundle_loader.dart';
 
 void main() {
   group('Fase 6 - Plan Maestro 18: Finanzas, Excel Multi-hoja, Búsqueda y Cierre', () {
@@ -221,9 +222,9 @@ void main() {
     });
 
     test('4. Auditoría estática web: Buscador interactivo y comprobantes en Finanzas', () {
-      final indexHtml = File('web/index.html').readAsStringSync();
-      final stylesCss = File('web/css/styles.css').readAsStringSync();
-      final adminJs = File('web/js/admin_app.js').readAsStringSync();
+      final indexHtml = WebBundleLoader.loadHtml();
+      final stylesCss = WebBundleLoader.loadCss();
+      final adminJs = WebBundleLoader.loadJs();
 
       // index.html
       expect(indexHtml, contains('id="inputFinSearch"'));

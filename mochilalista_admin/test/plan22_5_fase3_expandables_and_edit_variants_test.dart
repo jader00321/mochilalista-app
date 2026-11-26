@@ -6,12 +6,7 @@ import 'package:mochilalista_admin/apk_inspector_service.dart';
 import 'package:mochilalista_admin/config_service.dart';
 import 'package:mochilalista_admin/database_service.dart';
 import 'package:test/test.dart';
-
-File _resolveRepoFile(String relativeInsideAdmin) {
-  final direct = File(relativeInsideAdmin);
-  if (direct.existsSync()) return direct;
-  return File('mochilalista_admin/$relativeInsideAdmin');
-}
+import 'support/web_bundle_loader.dart';
 
 /// Construye un archivo .apk (ZIP) mínimo válido con entradas lib/<abi>/libapp.so
 void _createFakeApkZip(
@@ -110,8 +105,8 @@ void main() {
   test(
     '1. Auditoría HTML/CSS Fase 3: 4 expandables, contadores, estilos tema claro/oscuro, SVGs acotados y cero emojis',
     () {
-      final indexHtml = _resolveRepoFile('web/index.html').readAsStringSync();
-      final stylesCss = _resolveRepoFile('web/css/styles.css').readAsStringSync();
+      final indexHtml = WebBundleLoader.loadHtml();
+      final stylesCss = WebBundleLoader.loadCss();
 
       for (final id in [
         'relChangelog',
@@ -197,8 +192,13 @@ void main() {
   test(
     '2. JS Real (Node.js): textareas expandibles independientes, contadores, fix #btnEditLoadAtpTxt, 3 estados de variante, guard ABI, Desvincular seguro y sync #modalWaComposer',
     () async {
-      final adminJsFile = _resolveRepoFile('web/js/admin_app.js');
-      final jsPathJson = jsonEncode(adminJsFile.absolute.path);
+      final tempDir = Directory.systemTemp.createTempSync('ml_plan22_5_fase3_node_');
+      try {
+        final adminJsBundleFile = WebBundleLoader.writeConcatenatedJsTo(
+          tempDir,
+          filename: 'admin_bundle_p22_5_f3.js',
+        );
+        final jsPathJson = jsonEncode(adminJsBundleFile.path);
 
       final script = '''
 const fs = require('fs');
@@ -691,8 +691,6 @@ runTests().catch(err => {
 });
 ''';
 
-      final tempDir = Directory.systemTemp.createTempSync('ml_plan22_5_fase3_node_');
-      try {
         final scriptFile = File('${tempDir.path}/verify_phase3.js');
         scriptFile.writeAsStringSync(script);
         final res = await Process.run('node', [scriptFile.path]);

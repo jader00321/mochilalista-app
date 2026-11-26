@@ -5,6 +5,7 @@ import '../lib/database_service.dart';
 import '../lib/dpapi_service.dart';
 import '../lib/license_signer.dart';
 import '../lib/vault_storage_service.dart';
+import 'support/web_bundle_loader.dart';
 
 void main() {
   group('FASE 3 PLAN MAESTRO 10: Certificación de Interfaz Web de Bóveda y Portabilidad', () {
@@ -13,17 +14,13 @@ void main() {
     late String jsContent;
 
     setUpAll(() {
-      final htmlFile = File('web/index.html');
-      final cssFile = File('web/css/styles.css');
-      final jsFile = File('web/js/admin_app.js');
+      htmlContent = WebBundleLoader.loadHtml();
+      cssContent = WebBundleLoader.loadCss();
+      jsContent = WebBundleLoader.loadJs();
 
-      expect(htmlFile.existsSync(), isTrue, reason: 'index.html debe existir');
-      expect(cssFile.existsSync(), isTrue, reason: 'styles.css debe existir');
-      expect(jsFile.existsSync(), isTrue, reason: 'admin_app.js debe existir');
-
-      htmlContent = htmlFile.readAsStringSync();
-      cssContent = cssFile.readAsStringSync();
-      jsContent = jsFile.readAsStringSync();
+      expect(htmlContent, isNotEmpty, reason: 'index.html debe existir');
+      expect(cssContent, isNotEmpty, reason: 'styles.css debe existir');
+      expect(jsContent, isNotEmpty, reason: 'admin_app.js debe existir');
     });
 
     test('1. Sidebar y Vista Principal de Bóveda de Seguridad (#tabSecurityVault)', () {

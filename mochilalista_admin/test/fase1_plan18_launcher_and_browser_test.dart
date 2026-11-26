@@ -7,6 +7,7 @@ import '../lib/license_signer.dart';
 import '../lib/excel_export_service.dart';
 import '../lib/vault_storage_service.dart';
 import '../server.dart';
+import 'support/web_bundle_loader.dart';
 
 void main() {
   group('Plan Maestro 18 - Fase 1: Lanzador Windows y Prioridad Google Chrome', () {
@@ -200,13 +201,9 @@ void main() {
   });
 
   group('Plan Maestro 18 - Fase 1: UI Web (#btnOpenInChrome, SVG Limpio y Tooltip)', () {
-    final htmlFile = File('web/index.html');
-    final cssFile = File('web/css/styles.css');
-    final jsFile = File('web/js/admin_app.js');
-
     test('1.6. index.html contiene el boton #btnOpenInChrome con icono SVG vectorial (sin emojis)', () {
-      expect(htmlFile.existsSync(), isTrue);
-      final html = htmlFile.readAsStringSync();
+      final html = WebBundleLoader.loadHtml();
+      expect(html, isNotEmpty);
 
       expect(html.contains('id="btnOpenInChrome"'), isTrue);
       expect(html.contains('class="btn-open-in-chrome"'), isTrue);
@@ -227,8 +224,8 @@ void main() {
     });
 
     test('1.7. styles.css define estilos de .btn-open-in-chrome, maquetacion vertical y modo colapsado', () {
-      expect(cssFile.existsSync(), isTrue);
-      final css = cssFile.readAsStringSync();
+      final css = WebBundleLoader.loadCss();
+      expect(css, isNotEmpty);
 
       expect(css.contains('.btn-open-in-chrome'), isTrue);
       expect(css.contains('.app-sidebar.collapsed .btn-open-in-chrome'), isTrue);
@@ -241,8 +238,8 @@ void main() {
     });
 
     test('1.8. admin_app.js contiene isDesktopAppMode y visibilidad contextual para #btnOpenInChrome', () {
-      expect(jsFile.existsSync(), isTrue);
-      final js = jsFile.readAsStringSync();
+      final js = WebBundleLoader.loadJs();
+      expect(js, isNotEmpty);
 
       expect(js.contains("document.getElementById('btnOpenInChrome')"), isTrue);
       expect(js.contains("fetch('/api/system/open-browser'"), isTrue);

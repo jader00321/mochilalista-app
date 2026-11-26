@@ -3,6 +3,7 @@ import 'package:test/test.dart';
 import '../lib/database_service.dart';
 import '../lib/config_service.dart';
 import '../lib/license_signer.dart';
+import 'support/web_bundle_loader.dart';
 
 void main() {
   group('FASE 4: Ficha 360° Drawer, Metadatos QR, Pagos Compactos y Hardware',
@@ -206,9 +207,9 @@ void main() {
     test(
         '5. Integridad de Frontend: Elementos visuales, cards de pago y estilos de peligro',
         () {
-      final html = File('web/index.html').readAsStringSync();
-      final css = File('web/css/styles.css').readAsStringSync();
-      final js = File('web/js/admin_app.js').readAsStringSync();
+      final html = WebBundleLoader.loadHtml();
+      final css = WebBundleLoader.loadCss();
+      final js = WebBundleLoader.loadJs();
 
       // Cero "+ + Registrar Pago Manual"
       expect(html.contains('+ + Registrar Pago Manual'), isFalse);

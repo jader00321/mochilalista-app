@@ -11,6 +11,7 @@ import '../lib/license_signer.dart';
 import '../lib/vault_storage_service.dart';
 import '../server.dart';
 import 'apk_inspector_and_releases_test.dart' show createTestZip;
+import 'support/web_bundle_loader.dart';
 
 void main() {
   group(
@@ -36,8 +37,8 @@ void main() {
     test(
         '1. HTML & CSS: controles Fase 2, soporte [data-theme="light"], SVGs acotados y cero emojis crudos',
         () {
-      final html = File('web/index.html').readAsStringSync();
-      final css = File('web/css/styles.css').readAsStringSync();
+      final html = WebBundleLoader.loadHtml();
+      final css = WebBundleLoader.loadCss();
 
       // Controles HTML obligatorios de Fase 2
       final requiredHtmlIds = [
@@ -135,7 +136,10 @@ void main() {
     test(
         '2. JS Real (Node.js): resetCreateReleaseModalState, exclusión mutua manual/autodetect, clearSelectedCreateApk y saveOwnerConfig',
         () async {
-      final jsPath = File('web/js/admin_app.js').absolute.path;
+      final jsPath = WebBundleLoader.writeConcatenatedJsTo(
+        tempDir,
+        filename: 'admin_bundle_p22_5_fase2.js',
+      ).path;
       final testScriptFile = File('${tempDir.path}/run_js_fase2_test.js');
       await testScriptFile.writeAsString(r'''
 const fs = require('fs');

@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:test/test.dart';
+import 'support/web_bundle_loader.dart';
 
 String _extractSection(String source, String startMarker, String endMarker) {
   final start = source.indexOf(startMarker);
@@ -30,9 +31,9 @@ void main() {
     test(
         '1. Auditoría estática HTML/CSS/JS: guía 3 protocolos, #inspectMlc1AuditCard, Dark/Light, SVG acotados, 0 emojis y contratos intactos',
         () {
-      final html = File('web/index.html').readAsStringSync();
-      final css = File('web/css/styles.css').readAsStringSync();
-      final js = File('web/js/admin_app.js').readAsStringSync();
+      final html = WebBundleLoader.loadHtml();
+      final css = WebBundleLoader.loadCss();
+      final js = WebBundleLoader.loadJs();
 
       // Sidebar y títulos tri-protocolo
       expect(
@@ -139,7 +140,7 @@ void main() {
     test(
         '2. Ejecución Node.js real: guía desplegable, MLC1 válido/diferencias/inválido, informe forense, #tabSettings, historial MLC1 y upscale jsQR',
         () async {
-      final js = File('web/js/admin_app.js').readAsStringSync();
+      final js = WebBundleLoader.loadJs();
       final fmtLimaSlice = _extractSection(
         js,
         'function formatLimaDateTime(',

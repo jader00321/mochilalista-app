@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:test/test.dart';
 import '../lib/database_service.dart';
+import 'support/web_bundle_loader.dart';
 
 void main() {
   group('Fase 2 - Plan Maestro 18: Estudio Generador de Licencias Ed25519', () {
@@ -128,9 +129,8 @@ void main() {
     });
 
     test('4. Inspección estática de admin_app.js e index.html para Estudio Generador (Fase 2)', () async {
-      final jsFile = File('web/js/admin_app.js');
-      expect(await jsFile.exists(), isTrue);
-      final jsCode = await jsFile.readAsString();
+      final jsCode = WebBundleLoader.loadJs();
+      expect(jsCode, isNotEmpty);
 
       // Métodos y utilidades de Fase 2
       expect(jsCode, contains('decodeMl9TokenPayload'), reason: 'Debe implementar fallback Base64URL');
@@ -146,9 +146,8 @@ void main() {
           reason: 'No debe sobrescribir saldos reales de celular con texto erróneo de escaneos vitalicios');
 
       // Verificación de index.html
-      final htmlFile = File('web/index.html');
-      expect(await htmlFile.exists(), isTrue);
-      final htmlCode = await htmlFile.readAsString();
+      final htmlCode = WebBundleLoader.loadHtml();
+      expect(htmlCode, isNotEmpty);
 
       expect(htmlCode, contains('id="chkEnableCustomSettings"'), reason: 'Debe contener switch de ajustes personalizados');
       expect(htmlCode, contains('id="btnResetCustomSettings"'), reason: 'Debe contener botón de restablecer ajustes');

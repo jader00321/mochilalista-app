@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:test/test.dart';
+import 'support/web_bundle_loader.dart';
 
 void main() {
   group('PLAN MAESTRO 22 - FASE 3: Compositor Universal de WhatsApp (#modalWaComposer)', () {
@@ -21,9 +22,9 @@ void main() {
     // 1. Auditoría HTML/CSS/JS: estructura, SVGs explícitos y cero emojis crudos
     // =========================================================================
     test('1. HTML y CSS: #modalWaComposer completo, .wa-insert-chip.active, >100 MB warning y cero emojis crudos', () {
-      final html = File('web/index.html').readAsStringSync();
-      final css = File('web/css/styles.css').readAsStringSync();
-      final js = File('web/js/admin_app.js').readAsStringSync();
+      final html = WebBundleLoader.loadHtml();
+      final css = WebBundleLoader.loadCss();
+      final js = WebBundleLoader.loadJs();
 
       // Bloque completo del modal en index.html
       final modalStart = html.indexOf('id="modalWaComposer"');
@@ -112,7 +113,7 @@ void main() {
     // 2. Motor JS real (Node.js): Toggle de plantillas + Chips Multi-Select Idempotentes
     // =========================================================================
     test('2. JS Node.js: Toggle off en plantillas preservando borrador/chips y multi-select idempotente', () async {
-      final js = File('web/js/admin_app.js').readAsStringSync();
+      final js = WebBundleLoader.loadJs();
 
       final helpers = _extractJsSlices(js);
       final harnessFile = File('${tempDir.path}/wa_phase3_templates_chips.js');
@@ -228,7 +229,7 @@ runTests().catch(err => {
     // 3. Motor JS real (Node.js): Selector Versión APK, Variantes, >100 MB y Copia .APK
     // =========================================================================
     test('3. JS Node.js: Selector dinámico versión APK, auto-variante, alerta >100 MB y copia .APK robusta', () async {
-      final js = File('web/js/admin_app.js').readAsStringSync();
+      final js = WebBundleLoader.loadJs();
 
       final helpers = _extractJsSlices(js);
       final harnessFile = File('${tempDir.path}/wa_phase3_apk_dispatch.js');

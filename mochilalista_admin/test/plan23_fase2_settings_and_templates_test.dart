@@ -11,6 +11,7 @@ import '../lib/excel_export_service.dart';
 import '../lib/license_signer.dart';
 import '../lib/vault_storage_service.dart';
 import '../server.dart';
+import 'support/web_bundle_loader.dart';
 
 class _TestDpapiService implements DpapiService {
   @override
@@ -326,9 +327,9 @@ void main() {
     });
 
     test('3. Auditoría HTML/CSS: ?v=23, grilla 2x2, 9 plantillas, tooltips, sin reset duplicado ni emojis crudos', () {
-      final html = File('web/index.html').readAsStringSync();
-      final css = File('web/css/styles.css').readAsStringSync();
-      final js = File('web/js/admin_app.js').readAsStringSync();
+      final html = WebBundleLoader.loadHtml();
+      final css = WebBundleLoader.loadCss();
+      final js = WebBundleLoader.loadJs();
 
       // Cache bust ?v=23
       expect(html, contains('href="css/styles.css?v=23"'));
@@ -407,7 +408,7 @@ void main() {
     });
 
     test('4. Ejecución JS en Node.js: Borrador multi-plantilla, tarifa de migración en vivo, sincronización WA y Dirty Guard', () async {
-      final js = File('web/js/admin_app.js').readAsStringSync();
+      final js = WebBundleLoader.loadJs();
       final canvasSection = _extractSection(
         js,
         'function renderCredentialCanvas(',

@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:test/test.dart';
 import '../lib/database_service.dart';
 import '../lib/config_service.dart';
+import 'support/web_bundle_loader.dart';
 
 void main() {
   group('Plan Maestro 18.5 - Fase 3: Blindaje Anti-Colisión Correlativos, Comprobantes Canvas/HTML y Dashboard', () {
@@ -171,13 +172,11 @@ void main() {
     });
 
     test('3.3. Inspección Estática Frontend: Canvas >= 430px, Contraste Fijo en .rdoc-paper y formatPlanHumanLabel', () {
-      final jsFile = File('web/js/admin_app.js');
-      expect(jsFile.existsSync(), isTrue);
-      final js = jsFile.readAsStringSync();
+      final js = WebBundleLoader.loadJs();
+      expect(js, isNotEmpty);
 
-      final cssFile = File('web/css/styles.css');
-      expect(cssFile.existsSync(), isTrue);
-      final css = cssFile.readAsStringSync();
+      final css = WebBundleLoader.loadCss();
+      expect(css, isNotEmpty);
 
       // 1. Canvas >= 430px y medición dinámica
       expect(js.contains('Math.max(430, labelW + amountW + 70)'), isTrue,
@@ -205,8 +204,7 @@ void main() {
     });
 
     test('3.4. Inspección Estática Frontend: Orden de carga Dashboard y ausencia de emoji reloj ⏳', () {
-      final jsFile = File('web/js/admin_app.js');
-      final js = jsFile.readAsStringSync();
+      final js = WebBundleLoader.loadJs();
 
       // 1. loadClients() antes de loadDashboard() en DOMContentLoaded
       final domLoadedIdx = js.indexOf("document.addEventListener('DOMContentLoaded'");
