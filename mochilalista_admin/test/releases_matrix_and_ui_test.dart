@@ -138,7 +138,18 @@ void main() {
     test('2. Backend: apk_inspector_service.dart prioriza local_db.dart como candidato', () async {
       final inspectorFile = File('lib/apk_inspector_service.dart');
       expect(await inspectorFile.exists(), isTrue);
-      final content = await inspectorFile.readAsString();
+      final apkDir = Directory('lib/apk');
+      final moduleFiles = apkDir.existsSync()
+          ? (apkDir
+              .listSync()
+              .whereType<File>()
+              .where((f) => f.path.endsWith('.dart'))
+              .toList()
+            ..sort((a, b) => a.path.compareTo(b.path)))
+          : <File>[];
+      final content = <File>[inspectorFile, ...moduleFiles]
+          .map((f) => f.readAsStringSync())
+          .join('\n');
       expect(content, contains('local_db.dart'));
       expect(content, contains('database_helper.dart'));
       final localDbIdx = content.indexOf('local_db.dart');

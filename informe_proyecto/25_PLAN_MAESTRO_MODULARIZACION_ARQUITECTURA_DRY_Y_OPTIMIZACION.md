@@ -1,6 +1,6 @@
 # PLAN MAESTRO 25: AUDITORÍA ARQUITECTÓNICA TOTAL, MODULARIZACIÓN SEGURA POR CAPAS, CONSOLIDACIÓN DRY (CERO DUPLICACIÓN), OPTIMIZACIÓN DE PESO APK Y RECURSOS, E HIGIENE DE INGENIERÍA
 
-> **Documento Técnico y Hoja de Ruta Arquitectónica — Versión 1.2 (`FASE 0 CERTIFICADA — CHECKPOINT 0 EN VERDE 258/258 — LISTO PARA BLOQUE I: FASES 1–2`)**  
+> **Documento Técnico y Hoja de Ruta Arquitectónica — Versión 1.4 (`BLOQUE I CERTIFICADO — CHECKPOINT 1 CERRADO (FASES 1 + 2 EN VERDE) — LISTO PARA BLOQUE II: FASE 3 WEB HTML/CSS`)**  
 > **Proyecto:** MochilaLista POS Comercial (`app_movil/`) & MochilaLista Admin Platform (`mochilalista_admin/`)  
 > **Línea Base Certificada:** Rama `dev/mejoras-v9.0-comercializacion-seguridad` tras el cierre de los Planes Maestros 23 (`e84583a`), 23.5 (`09a84df`) y 24 (`fffb329`) — **`1,693/1,693` pruebas en verde** (`255/255` en `mochilalista_admin/` y `1,438/1,438` en `app_movil/`), motor QR ISO/IEC 18004 V1–V40 en `qrcode.min.js`, `owner_commercial_defaults.dart`, Inspector Tri-Protocolo (`ML9`/`MLS1`/`MLC1`) y `compilar_release_dual.bat` con `--init-notes` operativos.  
 > **Objetivo Estratégico:** Eliminar la fragilidad de los archivos monolíticos extensos (`> 800–1,000` líneas tanto en código reciente como heredado), organizar el código en capas cohesivas, consolidar lógica duplicada bajo una sola fuente de verdad (DRY), corregir bugs latentes y código muerto detectados, optimizar de forma realista el peso del APK (incluyendo emisión Universal ARM física `~70.6 MB` aprobada por el propietario) y el consumo de recursos (RAM/CPU/DOM), e incorporar los 4 pilares de higiene técnica (`Problems = 0` en PowerShell, `.gitattributes`, caché-busting unificado `?v=25` y `ARQUITECTURA_MODULAR.md`), **preservando el 100 % de las funciones, contratos de datos, pruebas e interfaces existentes**.
@@ -210,58 +210,73 @@ El análisis estático de los 52 archivos de prueba detectó que:
 
 ```text
 mochilalista_admin/
-├── server.dart                                 (< 220 L: arranque CLI, applyStartupModeFromConfig, HttpServer & handleRequest)
+├── server.dart                                 (139 L: arranque CLI, applyStartupModeFromConfig, compareSemVer, HttpServer & handleRequest)
 ├── lib/
-│   ├── *.dart (BARRELS LIVIANOS RETROCOMPATIBLES) (export 'data/database_service.dart'; export 'config/config_service.dart'; etc. para 0 ruptura en los 52 tests)
+│   ├── *.dart (11 BARRELS RETROCOMPATIBLES)  (1–2 L c/u: export 'data/database_service.dart', config, apk, vault, sync, export, time_utils)
 │   ├── core/
-│   │   ├── time_utils.dart                     (PeruTimeHelper - existente)
-│   │   ├── semver_utils.dart                   (Única fuente de verdad SemVer Dart)
-│   │   ├── csv_utils.dart                      (CsvCellEscaper RFC-4180 + sanitize newlines)
-│   │   ├── path_security.dart                  (canonicalizePath + isPathWithinDirectory + forbiddenDirs)
-│   │   ├── backup_rotation_helper.dart         (Snapshot atómico + rotación maxAutoSnapshots)
-│   │   └── commercial_constants.dart           (Slugs canónicos, días/AI por plan, officialSignerSha256)
-│   ├── data/
-│   │   ├── database_service.dart               (< 350 L: facade, modo Sandbox/Prod, init & locks)
-│   │   ├── clients_repository.dart             (CRUD clientes, sync snapshot, migración hardware)
-│   │   ├── payments_receipts_repository.dart   (Pagos, edición/eliminación, correlativos BOL/FAC)
-│   │   ├── finances_export_repository.dart     (Libro consolidado + CSV clientes/finanzas)
-│   │   ├── releases_repository.dart            (Catálogo releases, variantes, matriz adopción)
-│   │   └── backups_repository.dart             (Backups manuales/auto, preview, restore)
+│   │   ├── time_utils.dart                     (144 L: PeruTimeHelper - reubicado con barrel en lib/)
+│   │   ├── semver_utils.dart                   (102 L: Única fuente de verdad SemVer Dart)
+│   │   ├── csv_utils.dart                      (24 L: CsvCellEscaper RFC-4180 + BOM + sanitize newlines)
+│   │   ├── path_security.dart                  (226 L: canonicalizePath + isPathWithinDirectory + forbiddenDirs)
+│   │   ├── backup_rotation_helper.dart         (167 L: Snapshot atómico + rotación maxAutoSnapshots + tokens protegidos)
+│   │   └── commercial_constants.dart           (99 L: Slugs canónicos, días/AI por plan, officialSignerSha256)
+│   ├── data/                                   (8 módulos part/mixin < 450 L + barrel lib/database_service.dart)
+│   │   ├── database_service.dart               (291 L: fachada, modo Sandbox/Prod, init, resetSandbox & snapshots)
+│   │   ├── clients_repository.dart             (431 L: CRUD clientes, sync .mlsync/MLS1 y deleteClient)
+│   │   ├── clients_lifecycle_repository.dart   (360 L: migración hardware, recordCodeEmission, markClientUpdated, recordApkDispatched)
+│   │   ├── payments_receipts_repository.dart   (316 L: pagos manuales, edición/eliminación, correlativos BOL/FAC)
+│   │   ├── finances_export_repository.dart     (217 L: libro consolidado + historial + CSV clientes/finanzas)
+│   │   ├── releases_repository.dart            (420 L: catálogo releases, variantes, batch updates y matriz adopción)
+│   │   ├── backups_repository.dart             (445 L: snapshots manuales/auto, preview, restore y purge-sandbox)
+│   │   └── sandbox_seed_data.dart              (176 L: semilla inicial demostración Sandbox)
 │   ├── config/
-│   │   ├── config_service.dart                 (< 450 L: estado config, load/save/reset por scope)
-│   │   ├── config_defaults.dart                (getDefaultConfig catálogo 10 ítems + 9 plantillas WA)
-│   │   └── config_normalizer.dart              (Normalización legados, propagación legal, deepMerge)
+│   │   ├── config_service.dart                 (468 L: estado config, load/save/reset por scope)
+│   │   ├── config_defaults.dart                (319 L: getDefaultConfig catálogo 10 ítems + 9 plantillas WA)
+│   │   ├── config_normalizer.dart              (369 L: normalización legados, propagación legal, deepMerge)
+│   │   ├── config_apk_dirs_helper.dart         (169 L: validación, canonicalización y reset de rutas APK)
+│   │   └── config_template_renderer.dart       (88 L: motor de plantillas WA y bloques bancarios BCP/BBVA)
 │   ├── apk/
-│   │   ├── apk_models.dart                     (ApkSearchDirConfig, ApkDetectionReport, ApkInspectionResult)
-│   │   ├── apk_cache_store.dart                (Caché JSON persistente + cola de escritura)
-│   │   ├── apk_directory_scanner.dart          (Escáner BFS + notas compañeras *_atp.txt)
-│   │   └── apk_inspector_service.dart          (< 500 L: orquestador aapt2 + apksigner + ZIP ABI)
+│   │   ├── apk_models.dart                     (212 L: ApkSearchDirConfig, ApkDetectionReport, ApkInspectionResult)
+│   │   ├── apk_cache_store.dart                (274 L: caché JSON persistente + cola de escritura)
+│   │   ├── apk_directory_scanner.dart          (341 L: escáner BFS acotado + cuotas equilibradas)
+│   │   ├── apk_companion_notes_reader.dart     (309 L: lector notas compañeras *_atp.txt + schema/pubspec)
+│   │   ├── apk_binary_tools.dart               (255 L: lectura ZIP ABI + aapt2 + apksigner + build-tools)
+│   │   └── apk_inspector_service.dart          (546 L: orquestador y ranking híbrido de APKs)
 │   ├── sync/
-│   │   ├── license_signer.dart                 (ML9 Ed25519 - existente)
-│   │   ├── client_sync_service.dart            (MLS1 / .mlsync - existente)
-│   │   ├── commercial_config_sync_service.dart (< 550 L: firma/verificación MLC1 + diff)
-│   │   └── dart_defaults_exporter.dart         (Generación completa owner_commercial_defaults.dart)
+│   │   ├── license_signer.dart                 (296 L: ML9 Ed25519)
+│   │   ├── client_sync_service.dart            (551 L: MLS1 / .mlsync)
+│   │   ├── commercial_config_sync_service.dart (571 L: firma/verificación MLC1 + exportación)
+│   │   ├── mlc1_payload_inspector.dart         (379 L: validación de esquema y cálculo de diff MLC1)
+│   │   └── dart_defaults_exporter.dart         (146 L: generación completa owner_commercial_defaults.dart)
 │   ├── vault/
-│   │   ├── dpapi_service.dart                  (Windows DPAPI - existente)
-│   │   ├── vault_crypto_models.dart            (Excepciones, VaultKeyring, VaultImportResult, etc.)
-│   │   ├── vault_crypto_service.dart           (< 550 L: PBKDF2, slots AES-GCM, export/import)
-│   │   ├── vault_pin_session_manager.dart      (PIN status/configure/verify/recover/sessions)
-│   │   └── vault_storage_service.dart          (< 550 L: DPAPI + espejo + nube + auditoría 5 archivos)
+│   │   ├── dpapi_service.dart                  (181 L: Windows DPAPI)
+│   │   ├── vault_crypto_models.dart            (136 L: excepciones, VaultKeyring, VaultUnlockCredential, etc.)
+│   │   ├── vault_crypto_service.dart           (520 L: PBKDF2, slots AES-GCM, keyring)
+│   │   ├── vault_package_codec.dart            (339 L: empaquetado/desempaquetado cifrado .mlvault Nivel 2)
+│   │   ├── vault_pin_session_manager.dart      (231 L: PIN status/configure/verify/recover/sessions)
+│   │   ├── vault_integrity_auditor.dart        (456 L: auditoría 5 archivos SHA-256 + calificación de protección)
+│   │   └── vault_storage_service.dart          (538 L: DPAPI + espejo + nube + auto-recuperación)
 │   ├── export/
-│   │   ├── excel_styles.dart                   (Paletas y CellStyle compartidos)
-│   │   └── excel_export_service.dart           (< 600 L: generación de hojas Excel)
-│   └── http/
-│       ├── html_assembler.dart                 (Ensamblado determinista en memoria de index + partials)
-│       ├── static_handler.dart                 (Servidor web/ con containment check anti-traversal)
-│       ├── auth_pin_middleware.dart            (Guardián HTTP 423 + cookies HttpOnly + CORS)
-│       ├── api_router.dart                     (Despachador central protegido por AuthPinMiddleware)
+│   │   ├── excel_styles.dart                   (95 L: paletas y CellStyle compartidos)
+│   │   ├── excel_sheets_builder.dart           (506 L: constructores de las hojas Excel del libro maestro)
+│   │   └── excel_export_service.dart           (403 L: fachada de exportación .xlsx multi-hoja)
+│   └── http/                                   (15 módulos < 540 L; 0 existsSync bloqueantes; contención estricta en web/)
+│       ├── html_assembler.dart                 (107 L: ensamblado determinista en memoria de index + @PARTIAL con contención web/)
+│       ├── static_handler.dart                 (< 150 L: servidor web/ anti-traversal D-ADM-09 + 404 activos inexistentes + SPA fallback)
+│       ├── auth_pin_middleware.dart            (83 L: guardián HTTP 423 + cookies HttpOnly + CORS)
+│       ├── windows_shell_helpers.dart          (184 L: selector nativo PowerShell -STA, portapapeles CF_HDROP y launchBrowser async)
+│       ├── http_context.dart                   (65 L: contexto HTTP compartido y helpers JSON)
+│       ├── api_router.dart                     (137 L: despachador central protegido por AuthPinMiddleware)
 │       └── routes/
-│           ├── vault_routes.dart               (/api/vault/*)
-│           ├── system_routes.dart              (/api/system/*, /api/mode)
-│           ├── clients_routes.dart             (/api/dashboard, /api/clients/*, /api/licenses/*, /api/sync/*)
-│           ├── finances_backups_routes.dart    (/api/finances/*, /api/export/*, /api/backups/*)
-│           ├── releases_routes.dart            (/api/releases/* + _inspectAndComputeReleaseVerification)
-│           └── config_routes.dart              (/api/config/*)
+│           ├── vault_routes.dart               (383 L: /api/vault/*)
+│           ├── system_routes.dart              (85 L: /api/system/*, /api/mode)
+│           ├── clients_routes.dart             (497 L: /api/dashboard, /api/clients/*, pagos y boletas)
+│           ├── licenses_sync_routes.dart       (419 L: /api/licenses/* Tri-Protocolo ML9/MLS1/MLC1 y /api/sync/*)
+│           ├── finances_backups_routes.dart    (204 L: /api/finances/*, /api/export/*, /api/backups/*)
+│           ├── release_apk_helper.dart         (206 L: resolución async de variantes APK + inspectAndComputeReleaseVerification)
+│           ├── releases_files_routes.dart      (530 L: búsqueda, browse, upload, import-local-apk, download, copy-file, reveal-file)
+│           ├── releases_routes.dart            (294 L: CRUD releases, verify, verify-all, companion-notes, mark-sent, matrix)
+│           └── config_routes.dart              (201 L: /api/config/* incluyendo MLC1 y dart-defaults-snippet)
 └── test/
     └── support/
         └── web_bundle_loader.dart              (Loader unificado HTML/CSS/JS para los 34 tests lectores de web/ sin debilitar aserciones)
@@ -549,8 +564,8 @@ Cada sub-fase respeta estrictamente el **Tope Atómico por Turno** (**máximo `3
 | Bloque | Sub-Fase | Proyecto | Alcance Exacto (Topes Verificados) | Meta Tamaño | Verificación Obligatoria |
 |---|---|---|---|---|---|
 | **0** | **Fase 0** *(CERTIFICADA)* | Raíz + Scripts + Tests Admin | **Higiene A + B + Red de Seguridad Completa:** Renombradas 6 funciones en `scripts/compilar_release_dual.ps1` (`NO_BOM_PARSE_ERRORS=0`, `14` funciones con `0` verbos fuera de `(Get-Verb).Verb`, `CRLF` puro, único BOM `EF BB BF`), creado `.gitattributes` verificando cero archivos no editados en `git status`, creado `test/support/web_bundle_loader.dart`, **migrados los `34` archivos reales lectores de `web/`** sin debilitar aserciones y añadido `test/plan25_fase0_hygiene_and_loader_test.dart`. *(Nota: módulo externo `PSScriptAnalyzer` no instalado localmente; equivalencia validada vía Parser AST + `(Get-Verb).Verb`).* | `.ps1` con `0` verbos no aprobados; `34` tests migrados | AST/Verbs = 0 (`FUNCTIONS_COUNT=14`); `compilar_release_dual.bat --help/--dry-run/--verify-only --init-notes --no-pause` (`exit 0`); `git status` limpio; `dart analyze` limpio; `dart test` (`258/258`). |
-| **I** | **Fase 1** | `mochilalista_admin/` (`lib/`) | **DRY Backend + Extracción Servicios Soporte (6 archivos):** crear `lib/core/` (`semver_utils`, `csv_utils` corrigiendo `exportClientsToCsv`, `path_security`, `backup_rotation_helper`, `commercial_constants`); dividir `apk_inspector_service.dart`, `config_service.dart`, `vault_storage_service.dart`, `vault_crypto_service.dart`, `commercial_config_sync_service.dart` y `excel_export_service.dart` conservando **barrels `export '...'` en `lib/*.dart`**. | Todos `< 600` L; barrels `< 20` L | `dart analyze`; nuevos tests CSV RFC-4180/SemVer + `dart test` completo (`100 %` verde sin reescribir imports). |
-| **I** | **Fase 2** | `mochilalista_admin/` (`server.dart` + `database_service.dart`) | **Modularización DB & HTTP (2 monolitos):** dividir `database_service.dart` (`2,750` L) en `lib/data/*` (con barrel `lib/database_service.dart`); dividir `server.dart` (`3,220` L) en `lib/http/` (`auth_pin_middleware.dart`, `api_router.dart`, `routes/*.dart`, `static_handler.dart` con containment en `web/`, `html_assembler.dart`) y pasar `existsSync` en rutas HTTP a async I/O. | `server.dart < 220` L; rutas `< 500` L | `dart analyze`; test de middleware PIN `423` + path traversal estático + `dart test` completo (`100 %` verde). |
+| **I** | **Fase 1** *(CERTIFICADA)* | `mochilalista_admin/` (`lib/`) | **DRY Backend + Extracción Servicios Soporte (6 servicios + `time_utils`/`dpapi`/`signer`/`client_sync`):** creada capa `lib/core/` (`6` módulos: `time_utils`, `semver_utils`, `csv_utils` corrigiendo `D-ADM-02` en `database_service.dart#exportClientsToCsv`, `path_security`, `backup_rotation_helper`, `commercial_constants`); modularizados `apk_inspector_service`, `config_service`, `vault_storage_service`, `vault_crypto_service`, `commercial_config_sync_service` y `excel_export_service` en `32` archivos `< 600` L (máx `571` L) conservando **`10` barrels `1–2` L (`export '...'`) en `lib/*.dart`**, adaptado `releases_matrix_and_ui_test.dart` a lectura modular de `lib/apk/` y agregado `test/plan25_fase1_admin_core_and_services_test.dart`. | Todos `< 600` L (`571` máx); `10` barrels `1–2` L | `dart analyze` (`No issues found!`); censo de líneas (`32` módulos `< 600` L); `dart test` completo (`262/262` en verde sin romper imports heredados). |
+| **I** | **Fase 2** *(CERTIFICADA)* | `mochilalista_admin/` (`server.dart` + `database_service.dart`) | **Modularización DB & HTTP (2 monolitos -> `23` módulos):** dividido `database_service.dart` (`2,708` L) en `8` archivos `lib/data/*` (`<= 445` L) con barrel `lib/database_service.dart` (`1` L); dividido `server.dart` (`3,220` L) en `server.dart` (`139` L) + `15` archivos `lib/http/**` (`<= 530` L) con `AuthPinMiddleware` (`423` Locked + cookies `HttpOnly`), `StaticHandler` anti-traversal **`D-ADM-09`**, `HtmlTemplateAssembler`, `SemVerUtils` unificado y migración de `existsSync` HTTP a I/O `async` **`D-ADM-10`** + `test/plan25_fase2_db_and_http_modular_test.dart`. | `server.dart` = `139` L; todo `lib/` `< 600` L (máx `571` L) | `dart analyze` (`No issues found!`); `0` `existsSync` en `lib/http/**`; test PIN `423` + traversal + `dart test` completo (`265/265` verde). |
 | **II** | **Fase 3** | `mochilalista_admin/web/` (HTML + CSS) | **Capas CSS + Parciales HTML + `?v=25`:** dividir `styles.css` (`7,399` L) respetando orden `tokens -> base -> components -> modules/* -> 90_light_theme -> 95_responsive -> 99_print`; dividir `index.html` (`4,825` L) en `partials/` ensamblados por `HtmlTemplateAssembler`; unificar `?v=25` (incluyendo `plan23_fase2_settings_and_templates_test.dart`). | CSS `< 700` L/archivo; `index.html < 250` L | `dart test` (`100 %` verde con `WebBundleLoader`) + prueba HTTP `/` y modo oscuro/claro/print A4. |
 | **II** | **Fase 4** | `mochilalista_admin/web/js/` (Parte 1) | **Extracción JS Core + Estado + Bloque 1 (~5,200 L):** crear `js/core/` (consolidando una sola `compareSemVer`, `clipboard`, `time_lima`, `formatters`/`escapeHtml`, `whatsapp`, `qr_utils`, `canvas_pdf_utils`, `ui_feedback`), `js/state/app_store.js` y `js/modules/` (`navigation_theme`, `dashboard`, `clients_crm` con `DocumentFragment`, `license_studio`), cargados en orden determinista antes del resto de `admin_app.js`. | Módulos `< 600` L | `node --check` en **cada `.js` individual Y en el bundle concatenado** (`WebBundleLoader.loadJs()`); `0` colisiones `let`/`const`; `dart test` (`100 %` verde). |
 | **II** | **Fase 5A** | `mochilalista_admin/web/js/` (Parte 2A) | **Extracción JS Bloque 2A (~5,600 L):** extraer `receipts.js`, `drawer_360.js`, `client_sync.js` (DRY `.sync-migration-rescue-card`), `whatsapp_composer.js`, `releases_manager.js` (`formatApkSizeMb..renderSignatureStatusBadge`, `isVerifyAllCatalogRunning`) e `inspector_triprotocol.js` (marcadores Sección 5 intactos). | Módulos `< 650` L | `node --check` por **archivo individual Y bundle concatenado**; validación `window.*` inline `onclick`; `dart test` (`100 %` verde). |
@@ -575,7 +590,7 @@ Cada sub-fase respeta estrictamente el **Tope Atómico por Turno** (**máximo `3
 Para garantizar reversibilidad inmediata ante cualquier regresión, **nunca** se trabajará sin puntos de restauración limpios:
 1. Cada bloque certificado cerrará con un commit atómico en `dev/mejoras-v9.0-comercializacion-seguridad` (**sin `git tag` ni merge a `main`**, nunca usando `git add .` ni agregando secretos/datos reales):
    * **Checkpoint 0 *(CERRADO)*:** `Fase 0` (`.gitattributes`, `compilar_release_dual.ps1` con `0` verbos no aprobados y AST=0, `WebBundleLoader` + `34` tests migrados + `plan25_fase0_hygiene_and_loader_test.dart`, `dart analyze` limpio, `258/258` verde).
-   * **Checkpoint 1:** `Bloque I Admin Backend` (`Fases 1 + 2`, `dart test` verde).
+   * **Checkpoint 1 *(CERRADO)*:** `Bloque I Admin Backend` (`Fases 1 + 2`, `55` módulos `< 600` L, `11` barrels `1–2` L, `server.dart` = `139` L, `dart analyze` limpio, `265/265` pruebas en verde).
    * **Checkpoint 2:** `Bloque II Admin Web` (`Fases 3 + 4 + 5A + 5B`, `dart test` + `node --check` verde).
    * **Checkpoint 3:** `Fase 6` (Core DRY + huérfanos + `UniversalImage`, `flutter test` verde).
    * **Checkpoint 4:** `Fase 7` (`7A + 7B`, persistencia/servicios + SQLite `v36` intacto, `flutter test` verde).
@@ -586,5 +601,5 @@ Para garantizar reversibilidad inmediata ante cualquier regresión, **nunca** se
 
 ---
 
-> **Estado Actual del Plan Maestro 25 (v1.2):** **Fase 0 (Bloque 0 + Checkpoint 0) COMPLETADA Y CERTIFICADA (`258/258` tests Admin en verde; `0` archivos tocados en `app_movil/`, `mochilalista_admin/lib/`, `server.dart` o `web/`).**  
-> **Siguiente Paso:** Iniciar **Bloque I (Fase 1)** — Consolidación DRY backend en `mochilalista_admin/lib/core/` (`semver_utils`, `csv_utils` corrigiendo `exportClientsToCsv`, `path_security`, `backup_rotation_helper`, `commercial_constants`) y modularización de los `6` servicios de soporte conservando *barrels* retrocompatibles en `lib/*.dart`.
+> **Estado Actual del Plan Maestro 25 (v1.4):** **Bloque I completo (`Fase 1` + `Fase 2` + `Checkpoint 1`) COMPLETADO Y CERTIFICADO (`55` módulos `< 600` L en `lib/`, `11` barrels `1–2` L, `server.dart` = `139` L, fixes `D-ADM-02`, `D-ADM-08`, `D-ADM-09`, `D-ADM-10`, `dart analyze = No issues found!`, `265/265` tests Admin en verde; `0` cambios en `app_movil/`, `web/` o `Manual 05`).**  
+> **Siguiente Paso:** Iniciar **Bloque II — Fase 3 (`mochilalista_admin/web/` HTML + CSS)** — Modularización de `web/css/styles.css` (`7,399` L) y `web/index.html` (`4,825` L) en `partials/` ensamblados por `HtmlTemplateAssembler` + caché-busting unificado `?v=25`.
