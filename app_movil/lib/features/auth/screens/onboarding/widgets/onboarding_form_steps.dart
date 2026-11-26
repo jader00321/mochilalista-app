@@ -1,0 +1,502 @@
+part of '../onboarding_screen.dart';
+
+mixin _OnboardingFormStepsMixin on _OnboardingStateBase {
+  double _calculateProgress() {
+    double score = 0.0;
+    if (_nombreDuenoCtrl.text.trim().isNotEmpty) score += 0.25;
+    final digits = _telefonoCtrl.text.replaceAll(RegExp(r'\D'), '');
+    if (digits.length == 9) score += 0.25;
+    if (_nombreNegocioCtrl.text.trim().isNotEmpty) score += 0.25;
+    if (_direccionCtrl.text.trim().isNotEmpty) score += 0.15;
+    if (_infoPagoCtrl.text.trim().isNotEmpty || _rucCtrl.text.trim().isNotEmpty || _emailCtrl.text.trim().isNotEmpty) {
+      score += 0.10;
+    }
+    return score.clamp(0.0, 1.0);
+  }
+
+  void _insertPaymentTemplate(String prefix) {
+    final current = _infoPagoCtrl.text;
+    if (!current.contains('$prefix:')) {
+      final template = '$prefix: ';
+      if (current.trim().isEmpty) {
+        _infoPagoCtrl.text = template;
+      } else {
+        _infoPagoCtrl.text = '${current.trimRight()}\n$template';
+      }
+    }
+    _infoPagoFocusNode.requestFocus();
+    _infoPagoCtrl.selection = TextSelection.collapsed(offset: _infoPagoCtrl.text.length);
+    setState(() {});
+  }
+
+  Future<void> _guardarPerfil() async {
+    if (!_formKey.currentState!.validate()) return;
+    
+    if (_usarSeguridad && _pinCtrl.text.length != 4) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('El PIN debe tener exactamente 4 dígitos.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    final auth = Provider.of<AuthProvider>(context, listen: false);
+    final licenseProv = Provider.of<LicenseProvider?>(context, listen: false);
+    if (licenseProv?.license?.eulaAcceptedVersion == null) {
+      final accepted = await EulaAcceptanceModal.show(context);
+      if (accepted != true) return;
+    }
+    
+    bool success = await auth.createProfileAndLogin(
+      nombreDueno: _nombreDuenoCtrl.text.trim(),
+      telefono: _telefonoCtrl.text.trim(),
+      nombreNegocio: _nombreNegocioCtrl.text.trim(),
+      direccion: _direccionCtrl.text.trim(),
+      logoPath: _logoCtrl.text.trim().isEmpty ? null : _logoCtrl.text.trim(),
+      moneda: _monedaSeleccionada,
+      paymentInfo: _infoPagoCtrl.text.trim(),
+      ruc: _rucCtrl.text.trim().isEmpty ? null : _rucCtrl.text.trim(),
+      email: _emailCtrl.text.trim().isEmpty ? null : _emailCtrl.text.trim(),
+      pin: _usarSeguridad ? _pinCtrl.text : null,
+    );
+
+    if (success && mounted) {
+      await _showInitialCategoriesDialog(context);
+      if (mounted) {
+        Navigator.of(context).pop(); 
+      }
+    } else if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(auth.errorMessage), backgroundColor: Colors.red),
+      );
+    }
+  }
+
+  @override
+  Widget _buildOnboardingFormBody(AuthProvider auth, bool isDark) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+                      _buildProgressIndicator(isDark),
+
+                      _buildStaggered(_buildSectionHeader("Datos Personales", Icons.person_outline, isDark), 0),
+                      const SizedBox(height: 16),
+                      _buildStaggered(
+                        CustomTextField(
+                          label: 'Tu Nombre Completo',
+                          icon: Icons.person_outline,
+                          controller: _nombreDuenoCtrl,
+                          textCapitalization: TextCapitalization.words,
+                          onChanged: (_) => setState(() {}),
+                          validator: (v) => (v == null || v.trim().isEmpty) ? 'Requerido' : null,
+                        ),
+                        1,
+                      ),
+                      const SizedBox(height: 12),
+                      _buildStaggered(
+                        CustomTextField(
+                          label: 'Teléfono / WhatsApp', 
+                          icon: Icons.phone_android_rounded, 
+                          controller: _telefonoCtrl, 
+                          keyboardType: TextInputType.phone,
+                          maxLength: 11,
+                          inputFormatters: [
+                            FilteringTextInputFormatter.digitsOnly,
+                            _PhoneNumberFormatter(),
+                          ],
+                          onChanged: (_) => setState(() {}),
+                          validator: (v) {
+                            if (v == null || v.isEmpty) return 'Requerido';
+                            final digits = v.replaceAll(RegExp(r'\D'), '');
+                            if (digits.length != 9) return 'Debe tener 9 dígitos exactos';
+                            return null;
+                          },
+                        ),
+                        2,
+                      ),
+                      const SizedBox(height: 28),
+
+                      _buildStaggered(_buildSectionHeader("Datos del Negocio", Icons.store_mall_directory_outlined, isDark), 3),
+                      const SizedBox(height: 16),
+                      _buildStaggered(
+                        _CircularLogoPicker(
+                          controller: _logoCtrl,
+                          isDark: isDark,
+                          onChanged: () => setState(() {}),
+                        ),
+                        4,
+                      ),
+                      const SizedBox(height: 16),
+                      _buildStaggered(
+                        CustomTextField(
+                          label: 'Nombre Comercial',
+                          icon: Icons.store_mall_directory_outlined,
+                          controller: _nombreNegocioCtrl,
+                          textCapitalization: TextCapitalization.words,
+                          onChanged: (_) => setState(() {}),
+                          validator: (v) => (v == null || v.trim().isEmpty) ? 'Requerido' : null,
+                        ),
+                        5,
+                      ),
+                      const SizedBox(height: 12),
+                      _buildStaggered(
+                        CustomTextField(
+                          label: 'Dirección del Local',
+                          icon: Icons.location_on_outlined,
+                          controller: _direccionCtrl,
+                          onChanged: (_) => setState(() {}),
+                        ),
+                        6,
+                      ),
+                      const SizedBox(height: 14),
+                      
+                      _buildStaggered(
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: isDark ? const Color(0xFF14141C) : Colors.grey[100],
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          child: DropdownButtonFormField<String>(
+                            initialValue: _monedaSeleccionada,
+                            isExpanded: true,
+                            decoration: InputDecoration(
+                              labelText: 'Moneda Principal',
+                              labelStyle: TextStyle(color: isDark ? Colors.grey[500] : Colors.grey[600], fontSize: 13),
+                              border: InputBorder.none,
+                              prefixIcon: Icon(Icons.monetization_on_outlined, color: isDark ? Colors.blue[300] : Colors.blue[700], size: 22),
+                            ),
+                            items: ['S/ (Soles)', '\$ (Dólares)', '€ (Euros)', 'Bs. (Bolívares)', '\$ (Pesos)'].map((String val) {
+                              return DropdownMenuItem(value: val, child: Text(val, style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontSize: 15)));
+                            }).toList(),
+                            onChanged: (val) {
+                              if (val != null) setState(() => _monedaSeleccionada = val);
+                            },
+                            dropdownColor: isDark ? const Color(0xFF23232F) : Colors.white,
+                          ),
+                        ),
+                        7,
+                      ),
+                      const SizedBox(height: 18),
+
+                      _buildStaggered(
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              "Información de Pago",
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                                color: isDark ? Colors.grey[400] : Colors.grey[700],
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            _buildPaymentQuickChips(isDark),
+                            const SizedBox(height: 8),
+                            CustomTextField(
+                              label: 'Cuentas o Billeteras',
+                              hintText: 'Ej: Yape 987654321 / BCP 193-...',
+                              icon: Icons.account_balance_wallet_outlined,
+                              controller: _infoPagoCtrl,
+                              focusNode: _infoPagoFocusNode,
+                              maxLines: 2,
+                              onChanged: (_) => setState(() {}),
+                            ),
+                          ],
+                        ),
+                        8,
+                      ),
+                      const SizedBox(height: 28),
+
+                      _buildStaggered(
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _buildSectionHeader("Facturación y Contacto (Opcional)", Icons.receipt_long_outlined, isDark),
+                            const SizedBox(height: 14),
+                            CustomTextField(
+                              label: 'RUC del Negocio (11 dígitos)',
+                              hintText: 'Ej: 20601234567',
+                              icon: Icons.badge_outlined,
+                              controller: _rucCtrl,
+                              keyboardType: TextInputType.number,
+                              maxLength: 11,
+                              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                              onChanged: (_) => setState(() {}),
+                              validator: (v) {
+                                if (v != null && v.trim().isNotEmpty) {
+                                  if (v.trim().length != 11) {
+                                    return 'El RUC debe tener 11 dígitos';
+                                  }
+                                }
+                                return null;
+                              },
+                            ),
+                            const SizedBox(height: 12),
+                            CustomTextField(
+                              label: 'Correo Electrónico',
+                              hintText: 'Ej: contacto@minegocio.com',
+                              icon: Icons.email_outlined,
+                              controller: _emailCtrl,
+                              keyboardType: TextInputType.emailAddress,
+                              onChanged: (_) => setState(() {}),
+                              validator: (v) {
+                                if (v != null && v.trim().isNotEmpty) {
+                                  final emailRegex = RegExp(r'^[^@]+@[^@]+\.[^@]+$');
+                                  if (!emailRegex.hasMatch(v.trim())) {
+                                    return 'Correo electrónico inválido';
+                                  }
+                                }
+                                return null;
+                              },
+                            ),
+                          ],
+                        ),
+                        9,
+                      ),
+                      const SizedBox(height: 28),
+
+                      _buildStaggered(_buildSectionHeader("Seguridad y Privacidad", Icons.security_outlined, isDark), 10),
+                      const SizedBox(height: 8),
+                      _buildStaggered(
+                        Container(
+                          decoration: BoxDecoration(
+                            color: isDark ? Colors.white.withValues(alpha: 0.03) : Colors.blue.withValues(alpha: 0.05),
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(color: isDark ? Colors.white10 : Colors.blue.withValues(alpha: 0.2)),
+                          ),
+                          child: SwitchListTile(
+                            title: const Text("Proteger con PIN y Huella", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                            subtitle: const Text("Recomendado si compartes tu dispositivo", style: TextStyle(fontSize: 12)),
+                            value: _usarSeguridad,
+                            activeThumbColor: Colors.blue,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                            onChanged: (val) => setState(() => _usarSeguridad = val),
+                          ),
+                        ),
+                        11,
+                      ),
+                      
+                      AnimatedSize(
+                        duration: const Duration(milliseconds: 300),
+                        curve: Curves.easeInOutCubic,
+                        child: _usarSeguridad 
+                          ? Padding(
+                              padding: const EdgeInsets.only(top: 16.0),
+                              child: CustomTextField(
+                                label: 'Crea un PIN de 4 dígitos',
+                                icon: Icons.password_rounded,
+                                controller: _pinCtrl,
+                                keyboardType: TextInputType.number,
+                                isPassword: true,
+                                maxLength: 4,
+                              ),
+                            )
+                          : const SizedBox.shrink(),
+                      ),
+    
+                      const SizedBox(height: 36),
+                      PrimaryButton(
+                        text: "GUARDAR Y COMENZAR",
+                        icon: Icons.check_circle_outline,
+                        isLoading: auth.isLoading,
+                        onPressed: _guardarPerfil,
+                      ),
+                      const SizedBox(height: 32),
+      ],
+    );
+  }
+
+  Widget _buildProgressIndicator(bool isDark) {
+    final p = _calculateProgress();
+    final percentInt = (p * 100).toInt();
+    return Container(
+      margin: const EdgeInsets.only(bottom: 24),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF14141C) : Colors.blue.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isDark ? Colors.white10 : Colors.blue.withValues(alpha: 0.15),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Expanded(
+                child: Row(
+                  children: [
+                    Icon(
+                      percentInt == 100 ? Icons.check_circle_rounded : Icons.pending_actions_rounded,
+                      size: 18,
+                      color: percentInt == 100 ? Colors.green : (isDark ? Colors.blue[300] : Colors.blue[700]),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        percentInt == 100 ? "Formulario completado" : "Progreso de configuración",
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color: isDark ? Colors.white : Colors.black87,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                "$percentInt%",
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w900,
+                  color: isDark ? Colors.blue[300] : Colors.blue[700],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(6),
+            child: LinearProgressIndicator(
+              value: p,
+              minHeight: 6,
+              backgroundColor: isDark ? Colors.white12 : Colors.grey[200],
+              valueColor: AlwaysStoppedAnimation<Color>(
+                percentInt == 100 ? Colors.green : (isDark ? Colors.blue[400]! : Colors.blue[700]!),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPaymentQuickChips(bool isDark) {
+    final chips = [
+      {'label': '+ Yape', 'prefix': 'Yape'},
+      {'label': '+ Plin', 'prefix': 'Plin'},
+      {'label': '+ BCP', 'prefix': 'BCP'},
+      {'label': '+ BBVA', 'prefix': 'BBVA'},
+      {'label': '+ CCI', 'prefix': 'CCI'},
+    ];
+
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      physics: const BouncingScrollPhysics(),
+      child: Row(
+        children: chips.map((chip) {
+          final prefix = chip['prefix']!;
+          final isContained = _infoPagoCtrl.text.contains('$prefix:');
+          return Padding(
+            padding: const EdgeInsets.only(right: 8.0),
+            child: ActionChip(
+              label: Text(
+                chip['label']!,
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  color: isContained
+                      ? (isDark ? Colors.blue[200] : Colors.blue[900])
+                      : (isDark ? Colors.grey[300] : Colors.grey[700]),
+                ),
+              ),
+              avatar: isContained
+                  ? Icon(Icons.check, size: 14, color: isDark ? Colors.blue[300] : Colors.blue[700])
+                  : null,
+              backgroundColor: isContained
+                  ? (isDark ? Colors.blue.withValues(alpha: 0.2) : const Color(0xFFDCEBFF))
+                  : (isDark ? const Color(0xFF1B1B26) : Colors.grey[100]),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+                side: BorderSide(
+                  color: isContained
+                      ? (isDark ? Colors.blue.withValues(alpha: 0.5) : Colors.blue)
+                      : (isDark ? Colors.white12 : Colors.grey.shade300),
+                ),
+              ),
+              onPressed: () => _insertPaymentTemplate(prefix),
+            ),
+          );
+        }).toList(),
+      ),
+    );
+  }
+
+  Widget _buildSectionHeader(String title, IconData icon, bool isDark) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(icon, size: 20, color: isDark ? Colors.blue[300] : Colors.blue[700]),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: isDark ? Colors.blue[300] : Colors.blue[800],
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 6),
+        Container(
+          height: 2,
+          width: 40,
+          decoration: BoxDecoration(
+            color: isDark ? Colors.blue[800] : Colors.blue[200],
+            borderRadius: BorderRadius.circular(2),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildStaggered(Widget child, int index) {
+    final start = 0.3 + (index * 0.04).clamp(0.0, 0.6);
+    final end = start + 0.3;
+    
+    final animation = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(
+        parent: _animController,
+        curve: Interval(start, end.clamp(0.0, 1.0), curve: Curves.easeOutCubic),
+      ),
+    );
+
+    final slideAnimation = Tween<double>(begin: 20.0, end: 0.0).animate(
+      CurvedAnimation(
+        parent: _animController,
+        curve: Interval(start, end.clamp(0.0, 1.0), curve: Curves.easeOutCubic),
+      ),
+    );
+
+    return AnimatedBuilder(
+      animation: _animController,
+      builder: (context, childWidget) {
+        return Opacity(
+          opacity: animation.value,
+          child: Transform.translate(
+            offset: Offset(0, slideAnimation.value),
+            child: childWidget,
+          ),
+        );
+      },
+      child: child,
+    );
+  }
+}
