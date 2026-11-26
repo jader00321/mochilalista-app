@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:app_movil/features/analytics/services/inventory_intelligence_service.dart';
 import 'package:app_movil/core/database/local_db.dart';
 import 'package:app_movil/core/widgets/info_tooltip_button.dart';
+import 'package:app_movil/core/utils/app_date_formatter.dart';
 import 'package:app_movil/core/utils/currency_formatter.dart';
 import 'package:app_movil/core/widgets/interactive_sheet_wrapper.dart';
 
@@ -237,21 +238,10 @@ class _AuditTrailScreenState extends State<AuditTrailScreen> {
     return _history;
   }
 
-  String _formatDateSpanish(DateTime date) {
-    const months = ['ene.', 'feb.', 'mar.', 'abr.', 'may.', 'jun.', 'jul.', 'ago.', 'set.', 'oct.', 'nov.', 'dic.'];
-    final day = date.day.toString().padLeft(2, '0');
-    final month = months[date.month - 1];
-    final year = date.year;
-    final hour = date.hour.toString().padLeft(2, '0');
-    final minute = date.minute.toString().padLeft(2, '0');
-    return "$day $month $year • $hour:$minute";
-  }
+  String _formatDateSpanish(DateTime date) =>
+      AppDateFormatter.formatDateSpanish(date, includeTime: true);
 
-  String _formatTime(DateTime date) {
-    final hour = date.hour.toString().padLeft(2, '0');
-    final minute = date.minute.toString().padLeft(2, '0');
-    return "$hour:$minute";
-  }
+  String _formatTime(DateTime date) => AppDateFormatter.formatTime24(date);
 
   @override
   Widget build(BuildContext context) {

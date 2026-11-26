@@ -1,10 +1,10 @@
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:gal/gal.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:app_movil/core/utils/clipboard_helper.dart';
 import 'package:app_movil/core/widgets/marquee_text.dart';
 import 'package:app_movil/core/widgets/interactive_sheet_wrapper.dart';
 
@@ -804,12 +804,11 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
             icon: const Icon(Icons.copy, size: 18),
             label: const Text("Copiar"),
             onPressed: () {
-              Clipboard.setData(ClipboardData(text: title));
               Navigator.pop(ctx);
-              CustomSnackBar.show(
+              ClipboardHelper.copyWithFeedback(
                 context,
-                message: "Nombre copiado",
-                isError: false,
+                title,
+                feedbackMessage: "Nombre copiado",
               );
             },
           ),
@@ -963,12 +962,11 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
               ),
             ),
             onPressed: () {
-              Clipboard.setData(ClipboardData(text: fullText));
               Navigator.pop(ctx);
-              CustomSnackBar.show(
+              ClipboardHelper.copyWithFeedback(
                 context,
-                message: "Texto copiado",
-                isError: false,
+                fullText,
+                feedbackMessage: "Texto copiado",
               );
             },
           ),

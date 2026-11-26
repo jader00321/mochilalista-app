@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:intl/intl.dart';
 
 import 'package:app_movil/features/smart_quotation/models/matching_model.dart';
 import 'package:app_movil/features/smart_quotation/providers/quick_sale_provider.dart';
 import 'package:app_movil/features/catalog/providers/inventory_provider.dart';
+import 'package:app_movil/core/utils/currency_formatter.dart';
 import 'package:app_movil/core/widgets/universal_image.dart';
 
 class QuickSaleCartItem extends StatelessWidget {
@@ -29,7 +29,6 @@ class QuickSaleCartItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final currency = NumberFormat.currency(locale: 'es_PE', symbol: 'S/ ');
     final subtotal = effectivePrice * quantity;
     
     final double baseSystemPrice = product.price; 
@@ -251,7 +250,7 @@ class QuickSaleCartItem extends StatelessWidget {
                           children: [
                             if (isDiscounted) ...[
                               Text(
-                                currency.format(baseSystemPrice), 
+                                AppCurrency.format(baseSystemPrice), 
                                 style: TextStyle(
                                   decoration: TextDecoration.lineThrough, 
                                   fontSize: 12, 
@@ -278,7 +277,7 @@ class QuickSaleCartItem extends StatelessWidget {
                                 ),
                             ],
                             Text(
-                              currency.format(effectivePrice), 
+                              AppCurrency.format(effectivePrice), 
                               style: TextStyle(
                                 fontWeight: FontWeight.w900, 
                                 fontSize: 16, 
@@ -319,7 +318,7 @@ class QuickSaleCartItem extends StatelessWidget {
                       else
                         Text("Total", style: TextStyle(fontSize: 13, color: isDark ? Colors.grey[500] : Colors.grey[600], fontWeight: FontWeight.w600)),
                       const SizedBox(height: 2),
-                      Text(currency.format(subtotal), style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: isDark ? Colors.blue[300] : Colors.blue[800])),
+                      Text(AppCurrency.format(subtotal), style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: isDark ? Colors.blue[300] : Colors.blue[800])),
                     ],
                   ),
                 ],

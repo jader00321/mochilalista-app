@@ -2,6 +2,8 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:app_movil/core/config/owner_commercial_defaults.dart';
 import 'package:app_movil/core/services/license/commercial_config_sync_service.dart';
+import 'package:app_movil/core/utils/currency_formatter.dart';
+import 'package:app_movil/core/utils/whatsapp_uri_builder.dart';
 
 /// Especificación declarativa tipada de un producto comercial o tarifa técnica.
 class CommercialSyncProductSpec {
@@ -23,7 +25,8 @@ class CommercialSyncProductSpec {
     required this.description,
   });
 
-  String get formattedPrice => 'S/ ${price.toStringAsFixed(2)}';
+  String get formattedPrice =>
+      AppCurrency.format(price, includeThousandsSeparator: false);
 }
 
 /// Vista efectiva inmutable de tarifas, soporte y medios de pago combinando los valores
@@ -85,9 +88,9 @@ class EffectiveCommercialConfig {
   });
 
   static String deriveWhatsAppUrl(String phone) {
-    final cleanDigits = phone.replaceAll(RegExp(r'[^0-9]'), '');
-    if (cleanDigits.length >= 8) {
-      return 'https://wa.me/$cleanDigits';
+    final normalized = WhatsAppUriBuilder.normalizePeruWhatsAppPhone(phone);
+    if (normalized.length >= 8) {
+      return WhatsAppUriBuilder.buildSendUri(phone: normalized).toString();
     }
     return OwnerCommercialDefaults.supportWhatsAppUrl;
   }
@@ -219,12 +222,11 @@ class EffectiveCommercialConfig {
       plansById[id] ?? defaultPlansMap[id] ?? mensual;
 
   Uri buildCustomWhatsAppOrderUri(String customMessage) {
-    final cleanDigits = supportPhone.replaceAll(RegExp(r'[^0-9]'), '');
-    final base = cleanDigits.length >= 8
-        ? 'https://wa.me/$cleanDigits'
-        : supportWhatsAppUrl;
-    final encoded = Uri.encodeComponent(customMessage);
-    return Uri.parse('$base?text=$encoded');
+    return WhatsAppUriBuilder.buildSendUri(
+      phone: supportPhone,
+      message: customMessage,
+      fallbackPhone: supportWhatsAppUrl,
+    );
   }
 }
 

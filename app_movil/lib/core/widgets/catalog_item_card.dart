@@ -5,6 +5,7 @@ import 'package:app_movil/features/catalog/providers/catalog_provider.dart'; // 
 import 'package:app_movil/core/widgets/universal_image.dart';
 
 import 'package:flutter/services.dart';
+import 'package:app_movil/core/utils/currency_formatter.dart';
 import 'package:app_movil/features/catalog/models/product_model.dart';
 import 'package:app_movil/core/widgets/custom_snackbar.dart';
 
@@ -65,7 +66,11 @@ class _CatalogItemCardState extends State<CatalogItemCard> with SingleTickerProv
     if (discountPercent > 0) {
       offerBadgeText = "-$discountPercent%";
     } else if (hasOffer && pres.precioVentaFinal > effectivePrice) {
-      offerBadgeText = "-S/ ${(pres.precioVentaFinal - effectivePrice).toStringAsFixed(1)}";
+      offerBadgeText = AppCurrency.format(
+        -(pres.precioVentaFinal - effectivePrice),
+        decimals: 1,
+        includeThousandsSeparator: false,
+      );
     } else {
       offerBadgeText = "OFERTA";
     }
@@ -272,7 +277,7 @@ class _CatalogItemCardState extends State<CatalogItemCard> with SingleTickerProv
                                               const SizedBox(width: 4),
                                               Text(
                                                 tieneCosto
-                                                    ? "C: S/ ${costoPresentacion.toStringAsFixed(2)}"
+                                                    ? "C: ${AppCurrency.format(costoPresentacion, includeThousandsSeparator: false)}"
                                                     : "Sin costo",
                                                 style: TextStyle(
                                                   fontSize: 11.0,
@@ -289,7 +294,7 @@ class _CatalogItemCardState extends State<CatalogItemCard> with SingleTickerProv
                                               crossAxisAlignment: WrapCrossAlignment.center,
                                               children: [
                                                 Text(
-                                                  "G: S/ ${gananciaPresentacion.toStringAsFixed(2)}",
+                                                  "G: ${AppCurrency.format(gananciaPresentacion, includeThousandsSeparator: false)}",
                                                   style: TextStyle(
                                                     fontSize: 11.0,
                                                     fontWeight: FontWeight.bold,
@@ -340,7 +345,10 @@ class _CatalogItemCardState extends State<CatalogItemCard> with SingleTickerProv
                                   children: [
                                     if (hasOffer)
                                       Text(
-                                        "S/ ${pres.precioVentaFinal.toStringAsFixed(2)}",
+                                        AppCurrency.format(
+                                          pres.precioVentaFinal,
+                                          includeThousandsSeparator: false,
+                                        ),
                                         style: TextStyle(
                                           fontSize: 11,
                                           color: isDark ? Colors.grey[500] : Colors.grey[400],
@@ -350,7 +358,10 @@ class _CatalogItemCardState extends State<CatalogItemCard> with SingleTickerProv
                                         maxLines: 1,
                                       ),
                                     Text(
-                                      "S/ ${effectivePrice.toStringAsFixed(2)}",
+                                      AppCurrency.format(
+                                        effectivePrice,
+                                        includeThousandsSeparator: false,
+                                      ),
                                       style: TextStyle(
                                         fontSize: 17,
                                         fontWeight: FontWeight.w900,

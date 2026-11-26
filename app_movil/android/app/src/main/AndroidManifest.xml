@@ -35,10 +35,6 @@
         android:networkSecurityConfig="@xml/network_security_config"
         android:allowBackup="false"
         android:fullBackupContent="false">
-        
-        <meta-data 
-            android:name="com.google.android.geo.API_KEY" 
-            android:value="PON_TU_API_KEY_AQUI_O_DEJALO_ASI"/>
 
         <!-- 🔥 REGISTRO OBLIGATORIO PARA BACKUPS EN SEGUNDO PLANO -->
         <service

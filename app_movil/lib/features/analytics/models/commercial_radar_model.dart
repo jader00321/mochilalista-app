@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
+import 'package:app_movil/core/utils/app_date_formatter.dart';
 
 enum RadarActionType {
   workbench,
@@ -329,38 +329,20 @@ class CommercialNewsItem {
     } else if (diff.inDays < 7) {
       return 'Hace ${diff.inDays}d';
     } else {
-      try {
-        return DateFormat('dd MMM', 'es').format(publishedAt);
-      } catch (_) {
-        const months = [
-          'ene', 'feb', 'mar', 'abr', 'may', 'jun',
-          'jul', 'ago', 'sep', 'oct', 'nov', 'dic'
-        ];
-        final day = publishedAt.day.toString().padLeft(2, '0');
-        final month = months[(publishedAt.month - 1).clamp(0, 11)];
-        return '$day $month';
-      }
+      return AppDateFormatter.formatDayMonthEs(publishedAt);
     }
   }
 
   /// Fecha formateada completa con antigüedad compacta (ej: "26 oct. 2026 • Hace 3h")
   String get formattedDateWithTimeAgo {
-    try {
-      final dateStr = DateFormat('dd MMM yyyy', 'es').format(publishedAt);
-      return '$dateStr • $timeAgoFormatted';
-    } catch (_) {
-      return timeAgoFormatted;
-    }
+    final dateStr = AppDateFormatter.formatDayMonthYearEs(publishedAt);
+    return '$dateStr • $timeAgoFormatted';
   }
 
   /// Fecha relativa compacta para tarjetas móviles sin desbordes (ej: "26 oct • Hace 3h")
   String get compactTimeAgo {
-    try {
-      final dateStr = DateFormat('dd MMM', 'es').format(publishedAt).replaceAll('.', '');
-      return '$dateStr • $timeAgoFormatted';
-    } catch (_) {
-      return timeAgoFormatted;
-    }
+    final dateStr = AppDateFormatter.formatDayMonthEs(publishedAt, stripDot: true);
+    return '$dateStr • $timeAgoFormatted';
   }
 
   /// Badge u origen temporal honesto (evita fechas relativas falsas en guías permanentes)

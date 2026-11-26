@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:app_movil/core/widgets/interactive_sheet_wrapper.dart';
-import 'package:app_movil/core/widgets/custom_snackbar.dart';
+import 'package:app_movil/core/utils/clipboard_helper.dart';
 import 'package:app_movil/features/smart_quotation/models/crm_models.dart';
 import 'package:app_movil/features/smart_quotation/services/loyalty_whatsapp_service.dart';
 
@@ -65,8 +64,11 @@ class _PromotionBroadcastModalState extends State<PromotionBroadcastModal> {
   }
 
   void _copyToClipboard() {
-    Clipboard.setData(ClipboardData(text: _messageCtrl.text));
-    CustomSnackBar.show(context, message: 'Mensaje copiado al portapapeles');
+    ClipboardHelper.copyWithFeedback(
+      context,
+      _messageCtrl.text,
+      feedbackMessage: 'Mensaje copiado al portapapeles',
+    );
   }
 
   Future<void> _sendToClient(ClientModel client) async {

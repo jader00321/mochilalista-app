@@ -5,7 +5,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'package:intl/intl.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:path_provider/path_provider.dart';
@@ -16,8 +15,10 @@ import 'package:app_movil/core/providers/auth_provider.dart';
 import 'package:app_movil/core/models/user_model.dart';
 import 'package:app_movil/features/smart_quotation/services/client_service.dart';
 import 'package:app_movil/core/database/local_db.dart';
+import 'package:app_movil/core/utils/app_date_formatter.dart';
 import 'package:app_movil/core/utils/currency_formatter.dart';
 import 'package:app_movil/core/utils/cuota_date_helper.dart';
+import 'package:app_movil/core/utils/whatsapp_uri_builder.dart';
 
 import 'package:app_movil/features/smart_quotation/models/smart_quotation_model.dart';
 import 'package:app_movil/features/smart_quotation/models/crm_models.dart';
@@ -726,7 +727,7 @@ class _WhatsAppPreviewScreenState extends State<WhatsAppPreviewScreen> {
         sb.writeln("📦 *ESTADO DEL PEDIDO*");
         sb.writeln("▪ Estado: *${deliveryStatus.toUpperCase().replaceAll('_', ' ')}*");
         if (_saleData!['fecha_entrega'] != null) {
-          final dateFormatted = DateFormat('dd/MM/yyyy').format(DateTime.parse(_saleData!['fecha_entrega']));
+          final dateFormatted = AppDateFormatter.ddMMyyyy.format(DateTime.parse(_saleData!['fecha_entrega']));
           sb.writeln("▪ Entrega programada: $dateFormatted");
         }
         sb.writeln("");
@@ -1327,11 +1328,10 @@ class _WhatsAppPreviewScreenState extends State<WhatsAppPreviewScreen> {
     await _persistPendingDataIfRequested();
     if (!mounted) return;
 
-    final cleanPhone = _clientPhoneCtrl.text.replaceAll(RegExp(r'\D'), '');
-    final message = Uri.encodeComponent(_messageCtrl.text);
-    final Uri url = cleanPhone.length == 9
-        ? Uri.parse("https://wa.me/51$cleanPhone?text=$message")
-        : Uri.parse("https://wa.me/?text=$message");
+    final Uri url = WhatsAppUriBuilder.buildSendUri(
+      phone: _clientPhoneCtrl.text,
+      message: _messageCtrl.text,
+    );
 
     try {
       if (await canLaunchUrl(url)) {

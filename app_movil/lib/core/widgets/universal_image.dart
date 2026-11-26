@@ -78,13 +78,36 @@ class UniversalImage extends StatelessWidget {
     return Icons.inventory_2_rounded;
   }
 
+  /// Calcula una dimensión segura para decodificación `cacheWidth`/`cacheHeight`
+  /// multiplicando el tamaño lógico finito y positivo por el DPR actual.
+  @visibleForTesting
+  static int? computeSafeCacheDimension(
+    double? logicalSize,
+    double devicePixelRatio,
+  ) {
+    if (logicalSize == null || !logicalSize.isFinite || logicalSize <= 0) {
+      return null;
+    }
+    final double dpr =
+        devicePixelRatio.isFinite && devicePixelRatio > 0 ? devicePixelRatio : 1.0;
+    final double scaled = logicalSize * dpr;
+    if (!scaled.isFinite || scaled <= 0) {
+      return null;
+    }
+    return scaled.round().clamp(1, 4096);
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    
+
     if (path == null || path!.isEmpty || path == 'null') {
       return _buildSmartPlaceholder(context, isDark);
     }
+
+    final double dpr = MediaQuery.devicePixelRatioOf(context);
+    final int? safeCacheWidth = computeSafeCacheDimension(width, dpr);
+    final int? safeCacheHeight = computeSafeCacheDimension(height, dpr);
 
     // Salvavidas para datos antiguos (legacy URLs)
     if (path!.startsWith('http')) {
@@ -92,6 +115,8 @@ class UniversalImage extends StatelessWidget {
         path!,
         height: height,
         width: width,
+        cacheWidth: safeCacheWidth,
+        cacheHeight: safeCacheHeight,
         fit: fit,
         errorBuilder: (context, error, stackTrace) => _buildSmartPlaceholder(context, isDark, isError: true),
         loadingBuilder: (context, child, loadingProgress) {
@@ -102,7 +127,8 @@ class UniversalImage extends StatelessWidget {
             color: isDark ? Colors.white10 : Colors.grey[100],
             child: const Center(
               child: SizedBox(
-                height: 24, width: 24, 
+                height: 24,
+                width: 24,
                 child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.grey),
               ),
             ),
@@ -111,19 +137,17 @@ class UniversalImage extends StatelessWidget {
       );
     }
 
-    // Lógica Offline Principal: Leer desde el almacenamiento local
-    final file = File(path!);
-    if (file.existsSync()) {
-      return Image.file(
-        file,
-        height: height,
-        width: width,
-        fit: fit,
-        errorBuilder: (context, error, stackTrace) => _buildSmartPlaceholder(context, isDark, isError: true),
-      );
-    }
-
-    return _buildSmartPlaceholder(context, isDark);
+    // Lógica Offline Principal sin bloqueo de I/O síncrono en build()
+    return Image.file(
+      File(path!),
+      height: height,
+      width: width,
+      cacheWidth: safeCacheWidth,
+      cacheHeight: safeCacheHeight,
+      fit: fit,
+      errorBuilder: (context, error, stackTrace) =>
+          _buildSmartPlaceholder(context, isDark, isError: true),
+    );
   }
 
   Widget _buildSmartPlaceholder(BuildContext context, bool isDark, {bool isError = false}) {

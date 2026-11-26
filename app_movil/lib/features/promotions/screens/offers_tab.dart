@@ -5,7 +5,8 @@ import 'package:app_movil/features/catalog/providers/inventory_provider.dart';
 import 'package:app_movil/features/promotions/screens/bundle_builder_screen.dart';
 import 'package:app_movil/core/providers/auth_provider.dart';
 import 'package:intl/intl.dart';
-import 'package:flutter/services.dart';
+import 'package:app_movil/core/utils/app_date_formatter.dart';
+import 'package:app_movil/core/utils/clipboard_helper.dart';
 import 'package:app_movil/core/widgets/custom_snackbar.dart';
 import 'package:app_movil/core/widgets/interactive_sheet_wrapper.dart';
 import 'package:app_movil/core/widgets/tour/configs/inventory_tour.dart';
@@ -353,7 +354,7 @@ class OffersTabState extends State<OffersTab> {
                           children: [
                             Icon(Icons.calendar_today, size: 14, color: isDark ? Colors.grey[400] : Colors.grey[600]),
                             const SizedBox(width: 6),
-                            Text("Vigente hasta ${DateFormat('dd/MM/yyyy').format(bundle.fechaFin!)}", style: TextStyle(fontSize: 12, color: isDark ? Colors.grey[400] : Colors.grey[600], fontWeight: FontWeight.w500)),
+                            Text("Vigente hasta ${AppDateFormatter.ddMMyyyy.format(bundle.fechaFin!)}", style: TextStyle(fontSize: 12, color: isDark ? Colors.grey[400] : Colors.grey[600], fontWeight: FontWeight.w500)),
                           ],
                         )
                       ],
@@ -391,8 +392,11 @@ class OffersTabState extends State<OffersTab> {
                                  tooltip: "Compartir en WhatsApp",
                                  onPressed: () {
                                    final text = "🔥 *¡OFERTA EXCLUSIVA!* 🔥\n\n✨ *${bundle.nombrePaquete}*\n${bundle.descripcion ?? ''}\n\n💰 Llévalo por solo: *${currency.format(bundle.precioVentaTotal)}*\n\n¡Stock muy limitado! 🏃‍♂️💨\nEscríbenos para separar el tuyo antes que se agoten.";
-                                   Clipboard.setData(ClipboardData(text: text));
-                                   CustomSnackBar.show(context, message: "Copywriting de ventas copiado al portapapeles", isError: false);
+                                   ClipboardHelper.copyWithFeedback(
+                                     context,
+                                     text,
+                                     feedbackMessage: "Copywriting de ventas copiado al portapapeles",
+                                   );
                                  },
                                ),
                                const SizedBox(width: 8),

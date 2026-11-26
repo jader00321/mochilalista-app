@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
-import 'package:intl/intl.dart';
+import 'package:app_movil/core/utils/app_date_formatter.dart';
 
 import 'package:app_movil/core/providers/notification_provider.dart';
 import 'package:app_movil/features/catalog/providers/inventory_provider.dart';
@@ -701,7 +701,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> with SingleTi
                             ),
                             const SizedBox(height: 4),
                             Text(
-                              "Registrado el ${DateFormat('dd/MM/yyyy HH:mm').format(notif.createdAt)}",
+                              "Registrado el ${AppDateFormatter.ddMMyyyyHHmm.format(notif.createdAt)}",
                               style: TextStyle(fontSize: 12, color: subtitleColor, fontWeight: FontWeight.w500),
                             ),
                           ],

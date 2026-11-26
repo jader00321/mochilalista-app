@@ -1,14 +1,13 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_map/flutter_map.dart'; 
 import 'package:latlong2/latlong.dart';        
 import 'package:url_launcher/url_launcher.dart';
 import 'package:app_movil/core/models/user_model.dart';
 import 'package:app_movil/core/providers/auth_provider.dart';
+import 'package:app_movil/core/utils/clipboard_helper.dart';
 import 'package:app_movil/core/utils/hardware_validator.dart';
-import 'package:app_movil/core/widgets/custom_snackbar.dart';
 import 'package:app_movil/features/profile/widgets/edit_business_modal.dart';
 
 class BusinessInfoCard extends StatefulWidget {
@@ -353,8 +352,11 @@ class _BusinessInfoCardState extends State<BusinessInfoCard> with AutomaticKeepA
       child: InkWell(
         borderRadius: BorderRadius.circular(6),
         onTap: () {
-          Clipboard.setData(ClipboardData(text: ruc));
-          CustomSnackBar.show(context, message: "RUC copiado al portapapeles", isError: false);
+          ClipboardHelper.copyWithFeedback(
+            context,
+            ruc,
+            feedbackMessage: "RUC copiado al portapapeles",
+          );
         },
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),

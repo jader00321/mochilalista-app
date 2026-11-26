@@ -9,6 +9,9 @@ import 'dart:math' as math;
 
 import 'package:app_movil/core/config/owner_legal_identity.dart';
 import 'package:app_movil/core/config/app_changelog_registry.dart';
+import 'package:app_movil/core/utils/app_date_formatter.dart';
+import 'package:app_movil/core/utils/clipboard_helper.dart';
+import 'package:app_movil/core/utils/whatsapp_uri_builder.dart';
 import 'package:app_movil/core/models/license_model.dart';
 import 'package:app_movil/core/providers/license_provider.dart';
 import 'package:app_movil/core/providers/commercial_catalog_provider.dart';
@@ -671,14 +674,11 @@ class _LicenseStatusAndActivationScreenState
 
   Future<void> _launchWhatsAppMessage(String message) async {
     final effectiveConfig = _resolveEffectiveConfig();
-    final cleanDigits = effectiveConfig.supportPhone.replaceAll(
-      RegExp(r'[^0-9]'),
-      '',
+    final uri = WhatsAppUriBuilder.buildSendUri(
+      phone: effectiveConfig.supportPhone,
+      message: message,
+      fallbackPhone: effectiveConfig.supportWhatsAppUrl,
     );
-    final baseUri = cleanDigits.length >= 8
-        ? "https://wa.me/$cleanDigits"
-        : effectiveConfig.supportWhatsAppUrl;
-    final uri = Uri.parse("$baseUri?text=${Uri.encodeComponent(message)}");
     try {
       if (await canLaunchUrl(uri)) {
         await launchUrl(uri, mode: LaunchMode.externalApplication);
@@ -1061,7 +1061,7 @@ class _LicenseStatusAndActivationScreenState
   ) {
     final isPerpetual = license?.isPerpetual ?? false;
     final daysRemaining = license?.daysRemaining ?? 30;
-    final dateFormat = DateFormat('dd/MM/yyyy');
+    final dateFormat = AppDateFormatter.ddMMyyyy;
 
     // Propiedades dinámicas exactas desde LicenseModel
     final badgeLabel =
@@ -1382,12 +1382,11 @@ class _LicenseStatusAndActivationScreenState
                             minHeight: 32,
                           ),
                           onPressed: () {
-                            Clipboard.setData(ClipboardData(text: fingerprint));
-                            CustomSnackBar.show(
+                            ClipboardHelper.copyWithFeedback(
                               context,
-                              message:
+                              fingerprint,
+                              feedbackMessage:
                                   "Hardware ID $fingerprint copiado al portapapeles",
-                              isError: false,
                             );
                           },
                         ),
@@ -2088,16 +2087,11 @@ class _LicenseStatusAndActivationScreenState
                               const SizedBox(width: 8),
                               ElevatedButton(
                                 onPressed: () {
-                                  Clipboard.setData(
-                                    ClipboardData(
-                                      text: effectiveConfig.yapePhone,
-                                    ),
-                                  );
-                                  CustomSnackBar.show(
+                                  ClipboardHelper.copyWithFeedback(
                                     context,
-                                    message:
+                                    effectiveConfig.yapePhone,
+                                    feedbackMessage:
                                         "Número Yape/Plin copiado: ${effectiveConfig.yapePhone}",
-                                    isError: false,
                                   );
                                 },
                                 style: ElevatedButton.styleFrom(
@@ -2267,11 +2261,10 @@ class _LicenseStatusAndActivationScreenState
               ),
               TextButton(
                 onPressed: () {
-                  Clipboard.setData(ClipboardData(text: accountNumber));
-                  CustomSnackBar.show(
+                  ClipboardHelper.copyWithFeedback(
                     context,
-                    message: "Cuenta $bankName copiada al portapapeles",
-                    isError: false,
+                    accountNumber,
+                    feedbackMessage: "Cuenta $bankName copiada al portapapeles",
                   );
                 },
                 style: TextButton.styleFrom(
@@ -2300,11 +2293,10 @@ class _LicenseStatusAndActivationScreenState
                 ),
                 TextButton(
                   onPressed: () {
-                    Clipboard.setData(ClipboardData(text: cciNumber));
-                    CustomSnackBar.show(
+                    ClipboardHelper.copyWithFeedback(
                       context,
-                      message: "CCI $bankName copiado al portapapeles",
-                      isError: false,
+                      cciNumber,
+                      feedbackMessage: "CCI $bankName copiado al portapapeles",
                     );
                   },
                   style: TextButton.styleFrom(
@@ -3796,11 +3788,10 @@ class _OrderPlanBottomSheetState extends State<OrderPlanBottomSheet> {
                 key: const ValueKey("copy_hardware_id_btn"),
                 onTap: () {
                   FocusManager.instance.primaryFocus?.unfocus();
-                  Clipboard.setData(ClipboardData(text: widget.hardwareId));
-                  CustomSnackBar.show(
+                  ClipboardHelper.copyWithFeedback(
                     context,
-                    message: "Hardware ID copiado (${widget.hardwareId})",
-                    isError: false,
+                    widget.hardwareId,
+                    feedbackMessage: "Hardware ID copiado (${widget.hardwareId})",
                   );
                 },
                 borderRadius: BorderRadius.circular(8),
@@ -4062,11 +4053,10 @@ class _OrderPlanBottomSheetState extends State<OrderPlanBottomSheet> {
                   ),
                   onPressed: () {
                     FocusManager.instance.primaryFocus?.unfocus();
-                    Clipboard.setData(ClipboardData(text: _msgController.text));
-                    CustomSnackBar.show(
+                    ClipboardHelper.copyWithFeedback(
                       context,
-                      message: "Mensaje copiado al portapapeles",
-                      isError: false,
+                      _msgController.text,
+                      feedbackMessage: "Mensaje copiado al portapapeles",
                     );
                   },
                 ),

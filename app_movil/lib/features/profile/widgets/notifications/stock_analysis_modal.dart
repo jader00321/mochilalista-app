@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
+import 'package:app_movil/core/utils/app_date_formatter.dart';
 import 'package:app_movil/core/database/local_db.dart';
 import 'package:app_movil/core/models/notification_model.dart';
 import 'package:app_movil/core/providers/notification_provider.dart';
@@ -854,7 +854,7 @@ class _StockAnalysisModalState extends State<StockAnalysisModal> {
                                 child: Icon(rowIcon, color: rowColor, size: 16),
                               ),
                               title: Text(rowTitle, style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: textColor)),
-                              subtitle: Text(DateFormat('dd/MM/yyyy HH:mm').format(dt), style: TextStyle(fontSize: 11, color: subtitleColor)),
+                              subtitle: Text(AppDateFormatter.ddMMyyyyHHmm.format(dt), style: TextStyle(fontSize: 11, color: subtitleColor)),
                               trailing: Text(
                                 "${isSale ? '-' : '+'}$qty",
                                 style: TextStyle(fontSize: 15, fontWeight: FontWeight.w900, color: rowColor),

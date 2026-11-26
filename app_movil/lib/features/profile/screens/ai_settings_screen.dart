@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:intl/intl.dart';
+import 'package:app_movil/core/utils/clipboard_helper.dart';
 
 import 'package:app_movil/core/providers/license_provider.dart';
 import 'package:app_movil/core/models/ai_key_model.dart';
@@ -365,14 +366,11 @@ class _AiSettingsScreenState extends State<AiSettingsScreen> {
   }
 
   Future<void> _copyKey(AiKeyModel key) async {
-    await Clipboard.setData(ClipboardData(text: key.apiKey));
-    if (mounted) {
-      CustomSnackBar.show(
-        context,
-        message: "Clave completa de '${key.alias}' copiada al portapapeles.",
-        isError: false,
-      );
-    }
+    await ClipboardHelper.copyWithFeedback(
+      context,
+      key.apiKey,
+      feedbackMessage: "Clave completa de '${key.alias}' copiada al portapapeles.",
+    );
   }
 
   Future<void> _activateKey(AiKeyModel key) async {

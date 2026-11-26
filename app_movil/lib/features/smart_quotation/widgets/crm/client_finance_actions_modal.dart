@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
+import 'package:app_movil/core/utils/app_date_formatter.dart';
 import 'package:app_movil/core/utils/currency_formatter.dart';
 import 'package:app_movil/features/smart_quotation/models/crm_models.dart';
 import 'package:app_movil/features/smart_quotation/providers/tracking_provider.dart';
@@ -447,16 +448,8 @@ class _ClientFinanceActionsModalState extends State<ClientFinanceActionsModal>
   }
 
   /// Formatea la fecha con el día abreviado en español (ej. "Lun, 26/10/2026")
-  String _formatDateSpanish(DateTime date) {
-    try {
-      String raw = DateFormat('EEE, dd/MM/yyyy', 'es').format(date);
-      raw = raw.replaceAll('.', '');
-      if (raw.isEmpty) return DateFormat('dd/MM/yyyy').format(date);
-      return raw[0].toUpperCase() + raw.substring(1);
-    } catch (_) {
-      return DateFormat('dd/MM/yyyy').format(date);
-    }
-  }
+  String _formatDateSpanish(DateTime date) =>
+      AppDateFormatter.formatDateSpanish(date, includeWeekday: true);
 
   /// Toggle de día de la semana con protección anti-bucle (debe quedar al menos 1 día activo)
   void _toggleWeekday(int day) {

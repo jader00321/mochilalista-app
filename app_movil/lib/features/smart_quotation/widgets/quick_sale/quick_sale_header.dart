@@ -2,10 +2,10 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
-import 'package:intl/intl.dart';
 
 import 'package:app_movil/features/smart_quotation/providers/quick_sale_provider.dart';
 import 'package:app_movil/core/providers/auth_provider.dart';
+import 'package:app_movil/core/utils/currency_formatter.dart';
 import 'package:app_movil/features/smart_quotation/services/client_service.dart';
 import 'package:app_movil/features/smart_quotation/widgets/manual/client_search_modal.dart';
 import 'package:app_movil/core/widgets/morphing_accordion.dart';
@@ -285,7 +285,6 @@ class _QuickSaleHeaderState extends State<QuickSaleHeader> {
   @override
   Widget build(BuildContext context) {
     final provider = Provider.of<QuickSaleProvider>(context);
-    final currency = NumberFormat.currency(locale: 'es_PE', symbol: 'S/ ');
     _syncFromProvider(provider);
 
     final hasSaldo = provider.clientSaldo > 0;
@@ -425,7 +424,7 @@ class _QuickSaleHeaderState extends State<QuickSaleHeader> {
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        "Saldo a favor disponible: ${currency.format(provider.clientSaldo)}",
+                        "Saldo a favor disponible: ${AppCurrency.format(provider.clientSaldo)}",
                         style: TextStyle(
                           color: widget.isDark ? const Color(0xFF69F0AE) : const Color(0xFF1B5E20),
                           fontWeight: FontWeight.w700,
@@ -458,7 +457,7 @@ class _QuickSaleHeaderState extends State<QuickSaleHeader> {
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        "Deuda acumulada pendiente: ${currency.format(selectedClient.totalDebt)}",
+                        "Deuda acumulada pendiente: ${AppCurrency.format(selectedClient.totalDebt)}",
                         style: TextStyle(
                           color: widget.isDark ? const Color(0xFFFF8A80) : const Color(0xFFB71C1C),
                           fontWeight: FontWeight.w700,

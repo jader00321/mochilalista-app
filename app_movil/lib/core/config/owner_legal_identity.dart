@@ -1,4 +1,5 @@
 import 'package:app_movil/core/config/owner_commercial_defaults.dart';
+import 'package:app_movil/core/utils/whatsapp_uri_builder.dart';
 
 /// Parámetros centralizados de identidad legal, titularidad de propiedad intelectual
 /// y canales oficiales de soporte de MochilaLista.
@@ -95,9 +96,11 @@ class OwnerLegalIdentity {
     final targetPhone = (supportPhoneOverride?.trim().isNotEmpty ?? false)
         ? supportPhoneOverride!
         : supportPhone;
-    final cleanPhone = targetPhone.replaceAll(RegExp(r'[^0-9]'), '');
-    final encoded = Uri.encodeComponent(customMessage);
-    return Uri.parse("https://wa.me/$cleanPhone?text=$encoded");
+    return WhatsAppUriBuilder.buildSendUri(
+      phone: targetPhone,
+      message: customMessage,
+      fallbackPhone: supportPhone,
+    );
   }
 
   /// Construye la URI oficial de WhatsApp con mensaje comercial prellenado para solicitar planes

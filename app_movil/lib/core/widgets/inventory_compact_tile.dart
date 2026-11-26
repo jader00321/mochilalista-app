@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:app_movil/core/utils/currency_formatter.dart';
 import 'package:app_movil/features/catalog/models/inventory_wrapper.dart';
 import 'package:app_movil/features/catalog/providers/inventory_provider.dart';
 
@@ -219,7 +220,10 @@ class InventoryCompactTile extends StatelessWidget {
           children: [
             if (hasOffer) ...[
               Text(
-                "S/ ${presentation.precioVentaFinal.toStringAsFixed(2)}",
+                AppCurrency.format(
+                  presentation.precioVentaFinal,
+                  includeThousandsSeparator: false,
+                ),
                 style: TextStyle(
                   fontSize: 10,
                   decoration: TextDecoration.lineThrough,
@@ -232,7 +236,10 @@ class InventoryCompactTile extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
-                  "S/ ${item.effectivePrice.toStringAsFixed(2)}",
+                  AppCurrency.format(
+                    item.effectivePrice,
+                    includeThousandsSeparator: false,
+                  ),
                   style: TextStyle(
                     fontWeight: FontWeight.w900,
                     fontSize: 15,

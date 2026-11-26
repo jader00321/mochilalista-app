@@ -1,10 +1,10 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:share_plus/share_plus.dart';
+import 'package:app_movil/core/utils/app_date_formatter.dart';
 import 'package:app_movil/core/utils/currency_formatter.dart';
 import 'package:app_movil/features/smart_quotation/models/smart_quotation_model.dart';
 import 'package:app_movil/core/config/owner_legal_identity.dart';
@@ -26,8 +26,8 @@ class ExportReportService {
     int? activeTabIndex,
   }) async {
     final pdf = pw.Document();
-    final dateFormat = DateFormat('dd/MM/yyyy HH:mm');
-    final rangeFormat = DateFormat('dd/MM/yyyy');
+    final dateFormat = AppDateFormatter.ddMMyyyyHHmm;
+    final rangeFormat = AppDateFormatter.ddMMyyyy;
 
     final now = DateTime.now();
     final generatedAt = dateFormat.format(now);
@@ -187,7 +187,7 @@ class ExportReportService {
                       q.type == 'ai_scan' ? 'IA' : (q.type == 'pack' ? 'Pack' : 'Manual'),
                       _mapStatusToEs(q.status),
                       AppCurrency.format(q.totalAmount),
-                      date != null ? DateFormat('dd/MM HH:mm').format(date) : '-',
+                      date != null ? AppDateFormatter.ddMMHHmm.format(date) : '-',
                     ];
                   }),
                 ],
@@ -254,13 +254,13 @@ class ExportReportService {
     
     buffer.writeln("=== $reportTitle - MochilaLista ===");
     buffer.writeln("Filtro: $timeFilterLabel");
-    buffer.writeln("Periodo: ${DateFormat('dd/MM/yyyy').format(range.start)} - ${DateFormat('dd/MM/yyyy').format(range.end)}");
+    buffer.writeln("Periodo: ${AppDateFormatter.ddMMyyyy.format(range.start)} - ${AppDateFormatter.ddMMyyyy.format(range.end)}");
     buffer.writeln("");
     
     buffer.writeln("ID,Cliente,Tipo,Estado,Items,Total,Fecha");
     for (var q in allQuotes) {
       final date = DateTime.tryParse(q.createdAt);
-      final dateStr = date != null ? DateFormat('dd/MM/yyyy HH:mm').format(date) : '-';
+      final dateStr = date != null ? AppDateFormatter.ddMMyyyyHHmm.format(date) : '-';
       final typeStr = q.type == 'ai_scan' ? 'IA' : (q.type == 'pack' ? 'Pack' : 'Manual');
       buffer.writeln("${q.id},\"${q.clientName ?? 'Sin Cliente'}\",$typeStr,${_mapStatusToEs(q.status)},${q.itemCount},\"${AppCurrency.format(q.totalAmount)}\",$dateStr");
     }

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:app_movil/core/widgets/interactive_sheet_wrapper.dart';
 import 'package:app_movil/core/utils/currency_formatter.dart';
+import 'package:app_movil/core/utils/whatsapp_uri_builder.dart';
 import 'package:app_movil/core/widgets/custom_snackbar.dart';
 
 class CuotaReminderModal extends StatefulWidget {
@@ -78,9 +79,11 @@ class _CuotaReminderModalState extends State<CuotaReminderModal> {
       return;
     }
 
-    final waPhone = rawPhone.startsWith('51') ? rawPhone : '51$rawPhone';
     final msg = _buildMessage();
-    final url = Uri.parse("https://wa.me/$waPhone?text=${Uri.encodeComponent(msg)}");
+    final url = WhatsAppUriBuilder.buildSendUri(
+      phone: _phoneCtrl.text,
+      message: msg,
+    );
 
     Navigator.pop(context);
 

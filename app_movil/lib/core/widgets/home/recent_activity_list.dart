@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:intl/intl.dart';
+import 'package:app_movil/core/utils/app_date_formatter.dart';
+import 'package:app_movil/core/utils/currency_formatter.dart';
 import 'package:app_movil/features/smart_quotation/providers/sale_provider.dart';
 import 'package:app_movil/features/smart_quotation/screens/sales_history_screen.dart';
 import 'package:app_movil/features/smart_quotation/screens/sale_history_detail_screen.dart';
@@ -21,8 +22,6 @@ class RecentActivityList extends StatelessWidget {
     final recentSales = salesProv.recentHomeSales;
 
     if (recentSales.isEmpty) return const SizedBox.shrink();
-
-    final currency = NumberFormat.currency(locale: 'es_PE', symbol: 'S/ ');
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -65,7 +64,9 @@ class RecentActivityList extends StatelessWidget {
               final sale = recentSales[index];
               final date = DateTime.tryParse(sale.saleDate) ?? DateTime.now();
               final isToday = date.day == DateTime.now().day && date.month == DateTime.now().month && date.year == DateTime.now().year;
-              final dateStr = isToday ? DateFormat('hh:mm a').format(date) : DateFormat('dd/MM/yy').format(date);
+              final dateStr = isToday
+                  ? AppDateFormatter.hmma.format(date)
+                  : AppDateFormatter.ddMMyy.format(date);
 
               // 🎨 1. Determinación de Origen Semántico
               final IconData originIcon;
@@ -97,10 +98,10 @@ class RecentActivityList extends StatelessWidget {
                 statusText = "Pagado";
                 statusColor = isDark ? Colors.green[400]! : Colors.green[700]!;
               } else if (sale.isPartialPayment) {
-                statusText = "Parcial · Debe S/ ${sale.pendingDebt.toStringAsFixed(2)}";
+                statusText = "Parcial · Debe ${AppCurrency.format(sale.pendingDebt, includeThousandsSeparator: false)}";
                 statusColor = isDark ? Colors.orange[300]! : Colors.orange[800]!;
               } else {
-                statusText = "Pendiente · S/ ${sale.pendingDebt.toStringAsFixed(2)}";
+                statusText = "Pendiente · ${AppCurrency.format(sale.pendingDebt, includeThousandsSeparator: false)}";
                 statusColor = isDark ? Colors.red[300]! : Colors.red[700]!;
               }
 
@@ -186,7 +187,7 @@ class RecentActivityList extends StatelessWidget {
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               Text(
-                                currency.format(sale.trueTotalAmount),
+                                AppCurrency.format(sale.trueTotalAmount),
                                 style: TextStyle(
                                   fontWeight: FontWeight.w900, 
                                   fontSize: 15, 

@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
+import 'package:app_movil/core/utils/app_date_formatter.dart';
 
 class NotificationFilterBar extends StatelessWidget {
   final bool isDark;
@@ -107,7 +107,7 @@ class NotificationFilterBar extends StatelessWidget {
                   padding: const EdgeInsets.only(right: 6.0),
                   child: ChoiceChip(
                     label: Text(
-                      specificDate == null ? 'Específico' : DateFormat('MMM yyyy').format(specificDate!), 
+                      specificDate == null ? 'Específico' : AppDateFormatter.mmmYyyy.format(specificDate!), 
                       style: const TextStyle(fontSize: 12.5),
                     ),
                     selected: timeFilter == 'Específico',

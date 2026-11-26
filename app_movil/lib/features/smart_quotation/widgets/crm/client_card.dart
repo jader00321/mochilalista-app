@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:app_movil/core/utils/currency_formatter.dart';
+import 'package:app_movil/core/utils/whatsapp_uri_builder.dart';
 import 'package:app_movil/features/smart_quotation/models/crm_models.dart';
 import 'package:app_movil/features/smart_quotation/screens/crm/client_detail_screen.dart'; 
 import 'package:app_movil/features/smart_quotation/widgets/crm/payment_entry_modal.dart';
@@ -31,7 +32,7 @@ class ClientCard extends StatelessWidget {
           msg += " Te escribimos para recordarte que tienes un saldo pendiente de ${AppCurrency.format(client.totalDebt)}.";
         }
 
-        final url = Uri.parse("https://wa.me/51${client.phone.replaceAll(' ', '')}?text=${Uri.encodeComponent(msg)}");
+        final url = WhatsAppUriBuilder.buildSendUri(phone: client.phone, message: msg);
         if (await canLaunchUrl(url)) {
           await launchUrl(url, mode: LaunchMode.externalApplication);
         } else {

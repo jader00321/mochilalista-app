@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:intl/intl.dart';
+import 'package:app_movil/core/utils/app_date_formatter.dart';
 import 'package:app_movil/core/providers/notification_provider.dart';
 import 'package:app_movil/core/models/notification_model.dart';
 import 'package:app_movil/core/widgets/interactive_sheet_wrapper.dart';
@@ -495,7 +495,7 @@ class _SilencedNotificationsModalState extends State<SilencedNotificationsModal>
                                     ),
                                     const SizedBox(width: 8),
                                     Text(
-                                      DateFormat('dd/MM HH:mm').format(notif.createdAt),
+                                      AppDateFormatter.ddMMHHmm.format(notif.createdAt),
                                       style: TextStyle(fontSize: 11.5, color: subtitleColor),
                                     ),
                                   ],

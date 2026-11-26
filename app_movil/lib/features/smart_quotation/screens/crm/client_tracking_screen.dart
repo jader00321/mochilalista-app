@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:url_launcher/url_launcher.dart'; 
+import 'package:url_launcher/url_launcher.dart';
+import 'package:app_movil/core/utils/whatsapp_uri_builder.dart';
 
 import 'package:app_movil/features/smart_quotation/providers/tracking_provider.dart';
 import 'package:app_movil/core/providers/auth_provider.dart'; 
@@ -276,7 +277,10 @@ class _ClientTrackingScreenState extends State<ClientTrackingScreen> {
                             : ElevatedButton.icon(
                                 onPressed: isSent ? null : () async {
                                   String msg = "Hola ${client.fullName}, te saludamos de la librería. Te recordamos que tienes un saldo pendiente. Agradecemos tu pronta cancelación.";
-                                  final url = Uri.parse("https://wa.me/51${client.phone.replaceAll(' ', '')}?text=${Uri.encodeComponent(msg)}");
+                                  final url = WhatsAppUriBuilder.buildSendUri(
+                                    phone: client.phone,
+                                    message: msg,
+                                  );
                                   
                                   if (await canLaunchUrl(url)) {
                                     await launchUrl(url, mode: LaunchMode.externalApplication);

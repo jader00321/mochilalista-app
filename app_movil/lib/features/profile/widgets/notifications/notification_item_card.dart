@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
+import 'package:app_movil/core/utils/app_date_formatter.dart';
 import 'package:app_movil/core/models/notification_model.dart';
 
 class NotificationItemCard extends StatefulWidget {
@@ -272,7 +272,7 @@ class _NotificationItemCardState extends State<NotificationItemCard> with Single
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             Text(
-                              DateFormat('HH:mm').format(notif.createdAt), 
+                              AppDateFormatter.hhmm24.format(notif.createdAt),
                               style: TextStyle(
                                 fontSize: 12, 
                                 color: isDark ? Colors.grey[400] : Colors.grey[600], 

@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:app_movil/core/config/owner_legal_identity.dart';
 import 'package:app_movil/core/providers/auth_provider.dart';
@@ -10,6 +9,8 @@ import 'package:app_movil/core/providers/google_drive_backup_provider.dart';
 import 'package:app_movil/core/services/backup/google_drive_backup_service.dart';
 import 'package:app_movil/core/services/backup/i_google_drive_backup_service.dart';
 import 'package:app_movil/core/services/device_fingerprint.dart';
+import 'package:app_movil/core/utils/app_date_formatter.dart';
+import 'package:app_movil/core/utils/clipboard_helper.dart';
 import 'package:app_movil/core/widgets/custom_snackbar.dart';
 import 'package:app_movil/core/services/tour/interactive_tour_service.dart';
 
@@ -629,11 +630,11 @@ Fecha: ${DateTime.now().toIso8601String()}
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                           ),
                           onPressed: () {
-                            Clipboard.setData(ClipboardData(text: technicalReport));
                             Navigator.pop(ctx);
-                            CustomSnackBar.show(
+                            ClipboardHelper.copyWithFeedback(
                               context,
-                              message: "Datos técnicos copiados al portapapeles para soporte.",
+                              technicalReport,
+                              feedbackMessage: "Datos técnicos copiados al portapapeles para soporte.",
                             );
                           },
                         ),
@@ -782,20 +783,8 @@ class _GoogleDriveBackupSheetState extends State<GoogleDriveBackupSheet>
         passedHardwareId: passedHardwareId,
       );
 
-  String _formatDateTime(DateTime dt) {
-    final local = dt.toLocal();
-    final day = local.day.toString().padLeft(2, '0');
-    final month = local.month.toString().padLeft(2, '0');
-    final year = local.year.toString();
-
-    final hour24 = local.hour;
-    final period = hour24 >= 12 ? 'PM' : 'AM';
-    final hour12 = hour24 % 12 == 0 ? 12 : hour24 % 12;
-    final hourStr = hour12.toString().padLeft(2, '0');
-    final minuteStr = local.minute.toString().padLeft(2, '0');
-
-    return '$day/$month/$year • $hourStr:$minuteStr $period';
-  }
+  String _formatDateTime(DateTime dt) =>
+      AppDateFormatter.ddMMyyyyDotHhmma.format(dt.toLocal());
 
   Future<void> _handleSignOut(GoogleDriveBackupProvider prov) async {
     await prov.signOut();

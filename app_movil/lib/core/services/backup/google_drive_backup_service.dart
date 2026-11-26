@@ -9,7 +9,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:googleapis/drive/v3.dart' as drive;
 import 'package:http/http.dart' as http;
-import 'package:intl/intl.dart';
+import 'package:app_movil/core/utils/app_date_formatter.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
@@ -262,7 +262,7 @@ class GoogleDriveBackupService implements IGoogleDriveBackupService {
     );
 
     final now = DateTime.now();
-    final dateStr = DateFormat('yyyyMMdd_HHmmss').format(now);
+    final dateStr = AppDateFormatter.formatFileTimestamp(now);
     final fileName = 'mochilalista_backup_$dateStr.mlbg';
 
     File? backupFile;
@@ -378,7 +378,7 @@ class GoogleDriveBackupService implements IGoogleDriveBackupService {
           if (f.createdTime == null) {
             try {
               final rawDate = f.name!.replaceAll('mochilalista_backup_', '').replaceAll('.mlbg', '');
-              created = DateFormat('yyyyMMdd_HHmmss').parse(rawDate);
+              created = AppDateFormatter.parseFileTimestamp(rawDate);
             } catch (_) {}
           }
 

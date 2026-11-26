@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
+
+import 'package:app_movil/core/utils/clipboard_helper.dart';
+import 'package:app_movil/core/utils/whatsapp_uri_builder.dart';
 
 import 'package:app_movil/core/providers/commercial_catalog_provider.dart';
 import 'package:app_movil/core/providers/license_provider.dart';
@@ -140,10 +142,11 @@ class _LicenseLockedScreenState extends State<LicenseLockedScreen> {
       }
     }
 
-    final baseUri = cleanDigits.length >= 8
-        ? "https://wa.me/$cleanDigits"
-        : effectiveConfig.supportWhatsAppUrl;
-    final uri = Uri.parse("$baseUri?text=${Uri.encodeComponent(msg)}");
+    final uri = WhatsAppUriBuilder.buildSendUri(
+      phone: cleanDigits.length >= 8 ? cleanDigits : effectiveConfig.supportWhatsAppUrl,
+      message: msg,
+      fallbackPhone: effectiveConfig.supportPhone,
+    );
     try {
       if (await canLaunchUrl(uri)) {
         await launchUrl(uri, mode: LaunchMode.externalApplication);
@@ -418,13 +421,10 @@ class _LicenseLockedScreenState extends State<LicenseLockedScreen> {
                               icon: const Icon(Icons.copy_rounded, size: 18),
                               tooltip: "Copiar ID",
                               onPressed: () {
-                                Clipboard.setData(
-                                  ClipboardData(text: fingerprint),
-                                );
-                                CustomSnackBar.show(
+                                ClipboardHelper.copyWithFeedback(
                                   context,
-                                  message: "ID copiado al portapapeles",
-                                  isError: false,
+                                  fingerprint,
+                                  feedbackMessage: "ID copiado al portapapeles",
                                 );
                               },
                             ),

@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:intl/intl.dart';
+import 'package:app_movil/core/utils/app_date_formatter.dart';
+import 'package:app_movil/core/utils/clipboard_helper.dart';
 import 'package:app_movil/core/widgets/interactive_sheet_wrapper.dart';
-import 'package:app_movil/core/widgets/custom_snackbar.dart';
 
 /// 💬 MODAL DE REVISIÓN FINAL CON BURBUJA REALISTA ("MOBILE AWARDS")
 /// Incorpora:
@@ -116,8 +116,11 @@ class _WaFinalPreviewModalState extends State<WaFinalPreviewModal> {
                 flex: 1,
                 child: OutlinedButton.icon(
                   onPressed: () {
-                    Clipboard.setData(ClipboardData(text: widget.messageCtrl.text));
-                    CustomSnackBar.show(context, message: "Mensaje copiado al portapapeles", isError: false);
+                    ClipboardHelper.copyWithFeedback(
+                      context,
+                      widget.messageCtrl.text,
+                      feedbackMessage: "Mensaje copiado al portapapeles",
+                    );
                   },
                   icon: const Icon(Icons.copy, size: 16),
                   label: const Text("Copiar", style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
@@ -325,7 +328,7 @@ class _WaFinalPreviewModalState extends State<WaFinalPreviewModal> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
-                  DateFormat('h:mm a').format(DateTime.now()),
+                  AppDateFormatter.hmmaCompact.format(DateTime.now()),
                   style: TextStyle(
                     fontSize: 11,
                     color: widget.isDark ? Colors.white60 : Colors.black45,

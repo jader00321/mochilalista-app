@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:app_movil/core/utils/clipboard_helper.dart';
 import 'package:app_movil/core/utils/currency_formatter.dart';
+import 'package:app_movil/core/utils/whatsapp_uri_builder.dart';
 import 'package:app_movil/features/smart_quotation/models/crm_models.dart';
 import 'package:app_movil/core/widgets/interactive_sheet_wrapper.dart';
 import 'package:app_movil/core/widgets/loyalty_toast_feedback.dart';
@@ -10,21 +11,13 @@ import 'package:app_movil/core/widgets/loyalty_toast_feedback.dart';
 class LoyaltyWhatsAppService {
   LoyaltyWhatsAppService._();
 
-  static String _cleanPhone(String phone) {
-    String clean = phone.replaceAll(RegExp(r'\D'), '');
-    if (clean.length == 9 && !clean.startsWith('51')) {
-      return '51$clean';
-    }
-    return clean;
-  }
-
   static Future<bool> launchWhatsApp(
     BuildContext context,
     String phone,
     String message,
   ) async {
-    final clean = _cleanPhone(phone);
-    if (clean.isEmpty || clean == '000000000') {
+    final clean = WhatsAppUriBuilder.normalizePeruWhatsAppPhone(phone);
+    if (clean.isEmpty) {
       if (context.mounted) {
         LoyaltyToastFeedback.showWarning(
           context,
@@ -34,8 +27,9 @@ class LoyaltyWhatsAppService {
       return false;
     }
 
-    final url = Uri.parse(
-      'https://wa.me/$clean?text=${Uri.encodeComponent(message)}',
+    final url = WhatsAppUriBuilder.buildSendUri(
+      phone: phone,
+      message: message,
     );
     try {
       if (await canLaunchUrl(url)) {
@@ -822,12 +816,11 @@ Tu categoría te otorga atención preferencial y beneficios especiales en todos 
                         children: [
                           OutlinedButton.icon(
                             onPressed: () {
-                              Clipboard.setData(
-                                ClipboardData(text: msgCtrl.text.trim()),
-                              );
-                              LoyaltyToastFeedback.showSuccess(
+                              ClipboardHelper.copyWithFeedback(
                                 context,
-                                'Mensaje copiado al portapapeles',
+                                msgCtrl.text.trim(),
+                                feedbackMessage: 'Mensaje copiado al portapapeles',
+                                useLoyaltyToast: true,
                               );
                             },
                             icon: const Icon(Icons.copy_rounded, size: 16),

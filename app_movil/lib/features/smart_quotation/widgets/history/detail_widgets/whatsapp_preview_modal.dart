@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:app_movil/core/widgets/interactive_sheet_wrapper.dart';
+import 'package:app_movil/core/utils/clipboard_helper.dart';
 import 'package:app_movil/core/utils/currency_formatter.dart';
 import 'package:app_movil/core/utils/cuota_date_helper.dart';
+import 'package:app_movil/core/utils/whatsapp_uri_builder.dart';
 import 'package:app_movil/core/widgets/custom_snackbar.dart';
 
 class WhatsAppPreviewModal extends StatefulWidget {
@@ -424,14 +425,16 @@ class _WhatsAppPreviewModalState extends State<WhatsAppPreviewModal> {
       return;
     }
 
-    final waPhone = rawPhone.startsWith('51') ? rawPhone : '51$rawPhone';
     final msg = _messageCtrl.text.trim();
     if (msg.isEmpty) {
       CustomSnackBar.show(context, message: "El mensaje no puede estar vacío.", isError: true);
       return;
     }
 
-    final url = Uri.parse("https://wa.me/$waPhone?text=${Uri.encodeComponent(msg)}");
+    final url = WhatsAppUriBuilder.buildSendUri(
+      phone: _phoneCtrl.text,
+      message: msg,
+    );
     Navigator.pop(context);
 
     try {
@@ -712,8 +715,11 @@ class _WhatsAppPreviewModalState extends State<WhatsAppPreviewModal> {
                       const SizedBox(width: 4),
                       TextButton.icon(
                         onPressed: () {
-                          Clipboard.setData(ClipboardData(text: _messageCtrl.text));
-                          CustomSnackBar.show(context, message: "Texto copiado al portapapeles");
+                          ClipboardHelper.copyWithFeedback(
+                            context,
+                            _messageCtrl.text,
+                            feedbackMessage: "Texto copiado al portapapeles",
+                          );
                         },
                         icon: const Icon(Icons.copy_rounded, size: 14),
                         label: const Text("Copiar", style: TextStyle(fontSize: 11.5)),

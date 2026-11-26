@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:app_movil/core/services/license/license_redeem_result.dart';
+import 'package:app_movil/core/utils/app_date_formatter.dart';
+import 'package:app_movil/core/utils/clipboard_helper.dart';
 
 /// Modal animado e interactivo de retroalimentación tras un intento de canje de licencia.
 ///
@@ -51,14 +52,11 @@ class _LicenseActivationFeedbackModalState
 
   String _formatDate(DateTime? date) {
     if (date == null) return '';
-    final d = date.day.toString().padLeft(2, '0');
-    final m = date.month.toString().padLeft(2, '0');
-    final y = date.year.toString();
-    return '$d/$m/$y';
+    return AppDateFormatter.formatDate(date);
   }
 
   void _copyToClipboard(String text) {
-    Clipboard.setData(ClipboardData(text: text));
+    ClipboardHelper.copyWithFeedback(context, text);
     setState(() => _copiedDeviceId = true);
     Future.delayed(const Duration(seconds: 2), () {
       if (mounted) {

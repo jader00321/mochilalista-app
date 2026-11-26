@@ -1,4 +1,4 @@
-import 'package:intl/intl.dart';
+import 'package:app_movil/core/utils/app_date_formatter.dart';
 
 /// Representación inmutable del estado temporal de una cuota frente a una fecha calendario.
 class CuotaDateInfo {
@@ -82,7 +82,7 @@ class CuotaDateHelper {
 
     final dueCalendar = DateTime(dueDate.year, dueDate.month, dueDate.day);
     final int daysDiff = today.difference(dueCalendar).inDays;
-    final String dateFormatted = DateFormat('dd/MM/yyyy').format(dueCalendar);
+    final String dateFormatted = AppDateFormatter.ddMMyyyy.format(dueCalendar);
 
     if (daysDiff > 0) {
       // Venció en el pasado (se aplica tanto a cuotas pagadas como impagas)

@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-import 'package:app_movil/core/widgets/custom_snackbar.dart';
+import 'package:app_movil/core/utils/clipboard_helper.dart';
 import 'package:app_movil/features/smart_quotation/models/whatsapp_config_model.dart';
 import 'package:app_movil/features/smart_quotation/widgets/whatsapp/wa_dynamic_popover.dart';
 
@@ -308,8 +307,11 @@ class WaMessageEditor extends StatelessWidget {
                 const SizedBox(width: 10),
                 InkWell(
                   onTap: () {
-                    Clipboard.setData(ClipboardData(text: messageCtrl.text));
-                    CustomSnackBar.show(context, message: "Mensaje copiado al portapapeles", isError: false);
+                    ClipboardHelper.copyWithFeedback(
+                      context,
+                      messageCtrl.text,
+                      feedbackMessage: "Mensaje copiado al portapapeles",
+                    );
                   },
                   borderRadius: BorderRadius.circular(6),
                   child: Padding(

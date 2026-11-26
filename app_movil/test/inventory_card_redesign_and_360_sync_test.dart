@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:intl/intl.dart';
 import 'package:app_movil/core/utils/currency_formatter.dart';
 
 import 'package:app_movil/features/catalog/models/product_model.dart';
@@ -385,8 +384,6 @@ void main() {
         stock: 50,
       );
 
-      final currency = NumberFormat.currency(locale: 'es_PE', symbol: 'S/ ');
-
       await tester.pumpWidget(
         MultiProvider(
           providers: [
@@ -410,9 +407,9 @@ void main() {
       );
 
       // Precio base tachado
-      expect(find.text(currency.format(10.0)), findsOneWidget);
+      expect(find.text(AppCurrency.format(10.0)), findsOneWidget);
       // Precio efectivo
-      expect(find.text(currency.format(8.0)), findsOneWidget);
+      expect(find.text(AppCurrency.format(8.0)), findsOneWidget);
       // Badge -20%
       expect(find.text("-20%"), findsOneWidget);
     });

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:app_movil/core/utils/clipboard_helper.dart';
 
 class BarcodeNotFoundDialog extends StatelessWidget {
   final String barcode;
@@ -127,13 +128,12 @@ class BarcodeNotFoundDialog extends StatelessWidget {
                     const SizedBox(width: 8),
                     InkWell(
                       onTap: () {
-                        Clipboard.setData(ClipboardData(text: barcode));
-                        HapticFeedback.selectionClick();
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text("Código copiado al portapapeles"),
-                            duration: Duration(seconds: 1),
-                          ),
+                        ClipboardHelper.copyWithFeedback(
+                          context,
+                          barcode,
+                          feedbackMessage: "Código copiado al portapapeles",
+                          useScaffoldSnackBar: true,
+                          snackBarDuration: const Duration(seconds: 1),
                         );
                       },
                       borderRadius: BorderRadius.circular(6),
