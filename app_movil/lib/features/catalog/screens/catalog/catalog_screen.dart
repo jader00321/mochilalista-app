@@ -3,48 +3,47 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 // Providers
-import 'package:app_movil/features/smart_quotation/providers/smart_quotation_provider.dart';
-import 'package:app_movil/features/catalog/providers/catalog_provider.dart';
-import 'package:app_movil/features/smart_quotation/providers/quick_sale_provider.dart';
 import 'package:app_movil/core/providers/auth_provider.dart';
+import 'package:app_movil/core/utils/currency_formatter.dart';
+import 'package:app_movil/features/catalog/providers/catalog_provider.dart';
 import 'package:app_movil/features/catalog/providers/inventory_provider.dart';
 import 'package:app_movil/features/promotions/providers/promotion_provider.dart';
-import 'package:intl/intl.dart';
+import 'package:app_movil/features/smart_quotation/providers/quick_sale_provider.dart';
+import 'package:app_movil/features/smart_quotation/providers/smart_quotation_provider.dart';
 
 // Modelos
-import 'package:app_movil/features/catalog/models/product_model.dart';
 import 'package:app_movil/features/catalog/models/inventory_wrapper.dart';
+import 'package:app_movil/features/catalog/models/product_model.dart';
 import 'package:app_movil/features/smart_quotation/models/matching_model.dart';
 
 // Widgets
+import 'package:app_movil/core/widgets/catalog_cart_modal.dart';
 import 'package:app_movil/core/widgets/catalog_header.dart';
 import 'package:app_movil/core/widgets/catalog_item_card.dart';
-import 'package:app_movil/core/widgets/product_detail_modal.dart';
 import 'package:app_movil/core/widgets/custom_snackbar.dart';
-import 'package:app_movil/core/widgets/catalog_cart_modal.dart';
+import 'package:app_movil/core/widgets/deep_nav_return_pill.dart';
 import 'package:app_movil/core/widgets/info_tooltip_button.dart';
 import 'package:app_movil/core/widgets/interactive_sheet_wrapper.dart';
-import 'package:app_movil/core/widgets/deep_nav_return_pill.dart';
 import 'package:app_movil/core/widgets/live_filter_bottom_sheet.dart';
+import 'package:app_movil/core/widgets/product_detail_modal.dart';
 
 // Pantallas
-import 'package:app_movil/features/smart_quotation/screens/quick_sale_screen.dart';
-import 'package:app_movil/features/smart_quotation/screens/manual_quotation_screen.dart';
 import 'package:app_movil/features/catalog/screens/catalog/widgets/catalog_filter_header.dart';
-
 import 'package:app_movil/features/catalog/screens/catalog/widgets/catalog_sort_modal.dart';
+import 'package:app_movil/features/smart_quotation/screens/manual_quotation_screen.dart';
+import 'package:app_movil/features/smart_quotation/screens/quick_sale_screen.dart';
 import 'package:app_movil/core/services/tour/interactive_tour_service.dart';
 import 'package:app_movil/core/widgets/tour/configs/catalog_tour.dart';
+
+part 'widgets/catalog_screen_actions_and_transfers.dart';
+part 'widgets/catalog_screen_offers_section.dart';
+part 'widgets/catalog_screen_bottom_bar.dart';
 
 class CatalogScreen extends StatefulWidget {
   final bool autoTriggerTour;
   final CatalogTourKeys? tourKeys;
 
-  const CatalogScreen({
-    super.key,
-    this.autoTriggerTour = true,
-    this.tourKeys,
-  });
+  const CatalogScreen({super.key, this.autoTriggerTour = true, this.tourKeys});
 
   @override
   State<CatalogScreen> createState() => CatalogScreenState();
@@ -60,12 +59,17 @@ class CatalogScreenState extends State<CatalogScreen> with RouteAware {
   bool _isOffersExpanded = false;
   bool _isStoreMode = false;
 
-  // 🛡️ MOTOR DE SCROLL ANTI-REBOTE (Mobile Awards Quality)
+  // Motor de scroll anti-rebote
   bool _showRetractableSections = true;
   bool _showBottomCart = true;
   DateTime _lastToggleTime = DateTime.now();
   double _accumulatedDelta = 0.0;
   int _lastItemCount = 0;
+
+  void _refreshState(VoidCallback fn) {
+    if (!mounted) return;
+    setState(fn);
+  }
 
   @override
   void initState() {
@@ -144,7 +148,6 @@ class CatalogScreenState extends State<CatalogScreen> with RouteAware {
     final catProv = Provider.of<CatalogProvider>(context, listen: false);
     final invProv = Provider.of<InventoryProvider>(context, listen: false);
 
-    // Si la memoria está vacía (por ejemplo, tras un cambio de negocio), recargamos
     if (catProv.totalLoadedCount != invProv.items.length ||
         catProv.displayItems.isEmpty) {
       await catProv.initCatalog();
@@ -159,7 +162,6 @@ class CatalogScreenState extends State<CatalogScreen> with RouteAware {
     final now = DateTime.now();
     final elapsedSinceToggle = now.difference(_lastToggleTime).inMilliseconds;
 
-    // 1. Regla del Tope Real: Si estamos en el tope absoluto (currentOffset <= 5), forzar siempre expansión
     if (currentOffset <= 5) {
       if (!_showRetractableSections || !_showBottomCart) {
         _lastToggleTime = now;
@@ -172,16 +174,15 @@ class CatalogScreenState extends State<CatalogScreen> with RouteAware {
     } else if (elapsedSinceToggle > 350) {
       if (notification is ScrollUpdateNotification) {
         final delta = notification.scrollDelta ?? 0.0;
-
-        // Reiniciar acumulador si el usuario cambia de dirección
-        if ((delta > 0 && _accumulatedDelta < 0) || (delta < 0 && _accumulatedDelta > 0)) {
+        if ((delta > 0 && _accumulatedDelta < 0) ||
+            (delta < 0 && _accumulatedDelta > 0)) {
           _accumulatedDelta = 0.0;
         }
         _accumulatedDelta += delta;
 
-        // Caso A: Scroll hacia abajo (ocultar secciones retráctiles y barra inferior)
         if (_accumulatedDelta > 15 && currentOffset > 60) {
-          if ((_showRetractableSections || _showBottomCart) && maxScroll > 220) {
+          if ((_showRetractableSections || _showBottomCart) &&
+              maxScroll > 220) {
             _lastToggleTime = now;
             _accumulatedDelta = 0.0;
             setState(() {
@@ -189,14 +190,10 @@ class CatalogScreenState extends State<CatalogScreen> with RouteAware {
               _showBottomCart = false;
             });
           }
-        }
-        // Caso B: Scroll hacia arriba (reaparecer)
-        // Cero aperturas por rebote: Requiere arrastre activo del usuario (dragDetails != null)
-        // y no encontrarse en zona de sobre-desplazamiento / rebote
-        else if (_accumulatedDelta < -24 &&
-                 notification.dragDetails != null &&
-                 currentOffset < maxScroll - 25 &&
-                 !notification.metrics.outOfRange) {
+        } else if (_accumulatedDelta < -24 &&
+            notification.dragDetails != null &&
+            currentOffset < maxScroll - 25 &&
+            !notification.metrics.outOfRange) {
           if (!_showRetractableSections || !_showBottomCart) {
             _lastToggleTime = now;
             _accumulatedDelta = 0.0;
@@ -209,13 +206,11 @@ class CatalogScreenState extends State<CatalogScreen> with RouteAware {
       }
     }
 
-    // Scroll-to-top button
     final shouldShowTop = currentOffset > 300;
     if (shouldShowTop != _showScrollToTop) {
       setState(() => _showScrollToTop = shouldShowTop);
     }
 
-    // Paginación infinita al acercarse al final
     if (currentOffset >= maxScroll - 200) {
       Provider.of<CatalogProvider>(context, listen: false).loadMoreItems();
     }
@@ -235,403 +230,133 @@ class CatalogScreenState extends State<CatalogScreen> with RouteAware {
     await Provider.of<CatalogProvider>(context, listen: false).initCatalog();
   }
 
-  void _showExplorationModal(BuildContext context, bool isDark) {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: isDark ? const Color(0xFF23232F) : Colors.white,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Row(
-          children: [
-            Icon(Icons.explore, color: Colors.orange[400]),
-            const SizedBox(width: 10),
-            const Text(
-              "Modo Exploración",
-              style: TextStyle(fontWeight: FontWeight.bold),
-            ),
-          ],
-        ),
-        content: Text(
-          "Puedes añadir productos a tu Carrito o a tu Lista para ver cómo funciona el Catálogo.\n\n"
-          "Sin embargo, para poder Cotizarlos, Venderlos o Enviarlos como Pedido, necesitas registrar tu negocio en tu Perfil.",
+  AppBar _buildAppBar(BuildContext context, bool isDark, Color textColor) {
+    final bool canPop = Navigator.canPop(context);
+    return AppBar(
+      title: FittedBox(
+        fit: BoxFit.scaleDown,
+        alignment: Alignment.centerLeft,
+        child: Text(
+          "Catálogo de Ventas",
           style: TextStyle(
-            color: isDark ? Colors.grey[300] : Colors.grey[700],
-            fontSize: 16,
-            height: 1.4,
+            fontSize: 19,
+            fontWeight: FontWeight.w900,
+            color: textColor,
+            letterSpacing: -0.3,
           ),
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text(
-              "Entendido",
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-            ),
-          ),
-        ],
       ),
-    );
-  }
-
-  void _goToQuickSale(List<CartItem> listItems, bool isDark) {
-    final quickProv = Provider.of<QuickSaleProvider>(context, listen: false);
-    final catalogProv = Provider.of<CatalogProvider>(context, listen: false);
-
-    if (!quickProv.isEmpty) {
-      showDialog(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          backgroundColor: isDark ? const Color(0xFF23232F) : Colors.white,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
-          ),
-          title: Text(
-            "Caja Ocupada",
-            style: TextStyle(
-              fontWeight: FontWeight.bold,
-              color: isDark ? Colors.white : Colors.black87,
+      backgroundColor: isDark ? const Color(0xFF14141C) : Colors.white,
+      elevation: 0,
+      centerTitle: false,
+      titleSpacing: canPop ? 4 : 16,
+      leading: canPop
+          ? IconButton(
+              icon: const Icon(Icons.arrow_back_ios_new, size: 22),
+              onPressed: () => Navigator.pop(context),
+              color: isDark ? Colors.blue[300] : Colors.blue[800],
+              tooltip: "Volver",
+            )
+          : null,
+      actions: [
+        InfoTooltipButton(
+          title: "Catálogo de Ventas",
+          description:
+              "Muestra todos tus productos con stock disponible, presentaciones, precios y ofertas en un formato visual para ventas rápidas.",
+          onStartInteractiveTour: () => _startTour(context),
+          tips: const [
+            InfoTip(
+              icon: Icons.touch_app_outlined,
+              text:
+                  "Toca un producto para abrir sus opciones y agregarlo al Carrito o a tu Lista.",
             ),
-          ),
-          content: Text(
-            "Actualmente tienes productos pendientes en la Caja Rápida.\n\n¿Deseas limpiar la caja antes de agregar estos productos, o prefieres mezclarlos?",
-            style: TextStyle(
-              color: isDark ? Colors.grey[300] : Colors.grey[700],
-              fontSize: 16,
+            InfoTip(
+              icon: Icons.filter_list_rounded,
+              text:
+                  "Usa el botón de filtros o las categorías para encontrar rápidamente lo que necesitas.",
             ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.pop(ctx);
-                _executeTransferToQuickSale(
-                  listItems,
-                  quickProv,
-                  catalogProv,
-                  clearFirst: false,
-                );
-              },
-              child: Text(
-                "Mezclar",
-                style: TextStyle(
-                  color: isDark ? Colors.blue[300] : Colors.blue,
-                  fontSize: 16,
-                ),
-              ),
+            InfoTip(
+              icon: Icons.point_of_sale_rounded,
+              text:
+                  "Pasa los ítems de tu carrito directamente a Caja Rápida o Cotización Manual.",
             ),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.pinkAccent,
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10),
-                ),
-              ),
-              onPressed: () {
-                Navigator.pop(ctx);
-                _executeTransferToQuickSale(
-                  listItems,
-                  quickProv,
-                  catalogProv,
-                  clearFirst: true,
-                );
-              },
-              child: const Text(
-                "Limpiar y Cargar",
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
-              ),
+            InfoTip(
+              icon: Icons.storefront_rounded,
+              text:
+                  "Modo Tienda: Actívalo en la barra superior para mostrar una vista limpia de vitrina comercial al presentar el catálogo a clientes.",
             ),
           ],
         ),
-      );
-    } else {
-      _executeTransferToQuickSale(
-        listItems,
-        quickProv,
-        catalogProv,
-        clearFirst: true,
-      );
-    }
-  }
-
-  void _executeTransferToQuickSale(
-    List<CartItem> items,
-    QuickSaleProvider quickProv,
-    CatalogProvider catalogProv, {
-    required bool clearFirst,
-  }) {
-    if (clearFirst) quickProv.clearCart();
-
-    for (var cartItem in items) {
-      final presId = cartItem.item.presentation.id!;
-      final maxStock = cartItem.item.presentation.stockActual;
-
-      if (!quickProv.cartItems.any((p) => p.presentationId == presId)) {
-        quickProv.addToCart(cartItem.item);
-        quickProv.updateQuantity(presId, cartItem.quantity, maxStock);
-      } else {
-        int currentQty = quickProv.getQuantity(presId);
-        quickProv.updateQuantity(
-          presId,
-          currentQty + cartItem.quantity,
-          maxStock,
-        );
-      }
-    }
-
-    catalogProv.clearCart();
-    if (Navigator.canPop(context)) Navigator.pop(context);
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (_) => const QuickSaleScreen()),
-    );
-  }
-
-  void _goToManualQuotation(List<CartItem> listItems, bool isDark) {
-    final quoteProv = Provider.of<SmartQuotationProvider>(
-      context,
-      listen: false,
-    );
-    final catalogProv = Provider.of<CatalogProvider>(context, listen: false);
-
-    if (!quoteProv.hasManualDraft) {
-      _executeTransferToQuotation(
-        listItems,
-        quoteProv,
-        catalogProv,
-        clearFirst: true,
-      );
-      return;
-    }
-
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: isDark ? const Color(0xFF23232F) : Colors.white,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Text(
-          "Cotización en Progreso",
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-            color: isDark ? Colors.white : Colors.black87,
-          ),
-        ),
-        content: Text(
-          "Tienes una lista en curso.\n\n¿Deseas limpiar tu lista anterior antes de agregar estos nuevos productos, o prefieres mezclarlos?",
-          style: TextStyle(
-            color: isDark ? Colors.grey[300] : Colors.grey[700],
-            fontSize: 16,
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () {
-              Navigator.pop(ctx);
-              _executeTransferToQuotation(
-                listItems,
-                quoteProv,
-                catalogProv,
-                clearFirst: false,
+        Tooltip(
+          message: _isStoreMode
+              ? "Desactivar Modo Tienda"
+              : "Activar Modo Tienda (Ocultar costos y datos privados)",
+          child: InkWell(
+            onTap: () {
+              HapticFeedback.mediumImpact();
+              setState(() => _isStoreMode = !_isStoreMode);
+              CustomSnackBar.show(
+                context,
+                message: _isStoreMode
+                    ? "Modo Tienda Activado: Listo para mostrar a clientes en mostrador"
+                    : "Modo Tienda Desactivado: Vista de comerciante",
+                isError: false,
               );
             },
-            child: Text(
-              "Mezclar",
-              style: TextStyle(
-                color: isDark ? Colors.blue[300] : Colors.blue,
-                fontSize: 16,
-              ),
-            ),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.orange[800],
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 250),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+              decoration: BoxDecoration(
+                color: _isStoreMode
+                    ? (isDark
+                          ? Colors.amber[900]!.withValues(alpha: 0.6)
+                          : Colors.amber[100])
+                    : (isDark ? Colors.white10 : Colors.grey[100]),
                 borderRadius: BorderRadius.circular(10),
+                border: Border.all(
+                  color: _isStoreMode ? Colors.amber : Colors.transparent,
+                  width: 1.5,
+                ),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    _isStoreMode ? Icons.storefront : Icons.storefront_outlined,
+                    size: 20,
+                    color: _isStoreMode
+                        ? (isDark ? Colors.amber[300] : Colors.amber[900])
+                        : (isDark ? Colors.grey[400] : Colors.grey[700]),
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    "Tienda",
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      color: _isStoreMode
+                          ? (isDark ? Colors.amber[300] : Colors.amber[900])
+                          : (isDark ? Colors.grey[400] : Colors.grey[700]),
+                    ),
+                  ),
+                ],
               ),
             ),
-            onPressed: () {
-              Navigator.pop(ctx);
-              _executeTransferToQuotation(
-                listItems,
-                quoteProv,
-                catalogProv,
-                clearFirst: true,
-              );
-            },
-            child: const Text(
-              "Limpiar y Cargar",
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
-            ),
           ),
-        ],
-      ),
-    );
-  }
-
-  void _executeTransferToQuotation(
-    List<CartItem> listItems,
-    SmartQuotationProvider quoteProv,
-    CatalogProvider catalogProv, {
-    required bool clearFirst,
-  }) {
-    final auth = Provider.of<AuthProvider>(context, listen: false);
-    final isClient = auth.isCommunityClient;
-
-    List<MatchedProduct> currentItems = clearFirst
-        ? []
-        : List.from(quoteProv.draftManualItems ?? []);
-    Map<int, int> currentQuantities = clearFirst
-        ? {}
-        : Map.from(quoteProv.draftManualQuantities ?? {});
-
-    bool stockLimitReached =
-        false; // 🔥 Bandera para avisarle al usuario si lo frenamos
-
-    for (var cartItem in listItems) {
-      final item = cartItem.item;
-      final prod = item.product;
-      final pres = item.presentation;
-      final presId = pres.id!;
-
-      String cleanName = prod.nombre;
-
-      String brandName = "";
-      if (prod.marcaId != null) {
-        brandName = catalogProv.getBrandName(prod.marcaId);
-      }
-
-      int newQty = cartItem.quantity;
-
-      if (currentQuantities.containsKey(presId)) {
-        newQty += currentQuantities[presId]!;
-      }
-
-      // 🔥 PROTECCIÓN CRÍTICA DE STOCK PARA CLIENTES AL MEZCLAR LISTAS
-      if (isClient && newQty > pres.stockActual) {
-        newQty = pres.stockActual;
-        stockLimitReached = true;
-      }
-
-      if (currentQuantities.containsKey(presId)) {
-        currentQuantities[presId] = newQty;
-      } else {
-        currentItems.add(
-          MatchedProduct(
-            productId: prod.id,
-            presentationId: presId,
-            fullName: cleanName,
-            productName: prod.nombre,
-            specificName: pres.nombreEspecifico,
-            brand: brandName.isNotEmpty ? brandName : null,
-            price: pres.precioVentaFinal,
-            offerPrice: pres.precioOferta,
-            stock: pres.stockActual,
-            imageUrl: pres.imagenUrl ?? prod.imagenUrl,
-            unit: pres.unidadVenta ?? "Unidad",
-          ),
-        );
-        currentQuantities[presId] = newQty;
-      }
-    }
-
-    if (stockLimitReached) {
-      CustomSnackBar.show(
-        context,
-        message:
-            "Algunos productos se ajustaron al límite de stock disponible.",
-        isError: true,
-      );
-    }
-
-    catalogProv.clearUtilityList();
-    if (Navigator.canPop(context)) Navigator.pop(context);
-
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => ManualQuotationScreen(
-          initialItems: currentItems,
-          initialQuantities: currentQuantities,
         ),
-      ),
+        IconButton(
+          icon: Icon(
+            Icons.refresh,
+            color: isDark ? Colors.grey[400] : Colors.grey,
+            size: 26,
+          ),
+          onPressed: _onRefresh,
+        ),
+      ],
     );
   }
-
-  void _showDetailModal(BuildContext context, InventoryWrapper item) {
-    ProductDetailModal.show(
-      context,
-      item: item,
-      isStoreMode: _isStoreMode,
-      onAddToCart: (qty, [selectedPres]) {
-        final targetWrapper = (selectedPres != null)
-            ? item.copyWith(presentation: selectedPres)
-            : item;
-        Provider.of<CatalogProvider>(
-          context,
-          listen: false,
-        ).addToCart(targetWrapper, qty);
-        CustomSnackBar.show(
-          context,
-          message: "Agregado al Carrito: ${targetWrapper.displayNameDetail}",
-          isError: false,
-        );
-        setState(() {
-          _isBottomMenuExpanded = true;
-          _showBottomCart = true;
-        });
-      },
-      onAddToList: (qty, [selectedPres]) {
-        final targetWrapper = (selectedPres != null)
-            ? item.copyWith(presentation: selectedPres)
-            : item;
-        Provider.of<CatalogProvider>(
-          context,
-          listen: false,
-        ).addToUtilityList(targetWrapper, qty);
-        CustomSnackBar.show(
-          context,
-          message: "Agregado a tu Lista: ${targetWrapper.displayNameDetail}",
-          backgroundColor: Colors.orange[800]!,
-        );
-        setState(() {
-          _isBottomMenuExpanded = true;
-          _showBottomCart = true;
-        });
-      },
-    );
-  }
-
-  void _showListPreview(
-    BuildContext context,
-    bool isCart,
-    bool isDark,
-    AuthProvider auth,
-  ) {
-    InteractiveSheetWrapper.show(
-      context: context,
-      builder: (ctx) {
-        return CatalogCartModal(
-          isCart: isCart,
-          isDark: isDark,
-          onProcessTap: () {
-            if (!auth.hasActiveContext) {
-              Navigator.pop(ctx);
-              _showExplorationModal(context, isDark);
-              return;
-            }
-
-            final prov = Provider.of<CatalogProvider>(context, listen: false);
-            if (isCart) {
-              _goToQuickSale(prov.shoppingCart, isDark);
-            } else {
-              _goToManualQuotation(prov.utilityList, isDark);
-            }
-          },
-        );
-      },
-    );
-  }
-
 
   @override
   Widget build(BuildContext context) {
@@ -642,7 +367,6 @@ class CatalogScreenState extends State<CatalogScreen> with RouteAware {
     final provider = Provider.of<CatalogProvider>(context);
     final promoProv = Provider.of<PromotionProvider>(context);
     final auth = Provider.of<AuthProvider>(context);
-    final currency = NumberFormat.currency(locale: 'es_PE', symbol: 'S/ ');
 
     final int currentTotalCount = provider.cartCount + provider.utilityCount;
     if (currentTotalCount > _lastItemCount) {
@@ -650,157 +374,10 @@ class CatalogScreenState extends State<CatalogScreen> with RouteAware {
     }
     _lastItemCount = currentTotalCount;
 
-    final bool canPop = Navigator.canPop(context);
-
     return Scaffold(
       key: _scaffoldKey,
       backgroundColor: bgColor,
-
-      appBar: AppBar(
-        title: FittedBox(
-          fit: BoxFit.scaleDown,
-          alignment: Alignment.centerLeft,
-          child: Text(
-            "Catálogo de Ventas",
-            style: TextStyle(
-              fontSize: 19,
-              fontWeight: FontWeight.w900,
-              color: textColor,
-              letterSpacing: -0.3,
-            ),
-          ),
-        ),
-        backgroundColor: isDark
-            ? const Color(0xFF14141C)
-            : Colors.white,
-        elevation: 0,
-        centerTitle: false,
-        titleSpacing: canPop ? 4 : 16,
-        leading: canPop
-            ? IconButton(
-                icon: const Icon(Icons.arrow_back_ios_new, size: 22),
-                onPressed: () => Navigator.pop(context),
-                color: isDark ? Colors.blue[300] : Colors.blue[800],
-                tooltip: "Volver",
-              )
-            : null,
-        actions: [
-          InfoTooltipButton(
-            title: "Catálogo de Ventas",
-            description:
-                "Muestra todos tus productos con stock disponible, presentaciones, precios y ofertas en un formato visual para ventas rápidas.",
-            onStartInteractiveTour: () => _startTour(context),
-            tips: const [
-              InfoTip(
-                icon: Icons.touch_app_outlined,
-                text:
-                    "Toca un producto para abrir sus opciones y agregarlo al Carrito o a tu Lista.",
-              ),
-              InfoTip(
-                icon: Icons.filter_list_rounded,
-                text:
-                    "Usa el botón de filtros o las categorías para encontrar rápidamente lo que necesitas.",
-              ),
-              InfoTip(
-                icon: Icons.point_of_sale_rounded,
-                text:
-                    "Pasa los ítems de tu carrito directamente a Caja Rápida o Cotización Manual.",
-              ),
-              InfoTip(
-                icon: Icons.storefront_rounded,
-                text:
-                    "Modo Tienda: Actívalo en la barra superior para mostrar una vista limpia de vitrina comercial al presentar el catálogo a clientes.",
-              ),
-            ],
-          ),
-          Tooltip(
-            message: _isStoreMode
-                ? "Desactivar Modo Tienda"
-                : "Activar Modo Tienda (Ocultar costos y datos privados)",
-            child: InkWell(
-              onTap: () {
-                HapticFeedback.mediumImpact();
-                setState(() => _isStoreMode = !_isStoreMode);
-                CustomSnackBar.show(
-                  context,
-                  message: _isStoreMode
-                      ? "Modo Tienda Activado: Listo para mostrar a clientes en mostrador"
-                      : "Modo Tienda Desactivado: Vista de comerciante",
-                  isError: false,
-                );
-              },
-              borderRadius: BorderRadius.circular(10),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 250),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 6,
-                ),
-                margin: const EdgeInsets.symmetric(
-                  vertical: 8,
-                  horizontal: 4,
-                ),
-                decoration: BoxDecoration(
-                  color: _isStoreMode
-                      ? (isDark
-                          ? Colors.amber[900]!.withValues(alpha: 0.6)
-                          : Colors.amber[100])
-                      : (isDark ? Colors.white10 : Colors.grey[100]),
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(
-                    color: _isStoreMode
-                        ? Colors.amber
-                        : Colors.transparent,
-                    width: 1.5,
-                  ),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      _isStoreMode
-                          ? Icons.storefront
-                          : Icons.storefront_outlined,
-                      size: 20,
-                      color: _isStoreMode
-                          ? (isDark
-                              ? Colors.amber[300]
-                              : Colors.amber[900])
-                          : (isDark
-                              ? Colors.grey[400]
-                              : Colors.grey[700]),
-                    ),
-                    const SizedBox(width: 4),
-                    Text(
-                      "Tienda",
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold,
-                        color: _isStoreMode
-                            ? (isDark
-                                ? Colors.amber[300]
-                                : Colors.amber[900])
-                            : (isDark
-                                ? Colors.grey[400]
-                                : Colors.grey[700]),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-          IconButton(
-            icon: Icon(
-              Icons.refresh,
-              color: isDark ? Colors.grey[400] : Colors.grey,
-              size: 26,
-            ),
-            onPressed: _onRefresh,
-          ),
-        ],
-      ),
-
+      appBar: _buildAppBar(context, isDark, textColor),
       floatingActionButton: AnimatedScale(
         scale: _showScrollToTop ? 1.0 : 0.0,
         duration: const Duration(milliseconds: 300),
@@ -815,7 +392,6 @@ class CatalogScreenState extends State<CatalogScreen> with RouteAware {
           child: const Icon(Icons.keyboard_arrow_up, size: 24),
         ),
       ),
-
       body: GestureDetector(
         onTap: () => FocusScope.of(context).unfocus(),
         behavior: HitTestBehavior.translucent,
@@ -825,14 +401,11 @@ class CatalogScreenState extends State<CatalogScreen> with RouteAware {
             children: [
               Column(
                 children: [
-                  // 📌 1. NIVEL 1: Fila Fija del Buscador propio del catálogo
                   CatalogHeader(
                     key: _tourKeys.searchFiltersKey,
                     onFilterTap: () => LiveFilterBottomSheet.show(context),
                     showCategories: false,
                   ),
-
-                  // 🔄 2. NIVEL 2: Secciones Retráctiles en Column Superior (FUERA del CustomScrollView)
                   ClipRect(
                     child: AnimatedSize(
                       duration: const Duration(milliseconds: 280),
@@ -841,19 +414,21 @@ class CatalogScreenState extends State<CatalogScreen> with RouteAware {
                           ? Column(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                CatalogCategoriesBar(provider: provider, isDark: isDark),
+                                CatalogCategoriesBar(
+                                  provider: provider,
+                                  isDark: isDark,
+                                ),
                                 CatalogCounterBar(
                                   provider: provider,
                                   isDark: isDark,
-                                  onSortTap: () => CatalogSortModal.show(context, provider),
+                                  onSortTap: () =>
+                                      CatalogSortModal.show(context, provider),
                                 ),
                               ],
                             )
                           : const SizedBox(width: double.infinity, height: 0),
                     ),
                   ),
-
-                  // 📦 3. NIVEL 3: Grid de Productos Desacoplado
                   Expanded(
                     child: KeyedSubtree(
                       key: _tourKeys.productGridKey,
@@ -865,824 +440,129 @@ class CatalogScreenState extends State<CatalogScreen> with RouteAware {
                           child: CustomScrollView(
                             controller: _scrollController,
                             slivers: [
-
-                        // Panel de Ofertas
-                  if (promoProv.bundles.isNotEmpty)
-                    SliverToBoxAdapter(
-                      child: KeyedSubtree(
-                        key: _tourKeys.offersSectionKey,
-                        child: Builder(
-                      builder: (ctx) {
-                        final now = DateTime.now();
-                        final validBundles = promoProv.bundles.where((b) {
-                          if (!b.activo) return false;
-                          if (b.fechaInicio != null &&
-                              b.fechaInicio!.isAfter(now)) {
-                            return false;
-                          }
-                          if (b.fechaFin != null && b.fechaFin!.isBefore(now)) {
-                            return false;
-                          }
-                          final maxStock = promoProv.calculateBundleMaxStock(
-                            b.id,
-                          );
-                          return maxStock > 0;
-                        }).toList();
-
-                        if (validBundles.isEmpty) return const SizedBox();
-
-                        return AnimatedContainer(
-                          duration: const Duration(milliseconds: 300),
-                          curve: Curves.easeInOut,
-                          color: isDark
-                              ? const Color(0xFF1A1A24)
-                              : Colors.pink[50],
-                          padding: const EdgeInsets.only(bottom: 12),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              InkWell(
-                                onTap: () => setState(
-                                  () => _isOffersExpanded = !_isOffersExpanded,
-                                ),
-                                child: Padding(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 20,
-                                    vertical: 12,
+                              if (promoProv.bundles.isNotEmpty)
+                                _buildOffersSliver(promoProv, provider, isDark),
+                              if (provider.isLoading &&
+                                  provider.displayItems.isEmpty)
+                                const SliverFillRemaining(
+                                  child: Center(
+                                    child: CircularProgressIndicator(),
                                   ),
-                                  child: Row(
-                                    children: [
-                                      Text(
-                                        "🔥 Ofertas Disponibles (${validBundles.length})",
-                                        style: TextStyle(
+                                )
+                              else if (provider.displayItems.isEmpty)
+                                SliverFillRemaining(
+                                  child: Center(
+                                    child: Column(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.center,
+                                      children: [
+                                        Icon(
+                                          Icons.search_off,
+                                          size: 80,
                                           color: isDark
-                                              ? Colors.white
-                                              : Colors.black87,
-                                          fontWeight: FontWeight.bold,
-                                          fontSize: 14,
-                                          letterSpacing: 0.5,
+                                              ? Colors.white10
+                                              : Colors.grey[300],
                                         ),
-                                      ),
-                                      const Spacer(),
-                                      Icon(
-                                        _isOffersExpanded
-                                            ? Icons.keyboard_arrow_up
-                                            : Icons.keyboard_arrow_down,
-                                        color: isDark
-                                            ? Colors.white
-                                            : Colors.black87,
-                                        size: 22,
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                              if (_isOffersExpanded)
-                                ListView.builder(
-                                  shrinkWrap: true,
-                                  physics: const NeverScrollableScrollPhysics(),
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 16,
-                                  ),
-                                  itemCount: validBundles.length,
-                                  itemBuilder: (ctx, i) {
-                                    final bundle = validBundles[i];
-                                    final maxStock = promoProv
-                                        .calculateBundleMaxStock(bundle.id);
-
-                                    IconData iconData = Icons.inventory_2;
-                                    Color iconColor = Colors.amberAccent;
-                                    String prefix = "Paquete";
-                                    if (bundle.tipoPromocion == 'flash') {
-                                      iconData = Icons.bolt;
-                                      iconColor = Colors.orangeAccent;
-                                      prefix = "Flash";
-                                    } else if (bundle.tipoPromocion ==
-                                        'liquidez_costo') {
-                                      iconData = Icons.water_drop;
-                                      iconColor = Colors.lightBlue;
-                                      prefix = "Liquidez";
-                                    } else if (bundle.tipoPromocion == '2x1') {
-                                      iconData = Icons.exposure_plus_2;
-                                      iconColor = Colors.green;
-                                      prefix = "2x1";
-                                    } else if (bundle.tipoPromocion ==
-                                        'volumen') {
-                                      iconData = Icons.shopping_cart;
-                                      iconColor = Colors.deepPurple;
-                                      prefix = "Mayoreo";
-                                    } else if (bundle.tipoPromocion ==
-                                        'escolar') {
-                                      iconData = Icons.school;
-                                      iconColor = Colors.teal;
-                                      prefix = "Escolar";
-                                    }
-
-                                    return Container(
-                                      margin: const EdgeInsets.only(bottom: 8),
-                                      padding: const EdgeInsets.all(12),
-                                      decoration: BoxDecoration(
-                                        color: isDark
-                                            ? Colors.white10
-                                            : Colors.white,
-                                        borderRadius: BorderRadius.circular(16),
-                                        boxShadow: isDark
-                                            ? []
-                                            : [
-                                                BoxShadow(
-                                                  color: Colors.black
-                                                      .withValues(alpha: 0.05),
-                                                  blurRadius: 4,
-                                                  offset: const Offset(0, 2),
-                                                ),
-                                              ],
-                                      ),
-                                      child: Row(
-                                        children: [
-                                          Container(
-                                            padding: const EdgeInsets.all(8),
-                                            decoration: BoxDecoration(
-                                              color: iconColor.withValues(
-                                                alpha: 0.15,
+                                        const SizedBox(height: 16),
+                                        Text(
+                                          "No se encontraron productos",
+                                          style: textTheme.displaySmall
+                                              ?.copyWith(
+                                                color: isDark
+                                                    ? Colors.grey[500]
+                                                    : Colors.grey[600],
                                               ),
-                                              shape: BoxShape.circle,
-                                            ),
-                                            child: Icon(
-                                              iconData,
-                                              color: iconColor,
-                                              size: 22,
-                                            ),
-                                          ),
-                                          const SizedBox(width: 12),
-                                          Expanded(
-                                            child: Column(
-                                              crossAxisAlignment:
-                                                  CrossAxisAlignment.start,
-                                              children: [
-                                                Text(
-                                                  bundle.nombrePaquete,
-                                                  style: TextStyle(
-                                                    color: isDark
-                                                        ? Colors.white
-                                                        : Colors.black87,
-                                                    fontWeight: FontWeight.bold,
-                                                    fontSize: 14,
-                                                  ),
-                                                ),
-                                                const SizedBox(height: 4),
-                                                if (bundle.descripcion !=
-                                                        null &&
-                                                    bundle
-                                                        .descripcion!
-                                                        .isNotEmpty) ...[
-                                                  Text(
-                                                    bundle.descripcion!,
-                                                    style: TextStyle(
-                                                      color: isDark
-                                                          ? Colors.white70
-                                                          : Colors.black54,
-                                                      fontSize: 11,
-                                                    ),
-                                                    maxLines: 2,
-                                                    overflow:
-                                                        TextOverflow.ellipsis,
-                                                  ),
-                                                  const SizedBox(height: 4),
-                                                ],
-                                                Row(
-                                                  children: [
-                                                    Container(
-                                                      padding:
-                                                          const EdgeInsets.symmetric(
-                                                            horizontal: 6,
-                                                            vertical: 2,
-                                                          ),
-                                                      decoration: BoxDecoration(
-                                                        color: iconColor
-                                                            .withValues(
-                                                              alpha: 0.15,
-                                                            ),
-                                                        borderRadius:
-                                                            BorderRadius.circular(
-                                                              4,
-                                                            ),
-                                                      ),
-                                                      child: Text(
-                                                        prefix,
-                                                        style: TextStyle(
-                                                          color: iconColor,
-                                                          fontSize: 10,
-                                                          fontWeight:
-                                                              FontWeight.bold,
-                                                        ),
-                                                      ),
-                                                    ),
-                                                    const SizedBox(width: 8),
-                                                    Text(
-                                                      currency.format(
-                                                        bundle.precioVentaTotal,
-                                                      ),
-                                                      style: TextStyle(
-                                                        color: isDark
-                                                            ? Colors.white
-                                                            : Colors.black87,
-                                                        fontWeight:
-                                                            FontWeight.bold,
-                                                        fontSize: 13,
-                                                      ),
-                                                    ),
-                                                    const SizedBox(width: 8),
-                                                    Text(
-                                                      "Stock: $maxStock",
-                                                      style: TextStyle(
-                                                        color: isDark
-                                                            ? Colors.white70
-                                                            : Colors.black54,
-                                                        fontSize: 11,
-                                                      ),
-                                                    ),
-                                                  ],
-                                                ),
-                                              ],
-                                            ),
-                                          ),
-                                          IconButton(
-                                            icon: Icon(
-                                              Icons.add_circle,
-                                              color: isDark
-                                                  ? Colors.blue[400]
-                                                  : Colors.blue[600],
-                                              size: 32,
-                                            ),
-                                            tooltip: "Agregar paquete...",
-                                            onPressed: () {
-                                              final mockProduct = Product(
-                                                id: 0,
-                                                nombre: bundle.nombrePaquete,
-                                                categoriaId: 0,
-                                                marcaNombre: "OFERTA",
-                                                imagenUrl: bundle.imagenUrl,
-                                              );
-                                              final mockPresentation =
-                                                  ProductPresentation(
-                                                    id: -(bundle
-                                                        .id), // ID negativo
-                                                    nombreEspecifico:
-                                                        bundle.descripcion !=
-                                                                null &&
-                                                            bundle
-                                                                .descripcion!
-                                                                .isNotEmpty
-                                                        ? bundle.descripcion
-                                                        : "Paquete",
-                                                    precioVentaFinal:
-                                                        bundle.precioVentaTotal,
-                                                    stockActual: maxStock,
-                                                    unidadVenta: "Paquete",
-                                                  );
-                                              final mockWrapper =
-                                                  InventoryWrapper(
-                                                    product: mockProduct,
-                                                    presentation:
-                                                        mockPresentation,
-                                                  );
-
-                                              _showAddBundleActionSheet(
-                                                context,
-                                                mockWrapper,
-                                                provider,
-                                                isDark,
-                                              );
-                                            },
-                                          ),
-                                        ],
-                                      ),
-                                    );
-                                  },
-                                ),
-                            ],
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-                ),
-
-                if (provider.isLoading && provider.displayItems.isEmpty)
-                  const SliverFillRemaining(
-                    child: Center(child: CircularProgressIndicator()),
-                  )
-                else if (provider.displayItems.isEmpty)
-                  SliverFillRemaining(
-                    child: Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(
-                            Icons.search_off,
-                            size: 80,
-                            color: isDark ? Colors.white10 : Colors.grey[300],
-                          ),
-                          const SizedBox(height: 16),
-                          Text(
-                            "No se encontraron productos",
-                            style: textTheme.displaySmall?.copyWith(
-                              color: isDark
-                                  ? Colors.grey[500]
-                                  : Colors.grey[600],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  )
-                else
-                  SliverPadding(
-                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
-                    sliver: SliverList.builder(
-                      itemCount: ((provider.displayItems.length + 1) ~/ 2) +
-                          (provider.isLoading ? 1 : 0),
-                      itemBuilder: (context, rowIndex) {
-                        final totalItems = provider.displayItems.length;
-                        final rowCount = (totalItems + 1) ~/ 2;
-
-                        if (rowIndex >= rowCount) {
-                          return const Center(
-                            child: Padding(
-                              padding: EdgeInsets.symmetric(vertical: 16),
-                              child: SizedBox(
-                                width: 30,
-                                height: 30,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 3,
-                                ),
-                              ),
-                            ),
-                          );
-                        }
-
-                        final index1 = rowIndex * 2;
-                        final index2 = index1 + 1;
-                        final item1 = provider.displayItems[index1];
-                        final item2 = index2 < totalItems
-                            ? provider.displayItems[index2]
-                            : null;
-
-                        return Padding(
-                          padding: const EdgeInsets.only(bottom: 12),
-                          child: IntrinsicHeight(
-                            child: Row(
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
-                              children: [
-                                Expanded(
-                                  child: CatalogItemCard(
-                                    item: item1,
-                                    isStoreMode: _isStoreMode,
-                                    onDetails: () =>
-                                        _showDetailModal(context, item1),
-                                    onPresentationDetails: (pres) =>
-                                        _showDetailModal(
-                                      context,
-                                      item1.copyWith(presentation: pres),
+                                        ),
+                                      ],
                                     ),
                                   ),
-                                ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: item2 != null
-                                      ? CatalogItemCard(
-                                          item: item2,
-                                          isStoreMode: _isStoreMode,
-                                          onDetails: () =>
-                                              _showDetailModal(context, item2),
-                                          onPresentationDetails: (pres) =>
-                                              _showDetailModal(
-                                            context,
-                                            item2.copyWith(presentation: pres),
-                                          ),
-                                        )
-                                      : const SizedBox.shrink(),
-                                ),
-                              ],
-                            ),
+                                )
+                              else
+                                _buildProductGridSliver(provider),
+                            ],
                           ),
-                        );
-                      },
+                        ),
+                      ),
                     ),
                   ),
                 ],
               ),
-            ),
+              const DeepNavReturnPill(isBottom: true),
+            ],
           ),
         ),
       ),
-    ],
-  ),
-  const DeepNavReturnPill(isBottom: true),
-],
-),
-),
-),
       bottomNavigationBar: _buildDynamicBottomBar(provider, isDark, auth),
     );
   }
 
-  Widget _buildDynamicBottomBar(
-    CatalogProvider prov,
-    bool isDark,
-    AuthProvider auth,
-  ) {
-    final effectiveBottom = InteractiveSheetWrapper.getEffectiveBottomPadding(context, minPadding: 8);
-    final int totalItems = prov.cartCount + prov.utilityCount;
-    final bool hasItems = totalItems > 0;
-    final bool isVisible = _isBottomMenuExpanded || (hasItems && _showBottomCart);
+  Widget _buildProductGridSliver(CatalogProvider provider) {
+    return SliverPadding(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
+      sliver: SliverList.builder(
+        itemCount:
+            ((provider.displayItems.length + 1) ~/ 2) +
+            (provider.isLoading ? 1 : 0),
+        itemBuilder: (context, rowIndex) {
+          final totalItems = provider.displayItems.length;
+          final rowCount = (totalItems + 1) ~/ 2;
 
-    final double barHeight = !_isBottomMenuExpanded
-        ? (56.0 + effectiveBottom)
-        : (116.0 + effectiveBottom);
-
-    Widget barContent;
-    if (!_isBottomMenuExpanded) {
-      barContent = Container(
-        height: 56 + effectiveBottom,
-        padding: EdgeInsets.only(bottom: effectiveBottom),
-        decoration: BoxDecoration(
-          color: isDark ? const Color(0xFF1A1A24) : Colors.white,
-          boxShadow: [
-            if (!isDark)
-              const BoxShadow(
-                color: Colors.black12,
-                blurRadius: 10,
-                offset: Offset(0, -2),
-              ),
-          ],
-        ),
-        child: InkWell(
-          onTap: () => setState(() => _isBottomMenuExpanded = true),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(
-                Icons.keyboard_arrow_up,
-                color: isDark ? Colors.blue[300] : Colors.blue[800],
-              ),
-              const SizedBox(width: 8),
-              Text(
-                auth.isCommunityClient
-                    ? "VER MI PEDIDO (${prov.utilityCount})"
-                    : "VER CARRITO Y LISTA ($totalItems)",
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 14,
-                  color: isDark ? Colors.blue[300] : Colors.blue[800],
-                ),
-              ),
-            ],
-          ),
-        ),
-      );
-    } else {
-      barContent = Container(
-        decoration: BoxDecoration(
-          color: isDark ? const Color(0xFF1A1A24) : Colors.white,
-          boxShadow: [
-            if (!isDark)
-              const BoxShadow(
-                color: Colors.black12,
-                blurRadius: 20,
-                offset: Offset(0, -5),
-              ),
-          ],
-          border: Border(
-            top: BorderSide(color: isDark ? Colors.white10 : Colors.transparent),
-          ),
-        ),
-        padding: EdgeInsets.only(bottom: effectiveBottom),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            InkWell(
-              onTap: () => setState(() => _isBottomMenuExpanded = false),
+          if (rowIndex >= rowCount) {
+            return const Center(
               child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 8),
-                child: Icon(
-                  Icons.keyboard_arrow_down,
-                  color: isDark ? Colors.grey[400] : Colors.grey,
+                padding: EdgeInsets.symmetric(vertical: 16),
+                child: SizedBox(
+                  width: 30,
+                  height: 30,
+                  child: CircularProgressIndicator(strokeWidth: 3),
                 ),
               ),
-            ),
-            Container(
-              height: 76,
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+            );
+          }
+
+          final index1 = rowIndex * 2;
+          final index2 = index1 + 1;
+          final item1 = provider.displayItems[index1];
+          final item2 = index2 < totalItems
+              ? provider.displayItems[index2]
+              : null;
+
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: IntrinsicHeight(
               child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   Expanded(
-                    child: _BottomSummaryBtn(
-                      icon: Icons.playlist_add_check,
-                      label: auth.isCommunityClient ? "Mi Pedido" : "Mi Lista",
-                      count: prov.utilityCount,
-                      total: prov.utilityTotal,
-                      color: Colors.orange,
-                      isDark: isDark,
-                      onTap: () {
-                        _showListPreview(context, false, isDark, auth);
-                      },
-                    ),
-                  ),
-                  if (!auth.isCommunityClient) ...[
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: _BottomSummaryBtn(
-                        icon: Icons.shopping_cart,
-                        label: "Caja Rápida",
-                        count: prov.cartCount,
-                        total: prov.cartTotal,
-                        color: Colors.green,
-                        isDark: isDark,
-                        onTap: () =>
-                            _showListPreview(context, true, isDark, auth),
+                    child: CatalogItemCard(
+                      item: item1,
+                      isStoreMode: _isStoreMode,
+                      onDetails: () => _showDetailModal(context, item1),
+                      onPresentationDetails: (pres) => _showDetailModal(
+                        context,
+                        item1.copyWith(presentation: pres),
                       ),
                     ),
-                  ],
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: item2 != null
+                        ? CatalogItemCard(
+                            item: item2,
+                            isStoreMode: _isStoreMode,
+                            onDetails: () => _showDetailModal(context, item2),
+                            onPresentationDetails: (pres) => _showDetailModal(
+                              context,
+                              item2.copyWith(presentation: pres),
+                            ),
+                          )
+                        : const SizedBox.shrink(),
+                  ),
                 ],
               ),
             ),
-          ],
-        ),
-      );
-    }
-
-    return KeyedSubtree(
-      key: _tourKeys.cartActionKey,
-      child: AnimatedSlide(
-        offset: isVisible ? Offset.zero : const Offset(0, 1.0),
-        duration: const Duration(milliseconds: 280),
-        curve: Curves.easeInOutCubic,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 280),
-          curve: Curves.easeInOutCubic,
-          height: isVisible ? barHeight : 0.0,
-          clipBehavior: Clip.hardEdge,
-          decoration: const BoxDecoration(),
-          child: SingleChildScrollView(
-            physics: const NeverScrollableScrollPhysics(),
-            child: barContent,
-          ),
-        ),
-      ),
-    );
-  }
-
-  void _showAddBundleActionSheet(
-    BuildContext context,
-    InventoryWrapper mockWrapper,
-    CatalogProvider provider,
-    bool isDark,
-  ) {
-    InteractiveSheetWrapper.show(
-      context: context,
-      builder: (ctx) => InteractiveSheetWrapper(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                "¿Dónde deseas guardar esta oferta?",
-                style: TextStyle(
-                  fontWeight: FontWeight.w900,
-                  fontSize: 18,
-                  color: isDark ? Colors.white : Colors.black87,
-                ),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 8),
-              Text(
-                mockWrapper.product.nombre,
-                style: TextStyle(
-                  fontSize: 14,
-                  color: isDark ? Colors.blue[300] : Colors.blue[700],
-                  fontWeight: FontWeight.bold,
-                ),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 24),
-
-              _ActionSheetButton(
-                icon: Icons.shopping_cart,
-                title: "Caja Rápida",
-                subtitle: "Venta inmediata al contado",
-                color: Colors.green,
-                isDark: isDark,
-                onTap: () {
-                  Navigator.pop(ctx);
-                  provider.addToCart(mockWrapper, 1);
-                  CustomSnackBar.show(
-                    context,
-                    message: "Agregado a caja rápida",
-                    isError: false,
-                  );
-                  setState(() => _isBottomMenuExpanded = true);
-                },
-              ),
-              const SizedBox(height: 12),
-              _ActionSheetButton(
-                icon: Icons.assignment,
-                title: "Lista Cotizada",
-                subtitle: "Guardar para proforma o pedido",
-                color: Colors.orange,
-                isDark: isDark,
-                onTap: () {
-                  Navigator.pop(ctx);
-                  provider.addToUtilityList(mockWrapper, 1);
-                  CustomSnackBar.show(
-                    context,
-                    message: "Agregado a lista cotizada",
-                    isError: false,
-                  );
-                  setState(() => _isBottomMenuExpanded = true);
-                },
-              ),
-              const SizedBox(height: 8),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _ActionSheetButton extends StatelessWidget {
-  final IconData icon;
-  final String title;
-  final String subtitle;
-  final MaterialColor color;
-  final bool isDark;
-  final VoidCallback onTap;
-
-  const _ActionSheetButton({
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-    required this.color,
-    required this.isDark,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: isDark ? color.withValues(alpha: 0.1) : color[50],
-      borderRadius: BorderRadius.circular(16),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(16),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: isDark
-                  ? color.withValues(alpha: 0.3)
-                  : color.withValues(alpha: 0.3),
-            ),
-          ),
-          child: Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: isDark ? color.withValues(alpha: 0.2) : Colors.white,
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(
-                  icon,
-                  color: isDark ? color[300] : color[700],
-                  size: 28,
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16,
-                        color: isDark ? color[200] : color[900],
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      subtitle,
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: isDark ? Colors.grey[400] : Colors.grey[600],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Icon(
-                Icons.chevron_right,
-                color: isDark ? Colors.grey[600] : Colors.grey[400],
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _BottomSummaryBtn extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final int count;
-  final double total;
-  final MaterialColor color;
-  final bool isDark;
-  final VoidCallback onTap;
-
-  const _BottomSummaryBtn({
-    required this.icon,
-    required this.label,
-    required this.count,
-    required this.total,
-    required this.color,
-    required this.isDark,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: isDark ? color.withValues(alpha: 0.15) : color[50],
-      borderRadius: BorderRadius.circular(16),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(16),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: isDark
-                  ? color.withValues(alpha: 0.4)
-                  : color.withValues(alpha: 0.3),
-              width: 1.5,
-            ),
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: isDark ? color.withValues(alpha: 0.2) : Colors.white,
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(
-                  icon,
-                  color: isDark ? color[300] : color[800],
-                  size: 22,
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      "$label ($count)",
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        color: isDark ? color[200] : color[800],
-                        fontSize: 11,
-                        letterSpacing: 0.5,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    FittedBox(
-                      fit: BoxFit.scaleDown,
-                      child: Text(
-                        "S/ ${total.toStringAsFixed(2)}",
-                        style: TextStyle(
-                          fontWeight: FontWeight.w900,
-                          color: isDark ? Colors.white : Colors.black87,
-                          fontSize: 16,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
+          );
+        },
       ),
     );
   }
