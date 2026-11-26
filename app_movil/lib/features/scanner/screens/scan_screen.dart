@@ -1,32 +1,35 @@
+import 'dart:async';
+import 'dart:io';
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
-import 'dart:io';
-import 'dart:async';
-import 'dart:math' as math;
 
 // Providers
-import 'package:app_movil/features/smart_quotation/providers/smart_quotation_provider.dart';
-import 'package:app_movil/features/scanner/providers/scanner_provider.dart';
 import 'package:app_movil/core/providers/auth_provider.dart';
+import 'package:app_movil/core/providers/license_provider.dart';
+import 'package:app_movil/features/scanner/providers/scanner_provider.dart';
+import 'package:app_movil/features/smart_quotation/providers/smart_quotation_provider.dart';
 
 // Pantallas de Destino
-import 'package:app_movil/features/smart_quotation/screens/extraction_result_screen.dart';
-import 'package:app_movil/features/scanner/screens/invoice_review_screen.dart';
-import 'package:app_movil/features/scanner/screens/invoice_history_screen.dart';
-
-// Widgets
-import 'package:app_movil/core/widgets/info_tooltip_button.dart';
-
-// 🔥 IMPORT DE SEGURIDAD Y HARDWARE
-import 'package:app_movil/core/utils/hardware_validator.dart';
-import 'package:app_movil/features/scanner/widgets/shared/scanning_dialog.dart';
-import 'package:app_movil/core/providers/license_provider.dart';
 import 'package:app_movil/features/profile/screens/ai_settings_screen.dart';
+import 'package:app_movil/features/scanner/screens/invoice_history_screen.dart';
+import 'package:app_movil/features/scanner/screens/invoice_review_screen.dart';
+import 'package:app_movil/features/smart_quotation/screens/extraction_result_screen.dart';
+
+// Widgets, seguridad y tour
 import 'package:app_movil/core/services/tour/interactive_tour_service.dart';
+import 'package:app_movil/core/utils/hardware_validator.dart';
+import 'package:app_movil/core/widgets/info_tooltip_button.dart';
 import 'package:app_movil/core/widgets/tour/configs/invoice_scan_tour.dart';
 import 'package:app_movil/core/widgets/tour/configs/quotation_scan_tour.dart';
+import 'package:app_movil/features/scanner/widgets/shared/scanning_dialog.dart';
+
+part 'scan/scan_actions_and_modals.dart';
+part 'scan/scan_quotation_and_error_panels.dart';
+part 'scan/scan_invoice_panel.dart';
 
 class ScanScreen extends StatefulWidget {
   final ScanMode mode;
@@ -52,10 +55,15 @@ class _ScanScreenState extends State<ScanScreen>
   late final InvoiceScanTourKeys _invoiceTourKeys;
   late final QuotationScanTourKeys _quotationTourKeys;
 
-  // 🔥 FASE 1: Caché de Imagen y Estado de Error
+  // Caché de Imagen y Estado de Error
   File? _cachedImageFile;
   bool _hasError = false;
   String _errorMessage = "";
+
+  void _refreshState(VoidCallback fn) {
+    if (!mounted) return;
+    setState(fn);
+  }
 
   @override
   void initState() {
@@ -94,295 +102,72 @@ class _ScanScreenState extends State<ScanScreen>
     );
   }
 
-  void _showExplorationModal(
-    BuildContext context,
-    bool isQuotation,
-    bool isDark,
-  ) {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: isDark ? const Color(0xFF23232F) : Colors.white,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Row(
-          children: [
-            Icon(Icons.explore, color: Colors.orange[400]),
-            const SizedBox(width: 10),
-            const Text(
-              "Modo Exploración",
-              style: TextStyle(fontWeight: FontWeight.bold),
+  List<Widget> _buildAppBarActions(BuildContext context, bool isQuotation) {
+    if (isQuotation) {
+      return [
+        InfoTooltipButton(
+          title: "Escanear Lista",
+          description:
+              "Digitaliza listas de compras, pedidos al por mayor o requerimientos escolares a partir de fotos o documentos con Inteligencia Artificial.",
+          onStartInteractiveTour: () => _startQuotationTour(context),
+          tips: const [
+            InfoTip(
+              icon: Icons.tune_rounded,
+              text:
+                  "Reconoce automáticamente listas de compras, pedidos y escolares.",
+            ),
+            InfoTip(
+              icon: Icons.camera_alt_outlined,
+              text:
+                  "Captura fotos en papel o importa imágenes recibidas por WhatsApp.",
+            ),
+            InfoTip(
+              icon: Icons.person_search_outlined,
+              text:
+                  "Asigna la cotización al instante a clientes registrados o nuevos.",
             ),
           ],
         ),
-        content: Text(
-          isQuotation
-              ? "Esta es una de nuestras funciones estrella. Al registrar tu negocio, esta pantalla te permitirá usar Inteligencia Artificial para extraer los útiles de una foto y cotizarlos automáticamente.\n\nDirígete a tu Perfil para crear tu negocio y activar la IA."
-              : "Aquí podrás usar la cámara para escanear tus facturas de compra. El sistema leerá los productos y repondrá tu inventario automáticamente.\n\nDirígete a tu Perfil para crear tu negocio y usar esta función.",
-          style: TextStyle(
-            color: isDark ? Colors.grey[300] : Colors.grey[700],
-            fontSize: 16,
-            height: 1.4,
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text(
-              "Entendido",
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+        const SizedBox(width: 4),
+      ];
+    }
+
+    return [
+      IconButton(
+        key: _invoiceTourKeys.historyButtonKey,
+        tooltip: 'Historial de Facturas',
+        icon: const Icon(Icons.receipt_long_rounded),
+        onPressed: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => const InvoiceHistoryScreen(),
             ),
+          );
+        },
+      ),
+      InfoTooltipButton(
+        title: "Escanear Factura",
+        description:
+            "Digitaliza facturas físicas y boletas de compra de tus proveedores con Inteligencia Artificial para actualizar tu stock y costos al instante.",
+        onStartInteractiveTour: () => _startInvoiceTour(context),
+        tips: const [
+          InfoTip(
+            icon: Icons.camera_alt_outlined,
+            text: "Toma la foto directamente desde arriba con buena luz.",
+          ),
+          InfoTip(
+            icon: Icons.payments_outlined,
+            text: "Revisa precios unitarios y márgenes antes de confirmar.",
+          ),
+          InfoTip(
+            icon: Icons.sync_rounded,
+            text: "El inventario se repone automáticamente al guardar.",
           ),
         ],
       ),
-    );
-  }
-
-  // Llama al ImagePicker y procesa
-  Future<void> _pickImage(ImageSource source) async {
-    final auth = Provider.of<AuthProvider>(context, listen: false);
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
-    if (auth.activeBusinessId == null) {
-      _showExplorationModal(context, widget.mode == ScanMode.quotation, isDark);
-      return;
-    }
-
-    bool isInternetStable = await HardwareValidator.checkInternet(
-      context,
-      onNavigateToManual: () {
-        Navigator.pushReplacementNamed(context, '/manual_quotation');
-      },
-    );
-
-    if (!isInternetStable) return;
-
-    try {
-      final XFile? photo = await _picker.pickImage(
-        source: source,
-        maxWidth: 1920,
-        maxHeight: 1920,
-        imageQuality: 90,
-      );
-
-      if (photo == null) return;
-
-      setState(() {
-        _cachedImageFile = File(photo.path);
-        _hasError = false;
-        _errorMessage = "";
-      });
-
-      _processImage();
-    } catch (e) {
-      debugPrint("Error al seleccionar imagen: $e");
-    }
-  }
-
-  // Usa la foto de la caché y procesa
-  Future<void> _retryWithCachedImage() async {
-    if (_cachedImageFile == null) return;
-    setState(() {
-      _hasError = false;
-      _errorMessage = "";
-    });
-    _processImage();
-  }
-
-  // Limpia caché y vuelve a pedir foto
-  void _pickNewImage() {
-    setState(() {
-      _cachedImageFile = null;
-      _hasError = false;
-      _errorMessage = "";
-    });
-  }
-
-  Future<void> _processImage() async {
-    if (_cachedImageFile == null) return;
-
-    if (!mounted) return;
-
-    // 🛡️ Verificación defensiva de cuota IA
-    final licenseProv = Provider.of<LicenseProvider?>(context, listen: false);
-    if (licenseProv != null) {
-      final canScan = await licenseProv.canPerformAiScan();
-      if (!canScan) {
-        if (mounted) {
-          final isByokSelected = licenseProv.isUsingByokMode;
-          showDialog(
-            context: context,
-            builder: (_) => AlertDialog(
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-              title: const Row(
-                children: [
-                  Icon(Icons.warning_amber_rounded, color: Colors.amber),
-                  SizedBox(width: 8),
-                  Text("Límite de Cuota IA"),
-                ],
-              ),
-              content: Text(
-                isByokSelected
-                    ? "Tienes seleccionado el modo Clave Propia (BYOK), pero aún no has registrado una API Key válida de Google AI Studio. Ingresa tu clave para continuar o cambia a Cuota Incluida en ajustes."
-                    : "Has agotado tu bolsa de escaneos IA disponibles (${licenseProv.remainingAiScans} restantes). Puedes ingresar tu propia clave gratuita de Google AI Studio (BYOK) para seguir escaneando sin límites o recargar tu bolsa.",
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text("Cerrar"),
-                ),
-                ElevatedButton(
-                  onPressed: () {
-                    Navigator.pop(context);
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (_) => const AiSettingsScreen()),
-                    );
-                  },
-                  child: Text(isByokSelected ? "Configurar Clave" : "Configurar Clave Propia"),
-                ),
-              ],
-            ),
-          );
-        }
-        return;
-      }
-      if (!mounted) return;
-    }
-
-    final ValueNotifier<String> statusNotifier = ValueNotifier<String>(
-      widget.mode == ScanMode.quotation
-          ? "Preparando imagen..."
-          : "Preparando documento...",
-    );
-
-    bool isCancelled = false;
-
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      barrierColor: Colors.black.withValues(alpha: 0.7),
-      builder: (ctx) => ScanningDialog(
-        mode: widget.mode,
-        statusNotifier: statusNotifier,
-        onCancel: () {
-          isCancelled = true;
-          if (mounted) Navigator.pop(ctx);
-        },
-      ),
-    );
-
-    // 🔥 Lógica dinámica de textos de carga progresiva (Narrativa transparente)
-    int tick = 0;
-    Timer? loadingTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      tick++;
-      // Si el servicio emitió un mensaje prioritario de cascada o reintento, mantenerlo visible
-      final current = statusNotifier.value;
-      if (current.contains("Conmutando") ||
-          current.contains("Límite") ||
-          current.contains("Servidor") ||
-          current.contains("Reintentando") ||
-          current.contains("demanda")) {
-        return;
-      }
-
-      if (tick <= 2) {
-        statusNotifier.value = widget.mode == ScanMode.quotation
-            ? "Optimizando nitidez y legibilidad de la lista o pedido..."
-            : "Optimizando nitidez y resolución del comprobante...";
-      } else if (tick <= 9) {
-        statusNotifier.value = "Conectando con Agente IA (Gemini 3.8 Flash)...";
-      } else if (tick <= 22) {
-        statusNotifier.value = widget.mode == ScanMode.quotation
-            ? "Leyendo productos, marcas, empaques y cantidades requeridas..."
-            : "Leyendo detalle de productos, códigos y precios...";
-      } else if (tick <= 45) {
-        statusNotifier.value = widget.mode == ScanMode.quotation
-            ? "Normalizando nombres, unidades y presentaciones..."
-            : "Deduciendo empaques, fracciones y cálculos contables...";
-      } else if (tick <= 68) {
-        statusNotifier.value = "Estructurando catálogo con máxima precisión...";
-      } else {
-        statusNotifier.value = "Finalizando análisis exhaustivo, casi listo...";
-      }
-    });
-
-    bool success = false;
-    String errorMsg = "";
-
-    VoidCallback? smartListener;
-    VoidCallback? scannerListener;
-
-    final smartProvider = widget.mode == ScanMode.quotation
-        ? Provider.of<SmartQuotationProvider>(context, listen: false)
-        : null;
-    final scannerProvider = widget.mode != ScanMode.quotation
-        ? Provider.of<ScannerProvider>(context, listen: false)
-        : null;
-
-    try {
-      if (widget.mode == ScanMode.quotation) {
-        smartListener = () {
-          final msg = smartProvider!.errorMessage.trim();
-          if (msg.isNotEmpty && mounted) {
-            statusNotifier.value = msg;
-          }
-        };
-        smartProvider!.addListener(smartListener);
-        success = await smartProvider.analyzeImage(context, _cachedImageFile!);
-        errorMsg = smartProvider.errorMessage;
-      } else {
-        scannerListener = () {
-          final msg = scannerProvider!.statusMessage.trim();
-          if (msg.isNotEmpty && mounted) {
-            statusNotifier.value = msg;
-          }
-        };
-        scannerProvider!.addListener(scannerListener);
-        success = await scannerProvider.uploadAndAnalyzeImage(
-          _cachedImageFile!,
-        );
-        errorMsg = scannerProvider.statusMessage;
-      }
-    } finally {
-      if (smartListener != null) smartProvider?.removeListener(smartListener);
-      if (scannerListener != null) {
-        scannerProvider?.removeListener(scannerListener);
-      }
-
-      loadingTimer.cancel();
-      statusNotifier.dispose();
-      if (!isCancelled && mounted) {
-        Navigator.pop(context); // Cierra dialog
-      }
-    }
-
-    if (isCancelled) {
-      return; // El usuario canceló conscientemente la espera
-    }
-
-    if (success && mounted) {
-      if (licenseProv != null) {
-        await licenseProv.consumeAiScan();
-      }
-      if (!mounted) return;
-      if (widget.mode == ScanMode.quotation) {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (_) => const ExtractionResultScreen()),
-        );
-      } else {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (_) => const InvoiceReviewScreen()),
-        );
-      }
-    } else if (mounted) {
-      // 🔥 FASE 2: Mostramos el error en la misma pantalla en vez del SnackBar
-      setState(() {
-        _hasError = true;
-        _errorMessage = errorMsg;
-      });
-    }
+      const SizedBox(width: 4),
+    ];
   }
 
   @override
@@ -412,69 +197,7 @@ class _ScanScreenState extends State<ScanScreen>
         elevation: 0,
         foregroundColor: isDark ? Colors.white : Colors.black87,
         centerTitle: true,
-        actions: isQuotation
-            ? [
-                InfoTooltipButton(
-                  title: "Escanear Lista",
-                  description:
-                      "Digitaliza listas de compras, pedidos al por mayor o requerimientos escolares a partir de fotos o documentos con Inteligencia Artificial.",
-                  onStartInteractiveTour: () => _startQuotationTour(context),
-                  tips: const [
-                    InfoTip(
-                      icon: Icons.tune_rounded,
-                      text:
-                          "Reconoce automáticamente listas de compras, pedidos y escolares.",
-                    ),
-                    InfoTip(
-                      icon: Icons.camera_alt_outlined,
-                      text:
-                          "Captura fotos en papel o importa imágenes recibidas por WhatsApp.",
-                    ),
-                    InfoTip(
-                      icon: Icons.person_search_outlined,
-                      text:
-                          "Asigna la cotización al instante a clientes registrados o nuevos.",
-                    ),
-                  ],
-                ),
-                const SizedBox(width: 4),
-              ]
-            : [
-                IconButton(
-                  key: _invoiceTourKeys.historyButtonKey,
-                  tooltip: 'Historial de Facturas',
-                  icon: const Icon(Icons.receipt_long_rounded),
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => const InvoiceHistoryScreen(),
-                      ),
-                    );
-                  },
-                ),
-                InfoTooltipButton(
-                  title: "Escanear Factura",
-                  description:
-                      "Digitaliza facturas físicas y boletas de compra de tus proveedores con Inteligencia Artificial para actualizar tu stock y costos al instante.",
-                  onStartInteractiveTour: () => _startInvoiceTour(context),
-                  tips: const [
-                    InfoTip(
-                      icon: Icons.camera_alt_outlined,
-                      text: "Toma la foto directamente desde arriba con buena luz.",
-                    ),
-                    InfoTip(
-                      icon: Icons.payments_outlined,
-                      text: "Revisa precios unitarios y márgenes antes de confirmar.",
-                    ),
-                    InfoTip(
-                      icon: Icons.sync_rounded,
-                      text: "El inventario se repone automáticamente al guardar.",
-                    ),
-                  ],
-                ),
-                const SizedBox(width: 4),
-              ],
+        actions: _buildAppBarActions(context, isQuotation),
       ),
       body: SafeArea(
         top: false,
@@ -506,797 +229,18 @@ class _ScanScreenState extends State<ScanScreen>
                 child: _hasError
                     ? _buildErrorPanel(isDark, mainColor)
                     : (isQuotation
-                        ? _buildQuotationMainPanel(
-                            isDark,
-                            mainColor,
-                            mainIcon,
-                            subtitle,
-                            isGuest,
-                          )
-                        : _buildInvoiceMainPanel(isDark, isGuest)),
+                          ? _buildQuotationMainPanel(
+                              isDark,
+                              mainColor,
+                              mainIcon,
+                              subtitle,
+                              isGuest,
+                            )
+                          : _buildInvoiceMainPanel(isDark, isGuest)),
               ),
             ),
           ),
         ),
-      ),
-    );
-  }
-
-  // 🔥 FASE 2: Panel integrado de Error
-  Widget _buildErrorPanel(bool isDark, Color mainColor) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      key: const ValueKey("error_panel"),
-      children: [
-        Container(
-          padding: const EdgeInsets.all(24),
-          decoration: BoxDecoration(
-            color: Colors.red.withValues(alpha: 0.15),
-            shape: BoxShape.circle,
-            boxShadow: [
-              if (!isDark)
-                BoxShadow(
-                  color: Colors.red.withValues(alpha: 0.1),
-                  blurRadius: 25,
-                  spreadRadius: 5,
-                ),
-            ],
-          ),
-          child: Icon(
-            Icons.error_outline_rounded,
-            size: 70,
-            color: Colors.red[400],
-          ),
-        ),
-        const SizedBox(height: 30),
-
-        Text(
-          "No pudimos procesar la imagen",
-          style: TextStyle(
-            fontSize: 24,
-            fontWeight: FontWeight.w900,
-            color: isDark ? Colors.white : Colors.black87,
-            letterSpacing: -0.5,
-          ),
-        ),
-
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 16),
-          child: Text(
-            _errorMessage,
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              color: isDark ? Colors.grey[300] : Colors.grey[700],
-              fontSize: 16,
-              height: 1.5,
-            ),
-          ),
-        ),
-
-        const SizedBox(height: 20),
-
-        // Botón Primario: Reintentar
-        SizedBox(
-          width: 280,
-          height: 56,
-          child: ElevatedButton.icon(
-            icon: const Icon(Icons.refresh_rounded, size: 24),
-            label: const Text(
-              "Reintentar Escaneo",
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-            ),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: mainColor,
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-              ),
-              elevation: 4,
-              shadowColor: mainColor.withValues(alpha: 0.4),
-            ),
-            onPressed: _retryWithCachedImage,
-          ),
-        ),
-
-        const SizedBox(height: 16),
-
-        // Botón Secundario: Nueva Foto
-        SizedBox(
-          width: 280,
-          height: 50,
-          child: OutlinedButton.icon(
-            icon: const Icon(Icons.camera_alt_outlined, size: 20),
-            label: const Text(
-              "Escanear una nueva foto",
-              style: TextStyle(fontWeight: FontWeight.bold),
-            ),
-            style: OutlinedButton.styleFrom(
-              foregroundColor: isDark ? Colors.grey[300] : Colors.grey[700],
-              side: BorderSide(
-                color: isDark ? Colors.grey[700]! : Colors.grey[300]!,
-                width: 2,
-              ),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(14),
-              ),
-            ),
-            onPressed: _pickNewImage,
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildQuotationMainPanel(
-    bool isDark,
-    Color mainColor,
-    IconData mainIcon,
-    String subtitle,
-    bool isGuest,
-  ) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      key: const ValueKey("main_panel_quotation"),
-      children: [
-        KeyedSubtree(
-          key: _quotationTourKeys.clientHintKey,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                padding: const EdgeInsets.all(22),
-                decoration: BoxDecoration(
-                  color: isDark
-                      ? mainColor.withValues(alpha: 0.15)
-                      : mainColor.withValues(alpha: 0.1),
-                  shape: BoxShape.circle,
-                  boxShadow: [
-                    if (!isDark)
-                      BoxShadow(
-                        color: mainColor.withValues(alpha: 0.1),
-                        blurRadius: 20,
-                        spreadRadius: 3,
-                      ),
-                  ],
-                ),
-                child: Icon(
-                  mainIcon,
-                  size: 60,
-                  color: isDark ? mainColor.withValues(alpha: 0.9) : mainColor,
-                ),
-              ),
-              const SizedBox(height: 24),
-
-              Text(
-                "Digitaliza tu Lista",
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 26,
-                  fontWeight: FontWeight.w900,
-                  color: isDark ? Colors.white : Colors.black87,
-                  letterSpacing: -0.5,
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
-                child: Text(
-                  subtitle,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: isDark ? Colors.grey[400] : Colors.grey[600],
-                    fontSize: 14,
-                    height: 1.4,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-
-        // 🏷️ Chips informativos de escenarios multi-rubro soportados (sin emojis crudos)
-        Padding(
-          padding: const EdgeInsets.only(top: 4, bottom: 8),
-          child: KeyedSubtree(
-            key: _quotationTourKeys.scenariosKey,
-            child: Wrap(
-              alignment: WrapAlignment.center,
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                _buildScenarioPill(
-                  icon: Icons.shopping_bag_outlined,
-                  label: "Compras / Pedido",
-                  color: Colors.blue,
-                  isDark: isDark,
-                ),
-                _buildScenarioPill(
-                  icon: Icons.storefront_rounded,
-                  label: "Mayorista / Negocio",
-                  color: Colors.teal,
-                  isDark: isDark,
-                ),
-                _buildScenarioPill(
-                  icon: Icons.school_outlined,
-                  label: "Lista Escolar",
-                  color: Colors.orange,
-                  isDark: isDark,
-                ),
-              ],
-            ),
-          ),
-        ),
-
-        if (isGuest)
-          Container(
-            margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: Colors.orange.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: Colors.orange.withValues(alpha: 0.5)),
-            ),
-            child: Row(
-              children: [
-                Icon(Icons.info_outline, color: Colors.orange[700]),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    "Estás en Modo Exploración. Explora la interfaz visual, pero para procesar imágenes necesitas registrar tu negocio.",
-                    style: TextStyle(
-                      color: isDark ? Colors.orange[200] : Colors.orange[900],
-                      fontSize: 12.5,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-        const SizedBox(height: 24),
-
-        KeyedSubtree(
-          key: _quotationTourKeys.captureActionsKey,
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 320),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Expanded(
-                  child: _bigButton(
-                    icon: Icons.camera_alt_rounded,
-                    label: "Cámara",
-                    color: mainColor,
-                    isDark: isDark,
-                    onTap: () => _pickImage(ImageSource.camera),
-                  ),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: _bigButton(
-                    icon: Icons.photo_library_rounded,
-                    label: "Galería",
-                    color: Colors.orange,
-                    isDark: isDark,
-                    onTap: () => _pickImage(ImageSource.gallery),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildInvoiceMainPanel(bool isDark, bool isGuest) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      key: const ValueKey("main_panel_invoice"),
-      children: [
-        // 1. Tarjeta Hero Moderna con Badge en Vivo de Escaneos IA
-        KeyedSubtree(
-          key: _invoiceTourKeys.heroQuotaKey,
-          child: Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: isDark
-                  ? [const Color(0xFF0D2928), const Color(0xFF13222B)]
-                  : [const Color(0xFFE6F7F5), const Color(0xFFF0FDF8)],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-            borderRadius: BorderRadius.circular(22),
-            border: Border.all(
-              color: isDark
-                  ? Colors.teal.withValues(alpha: 0.35)
-                  : Colors.teal.shade300.withValues(alpha: 0.5),
-              width: 1.5,
-            ),
-            boxShadow: [
-              if (!isDark)
-                BoxShadow(
-                  color: Colors.teal.withValues(alpha: 0.08),
-                  blurRadius: 16,
-                  offset: const Offset(0, 6),
-                ),
-            ],
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.teal.withValues(alpha: 0.15),
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(
-                  Icons.receipt_long_rounded,
-                  size: 34,
-                  color: isDark ? Colors.tealAccent : Colors.teal.shade700,
-                ),
-              ),
-              const SizedBox(height: 10),
-              Text(
-                "Procesa tu Compra",
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.w900,
-                  color: isDark ? Colors.white : const Color(0xFF1E293B),
-                  letterSpacing: -0.4,
-                ),
-              ),
-              const SizedBox(height: 5),
-              Text(
-                "Digitaliza tu factura o boleta de proveedor y actualiza tu stock automáticamente.",
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 13,
-                  color: isDark ? Colors.grey[300] : Colors.grey[700],
-                  height: 1.35,
-                ),
-              ),
-              const SizedBox(height: 12),
-              // Badge Reactivo de Cuota IA (nullable-safe)
-              Builder(
-                builder: (ctx) {
-                  final licenseProv = Provider.of<LicenseProvider?>(ctx);
-                  final isByok = licenseProv != null &&
-                      (licenseProv.isUsingByokMode || licenseProv.isUsingCustomApiKey);
-                  final remaining = licenseProv?.remainingAiScans ?? 0;
-                  final isLow = remaining <= 5;
-
-                  final MaterialColor badgeColor = isByok
-                      ? Colors.purple
-                      : (isLow ? Colors.amber : Colors.teal);
-
-                  final String badgeText = isByok
-                      ? "IA Ilimitada (Clave Propia)"
-                      : (licenseProv == null
-                          ? "IA Oficial Activa"
-                          : "$remaining ${remaining == 1 ? 'escaneo IA disponible' : 'escaneos IA disponibles'}");
-
-                  return Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
-                    decoration: BoxDecoration(
-                      color: badgeColor.withValues(alpha: isDark ? 0.2 : 0.12),
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(
-                        color: badgeColor.withValues(alpha: isDark ? 0.45 : 0.35),
-                      ),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          isByok ? Icons.key_rounded : Icons.auto_awesome_rounded,
-                          size: 14,
-                          color: isDark ? badgeColor.shade200 : badgeColor.shade800,
-                        ),
-                        const SizedBox(width: 6),
-                        Text(
-                          badgeText,
-                          style: TextStyle(
-                            fontSize: 11.5,
-                            fontWeight: FontWeight.w700,
-                            color: isDark ? badgeColor.shade200 : badgeColor.shade900,
-                          ),
-                        ),
-                      ],
-                    ),
-                  );
-                },
-              ),
-            ],
-          ),
-        ),
-      ),
-
-        if (isGuest) ...[
-          const SizedBox(height: 12),
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: Colors.orange.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: Colors.orange.withValues(alpha: 0.5)),
-            ),
-            child: Row(
-              children: [
-                Icon(Icons.info_outline, color: Colors.orange[700]),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    "Estás en Modo Exploración. Explora la interfaz visual, pero para procesar imágenes necesitas registrar tu negocio.",
-                    style: TextStyle(
-                      color: isDark ? Colors.orange[200] : Colors.orange[900],
-                      fontSize: 12,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-
-        const SizedBox(height: 16),
-
-        // 2. Tarjetas Interactivas de Acción Primaria (Cámara y Galería)
-        Row(
-          children: [
-            Expanded(
-              child: KeyedSubtree(
-                key: _invoiceTourKeys.cameraCardKey,
-                child: _buildActionCard(
-                  icon: Icons.camera_alt_rounded,
-                  title: "Cámara",
-                  subtitle: "Toma una foto nítida de la factura",
-                  color: Colors.teal,
-                  isDark: isDark,
-                  onTap: () {
-                    HapticFeedback.lightImpact();
-                    _pickImage(ImageSource.camera);
-                  },
-                ),
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: KeyedSubtree(
-                key: _invoiceTourKeys.galleryCardKey,
-                child: _buildActionCard(
-                  icon: Icons.photo_library_rounded,
-                  title: "Galería",
-                  subtitle: "Sube una imagen o captura guardada",
-                  color: Colors.orange.shade800,
-                  isDark: isDark,
-                  onTap: () {
-                    HapticFeedback.lightImpact();
-                    _pickImage(ImageSource.gallery);
-                  },
-                ),
-              ),
-            ),
-          ],
-        ),
-
-        const SizedBox(height: 20),
-
-        // 3. Bloque Inferior Pedagógico y de Valor Real (CERO emojis crudos)
-        Row(
-          children: [
-            Icon(
-              Icons.auto_awesome_rounded,
-              size: 18,
-              color: isDark ? Colors.tealAccent : Colors.teal.shade700,
-            ),
-            const SizedBox(width: 8),
-            Text(
-              "¿Qué procesa la IA automáticamente?",
-              style: TextStyle(
-                fontSize: 14.5,
-                fontWeight: FontWeight.bold,
-                color: isDark ? Colors.white : const Color(0xFF1E293B),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 10),
-
-        _buildFeatureRow(
-          icon: Icons.inventory_2_outlined,
-          color: Colors.blue,
-          title: "Ítems y Cantidades",
-          description: "Detecta cada producto y sus unidades de compra.",
-          isDark: isDark,
-        ),
-        _buildFeatureRow(
-          icon: Icons.payments_outlined,
-          color: Colors.green,
-          title: "Costos y Márgenes",
-          description: "Calcula el costo unitario y ayuda a definir tu precio de venta.",
-          isDark: isDark,
-        ),
-        _buildFeatureRow(
-          icon: Icons.sync_rounded,
-          color: Colors.purple,
-          title: "Reposición Directa",
-          description: "Actualiza tu inventario al confirmar sin digitar uno por uno.",
-          isDark: isDark,
-        ),
-
-        const SizedBox(height: 10),
-
-        // 4. Consejo de Captura Óptima
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-          decoration: BoxDecoration(
-            color: isDark
-                ? Colors.amber.withValues(alpha: 0.1)
-                : const Color(0xFFFFFBEB),
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(
-              color: Colors.amber.withValues(alpha: isDark ? 0.35 : 0.5),
-            ),
-          ),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Icon(
-                Icons.lightbulb_outline_rounded,
-                color: isDark ? Colors.amber[300] : Colors.amber[800],
-                size: 20,
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  "Consejo: Coloca la factura sobre una superficie plana, con buena iluminación y evitando sombras o dobleces.",
-                  style: TextStyle(
-                    fontSize: 11.5,
-                    color: isDark ? Colors.amber[100] : const Color(0xFF78350F),
-                    height: 1.35,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildActionCard({
-    required IconData icon,
-    required String title,
-    required String subtitle,
-    required Color color,
-    required bool isDark,
-    required VoidCallback onTap,
-  }) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(18),
-        splashColor: color.withValues(alpha: 0.15),
-        highlightColor: color.withValues(alpha: 0.08),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 14),
-          decoration: BoxDecoration(
-            color: isDark ? const Color(0xFF1E222D) : Colors.white,
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(
-              color: isDark
-                  ? color.withValues(alpha: 0.35)
-                  : color.withValues(alpha: 0.25),
-              width: 1.5,
-            ),
-            boxShadow: [
-              if (!isDark)
-                BoxShadow(
-                  color: color.withValues(alpha: 0.08),
-                  blurRadius: 10,
-                  offset: const Offset(0, 4),
-                ),
-            ],
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: color.withValues(alpha: 0.12),
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(icon, color: color, size: 28),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                title,
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 15,
-                  color: isDark ? Colors.white : Colors.black87,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                subtitle,
-                textAlign: TextAlign.center,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontSize: 11,
-                  color: isDark ? Colors.grey[400] : Colors.grey[600],
-                  height: 1.25,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildFeatureRow({
-    required IconData icon,
-    required MaterialColor color,
-    required String title,
-    required String description,
-    required bool isDark,
-  }) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF1B1F2A) : Colors.grey[50],
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: isDark ? Colors.white10 : Colors.grey.shade200,
-        ),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.15),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Icon(
-              icon,
-              color: isDark ? color.shade300 : color.shade700,
-              size: 20,
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  title,
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.bold,
-                    color: isDark ? Colors.white : Colors.black87,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  description,
-                  style: TextStyle(
-                    fontSize: 11.5,
-                    color: isDark ? Colors.grey[400] : Colors.grey[600],
-                    height: 1.25,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _bigButton({
-    required IconData icon,
-    required String label,
-    required Color color,
-    required bool isDark,
-    required VoidCallback onTap,
-  }) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(24),
-        splashColor: color.withValues(alpha: 0.2),
-        highlightColor: color.withValues(alpha: 0.1),
-        child: Container(
-          height: 135,
-          decoration: BoxDecoration(
-            color: isDark ? const Color(0xFF23232F) : Colors.white,
-            borderRadius: BorderRadius.circular(24),
-            border: Border.all(
-              color: isDark
-                  ? color.withValues(alpha: 0.3)
-                  : color.withValues(alpha: 0.2),
-              width: 2,
-            ),
-            boxShadow: [
-              if (!isDark)
-                BoxShadow(
-                  color: color.withValues(alpha: 0.15),
-                  blurRadius: 15,
-                  offset: const Offset(0, 8),
-                ),
-            ],
-          ),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(
-                icon,
-                size: 44,
-                color: isDark ? color.withValues(alpha: 0.9) : color,
-              ),
-              const SizedBox(height: 12),
-              Text(
-                label,
-                style: TextStyle(
-                  color: isDark ? color.withValues(alpha: 0.9) : color,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 16.5,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildScenarioPill({
-    required IconData icon,
-    required String label,
-    required MaterialColor color,
-    required bool isDark,
-  }) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      decoration: BoxDecoration(
-        color: isDark ? color.withValues(alpha: 0.15) : color.shade50,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: isDark ? color.withValues(alpha: 0.3) : color.shade200,
-          width: 1,
-        ),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 15, color: isDark ? color.shade300 : color.shade700),
-          const SizedBox(width: 6),
-          Flexible(
-            child: Text(
-              label,
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w700,
-                color: isDark ? color.shade200 : color.shade900,
-              ),
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-        ],
       ),
     );
   }
