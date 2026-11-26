@@ -8,21 +8,32 @@ import 'package:app_movil/features/catalog/providers/inventory_provider.dart';
 class PulsingStockBadge extends StatefulWidget {
   final Widget child;
   final bool isPulsing;
-  const PulsingStockBadge({super.key, required this.child, this.isPulsing = true});
+  const PulsingStockBadge({
+    super.key,
+    required this.child,
+    this.isPulsing = true,
+  });
 
   @override
   State<PulsingStockBadge> createState() => _PulsingStockBadgeState();
 }
 
-class _PulsingStockBadgeState extends State<PulsingStockBadge> with SingleTickerProviderStateMixin {
+class _PulsingStockBadgeState extends State<PulsingStockBadge>
+    with SingleTickerProviderStateMixin {
   late AnimationController _ctrl;
   late Animation<double> _scale;
 
   @override
   void initState() {
     super.initState();
-    _ctrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 900));
-    _scale = Tween<double>(begin: 0.95, end: 1.05).animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut));
+    _ctrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 900),
+    );
+    _scale = Tween<double>(
+      begin: 0.95,
+      end: 1.05,
+    ).animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut));
     if (widget.isPulsing) _ctrl.repeat(reverse: true);
   }
 
@@ -72,17 +83,20 @@ class InventoryItemTile extends StatelessWidget {
     final product = item.product;
     final presentation = item.presentation;
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    
+
     final String brandName = provider.getBrandName(product.marcaId);
 
-    final String? displayImage = (presentation.imagenUrl != null && presentation.imagenUrl!.isNotEmpty)
+    final String? displayImage =
+        (presentation.imagenUrl != null && presentation.imagenUrl!.isNotEmpty)
         ? presentation.imagenUrl
         : product.imagenUrl;
 
     final bool isPublic = presentation.estado == 'publico';
-    final Color statusColor = isPublic ? (isDark ? Colors.green[400]! : Colors.green) : (isDark ? Colors.orange[400]! : Colors.orange);
+    final Color statusColor = isPublic
+        ? (isDark ? Colors.green[400]! : Colors.green)
+        : (isDark ? Colors.orange[400]! : Colors.orange);
     final String statusText = isPublic ? "PÚBLICO" : "PRIVADO";
-    
+
     final int stock = item.displayStock;
     final int threshold = presentation.stockAlerta ?? 5;
     final bool hasQuotaExhaustedWithBase = item.hasQuotaExhaustedWithBaseStock;
@@ -91,36 +105,47 @@ class InventoryItemTile extends StatelessWidget {
     final Color stockColor = hasQuotaExhaustedWithBase
         ? (isDark ? Colors.amber[400]! : Colors.amber.shade800)
         : (isTrulyOutOfStock
-            ? (isDark ? Colors.red[400]! : Colors.red)
-            : (isCritical
-                ? (isDark ? Colors.orange[400]! : Colors.orange.shade800)
-                : (isDark ? Colors.teal[300]! : Colors.teal[700]!)));
+              ? (isDark ? Colors.red[400]! : Colors.red)
+              : (isCritical
+                    ? (isDark ? Colors.orange[400]! : Colors.orange.shade800)
+                    : (isDark ? Colors.teal[300]! : Colors.teal[700]!)));
 
     final bool showAlertColors = provider.showStockAlertColors;
-    final Color neutralStockColor = isDark ? Colors.blueGrey[300]! : Colors.blueGrey[700]!;
-    final Color effectiveStockColor = showAlertColors ? stockColor : neutralStockColor;
+    final Color neutralStockColor = isDark
+        ? Colors.blueGrey[300]!
+        : Colors.blueGrey[700]!;
+    final Color effectiveStockColor = showAlertColors
+        ? stockColor
+        : neutralStockColor;
     final Color effectiveContentColor = (!showAlertColors)
         ? effectiveStockColor
         : ((hasQuotaExhaustedWithBase || item.hasLooseUnits)
-            ? (isDark ? Colors.amber[300]! : Colors.amber[800]!)
-            : effectiveStockColor);
+              ? (isDark ? Colors.amber[300]! : Colors.amber[800]!)
+              : effectiveStockColor);
     final Color effectiveBadgeBg = (!showAlertColors)
         ? (isDark ? Colors.white.withValues(alpha: 0.05) : Colors.grey.shade100)
         : ((hasQuotaExhaustedWithBase || item.hasLooseUnits)
-            ? (isDark ? Colors.amber[900]!.withValues(alpha: 0.25) : Colors.amber.shade50)
-            : effectiveStockColor.withValues(alpha: 0.15));
+              ? (isDark
+                    ? Colors.amber[900]!.withValues(alpha: 0.25)
+                    : Colors.amber.shade50)
+              : effectiveStockColor.withValues(alpha: 0.15));
     final Color effectiveBadgeBorder = (!showAlertColors)
         ? (isDark ? Colors.white12 : Colors.grey.shade300)
         : ((hasQuotaExhaustedWithBase || item.hasLooseUnits)
-            ? (isDark ? Colors.amber[400]! : Colors.amber[800]!)
-            : effectiveStockColor.withValues(alpha: (isTrulyOutOfStock || isCritical) ? 0.7 : 0.4));
+              ? (isDark ? Colors.amber[400]! : Colors.amber[800]!)
+              : effectiveStockColor.withValues(
+                  alpha: (isTrulyOutOfStock || isCritical) ? 0.7 : 0.4,
+                ));
 
     final bool hasOffer = item.hasOffer;
     final double finalPrice = item.effectivePrice;
-    
+
     String discountBadgeText = "OFERTA";
-    if (hasOffer && presentation.tipoDescuento == 'porcentaje' && presentation.valorDescuento != null) {
-      discountBadgeText = "-${presentation.valorDescuento!.toStringAsFixed(0)}%";
+    if (hasOffer &&
+        presentation.tipoDescuento == 'porcentaje' &&
+        presentation.valorDescuento != null) {
+      discountBadgeText =
+          "-${presentation.valorDescuento!.toStringAsFixed(0)}%";
     } else if (hasOffer && presentation.discountPercentRounded > 0) {
       discountBadgeText = "-${presentation.discountPercentRounded}%";
     }
@@ -134,7 +159,7 @@ class InventoryItemTile extends StatelessWidget {
       shadowColor: isDark ? Colors.transparent : Colors.black12,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
-        side: BorderSide(color: isDark ? Colors.white10 : Colors.transparent)
+        side: BorderSide(color: isDark ? Colors.white10 : Colors.transparent),
       ),
       child: InkWell(
         onTap: onTap,
@@ -149,8 +174,17 @@ class InventoryItemTile extends StatelessWidget {
               Stack(
                 children: [
                   Container(
-                    width: 85, height: 85,
-                    decoration: BoxDecoration(color: isDark ? Colors.white10 : Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: isDark ? Colors.transparent : Colors.grey.shade200)),
+                    width: 85,
+                    height: 85,
+                    decoration: BoxDecoration(
+                      color: isDark ? Colors.white10 : Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: isDark
+                            ? Colors.transparent
+                            : Colors.grey.shade200,
+                      ),
+                    ),
                     child: ClipRRect(
                       borderRadius: BorderRadius.circular(12),
                       child: Stack(
@@ -161,34 +195,58 @@ class InventoryItemTile extends StatelessWidget {
                             child: UniversalImage(
                               path: displayImage,
                               productName: product.nombre,
-                              categoryName: provider.getCategoryName(product.categoriaId),
+                              categoryName: provider.getCategoryName(
+                                product.categoriaId,
+                              ),
                               fit: BoxFit.cover,
                             ),
                           ),
                           if (isTrulyOutOfStock)
                             Container(
-                              color: isDark ? Colors.black.withValues(alpha: 0.7) : Colors.white.withValues(alpha: 0.7),
-                              child: Center(child: Icon(Icons.block, color: isDark ? Colors.red[400] : Colors.red, size: 36))
-                            )
+                              color: isDark
+                                  ? Colors.black.withValues(alpha: 0.7)
+                                  : Colors.white.withValues(alpha: 0.7),
+                              child: Center(
+                                child: Icon(
+                                  Icons.block,
+                                  color: isDark ? Colors.red[400] : Colors.red,
+                                  size: 36,
+                                ),
+                              ),
+                            ),
                         ],
                       ),
                     ),
                   ),
                   if (hasOffer)
                     Positioned(
-                      top: 0, left: 0,
+                      top: 0,
+                      left: 0,
                       child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: isDark ? Colors.red[800] : Colors.red, 
-                          borderRadius: const BorderRadius.only(topLeft: Radius.circular(12), bottomRight: Radius.circular(8))
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 6,
+                          vertical: 4,
                         ),
-                        child: Text(discountBadgeText, style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
+                        decoration: BoxDecoration(
+                          color: isDark ? Colors.red[800] : Colors.red,
+                          borderRadius: const BorderRadius.only(
+                            topLeft: Radius.circular(12),
+                            bottomRight: Radius.circular(8),
+                          ),
+                        ),
+                        child: Text(
+                          discountBadgeText,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
                       ),
                     ),
                 ],
               ),
-              
+
               const SizedBox(width: 16),
 
               // 2. INFORMACIÓN
@@ -201,8 +259,20 @@ class InventoryItemTile extends StatelessWidget {
                       children: [
                         Flexible(
                           child: Text(
-                            (brandName.isNotEmpty ? brandName : provider.getCategoryName(product.categoriaId)).toUpperCase(),
-                            style: TextStyle(fontSize: 11, fontWeight: FontWeight.w900, color: isDark ? Colors.indigo[300] : Colors.grey[600], letterSpacing: 0.5),
+                            (brandName.isNotEmpty
+                                    ? brandName
+                                    : provider.getCategoryName(
+                                        product.categoriaId,
+                                      ))
+                                .toUpperCase(),
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w900,
+                              color: isDark
+                                  ? Colors.indigo[300]
+                                  : Colors.grey[600],
+                              letterSpacing: 0.5,
+                            ),
                             overflow: TextOverflow.ellipsis,
                           ),
                         ),
@@ -210,13 +280,26 @@ class InventoryItemTile extends StatelessWidget {
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 3,
+                              ),
                               decoration: BoxDecoration(
                                 color: statusColor.withValues(alpha: 0.15),
                                 borderRadius: BorderRadius.circular(6),
-                                border: Border.all(color: statusColor.withValues(alpha: 0.4))
+                                border: Border.all(
+                                  color: statusColor.withValues(alpha: 0.4),
+                                ),
                               ),
-                              child: Text(statusText, style: TextStyle(fontSize: 9, color: statusColor, fontWeight: FontWeight.bold, letterSpacing: 0.5)),
+                              child: Text(
+                                statusText,
+                                style: TextStyle(
+                                  fontSize: 9,
+                                  color: statusColor,
+                                  fontWeight: FontWeight.bold,
+                                  letterSpacing: 0.5,
+                                ),
+                              ),
                             ),
                             if (onMoreOptions != null) ...[
                               const SizedBox(width: 4),
@@ -228,7 +311,9 @@ class InventoryItemTile extends StatelessWidget {
                                   child: Icon(
                                     Icons.more_vert,
                                     size: 18,
-                                    color: isDark ? Colors.grey[400] : Colors.grey[600],
+                                    color: isDark
+                                        ? Colors.grey[400]
+                                        : Colors.grey[600],
                                   ),
                                 ),
                               ),
@@ -237,37 +322,61 @@ class InventoryItemTile extends StatelessWidget {
                         ),
                       ],
                     ),
-                    
+
                     const SizedBox(height: 6),
 
                     Text(
                       product.nombre,
-                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, height: 1.2, color: isDark ? Colors.white : Colors.black87),
-                      maxLines: 2, overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 15,
+                        height: 1.2,
+                        color: isDark ? Colors.white : Colors.black87,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
                     ),
-                    
+
                     // 🔥 Nombre de Variante
-                    if (presentation.nombreEspecifico != null && presentation.nombreEspecifico!.isNotEmpty)
+                    if (presentation.nombreEspecifico != null &&
+                        presentation.nombreEspecifico!.isNotEmpty)
                       Padding(
                         padding: const EdgeInsets.only(top: 2, bottom: 2),
                         child: Text(
                           presentation.nombreEspecifico!,
-                          style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14, color: isDark ? Colors.teal[300] : Colors.teal[700]),
-                          maxLines: 2, overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontWeight: FontWeight.w600,
+                            fontSize: 14,
+                            color: isDark ? Colors.teal[300] : Colors.teal[700],
+                          ),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ),
 
                     // 🔥 Chip de Unidad / Factor de Venta
                     Container(
                       margin: const EdgeInsets.only(top: 4, bottom: 4),
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 2,
+                      ),
                       decoration: BoxDecoration(
-                        color: isDark ? Colors.blueGrey.withValues(alpha: 0.3) : Colors.blueGrey.shade50,
-                        borderRadius: BorderRadius.circular(6)
+                        color: isDark
+                            ? Colors.blueGrey.withValues(alpha: 0.3)
+                            : Colors.blueGrey.shade50,
+                        borderRadius: BorderRadius.circular(6),
                       ),
                       child: Text(
                         item.presentationFactorChip,
-                        style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: isDark ? Colors.blueGrey[300] : Colors.blueGrey[700], letterSpacing: 0.5)
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                          color: isDark
+                              ? Colors.blueGrey[300]
+                              : Colors.blueGrey[700],
+                          letterSpacing: 0.5,
+                        ),
                       ),
                     ),
 
@@ -279,7 +388,10 @@ class InventoryItemTile extends StatelessWidget {
                           onTap: onTapPrice ?? onTap,
                           borderRadius: BorderRadius.circular(8),
                           child: Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 2.0, horizontal: 2.0),
+                            padding: const EdgeInsets.symmetric(
+                              vertical: 2.0,
+                              horizontal: 2.0,
+                            ),
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               mainAxisSize: MainAxisSize.min,
@@ -293,7 +405,9 @@ class InventoryItemTile extends StatelessWidget {
                                     style: TextStyle(
                                       fontSize: 11,
                                       decoration: TextDecoration.lineThrough,
-                                      color: isDark ? Colors.red[300] : Colors.red[700],
+                                      color: isDark
+                                          ? Colors.red[300]
+                                          : Colors.red[700],
                                       fontWeight: FontWeight.bold,
                                     ),
                                   ),
@@ -301,24 +415,36 @@ class InventoryItemTile extends StatelessWidget {
                                 Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
-                                    Text(
-                                      AppCurrency.format(
-                                        finalPrice,
-                                        includeThousandsSeparator: false,
-                                      ),
-                                      style: TextStyle(
-                                        fontSize: 18,
-                                        fontWeight: FontWeight.w900,
-                                        color: hasOffer
-                                            ? (isDark ? Colors.orange[300] : Colors.orange[800])
-                                            : (isDark ? Colors.blue[300] : Colors.black87),
+                                    Flexible(
+                                      child: FittedBox(
+                                        fit: BoxFit.scaleDown,
+                                        alignment: Alignment.centerLeft,
+                                        child: Text(
+                                          AppCurrency.format(
+                                            finalPrice,
+                                            includeThousandsSeparator: false,
+                                          ),
+                                          style: TextStyle(
+                                            fontSize: 18,
+                                            fontWeight: FontWeight.w900,
+                                            color: hasOffer
+                                                ? (isDark
+                                                      ? Colors.orange[300]
+                                                      : Colors.orange[800])
+                                                : (isDark
+                                                      ? Colors.blue[300]
+                                                      : Colors.black87),
+                                          ),
+                                        ),
                                       ),
                                     ),
                                     const SizedBox(width: 4),
                                     Icon(
                                       Icons.edit_outlined,
                                       size: 12,
-                                      color: isDark ? Colors.grey[500] : Colors.grey[400],
+                                      color: isDark
+                                          ? Colors.grey[500]
+                                          : Colors.grey[400],
                                     ),
                                   ],
                                 ),
@@ -331,18 +457,28 @@ class InventoryItemTile extends StatelessWidget {
                           onTap: onTapStock ?? onTap,
                           borderRadius: BorderRadius.circular(10),
                           child: PulsingStockBadge(
-                            isPulsing: showAlertColors &&
-                                (isTrulyOutOfStock || isCritical || hasQuotaExhaustedWithBase),
+                            isPulsing:
+                                showAlertColors &&
+                                (isTrulyOutOfStock ||
+                                    isCritical ||
+                                    hasQuotaExhaustedWithBase),
                             child: AnimatedContainer(
                               duration: const Duration(milliseconds: 250),
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 6,
+                              ),
                               decoration: BoxDecoration(
                                 color: effectiveBadgeBg,
                                 borderRadius: BorderRadius.circular(10),
                                 border: Border.all(
                                   color: effectiveBadgeBorder,
-                                  width: (showAlertColors &&
-                                          (isTrulyOutOfStock || isCritical || item.hasLooseUnits || hasQuotaExhaustedWithBase))
+                                  width:
+                                      (showAlertColors &&
+                                          (isTrulyOutOfStock ||
+                                              isCritical ||
+                                              item.hasLooseUnits ||
+                                              hasQuotaExhaustedWithBase))
                                       ? 1.5
                                       : 1.0,
                                 ),
@@ -354,27 +490,39 @@ class InventoryItemTile extends StatelessWidget {
                                     hasQuotaExhaustedWithBase
                                         ? Icons.tune_rounded
                                         : (isTrulyOutOfStock
-                                            ? Icons.error_outline_rounded
-                                            : (isCritical
-                                                ? Icons.warning_amber_rounded
-                                                : (item.hasLooseUnits ? Icons.tune_rounded : Icons.inventory_2_rounded))),
+                                              ? Icons.error_outline_rounded
+                                              : (isCritical
+                                                    ? Icons
+                                                          .warning_amber_rounded
+                                                    : (item.hasLooseUnits
+                                                          ? Icons.tune_rounded
+                                                          : Icons
+                                                                .inventory_2_rounded))),
                                     size: 15,
                                     color: effectiveContentColor,
                                   ),
                                   const SizedBox(width: 6),
-                                  Text(
-                                    unidadVentaText,
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.bold,
-                                      color: effectiveContentColor,
+                                  Flexible(
+                                    child: FittedBox(
+                                      fit: BoxFit.scaleDown,
+                                      alignment: Alignment.centerLeft,
+                                      child: Text(
+                                        unidadVentaText,
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.bold,
+                                          color: effectiveContentColor,
+                                        ),
+                                      ),
                                     ),
                                   ),
                                   const SizedBox(width: 4),
                                   Icon(
                                     Icons.edit_note_rounded,
                                     size: 14,
-                                    color: effectiveContentColor.withValues(alpha: 0.7),
+                                    color: effectiveContentColor.withValues(
+                                      alpha: 0.7,
+                                    ),
                                   ),
                                 ],
                               ),
@@ -382,10 +530,18 @@ class InventoryItemTile extends StatelessWidget {
                           ),
                         );
 
-                        // Estimación precisa para detectar saturación horizontal
-                        final double estPriceWidth = finalPrice >= 1000 ? 120.0 : 85.0;
-                        final double estStockWidth = 55.0 + (unidadVentaText.length * 7.5);
-                        final bool shouldWrap = (estPriceWidth + estStockWidth + 12 > constraints.maxWidth) ||
+                        // Estimación precisa para detectar saturación horizontal (escalada con textScaler)
+                        final double textScale = MediaQuery.textScalerOf(
+                          context,
+                        ).scale(1.0);
+                        final double estPriceWidth =
+                            (finalPrice >= 1000 ? 120.0 : 85.0) * textScale;
+                        final double estStockWidth =
+                            (55.0 + (unidadVentaText.length * 10.5)) *
+                            textScale;
+                        final bool shouldWrap =
+                            (estPriceWidth + estStockWidth + 12 >
+                                constraints.maxWidth) ||
                             (unidadVentaText.length > 13);
 
                         if (shouldWrap) {
@@ -404,20 +560,20 @@ class InventoryItemTile extends StatelessWidget {
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           crossAxisAlignment: CrossAxisAlignment.end,
                           children: [
-                            priceWidget,
+                            Flexible(child: priceWidget),
                             const SizedBox(width: 8),
-                            stockBadgeWidget,
+                            Flexible(child: stockBadgeWidget),
                           ],
                         );
                       },
-                    )
+                    ),
                   ],
                 ),
-              )
+              ),
             ],
           ),
         ),
       ),
     );
   }
-}
+}

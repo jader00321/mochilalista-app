@@ -1,31 +1,35 @@
+import 'dart:async';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'dart:async';
-import 'package:provider/provider.dart';
-import 'package:app_movil/core/widgets/empty_state_widget.dart';
-import 'package:app_movil/features/catalog/providers/inventory_provider.dart';
-import 'package:app_movil/core/providers/auth_provider.dart'; // 🔥 FASE 4
-import 'package:app_movil/features/catalog/models/inventory_wrapper.dart';
-import 'package:app_movil/core/widgets/inventory_item_tile.dart';
-import 'package:app_movil/core/widgets/inventory_grid_card.dart';
-import 'package:app_movil/core/widgets/inventory_compact_tile.dart';
-import 'package:app_movil/core/widgets/product_action_sheet.dart';
-import 'package:app_movil/core/widgets/custom_search_bar.dart';
-import 'package:app_movil/features/catalog/screens/product_create_screen.dart';
-import 'dart:io';
 import 'package:image_picker/image_picker.dart';
-import 'package:app_movil/features/scanner/screens/barcode_scanner_screen.dart';
-import 'package:app_movil/features/scanner/screens/invoice_review_screen.dart';
+import 'package:provider/provider.dart';
+import 'package:app_movil/core/providers/auth_provider.dart';
+import 'package:app_movil/core/widgets/custom_search_bar.dart';
 import 'package:app_movil/core/widgets/custom_snackbar.dart';
-import 'package:app_movil/features/scanner/providers/scanner_provider.dart';
-import 'package:app_movil/features/scanner/widgets/shared/scanning_dialog.dart';
+import 'package:app_movil/core/widgets/empty_state_widget.dart';
+import 'package:app_movil/core/widgets/interactive_sheet_wrapper.dart';
+import 'package:app_movil/core/widgets/inventory_compact_tile.dart';
+import 'package:app_movil/core/widgets/inventory_grid_card.dart';
+import 'package:app_movil/core/widgets/inventory_item_tile.dart';
+import 'package:app_movil/core/widgets/price_update_modal.dart';
+import 'package:app_movil/core/widgets/product_action_sheet.dart';
+import 'package:app_movil/core/widgets/stock_update_modal.dart';
+import 'package:app_movil/core/widgets/tour/configs/inventory_tour.dart';
+import 'package:app_movil/features/catalog/models/inventory_wrapper.dart';
+import 'package:app_movil/features/catalog/providers/inventory_provider.dart';
+import 'package:app_movil/features/catalog/screens/product_create_screen.dart';
+import 'package:app_movil/features/catalog/screens/product_detail_screen.dart';
 import 'package:app_movil/features/catalog/screens/tabs/widgets/inventory_filter_header.dart';
 import 'package:app_movil/features/catalog/widgets/auto_categorization_modal.dart';
-import 'package:app_movil/features/catalog/screens/product_detail_screen.dart';
-import 'package:app_movil/core/widgets/price_update_modal.dart';
-import 'package:app_movil/core/widgets/stock_update_modal.dart';
-import 'package:app_movil/core/widgets/interactive_sheet_wrapper.dart';
-import 'package:app_movil/core/widgets/tour/configs/inventory_tour.dart';
+import 'package:app_movil/features/scanner/providers/scanner_provider.dart';
+import 'package:app_movil/features/scanner/screens/barcode_scanner_screen.dart';
+import 'package:app_movil/features/scanner/screens/invoice_review_screen.dart';
+import 'package:app_movil/features/scanner/widgets/shared/scanning_dialog.dart';
+
+part 'widgets/products_tab_scan_and_modals.dart';
+part 'widgets/products_tab_list_and_slivers.dart';
+part 'widgets/products_tab_fab_and_toast.dart';
 
 class ProductsTab extends StatefulWidget {
   final TabController? tabController;
@@ -48,17 +52,20 @@ class _ProductsTabState extends State<ProductsTab>
 
   bool _showScrollToTop = false;
 
-  // 🎨 FASE 2: Toast Flotante Local de Alerta de Stock
   bool _showStockAlertToast = false;
   String _stockAlertToastText = "";
   bool _stockAlertToastIsActive = true;
   Timer? _stockAlertToastTimer;
 
+  void _updateState([VoidCallback? fn]) {
+    if (!mounted) return;
+    setState(fn ?? () {});
+  }
+
   @override
   void initState() {
     super.initState();
     _scrollController.addListener(_onScroll);
-
     widget.tabController?.addListener(_onParentTabChanged);
 
     _fabAnimationController = AnimationController(
@@ -141,422 +148,6 @@ class _ProductsTabState extends State<ProductsTab>
     );
   }
 
-  // 🔥 NUEVO: Explicación de Exploración
-  void _showExplorationModal(BuildContext context, bool isDark) {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: isDark ? const Color(0xFF23232F) : Colors.white,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Row(
-          children: [
-            Icon(Icons.explore, color: Colors.orange[400]),
-            const SizedBox(width: 10),
-            const Text(
-              "Modo Exploración",
-              style: TextStyle(fontWeight: FontWeight.bold),
-            ),
-          ],
-        ),
-        content: Text(
-          "El inventario está bloqueado en el Modo Exploración.\n\n"
-          "Para escanear facturas con IA, agregar productos o registrar tu stock real, ve a tu Perfil y crea tu propio negocio.",
-          style: TextStyle(
-            color: isDark ? Colors.grey[300] : Colors.grey[700],
-            fontSize: 16,
-            height: 1.4,
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text(
-              "Entendido",
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Future<void> _handleInvoiceScan(bool isDark, bool isGuest) async {
-    _toggleFab();
-
-    // 🔥 BLOQUEO PARA INVITADOS
-    if (isGuest) {
-      _showExplorationModal(context, isDark);
-      return;
-    }
-
-    showModalBottomSheet(
-      context: context,
-      useSafeArea: true,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true,
-      builder: (ctx) {
-        final effectiveBottom = InteractiveSheetWrapper.getEffectiveBottomPadding(ctx, minPadding: kMinDefensiveBottomClearance);
-        return Container(
-          padding: EdgeInsets.fromLTRB(24, 24, 24, effectiveBottom + 8),
-          decoration: BoxDecoration(
-            color: isDark ? const Color(0xFF1E1E28) : Colors.white,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.2),
-                blurRadius: 20,
-              ),
-            ],
-          ),
-          child: SafeArea(
-            top: false,
-            bottom: true,
-            child: SingleChildScrollView(
-              physics: const BouncingScrollPhysics(),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: isDark ? Colors.white24 : Colors.grey[300],
-                  borderRadius: BorderRadius.circular(10),
-                ),
-              ),
-              const SizedBox(height: 24),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    Icons.document_scanner,
-                    color: isDark ? Colors.tealAccent : Colors.teal,
-                    size: 28,
-                  ),
-                  const SizedBox(width: 12),
-                  Text(
-                    "Procesar Factura",
-                    style: TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.bold,
-                      color: isDark ? Colors.white : Colors.black87,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              Text(
-                "Selecciona el origen de la imagen de tu factura",
-                style: TextStyle(
-                  fontSize: 14,
-                  color: isDark ? Colors.grey[400] : Colors.grey[600],
-                ),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 32),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                children: [
-                  _buildSourceOption(
-                    ctx,
-                    Icons.camera_alt_rounded,
-                    "Tomar Foto",
-                    ImageSource.camera,
-                    isDark,
-                  ),
-                  _buildSourceOption(
-                    ctx,
-                    Icons.photo_library_rounded,
-                    "Galería",
-                    ImageSource.gallery,
-                    isDark,
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-            ],
-          ),
-        ),
-      ),
-    );
-  },
-);
-}
-
-  Widget _buildSourceOption(
-    BuildContext ctx,
-    IconData icon,
-    String label,
-    ImageSource source,
-    bool isDark,
-  ) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: () {
-          Navigator.pop(ctx);
-          _processImage(source, isDark);
-        },
-        borderRadius: BorderRadius.circular(20),
-        splashColor: (isDark ? Colors.tealAccent : Colors.teal).withValues(
-          alpha: 0.2,
-        ),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
-          decoration: BoxDecoration(
-            color: isDark ? const Color(0xFF2A2A36) : Colors.grey[50],
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(
-              color: isDark ? Colors.white10 : Colors.grey.shade200,
-            ),
-          ),
-          child: Column(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: isDark
-                      ? Colors.teal.withValues(alpha: 0.15)
-                      : Colors.teal[50],
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(
-                  icon,
-                  size: 36,
-                  color: isDark ? Colors.tealAccent : Colors.teal,
-                ),
-              ),
-              const SizedBox(height: 16),
-              Text(
-                label,
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 15,
-                  color: isDark ? Colors.white : Colors.black87,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Future<void> _processImage(
-    ImageSource source,
-    bool isDark, {
-    File? cachedImage,
-  }) async {
-    try {
-      File imageFile;
-      if (cachedImage != null) {
-        imageFile = cachedImage;
-      } else {
-        final XFile? pickedFile = await _picker.pickImage(
-          source: source,
-          imageQuality: 85,
-        );
-        if (pickedFile == null) return;
-        imageFile = File(pickedFile.path);
-      }
-
-      if (!mounted) return;
-
-      final ValueNotifier<String> statusNotifier = ValueNotifier<String>(
-        "Iniciando Inteligencia Artificial...",
-      );
-      bool isScanning = true;
-
-      try {
-        showDialog(
-          context: context,
-          barrierDismissible: false,
-          barrierColor: Colors.black.withValues(alpha: 0.7),
-          builder: (ctx) => ScanningDialog(
-            mode: ScanMode.invoice,
-            statusNotifier: statusNotifier,
-          ),
-        );
-
-        // Simulación de fases para UI interactiva (igual que en scan_screen)
-        Future.delayed(const Duration(milliseconds: 1500), () {
-          if (mounted &&
-              isScanning &&
-              statusNotifier.value.contains("Iniciando")) {
-            statusNotifier.value = "Analizando estructura...";
-          }
-        });
-        Future.delayed(const Duration(milliseconds: 3500), () {
-          if (mounted &&
-              isScanning &&
-              statusNotifier.value.contains("Analizando")) {
-            statusNotifier.value = "Extrayendo productos...";
-          }
-        });
-
-        final prov = Provider.of<ScannerProvider>(context, listen: false);
-        bool success = await prov.uploadAndAnalyzeImage(imageFile);
-
-        if (!mounted) return;
-        Navigator.pop(context); // Cerrar ScanningDialog
-
-        if (success) {
-          Navigator.push(
-            context,
-            MaterialPageRoute(builder: (_) => const InvoiceReviewScreen()),
-          );
-        } else {
-          _showErrorModal(context, isDark, imageFile, source);
-        }
-      } finally {
-        isScanning = false;
-        statusNotifier.dispose();
-      }
-    } catch (e) {
-      if (mounted) Navigator.pop(context);
-      if (!mounted) return;
-      CustomSnackBar.show(
-        context,
-        message: "Error al procesar imagen: $e",
-        isError: true,
-      );
-    }
-  }
-
-  void _showErrorModal(
-    BuildContext context,
-    bool isDark,
-    File cachedImage,
-    ImageSource source,
-  ) {
-    showModalBottomSheet(
-      context: context,
-      useSafeArea: true,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) {
-        final effectiveBottom = InteractiveSheetWrapper.getEffectiveBottomPadding(ctx, minPadding: kMinDefensiveBottomClearance);
-        return SafeArea(
-          top: false,
-          bottom: true,
-          child: Container(
-            padding: EdgeInsets.fromLTRB(30, 30, 30, effectiveBottom + 16),
-            decoration: BoxDecoration(
-              color: isDark ? const Color(0xFF1A1A24) : Colors.white,
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.3),
-                  blurRadius: 20,
-                ),
-              ],
-            ),
-            child: SingleChildScrollView(
-              physics: const BouncingScrollPhysics(),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    width: 40,
-                    height: 5,
-                    decoration: BoxDecoration(
-                      color: isDark ? Colors.white24 : Colors.grey[300],
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                  ),
-                  const SizedBox(height: 30),
-                  Icon(Icons.error_outline_rounded, size: 70, color: Colors.red[400]),
-                  const SizedBox(height: 24),
-                  Text(
-                    "No se pudo procesar",
-                    style: TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.bold,
-                      color: isDark ? Colors.white : Colors.black87,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    "La IA no pudo extraer datos legibles de esta imagen. Asegúrate de que la factura esté bien iluminada y nítida.",
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 15,
-                      color: isDark ? Colors.grey[400] : Colors.grey[600],
-                      height: 1.4,
-                    ),
-                  ),
-                  const SizedBox(height: 32),
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton.icon(
-                      onPressed: () {
-                        Navigator.pop(ctx);
-                        _processImage(
-                          source,
-                          isDark,
-                          cachedImage: cachedImage,
-                        ); // REINTENTAR CON LA MISMA IMAGEN
-                      },
-                      icon: const Icon(Icons.refresh),
-                      label: const Text(
-                        "Reintentar con esta foto",
-                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                      ),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: isDark ? Colors.blue[700] : Colors.blue,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  SizedBox(
-                    width: double.infinity,
-                    child: TextButton(
-                      onPressed: () {
-                        Navigator.pop(ctx);
-                        _handleInvoiceScan(isDark, false); // VOLVER AL SELECTOR
-                      },
-                      style: TextButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                      ),
-                      child: Text(
-                        "Tomar otra foto",
-                        style: TextStyle(
-                          color: isDark ? Colors.grey[300] : Colors.grey[700],
-                          fontWeight: FontWeight.bold,
-                          fontSize: 16,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  void _handleBarcodeScan(bool isGuest, bool isDark) {
-    _toggleFab();
-
-    // 🔥 BLOQUEO PARA INVITADOS
-    if (isGuest) {
-      _showExplorationModal(context, isDark);
-      return;
-    }
-
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (_) => const BarcodeScannerScreen()),
-    );
-  }
-
   void _onSearch(String query) {
     final p = Provider.of<InventoryProvider>(context, listen: false);
     p.loadInventory(
@@ -573,61 +164,6 @@ class _ProductsTabState extends State<ProductsTab>
       hasOffer: p.activeHasOffer,
       onlyDefaults: p.activeOnlyDefaults,
     );
-  }
-
-  void _navigateToDetail(BuildContext navContext, InventoryWrapper wrapper) {
-    HapticFeedback.lightImpact();
-    Navigator.push(
-      navContext,
-      MaterialPageRoute(
-        builder: (_) => ProductDetailScreen(
-          product: wrapper.product,
-          initialPresentationId: wrapper.presentation.id ?? -1,
-          heroTag: 'inv_${wrapper.product.id}_${wrapper.presentation.id}',
-        ),
-      ),
-    ).then((_) {
-      if (mounted) {
-        Provider.of<InventoryProvider>(context, listen: false).loadInventory(reset: true);
-      }
-    });
-  }
-
-  void _openPriceModal(BuildContext context, InventoryWrapper wrapper, bool isDark) {
-    HapticFeedback.lightImpact();
-    final provider = Provider.of<InventoryProvider>(context, listen: false);
-    PriceUpdateModal.show(
-      context: context,
-      presentation: wrapper.presentation,
-      provider: provider,
-      isDark: isDark,
-    );
-  }
-
-  void _openStockModal(BuildContext context, InventoryWrapper wrapper, bool isDark) async {
-    HapticFeedback.lightImpact();
-    final provider = Provider.of<InventoryProvider>(context, listen: false);
-    final res = await StockUpdateModal.show(
-      context: context,
-      presentation: wrapper.presentation,
-      provider: provider,
-      isDark: isDark,
-    );
-    if (res == true && mounted) {
-      setState(() {});
-    }
-  }
-
-  void _openActions(BuildContext context, InventoryWrapper wrapper) {
-    // Si bien los invitados pueden ver los detalles, si intentan editar dentro
-    // de ProductActionSheet el backend los rebotará automáticamente
-    ProductActionSheet.show(
-      context,
-      product: wrapper.product,
-      initialPresentationId: wrapper.presentation.id,
-    ).then((_) {
-      if (mounted) setState(() {});
-    });
   }
 
   void _toggleFab() {
@@ -650,7 +186,6 @@ class _ProductsTabState extends State<ProductsTab>
     final provider = Provider.of<InventoryProvider>(context);
     final List<InventoryWrapper> displayItems = provider.items;
     final isDark = Theme.of(context).brightness == Brightness.dark;
-
     final auth = Provider.of<AuthProvider>(context, listen: false);
     final isGuest = !auth.hasActiveContext;
 
@@ -665,14 +200,17 @@ class _ProductsTabState extends State<ProductsTab>
             child: CustomScrollView(
               controller: _scrollController,
               slivers: [
-                // 1. Buscador y Filtros Rápidos
                 SliverAppBar(
                   backgroundColor: isDark
                       ? const Color(0xFF1A1A24)
                       : Theme.of(context).primaryColor,
                   automaticallyImplyLeading: false,
                   actions: const [SizedBox.shrink()],
-                  expandedHeight: (provider.categories.isNotEmpty || provider.hasOrphanCategories) ? 138.0 : 85.0,
+                  expandedHeight:
+                      (provider.categories.isNotEmpty ||
+                          provider.hasOrphanCategories)
+                      ? 138.0
+                      : 85.0,
                   floating: true,
                   snap: true,
                   stretch: true,
@@ -692,10 +230,10 @@ class _ProductsTabState extends State<ProductsTab>
                     ),
                   ),
                 ),
-
-                // 2. Toolbar Fija
                 InventoryFilterHeader(
-                  searchFiltersKey: widget.tourKeys?.searchFiltersKey ?? const ValueKey('tour_search_filters_fallback'),
+                  searchFiltersKey:
+                      widget.tourKeys?.searchFiltersKey ??
+                      const ValueKey('tour_search_filters_fallback'),
                   provider: provider,
                   isDark: isDark,
                   viewMode: _viewMode,
@@ -710,100 +248,8 @@ class _ProductsTabState extends State<ProductsTab>
                     );
                   },
                 ),
-
-                // 2.1 Banner de Producto en Creación Pendiente (Borrador en Memoria)
                 if (provider.hasCreationDraft)
-                  SliverToBoxAdapter(
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 10, 16, 4),
-                      child: InkWell(
-                        onTap: () {
-                          HapticFeedback.lightImpact();
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => const ProductCreateScreen(),
-                            ),
-                          );
-                        },
-                        borderRadius: BorderRadius.circular(12),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 14,
-                            vertical: 10,
-                          ),
-                          decoration: BoxDecoration(
-                            color: isDark
-                                ? const Color(0xFF004D40).withValues(alpha: 0.3)
-                                : const Color(0xFFE0F2F1),
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(
-                              color: isDark
-                                  ? const Color(0xFF00897B)
-                                  : const Color(0xFF80CBC4),
-                              width: 1.2,
-                            ),
-                          ),
-                          child: Row(
-                            children: [
-                              Container(
-                                padding: const EdgeInsets.all(6),
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFF00897B),
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: const Icon(
-                                  Icons.edit_note_rounded,
-                                  color: Colors.white,
-                                  size: 18,
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      "Producto en creación pendiente",
-                                      style: TextStyle(
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.bold,
-                                        color: isDark
-                                            ? const Color(0xFF80CBC4)
-                                            : const Color(0xFF00695C),
-                                      ),
-                                    ),
-                                    Text(
-                                      provider.creationDraft!.name
-                                              .trim()
-                                              .isNotEmpty
-                                          ? "${provider.creationDraft!.name.trim()} (${provider.creationDraft!.presentations.length} var.) • Toca para continuar"
-                                          : "Borrador sin título • Toca para continuar",
-                                      style: TextStyle(
-                                        fontSize: 11,
-                                        color: isDark
-                                            ? Colors.white70
-                                            : Colors.black87,
-                                      ),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              const Icon(
-                                Icons.arrow_forward_ios_rounded,
-                                size: 14,
-                                color: Color(0xFF00897B),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-
-                // 3. LA LISTA EN SÍ
+                  _buildCreationDraftBanner(context, provider, isDark),
                 if (provider.isLoading && displayItems.isEmpty)
                   const SliverFillRemaining(
                     child: Center(child: CircularProgressIndicator()),
@@ -812,7 +258,6 @@ class _ProductsTabState extends State<ProductsTab>
                   SliverFillRemaining(child: _buildEmptyState(isDark, provider))
                 else
                   _buildSliverList(displayItems, isDark),
-
                 if (provider.isLoadingMore)
                   SliverToBoxAdapter(
                     child: Container(
@@ -832,8 +277,6 @@ class _ProductsTabState extends State<ProductsTab>
               ],
             ),
           ),
-
-          // CAPA 2: BACKDROP OSCURO
           if (_isFabOpen)
             Positioned.fill(
               child: GestureDetector(
@@ -841,387 +284,10 @@ class _ProductsTabState extends State<ProductsTab>
                 child: Container(color: Colors.black.withValues(alpha: 0.6)),
               ),
             ),
-
-          // CAPA 3: MENÚ FLOTANTE
-          Positioned(
-            bottom: 20,
-            right: 20,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                AnimatedScale(
-                  scale: _showScrollToTop && !_isFabOpen ? 1.0 : 0.0,
-                  duration: const Duration(milliseconds: 300),
-                  curve: Curves.easeOutBack,
-                  child: Padding(
-                    padding: const EdgeInsets.only(bottom: 16),
-                    child: FloatingActionButton(
-                      heroTag: 'btn_scroll_top_inv',
-                      mini: true,
-                      onPressed: _scrollToTop,
-                      backgroundColor: isDark
-                          ? Colors.blueGrey[800]
-                          : Colors.blueGrey[100],
-                      foregroundColor: isDark ? Colors.white : Colors.black87,
-                      elevation: 4,
-                      child: const Icon(Icons.keyboard_arrow_up, size: 24),
-                    ),
-                  ),
-                ),
-
-                if (_isFabOpen) ...[
-                  _buildFabOption(
-                    icon: Icons.receipt_long,
-                    label: "Escanear Factura (IA)",
-                    onTap: () => _handleInvoiceScan(isDark, isGuest),
-                    color: isDark ? Colors.purple[400]! : Colors.purple,
-                    isDark: isDark,
-                  ),
-
-                  _buildFabOption(
-                    icon: Icons.qr_code_scanner,
-                    label: "Escanear Código",
-                    onTap: () => _handleBarcodeScan(isGuest, isDark),
-                    color: isDark ? Colors.blue[400]! : Colors.blue,
-                    isDark: isDark,
-                  ),
-
-                  _buildFabOption(
-                    icon: Icons.auto_awesome,
-                    label: "Auto-categorizar (IA)",
-                    onTap: () {
-                      _toggleFab();
-                      if (isGuest) {
-                        _showExplorationModal(context, isDark);
-                        return;
-                      }
-                      AutoCategorizationModal.show(context, isDark: isDark);
-                    },
-                    color: isDark ? Colors.teal[400]! : Colors.teal,
-                    isDark: isDark,
-                  ),
-
-                  _buildFabOption(
-                    icon: Icons.edit_document,
-                    label: "Ingreso Manual",
-                    onTap: () async {
-                      _toggleFab();
-                      if (isGuest) {
-                        _showExplorationModal(context, isDark);
-                        return;
-                      }
-                      await Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => const ProductCreateScreen(),
-                        ),
-                      );
-                      if (context.mounted) {
-                        Provider.of<InventoryProvider>(
-                          context,
-                          listen: false,
-                        ).loadInventory(reset: true);
-                      }
-                    },
-                    color: isDark ? Colors.orange[400]! : Colors.orange,
-                    isDark: isDark,
-                  ),
-                  const SizedBox(height: 16),
-                ],
-                KeyedSubtree(
-                  key: widget.tourKeys?.newProductFabKey ?? const ValueKey('tour_new_prod_fab_fallback'),
-                  child: FloatingActionButton(
-                    heroTag: 'btn_inv_create',
-                    onPressed: _toggleFab,
-                    elevation: isDark ? 0 : 6,
-                    backgroundColor: _isFabOpen
-                        ? (isDark ? Colors.red[800] : Colors.red)
-                        : (isDark
-                              ? Colors.blue[300]
-                              : Theme.of(context).primaryColor),
-                    foregroundColor: isDark && !_isFabOpen
-                        ? Colors.black87
-                        : Colors.white,
-                    child: RotationTransition(
-                      turns: _fabRotateAnimation,
-                      child: Icon(
-                        Icons.add,
-                        size: 30,
-                        color: isDark && !_isFabOpen
-                            ? Colors.black87
-                            : Colors.white,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          // 🎨 FASE 2: Toast Flotante Local de Alerta de Stock (~2.0s y dismiss en cambio de tab)
-          Positioned(
-            top: 135,
-            left: 20,
-            right: 20,
-            child: IgnorePointer(
-              ignoring: !_showStockAlertToast,
-              child: AnimatedSlide(
-                duration: const Duration(milliseconds: 240),
-                curve: Curves.easeOutCubic,
-                offset: _showStockAlertToast ? Offset.zero : const Offset(0, -0.35),
-                child: AnimatedOpacity(
-                  duration: const Duration(milliseconds: 200),
-                  curve: Curves.easeOut,
-                  opacity: _showStockAlertToast ? 1.0 : 0.0,
-                  child: Center(
-                    child: Material(
-                      color: Colors.transparent,
-                      child: InkWell(
-                        onTap: () {
-                          _dismissStockAlertToast();
-                          InventoryFilterHeader.showColorAlertExplanation(
-                            context,
-                            provider,
-                            isDark,
-                          );
-                        },
-                        borderRadius: BorderRadius.circular(20),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                          decoration: BoxDecoration(
-                            color: isDark ? const Color(0xFF1E2235) : const Color(0xFF22283A),
-                            borderRadius: BorderRadius.circular(20),
-                            border: Border.all(
-                              color: _stockAlertToastIsActive
-                                  ? (isDark ? Colors.tealAccent.withValues(alpha: 0.6) : Colors.tealAccent)
-                                  : Colors.white24,
-                              width: 1.2,
-                            ),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withValues(alpha: 0.35),
-                                blurRadius: 10,
-                                offset: const Offset(0, 4),
-                              ),
-                            ],
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(
-                                _stockAlertToastIsActive ? Icons.palette_rounded : Icons.palette_outlined,
-                                size: 18,
-                                color: _stockAlertToastIsActive ? Colors.tealAccent : Colors.grey[400],
-                              ),
-                              const SizedBox(width: 8),
-                              Text(
-                                _stockAlertToastText,
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 13,
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              Container(
-                                padding: const EdgeInsets.all(2),
-                                decoration: BoxDecoration(
-                                  color: Colors.white.withValues(alpha: 0.2),
-                                  shape: BoxShape.circle,
-                                ),
-                                child: const Icon(
-                                  Icons.info_outline,
-                                  size: 12,
-                                  color: Colors.white,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
+          _buildFloatingMenuLayer(context, isDark, isGuest),
+          _buildStockAlertToast(context, provider, isDark),
         ],
       ),
-    );
-  }
-
-  Widget _buildFabOption({
-    required IconData icon,
-    required String label,
-    required VoidCallback onTap,
-    required Color color,
-    required bool isDark,
-  }) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 16.0, right: 4.0),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.end,
-        children: [
-          Material(
-            color: Colors.transparent,
-            child: InkWell(
-              onTap: onTap,
-              borderRadius: BorderRadius.circular(12),
-              child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 10,
-                ),
-                decoration: BoxDecoration(
-                  color: isDark ? const Color(0xFF23232F) : Colors.white,
-                  borderRadius: BorderRadius.circular(12),
-                  boxShadow: [
-                    if (!isDark)
-                      const BoxShadow(color: Colors.black26, blurRadius: 6),
-                  ],
-                ),
-                child: Text(
-                  label,
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 14,
-                    color: isDark ? Colors.white : Colors.black87,
-                  ),
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(width: 12),
-          FloatingActionButton(
-            onPressed: onTap,
-            backgroundColor: color,
-            foregroundColor: Colors.white,
-            elevation: isDark ? 0 : 4,
-            heroTag: null,
-            child: Icon(icon, size: 26),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSliverList(List<InventoryWrapper> items, bool isDark) {
-    Widget wrapFirstIfNeeded(int index, Widget child) {
-      if (index != 0 || widget.tourKeys == null) {
-        return child;
-      }
-      return KeyedSubtree(
-        key: widget.tourKeys!.productCardKey,
-        child: child,
-      );
-    }
-
-    if (_viewMode == 1) {
-      return SliverPadding(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 110),
-        sliver: SliverGrid(
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 2,
-            childAspectRatio: 0.62,
-            crossAxisSpacing: 12,
-            mainAxisSpacing: 12,
-          ),
-          delegate: SliverChildBuilderDelegate(
-            (ctx, i) => wrapFirstIfNeeded(
-              i,
-              InventoryGridCard(
-                item: items[i],
-                onTap: () => _navigateToDetail(ctx, items[i]),
-                onTapPrice: () => _openPriceModal(ctx, items[i], isDark),
-                onTapStock: () => _openStockModal(ctx, items[i], isDark),
-                onMoreOptions: () => _openActions(ctx, items[i]),
-              ),
-            ),
-            childCount: items.length,
-          ),
-        ),
-      );
-    }
-
-    if (_viewMode == 2) {
-      return SliverPadding(
-        padding: const EdgeInsets.only(bottom: 110),
-        sliver: SliverList(
-          delegate: SliverChildBuilderDelegate((ctx, i) {
-            return Column(
-              children: [
-                wrapFirstIfNeeded(
-                  i,
-                  InventoryCompactTile(
-                    item: items[i],
-                    onTap: () => _navigateToDetail(ctx, items[i]),
-                    onTapPrice: () => _openPriceModal(ctx, items[i], isDark),
-                    onTapStock: () => _openStockModal(ctx, items[i], isDark),
-                    onMoreOptions: () => _openActions(ctx, items[i]),
-                  ),
-                ),
-                if (i < items.length - 1)
-                  Divider(
-                    height: 1,
-                    color: isDark ? Colors.white10 : Colors.grey.shade200,
-                    indent: 20,
-                    endIndent: 20,
-                  ),
-              ],
-            );
-          }, childCount: items.length),
-        ),
-      );
-    }
-
-    return SliverPadding(
-      padding: const EdgeInsets.only(top: 8, bottom: 110),
-      sliver: SliverList(
-        delegate: SliverChildBuilderDelegate(
-          (ctx, i) => wrapFirstIfNeeded(
-            i,
-            InventoryItemTile(
-              item: items[i],
-              onTap: () => _navigateToDetail(ctx, items[i]),
-              onTapPrice: () => _openPriceModal(ctx, items[i], isDark),
-              onTapStock: () => _openStockModal(ctx, items[i], isDark),
-              onMoreOptions: () => _openActions(ctx, items[i]),
-            ),
-          ),
-          childCount: items.length,
-        ),
-      ),
-    );
-  }
-
-  Widget _buildEmptyState(bool isDark, InventoryProvider provider) {
-    final bool hasFilters =
-        provider.activeQuery.isNotEmpty ||
-        provider.activeCategoryIds.isNotEmpty ||
-        provider.activeBrandIds.isNotEmpty ||
-        provider.activeProviderIds.isNotEmpty ||
-        provider.activeState != null;
-
-    final Widget content = hasFilters
-        ? const EmptyStateWidget(
-            icon: Icons.search_off,
-            title: "No hay resultados",
-            subtitle: "Intenta ajustando tus filtros o términos de búsqueda.",
-          )
-        : const EmptyStateWidget(
-            icon: Icons.inventory_2_outlined,
-            title: "Inventario Vacío",
-            subtitle:
-                "Aún no tienes productos registrados. Escanea una factura o agrega uno manualmente para empezar.",
-          );
-
-    if (widget.tourKeys == null) {
-      return content;
-    }
-    return KeyedSubtree(
-      key: widget.tourKeys!.productCardKey,
-      child: content,
     );
   }
 }
