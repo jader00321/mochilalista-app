@@ -194,35 +194,38 @@ class _KpiSummaryRowState extends State<KpiSummaryRow> {
       onTap: () => _onCardTap(index),
       child: GlassCard(
         isDark: widget.isDark,
-        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 6),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(kpi['icon'], color: kpi['color'], size: 24),
-            const SizedBox(height: 6),
+            Icon(kpi['icon'], color: kpi['color'], size: 22),
+            const SizedBox(height: 4),
             FittedBox(
               fit: BoxFit.scaleDown,
               child: Text(
-                kpi['value'], 
+                kpi['value'],
                 style: TextStyle(
-                  fontWeight: FontWeight.bold, 
-                  fontSize: 14, 
-                  color: kpi['title'] == 'Inmovilizado' 
-                      ? kpi['color'] 
-                      : (widget.isDark ? Colors.white : Colors.black87)
-                )
+                  fontWeight: FontWeight.bold,
+                  fontSize: 14,
+                  color: kpi['title'] == 'Inmovilizado'
+                      ? kpi['color']
+                      : (widget.isDark ? Colors.white : Colors.black87),
+                ),
               ),
             ),
             const SizedBox(height: 2),
-            Text(
-              kpi['title'], 
-              style: TextStyle(
-                fontSize: 10, 
-                color: widget.isDark ? Colors.grey[400] : Colors.grey[600]
-              ), 
-              textAlign: TextAlign.center,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
+            Flexible(
+              child: Text(
+                kpi['title'],
+                style: TextStyle(
+                  fontSize: 10,
+                  color: widget.isDark ? Colors.grey[400] : Colors.grey[600],
+                ),
+                textAlign: TextAlign.center,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
             ),
           ],
         ),
@@ -295,19 +298,25 @@ class _KpiSummaryRowState extends State<KpiSummaryRow> {
         ),
         const SizedBox(height: 14),
         // Grid de las tarjetas restantes
-        GridView.builder(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 3,
-            crossAxisSpacing: 10,
-            mainAxisSpacing: 10,
-            childAspectRatio: 1.15,
-          ),
-          itemCount: otherIndices.length,
-          itemBuilder: (context, index) {
-            int originalIndex = otherIndices[index];
-            return _buildSmallCard(originalIndex, kpis[originalIndex]);
+        Builder(
+          builder: (context) {
+            final scaleFactor = MediaQuery.textScalerOf(context).scale(14) / 14;
+            final aspect = scaleFactor > 1.15 ? 0.85 : 1.12;
+            return GridView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 3,
+                crossAxisSpacing: 10,
+                mainAxisSpacing: 10,
+                childAspectRatio: aspect,
+              ),
+              itemCount: otherIndices.length,
+              itemBuilder: (context, index) {
+                int originalIndex = otherIndices[index];
+                return _buildSmallCard(originalIndex, kpis[originalIndex]);
+              },
+            );
           },
         ),
       ],

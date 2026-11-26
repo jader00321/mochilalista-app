@@ -285,7 +285,14 @@ class _FinancialSummaryCardState extends State<FinancialSummaryCard> with Single
           children: [
             Icon(icon, color: color, size: 16),
             const SizedBox(width: 6),
-            Text(label, style: const TextStyle(color: Colors.white70, fontSize: 13)),
+            Expanded(
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(color: Colors.white70, fontSize: 13),
+              ),
+            ),
           ],
         ),
         const SizedBox(height: 6),
