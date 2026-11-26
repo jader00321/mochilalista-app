@@ -2,7 +2,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
-import 'package:intl/intl.dart';
 import 'package:app_movil/features/catalog/models/inventory_wrapper.dart';
 import 'package:app_movil/features/catalog/models/product_model.dart';
 import 'package:app_movil/core/widgets/universal_image.dart';
@@ -13,6 +12,11 @@ import 'package:app_movil/features/promotions/models/bundle_model.dart';
 import 'package:app_movil/features/promotions/models/bundle_item_model.dart';
 import 'package:app_movil/core/widgets/interactive_sheet_wrapper.dart';
 import 'package:app_movil/core/utils/currency_formatter.dart';
+
+part 'detail_modal/product_quote_detail_logic_mixin.dart';
+part 'detail_modal/product_quote_header_and_variants_section.dart';
+part 'detail_modal/product_quote_pricing_and_bundles_section.dart';
+part 'detail_modal/product_quote_qty_and_totals_section.dart';
 
 enum _PricingMode { normal, catalogOffer, manualDiscount }
 
@@ -89,7 +93,8 @@ class ProductQuoteDetailModal extends StatefulWidget {
       _ProductQuoteDetailModalState();
 }
 
-class _ProductQuoteDetailModalState extends State<ProductQuoteDetailModal>
+abstract class _ProductQuoteDetailStateBase
+    extends State<ProductQuoteDetailModal>
     with SingleTickerProviderStateMixin {
   Product? _fullProduct;
   bool _isLoading = true;
@@ -109,17 +114,6 @@ class _ProductQuoteDetailModalState extends State<ProductQuoteDetailModal>
   AnimationController? _maxStockBannerAnim;
   Timer? _maxStockBannerTimer;
   bool _showMaxStockBanner = false;
-
-  int _getRealStock(ProductPresentation pres) {
-    final bool isShared = (_fullProduct?.modoStock == 'COMPARTIDO')
-        ? true
-        : pres.usaStockCompartido;
-    if (isShared) {
-      return pres.unidadesVendiblesDisponibles;
-    }
-    int factor = pres.unidadesPorVenta > 0 ? pres.unidadesPorVenta : 1;
-    return pres.stockActual ~/ factor;
-  }
 
   @override
   void initState() {
@@ -145,43 +139,6 @@ class _ProductQuoteDetailModalState extends State<ProductQuoteDetailModal>
     _loadFullProductDetails();
   }
 
-  void _initializePricing() {
-    final double basePrice = _selectedPresentation.precioVentaFinal;
-    final bool hasOffer =
-        _selectedPresentation.precioOferta != null &&
-        _selectedPresentation.precioOferta! > 0;
-    final double offerPrice = hasOffer
-        ? _selectedPresentation.precioOferta!
-        : basePrice;
-
-    double effectivePrice =
-        widget.currentOverridePrice ?? (hasOffer ? offerPrice : basePrice);
-
-    if (widget.currentOverridePrice != null) {
-      if (widget.currentOverridePrice == offerPrice && hasOffer) {
-        _pricingMode = _PricingMode.catalogOffer;
-        _discountCtrl.text = (basePrice - offerPrice).toStringAsFixed(2);
-      } else if (widget.currentOverridePrice == basePrice) {
-        _pricingMode = _PricingMode.normal;
-        _discountCtrl.text = "";
-      } else {
-        _pricingMode = _PricingMode.manualDiscount;
-        double discount = basePrice - widget.currentOverridePrice!;
-        _discountCtrl.text = discount > 0 ? discount.toStringAsFixed(2) : "";
-      }
-    } else {
-      if (hasOffer) {
-        _pricingMode = _PricingMode.catalogOffer;
-        _discountCtrl.text = (basePrice - offerPrice).toStringAsFixed(2);
-      } else {
-        _pricingMode = _PricingMode.normal;
-        _discountCtrl.text = "";
-      }
-    }
-
-    _priceCtrl.text = effectivePrice.toStringAsFixed(2);
-  }
-
   @override
   void dispose() {
     _maxStockBannerTimer?.cancel();
@@ -192,621 +149,55 @@ class _ProductQuoteDetailModalState extends State<ProductQuoteDetailModal>
     super.dispose();
   }
 
-  void _triggerMaxStockReached(int maxStock, String unitName) {
-    HapticFeedback.lightImpact();
-    _maxStockBannerTimer?.cancel();
-    setState(() {
-      _showMaxStockBanner = true;
-    });
-    _maxStockBannerAnim?.forward(from: 0.0);
-    _maxStockBannerTimer = Timer(const Duration(milliseconds: 2800), () {
-      if (mounted) {
-        _maxStockBannerAnim?.reverse().orCancel.then((_) {
-          if (mounted) {
-            setState(() {
-              _showMaxStockBanner = false;
-            });
-          }
-        }).catchError((_) {});
-      }
-    });
-  }
+  int _getRealStock(ProductPresentation pres);
+  void _initializePricing();
+  void _selectPricingMode(_PricingMode mode);
+  void _triggerMaxStockReached(int maxStock, String unitName);
+  Future<void> _loadFullProductDetails();
+  double _getEffectivePrice();
+  void _onDiscountChanged(String val);
+  void _onPriceChanged(String val);
+  void _qtyAction(int delta, bool isClient);
+  void _handleSave();
+  List<BundleModel> _getApplicableBundles();
 
-  Future<void> _loadFullProductDetails() async {
-    final inventoryProv = Provider.of<InventoryProvider>(
-      context,
-      listen: false,
-    );
-    final product = await inventoryProv.getFullProductWithFallback(
-      widget.wrapper.product.id,
-    );
-
-    if (mounted) {
-      setState(() {
-        _fullProduct = product;
-        _isLoading = false;
-
-        if (_currentCategoryName.isEmpty && product != null) {
-          _currentCategoryName = inventoryProv.getCategoryName(
-            product.categoriaId,
-          );
-        }
-
-        if (_fullProduct != null) {
-          try {
-            _selectedPresentation = _fullProduct!.presentaciones.firstWhere(
-              (p) => p.id == _selectedPresentation.id,
-              orElse: () => _selectedPresentation,
-            );
-          } catch (_) {}
-        }
-      });
-    }
-  }
-
-  double _getEffectivePrice() {
-    switch (_pricingMode) {
-      case _PricingMode.normal:
-        return _selectedPresentation.precioVentaFinal;
-      case _PricingMode.catalogOffer:
-        return _selectedPresentation.precioOferta ??
-            _selectedPresentation.precioVentaFinal;
-      case _PricingMode.manualDiscount:
-        return double.tryParse(_priceCtrl.text) ??
-            _selectedPresentation.precioVentaFinal;
-    }
-  }
-
-  void _onDiscountChanged(String val) {
-    if (_isSyncing) return;
-    _isSyncing = true;
-    double basePrice = _selectedPresentation.precioVentaFinal;
-
-    if (val.trim().isEmpty) {
-      _priceCtrl.text = basePrice.toStringAsFixed(2);
-      _isSyncing = false;
-      setState(() {});
-      return;
-    }
-
-    double disc = double.tryParse(val) ?? 0.0;
-    if (disc < 0) disc = 0;
-    if (disc > basePrice) {
-      disc = basePrice;
-      _discountCtrl.text = basePrice.toStringAsFixed(2);
-    }
-
-    double newPrice = basePrice - disc;
-    _priceCtrl.text = newPrice.toStringAsFixed(2);
-    _isSyncing = false;
-    setState(() {});
-  }
-
-  void _onPriceChanged(String val) {
-    if (_isSyncing) return;
-    _isSyncing = true;
-    double basePrice = _selectedPresentation.precioVentaFinal;
-
-    if (val.trim().isEmpty) {
-      _discountCtrl.text = "";
-      _isSyncing = false;
-      setState(() {});
-      return;
-    }
-
-    double price = double.tryParse(val) ?? basePrice;
-    if (price < 0) {
-      price = 0;
-      _priceCtrl.text = "0.00";
-    }
-    if (price > basePrice) {
-      price = basePrice;
-      _priceCtrl.text = basePrice.toStringAsFixed(2);
-    }
-
-    double disc = basePrice - price;
-    _discountCtrl.text = disc > 0 ? disc.toStringAsFixed(2) : "";
-    _isSyncing = false;
-    setState(() {});
-  }
-
-  void _qtyAction(int delta, bool isClient) {
-    int current = int.tryParse(_qtyCtrl.text) ?? 0;
-    int newQty = current + delta;
-    final realStock = _getRealStock(_selectedPresentation);
-    final unitName = _selectedPresentation.unidadVenta ?? 'Und';
-
-    if (delta > 0 && realStock > 0 && newQty > realStock) {
-      _qtyCtrl.text = realStock.toString();
-      _triggerMaxStockReached(realStock, unitName);
-      setState(() => _quantity = realStock);
-      return;
-    }
-
-    if (newQty > 0) {
-      _qtyCtrl.text = newQty.toString();
-      setState(() => _quantity = newQty);
-    }
-  }
-
-  void _handleSave() {
-    final double finalPrice = _getEffectivePrice();
-    final double defaultSystemPrice =
-        _selectedPresentation.precioOferta != null &&
-            _selectedPresentation.precioOferta! > 0
-        ? _selectedPresentation.precioOferta!
-        : _selectedPresentation.precioVentaFinal;
-
-    final overridePrice = (finalPrice == defaultSystemPrice)
-        ? null
-        : finalPrice;
-
-    widget.onSave(_selectedPresentation, _quantity, overridePrice, null);
-    Navigator.pop(context);
-  }
-
-  List<BundleModel> _getApplicableBundles() {
-    if (widget.availableBundles == null ||
-        widget.bundleItemsCache == null ||
-        _fullProduct == null) {
-      return [];
-    }
-
-    List<BundleModel> applicable = [];
-    for (var bundle in widget.availableBundles!) {
-      final items = widget.bundleItemsCache![bundle.id] ?? [];
-      if (items.any((item) => item.productoId == _fullProduct!.id)) {
-        applicable.add(bundle);
-      }
-    }
-    return applicable;
-  }
-
-  Widget _buildPricingSection(
-    bool isDark,
-    TextTheme textTheme,
-    NumberFormat currency,
-  ) {
-    final basePrice = _selectedPresentation.precioVentaFinal;
-    final hasOffer =
-        _selectedPresentation.precioOferta != null &&
-        _selectedPresentation.precioOferta! > 0;
-    final offerPrice = hasOffer
-        ? _selectedPresentation.precioOferta!
-        : basePrice;
-
-    final applicableBundles = _getApplicableBundles();
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          "Configuración de Precio",
-          style: textTheme.titleMedium?.copyWith(
-            color: isDark ? Colors.grey[300] : Colors.grey[800],
-          ),
-        ),
-        const SizedBox(height: 12),
-
-        Container(
-          decoration: BoxDecoration(
-            color: isDark ? const Color(0xFF1A1A24) : Colors.grey.shade50,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: isDark ? Colors.white10 : Colors.grey.shade200,
-            ),
-          ),
-          child: Column(
-            children: [
-              _buildRadioOption(
-                isDark: isDark,
-                textTheme: textTheme,
-                currency: currency,
-                mode: _PricingMode.normal,
-                title: "Precio Normal",
-                subtitle: "Sin descuento aplicado",
-                price: basePrice,
-                activeColor: Colors.blue,
-              ),
-
-              if (hasOffer) ...[
-                Divider(
-                  height: 1,
-                  color: isDark ? Colors.white10 : Colors.grey.shade200,
-                ),
-                _buildRadioOption(
-                  isDark: isDark,
-                  textTheme: textTheme,
-                  currency: currency,
-                  mode: _PricingMode.catalogOffer,
-                  title: "Oferta de Catálogo",
-                  subtitle: "Descuento individual activo",
-                  price: offerPrice,
-                  activeColor: Colors.green,
-                ),
-              ],
-
-              Divider(
-                height: 1,
-                color: isDark ? Colors.white10 : Colors.grey.shade200,
-              ),
-              _buildRadioOption(
-                isDark: isDark,
-                textTheme: textTheme,
-                currency: currency,
-                mode: _PricingMode.manualDiscount,
-                title: "Precio Especial Manual",
-                subtitle: "Aplica un descuento personalizado",
-                price: null,
-                activeColor: Colors.orange,
-              ),
-
-              AnimatedCrossFade(
-                duration: const Duration(milliseconds: 300),
-                crossFadeState: _pricingMode == _PricingMode.manualDiscount
-                    ? CrossFadeState.showSecond
-                    : CrossFadeState.showFirst,
-                firstChild: const SizedBox(width: double.infinity, height: 0),
-                secondChild: _buildManualDiscountUI(
-                  isDark,
-                  textTheme,
-                  currency,
-                  basePrice,
-                ),
-              ),
-            ],
-          ),
-        ),
-
-        if (applicableBundles.isNotEmpty) ...[
-          const SizedBox(height: 16),
-          Text(
-            "Paquetes Disponibles",
-            style: textTheme.titleSmall?.copyWith(
-              color: isDark ? Colors.amber[300] : Colors.amber[800],
-            ),
-          ),
-          const SizedBox(height: 8),
-          ...applicableBundles.map(
-            (b) => Padding(
-              padding: const EdgeInsets.only(bottom: 8.0),
-              child: Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: isDark
-                      ? Colors.amber.withValues(alpha: 0.1)
-                      : Colors.amber.shade50,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: isDark
-                        ? Colors.amber.withValues(alpha: 0.3)
-                        : Colors.amber.shade200,
-                  ),
-                ),
-                child: Row(
-                  children: [
-                    const Icon(
-                      Icons.auto_awesome,
-                      color: Colors.amber,
-                      size: 20,
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            b.nombrePaquete,
-                            style: textTheme.bodyMedium?.copyWith(
-                              fontWeight: FontWeight.bold,
-                              color: isDark
-                                  ? Colors.amber[200]
-                                  : Colors.amber[900],
-                            ),
-                          ),
-                          Text(
-                            "Se aplica automáticamente (Referencial)",
-                            style: textTheme.bodySmall?.copyWith(
-                              color: isDark
-                                  ? Colors.amber[100]
-                                  : Colors.amber[800],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ],
-      ],
-    );
-  }
-
-  Widget _buildRadioOption({
+  Widget _buildNameChangedBanner(String snapshot, bool isDark);
+  Widget _buildProductHeader({
+    required Product productDisplay,
+    required String? img,
+    required bool hasRealImage,
     required bool isDark,
     required TextTheme textTheme,
-    required NumberFormat currency,
-    required _PricingMode mode,
-    required String title,
-    required String subtitle,
-    required double? price,
-    required MaterialColor activeColor,
-  }) {
-    final bool isSelected = _pricingMode == mode;
-    return InkWell(
-      onTap: () {
-        setState(() {
-          _pricingMode = mode;
-          if (mode == _PricingMode.manualDiscount) {
-            if (_discountCtrl.text.isEmpty ||
-                (double.tryParse(_discountCtrl.text) ?? 0.0) == 0.0) {
-              final double basePrice = _selectedPresentation.precioVentaFinal;
-              final bool hasOffer =
-                  _selectedPresentation.precioOferta != null &&
-                  _selectedPresentation.precioOferta! > 0;
-              if (hasOffer) {
-                final double offerPrice = _selectedPresentation.precioOferta!;
-                _discountCtrl.text = (basePrice - offerPrice).toStringAsFixed(
-                  2,
-                );
-                _priceCtrl.text = offerPrice.toStringAsFixed(2);
-              } else {
-                _priceCtrl.text = basePrice.toStringAsFixed(2);
-              }
-            }
-          }
-        });
-      },
-      borderRadius: BorderRadius.circular(16),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        decoration: BoxDecoration(
-          color: isSelected
-              ? (isDark
-                    ? activeColor.withValues(alpha: 0.1)
-                    : activeColor.shade50)
-              : Colors.transparent,
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: Row(
-          children: [
-            Radio<_PricingMode>(
-              value: mode,
-              // ignore: deprecated_member_use
-              groupValue: _pricingMode,
-              // ignore: deprecated_member_use
-              onChanged: (v) {
-                if (v != null) {
-                  setState(() {
-                    _pricingMode = v;
-                    if (v == _PricingMode.manualDiscount) {
-                      if (_discountCtrl.text.isEmpty ||
-                          (double.tryParse(_discountCtrl.text) ?? 0.0) == 0.0) {
-                        final double basePrice =
-                            _selectedPresentation.precioVentaFinal;
-                        final bool hasOffer =
-                            _selectedPresentation.precioOferta != null &&
-                            _selectedPresentation.precioOferta! > 0;
-                        if (hasOffer) {
-                          final double offerPrice =
-                              _selectedPresentation.precioOferta!;
-                          _discountCtrl.text = (basePrice - offerPrice)
-                              .toStringAsFixed(2);
-                          _priceCtrl.text = offerPrice.toStringAsFixed(2);
-                        } else {
-                          _priceCtrl.text = basePrice.toStringAsFixed(2);
-                        }
-                      }
-                    }
-                  });
-                }
-              },
-              activeColor: activeColor,
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: textTheme.titleMedium?.copyWith(
-                      color: isSelected
-                          ? (isDark ? activeColor[300] : activeColor[900])
-                          : (isDark ? Colors.white : Colors.black87),
-                    ),
-                  ),
-                  Text(
-                    subtitle,
-                    style: textTheme.bodySmall?.copyWith(
-                      color: isSelected
-                          ? (isDark ? activeColor[200] : activeColor[700])
-                          : (isDark ? Colors.grey[500] : Colors.grey),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            if (price != null)
-              Text(
-                AppCurrency.format(price),
-                style: textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.bold,
-                  color: isSelected
-                      ? (isDark ? activeColor[300] : activeColor[900])
-                      : (isDark ? Colors.grey[400] : Colors.grey[700]),
-                ),
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildManualDiscountUI(
-    bool isDark,
-    TextTheme textTheme,
-    NumberFormat currency,
-    double basePrice,
-  ) {
-    double currentDiscount = double.tryParse(_discountCtrl.text) ?? 0.0;
-    double currentPrice = double.tryParse(_priceCtrl.text) ?? basePrice;
-
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: isDark
-            ? Colors.orange.withValues(alpha: 0.05)
-            : Colors.orange.shade50,
-        borderRadius: const BorderRadius.only(
-          bottomLeft: Radius.circular(16),
-          bottomRight: Radius.circular(16),
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      "S/ a Descontar",
-                      style: textTheme.labelLarge?.copyWith(
-                        color: isDark ? Colors.orange[300] : Colors.orange[900],
-                      ),
-                    ),
-                    TextField(
-                      controller: _discountCtrl,
-                      keyboardType: const TextInputType.numberWithOptions(
-                        decimal: true,
-                      ),
-                      style: textTheme.headlineSmall?.copyWith(
-                        color: isDark ? Colors.white : Colors.black87,
-                      ),
-                      decoration: InputDecoration(
-                        prefixText: "- ",
-                        prefixStyle: textTheme.headlineSmall?.copyWith(
-                          color: isDark
-                              ? Colors.orange[300]
-                              : Colors.orange[900],
-                        ),
-                        isDense: true,
-                        border: InputBorder.none,
-                        hintText: "0.00",
-                      ),
-                      onChanged: _onDiscountChanged,
-                    ),
-                  ],
-                ),
-              ),
-              Container(
-                width: 1,
-                height: 50,
-                color: isDark
-                    ? Colors.orange.withValues(alpha: 0.3)
-                    : Colors.orange[300],
-              ),
-              const SizedBox(width: 20),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      "Precio Final Unit.",
-                      style: textTheme.labelLarge?.copyWith(
-                        color: isDark ? Colors.blue[300] : Colors.blue[900],
-                      ),
-                    ),
-                    TextField(
-                      controller: _priceCtrl,
-                      keyboardType: const TextInputType.numberWithOptions(
-                        decimal: true,
-                      ),
-                      style: textTheme.headlineSmall?.copyWith(
-                        color: isDark ? Colors.blue[300] : Colors.blue,
-                      ),
-                      decoration: InputDecoration(
-                        prefixText: "S/ ",
-                        prefixStyle: textTheme.headlineSmall?.copyWith(
-                          color: isDark ? Colors.blue[300] : Colors.blue,
-                        ),
-                        isDense: true,
-                        border: InputBorder.none,
-                      ),
-                      onChanged: _onPriceChanged,
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            decoration: BoxDecoration(
-              color: isDark ? Colors.black26 : Colors.white,
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(
-                color: isDark ? Colors.white10 : Colors.grey.shade300,
-              ),
-            ),
-            child: RichText(
-              text: TextSpan(
-                children: [
-                  TextSpan(
-                    text: "Base: ",
-                    style: textTheme.bodySmall?.copyWith(
-                      color: isDark ? Colors.grey[400] : Colors.grey[600],
-                    ),
-                  ),
-                  TextSpan(
-                    text: AppCurrency.format(basePrice),
-                    style: textTheme.bodySmall?.copyWith(
-                      fontWeight: FontWeight.bold,
-                      color: isDark ? Colors.grey[300] : Colors.grey[800],
-                    ),
-                  ),
-                  TextSpan(
-                    text: " → Menos ",
-                    style: textTheme.bodySmall?.copyWith(
-                      color: isDark ? Colors.grey[400] : Colors.grey[600],
-                    ),
-                  ),
-                  TextSpan(
-                    text: AppCurrency.format(currentDiscount),
-                    style: textTheme.bodySmall?.copyWith(
-                      fontWeight: FontWeight.bold,
-                      color: isDark ? Colors.orange[300] : Colors.orange[800],
-                    ),
-                  ),
-                  TextSpan(
-                    text: " = Final: ",
-                    style: textTheme.bodySmall?.copyWith(
-                      color: isDark ? Colors.grey[400] : Colors.grey[600],
-                    ),
-                  ),
-                  TextSpan(
-                    text: AppCurrency.format(currentPrice),
-                    style: textTheme.bodySmall?.copyWith(
-                      fontWeight: FontWeight.bold,
-                      color: isDark ? Colors.blue[300] : Colors.blue[800],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+    required Color textColor,
+    required bool isStockEmpty,
+    required int realStock,
+  });
+  Widget _buildVariantSelectorSection({
+    required bool isClient,
+    required bool isDark,
+    required TextTheme textTheme,
+    required Color textColor,
+  });
+  Widget _buildPricingSection(bool isDark, TextTheme textTheme);
+  Widget _buildQuantityAndSubtotalRow({
+    required bool isClient,
+    required bool isDark,
+    required TextTheme textTheme,
+    required Color textColor,
+    required bool exceedsStock,
+    required bool isStockEmpty,
+    required double savings,
+    required double subtotal,
+  });
+  Widget _buildMaxStockBanner(bool isDark);
+  Widget _buildStockStatusNotice({
+    required bool isStockEmpty,
+    required bool exceedsStock,
+    required bool isClient,
+    required int realStock,
+    required bool isDark,
+    required TextTheme textTheme,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -814,7 +205,6 @@ class _ProductQuoteDetailModalState extends State<ProductQuoteDetailModal>
     final isClient = auth.isCommunityClient;
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final textTheme = Theme.of(context).textTheme;
-    final currency = NumberFormat.currency(locale: 'es_PE', symbol: 'S/ ');
     final productDisplay = _fullProduct ?? widget.wrapper.product;
     final textColor = isDark ? Colors.white : Colors.black87;
 
@@ -832,14 +222,14 @@ class _ProductQuoteDetailModalState extends State<ProductQuoteDetailModal>
     final savings = originalTotal - subtotal;
 
     final realStock = _getRealStock(_selectedPresentation);
-    bool isStockEmpty = realStock <= 0;
-    bool exceedsStock = _quantity > realStock && !isStockEmpty;
+    final bool isStockEmpty = realStock <= 0;
+    final bool exceedsStock = _quantity > realStock && !isStockEmpty;
 
-    String snapshot = widget.currentSnapshotName?.trim() ?? "";
-    String currentBuiltName =
+    final String snapshot = widget.currentSnapshotName?.trim() ?? "";
+    final String currentBuiltName =
         "${productDisplay.nombre} ${_selectedPresentation.nombreEspecifico ?? ''}"
             .trim();
-    bool isNameChanged =
+    final bool isNameChanged =
         snapshot.isNotEmpty &&
         currentBuiltName.toLowerCase() != snapshot.toLowerCase() &&
         !snapshot.toLowerCase().contains("nuevo ítem");
@@ -866,855 +256,90 @@ class _ProductQuoteDetailModalState extends State<ProductQuoteDetailModal>
               borderRadius: BorderRadius.circular(16),
             ),
           ),
-          child: const Text(
-            "CONFIRMAR PRODUCTO",
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
-              letterSpacing: 0.5,
+          child: const FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(
+              "CONFIRMAR PRODUCTO",
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                letterSpacing: 0.5,
+              ),
             ),
           ),
         ),
       ),
       child: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(20, 8, 20, InteractiveSheetWrapper.kModalScrollBottomClearance),
+        padding: const EdgeInsets.fromLTRB(
+          20,
+          8,
+          20,
+          InteractiveSheetWrapper.kModalScrollBottomClearance,
+        ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            if (isNameChanged)
-              Container(
-                margin: const EdgeInsets.only(bottom: 16),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 10,
-                ),
-                decoration: BoxDecoration(
-                  color: isDark
-                      ? Colors.orange.withValues(alpha: 0.15)
-                      : Colors.orange.shade50,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.only(top: 2.0),
-                      child: Icon(
-                        Icons.history,
-                        size: 18,
-                        color: isDark ? Colors.orange[300] : Colors.orange[800],
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        "Extraído originalmente como:\n$snapshot",
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: isDark
-                              ? Colors.orange[300]
-                              : Colors.orange[800],
-                          fontStyle: FontStyle.italic,
-                        ),
-                        maxLines: 4,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                GestureDetector(
-                  onTap: hasRealImage
-                      ? () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => FullScreenImageViewer(
-                                imageUrl: img,
-                                tag: "matching_${_selectedPresentation.id}",
-                              ),
-                            ),
-                          );
-                        }
-                      : null,
-                  child: Hero(
-                    tag: "matching_${_selectedPresentation.id}",
-                    child: Stack(
-                      alignment: Alignment.center,
-                      children: [
-                        Container(
-                          width: 90,
-                          height: 90,
-                          decoration: BoxDecoration(
-                            color: isDark ? Colors.white10 : Colors.white,
-                            border: Border.all(
-                              color: isDark
-                                  ? Colors.transparent
-                                  : Colors.grey.shade300,
-                            ),
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(16),
-                            child: UniversalImage(
-                              path: img,
-                              productName: productDisplay.nombre,
-                              categoryName: _currentCategoryName.isNotEmpty
-                                  ? _currentCategoryName
-                                  : widget.brandName,
-                              fit: BoxFit.cover,
-                            ),
-                          ),
-                        ),
-                        if (hasRealImage) ...[
-                          Container(
-                            width: 90,
-                            height: 90,
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(16),
-                              color: Colors.black.withValues(alpha: 0.2),
-                            ),
-                          ),
-                          const Icon(
-                            Icons.zoom_in,
-                            color: Colors.white,
-                            size: 32,
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      if (widget.brandName != null &&
-                          widget.brandName!.isNotEmpty)
-                        Text(
-                          widget.brandName!.toUpperCase(),
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: isDark
-                                ? Colors.indigo[300]
-                                : Colors.indigo[800],
-                            fontWeight: FontWeight.w800,
-                            letterSpacing: 0.5,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-
-                      const SizedBox(height: 2),
-
-                      RichText(
-                        maxLines: 4,
-                        overflow: TextOverflow.ellipsis,
-                        text: TextSpan(
-                          children: [
-                            TextSpan(
-                              text: "${productDisplay.nombre} ",
-                              style: TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
-                                color: textColor,
-                                height: 1.2,
-                              ),
-                            ),
-                            if (_selectedPresentation.nombreEspecifico !=
-                                    null &&
-                                _selectedPresentation
-                                    .nombreEspecifico!
-                                    .isNotEmpty)
-                              TextSpan(
-                                text: _selectedPresentation.nombreEspecifico!,
-                                style: TextStyle(
-                                  fontSize: 18,
-                                  color: isDark
-                                      ? Colors.teal[300]
-                                      : Colors.teal[700],
-                                  height: 1.2,
-                                ),
-                              ),
-                          ],
-                        ),
-                      ),
-
-                      const SizedBox(height: 10),
-
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 10,
-                              vertical: 4,
-                            ),
-                            decoration: BoxDecoration(
-                              color: isDark
-                                  ? Colors.blue.withValues(alpha: 0.2)
-                                  : Colors.blue.shade50,
-                              borderRadius: BorderRadius.circular(6),
-                            ),
-                            child: Text(
-                              "${_selectedPresentation.unidadVenta ?? 'Unidad'} (x${_selectedPresentation.unidadesPorVenta})",
-                              style: textTheme.labelSmall?.copyWith(
-                                color: isDark
-                                    ? Colors.blue[300]
-                                    : Colors.blue[700],
-                              ),
-                            ),
-                          ),
-                          if (_currentCategoryName.isNotEmpty)
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 10,
-                                vertical: 4,
-                              ),
-                              decoration: BoxDecoration(
-                                color: isDark
-                                    ? Colors.grey.withValues(alpha: 0.2)
-                                    : Colors.grey.shade200,
-                                borderRadius: BorderRadius.circular(6),
-                              ),
-                              child: Text(
-                                _currentCategoryName,
-                                style: textTheme.labelSmall?.copyWith(
-                                  color: isDark
-                                      ? Colors.grey[300]
-                                      : Colors.grey[700],
-                                ),
-                              ),
-                            ),
-                        ],
-                      ),
-
-                      const SizedBox(height: 8),
-                      FittedBox(
-                        fit: BoxFit.scaleDown,
-                        alignment: Alignment.centerRight,
-                        child: Text(
-                          isStockEmpty
-                              ? "Agotado (0)"
-                              : "Stock disponible: $realStock ${_selectedPresentation.unidadVenta ?? 'Unidad'}",
-                          style: textTheme.bodySmall?.copyWith(
-                            color: isStockEmpty
-                                ? (isDark ? Colors.red[400] : Colors.red)
-                                : (isDark ? Colors.green[400] : Colors.green),
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
+            if (isNameChanged) _buildNameChangedBanner(snapshot, isDark),
+            _buildProductHeader(
+              productDisplay: productDisplay,
+              img: img,
+              hasRealImage: hasRealImage,
+              isDark: isDark,
+              textTheme: textTheme,
+              textColor: textColor,
+              isStockEmpty: isStockEmpty,
+              realStock: realStock,
             ),
-
             const SizedBox(height: 24),
-
             if (_isLoading)
               const Center(child: CircularProgressIndicator())
             else if (_fullProduct != null &&
-                _fullProduct!.presentaciones.length > 1) ...[
-              InkWell(
-                onTap: () => setState(
-                  () => _showVariantSelector = !_showVariantSelector,
-                ),
-                borderRadius: BorderRadius.circular(10),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 10,
-                  ),
-                  decoration: BoxDecoration(
-                    color: isDark
-                        ? Colors.white.withValues(alpha: 0.05)
-                        : Colors.grey.shade100,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: isDark ? Colors.white12 : Colors.grey.shade300,
-                    ),
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Expanded(
-                        child: Row(
-                          children: [
-                            Icon(
-                              Icons.dashboard_customize_outlined,
-                              size: 18,
-                              color: isDark
-                                  ? Colors.blue[300]
-                                  : Colors.blue[800],
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: FittedBox(
-                                fit: BoxFit.scaleDown,
-                                alignment: Alignment.centerLeft,
-                                child: Text(
-                                  "Seleccionar Variante / Presentación",
-                                  style: textTheme.bodyMedium?.copyWith(
-                                    fontWeight: FontWeight.bold,
-                                    color: textColor,
-                                  ),
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 7,
-                                vertical: 2,
-                              ),
-                              decoration: BoxDecoration(
-                                color: isDark
-                                    ? Colors.blue.withValues(alpha: 0.25)
-                                    : Colors.blue.shade100,
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                              child: Text(
-                                "${_fullProduct!.presentaciones.length}",
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.bold,
-                                  color: isDark
-                                      ? Colors.blue[200]
-                                      : Colors.blue[900],
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Row(
-                        children: [
-                          Text(
-                            _showVariantSelector ? "Ocultar" : "Ver otras",
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.bold,
-                              color: isDark
-                                  ? Colors.blue[300]
-                                  : Colors.blue[800],
-                            ),
-                          ),
-                          const SizedBox(width: 2),
-                          Icon(
-                            _showVariantSelector
-                                ? Icons.keyboard_arrow_up
-                                : Icons.keyboard_arrow_down,
-                            size: 18,
-                            color: isDark ? Colors.blue[300] : Colors.blue[800],
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
+                _fullProduct!.presentaciones.length > 1)
+              _buildVariantSelectorSection(
+                isClient: isClient,
+                isDark: isDark,
+                textTheme: textTheme,
+                textColor: textColor,
               ),
-              const SizedBox(height: 10),
-
-              if (_showVariantSelector) ...[
-                if (_fullProduct != null && _fullProduct!.hasSharedStock) ...[
-                  if (_selectedPresentation.usaStockCompartido) ...[
-                    Builder(
-                      builder: (ctx) {
-                        final pool = _fullProduct!.stockCompartido;
-                        final factor =
-                            _selectedPresentation.unidadesPorVenta > 0
-                            ? _selectedPresentation.unidadesPorVenta
-                            : 1;
-                        final maxPhysical = pool ~/ factor;
-                        final cupo = _selectedPresentation.cupoMaximoVariante;
-                        final cupoStr = cupo != null
-                            ? " · Cupo: $cupo disp."
-                            : "";
-                        final modoStr = _fullProduct!.modoStock == 'MIXTO'
-                            ? 'Mixto'
-                            : 'Compartido';
-                        return Container(
-                          width: double.infinity,
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 8,
-                          ),
-                          margin: const EdgeInsets.only(bottom: 12),
-                          decoration: BoxDecoration(
-                            color: isDark
-                                ? const Color(
-                                    0xFF1E3A8A,
-                                  ).withValues(alpha: 0.25)
-                                : const Color(0xFFEFF6FF),
-                            borderRadius: BorderRadius.circular(10),
-                            border: Border.all(
-                              color: isDark
-                                  ? Colors.blue.shade700
-                                  : const Color(0xFF93C5FD),
-                            ),
-                          ),
-                          child: Row(
-                            children: [
-                              Icon(
-                                Icons.hub_rounded,
-                                size: 16,
-                                color: isDark
-                                    ? Colors.blue[300]
-                                    : const Color(0xFF1E40AF),
-                              ),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: Text(
-                                  "Inventario base compartido: $pool und. (= máx. $maxPhysical ${_selectedPresentation.unidadVenta ?? 'Und'}$cupoStr) · $modoStr",
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.bold,
-                                    color: isDark
-                                        ? Colors.blue[200]
-                                        : const Color(0xFF1E40AF),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        );
-                      },
-                    ),
-                  ] else ...[
-                    Builder(
-                      builder: (ctx) {
-                        final factor =
-                            _selectedPresentation.unidadesPorVenta > 0
-                            ? _selectedPresentation.unidadesPorVenta
-                            : 1;
-                        final ownStock =
-                            _selectedPresentation.stockActual ~/ factor;
-                        return Container(
-                          width: double.infinity,
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 8,
-                          ),
-                          margin: const EdgeInsets.only(bottom: 12),
-                          decoration: BoxDecoration(
-                            color: isDark
-                                ? Colors.teal.withValues(alpha: 0.15)
-                                : const Color(0xFFF0FDF4),
-                            borderRadius: BorderRadius.circular(10),
-                            border: Border.all(
-                              color: isDark
-                                  ? Colors.teal.shade700
-                                  : const Color(0xFF86EFAC),
-                            ),
-                          ),
-                          child: Row(
-                            children: [
-                              Icon(
-                                Icons.inventory_2_outlined,
-                                size: 16,
-                                color: isDark
-                                    ? Colors.teal[300]
-                                    : const Color(0xFF166534),
-                              ),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: Text(
-                                  "Stock Propio disponible: $ownStock ${_selectedPresentation.unidadVenta ?? 'Und'} · Mixto",
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.bold,
-                                    color: isDark
-                                        ? Colors.teal[200]
-                                        : const Color(0xFF166534),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        );
-                      },
-                    ),
-                  ],
-                ],
-                ShaderMask(
-                  shaderCallback: (Rect bounds) {
-                    return const LinearGradient(
-                      begin: Alignment.centerLeft,
-                      end: Alignment.centerRight,
-                      colors: [Colors.black, Colors.black, Colors.transparent],
-                      stops: [0.0, 0.94, 1.0],
-                    ).createShader(bounds);
-                  },
-                  blendMode: BlendMode.dstIn,
-                  child: SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    physics: const BouncingScrollPhysics(),
-                    child: Row(
-                      children: _fullProduct!.presentaciones.map((p) {
-                        final isSelected = p.id == _selectedPresentation.id;
-                        final realVariantStock = _getRealStock(p);
-                        final isOutOfStockVariant = realVariantStock <= 0;
-                        final isDisabled = isClient && isOutOfStockVariant;
-                        final specName =
-                            (p.nombreEspecifico != null &&
-                                p.nombreEspecifico!.trim().isNotEmpty)
-                            ? p.nombreEspecifico!.trim()
-                            : (p.esDefault
-                                  ? "Principal"
-                                  : (p.unidadVenta ?? "Variante"));
-                        final factorStr = p.unidadesPorVenta > 1
-                            ? " (x${p.unidadesPorVenta})"
-                            : "";
-                        final stockStr = isOutOfStockVariant
-                            ? "Agotado"
-                            : "$realVariantStock disp.";
-
-                        return Padding(
-                          padding: const EdgeInsets.only(right: 12),
-                          child: ChoiceChip(
-                            label: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              crossAxisAlignment: CrossAxisAlignment.center,
-                              children: [
-                                Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    Text(
-                                      specName,
-                                      style: textTheme.bodyMedium?.copyWith(
-                                        fontWeight: isSelected
-                                            ? FontWeight.w900
-                                            : FontWeight.bold,
-                                        color: isSelected
-                                            ? (isDark
-                                                  ? Colors.blue[200]
-                                                  : Colors.blue[900])
-                                            : (isDark
-                                                  ? Colors.white
-                                                  : Colors.black87),
-                                      ),
-                                      textAlign: TextAlign.center,
-                                    ),
-                                    const SizedBox(width: 5),
-                                    Container(
-                                      width: 7,
-                                      height: 7,
-                                      decoration: BoxDecoration(
-                                        shape: BoxShape.circle,
-                                        color: isOutOfStockVariant
-                                            ? Colors.red
-                                            : (realVariantStock < 10
-                                                  ? Colors.orange
-                                                  : Colors.green),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 2),
-                                Text(
-                                  "${p.unidadVenta ?? 'Und'}$factorStr · ${AppCurrency.format(p.precioVentaFinal)} · $stockStr",
-                                  style: textTheme.labelSmall?.copyWith(
-                                    fontSize: 11,
-                                    color: isSelected
-                                        ? (isDark
-                                              ? Colors.blue[100]
-                                              : Colors.blue[800])
-                                        : (isDark
-                                              ? Colors.grey[400]
-                                              : Colors.grey[600]),
-                                  ),
-                                  textAlign: TextAlign.center,
-                                ),
-                              ],
-                            ),
-                            selected: isSelected,
-                            onSelected: isDisabled
-                                ? null
-                                : (v) {
-                                    if (v) {
-                                      setState(() {
-                                        _selectedPresentation = p;
-                                        _initializePricing();
-
-                                        if (isClient &&
-                                            _quantity > realVariantStock) {
-                                          _quantity = realVariantStock > 0
-                                              ? realVariantStock
-                                              : 1;
-                                          _qtyCtrl.text = _quantity.toString();
-                                        }
-                                      });
-                                    }
-                                  },
-                            selectedColor: isDark
-                                ? Colors.blue.withValues(alpha: 0.3)
-                                : Colors.blue[100],
-                            backgroundColor: isDark
-                                ? Colors.white10
-                                : Colors.grey[100],
-                            labelStyle: TextStyle(
-                              color: isDisabled
-                                  ? (isDark
-                                        ? Colors.grey[600]
-                                        : Colors.grey[400])
-                                  : (isSelected
-                                        ? (isDark
-                                              ? Colors.blue[300]
-                                              : Colors.blue[900])
-                                        : textColor),
-                            ),
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 14,
-                              vertical: 8,
-                            ),
-                          ),
-                        );
-                      }).toList(),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 16),
-              ],
-            ],
-
             AnimatedSize(
               duration: const Duration(milliseconds: 300),
               curve: Curves.easeInOut,
               child: (!_isLoading && !isClient)
-                  ? _buildPricingSection(isDark, textTheme, currency)
+                  ? _buildPricingSection(isDark, textTheme)
                   : const SizedBox.shrink(),
             ),
-
             if (!isClient) const SizedBox(height: 24),
-
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Expanded(
-                  flex: 3,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        "Cantidad",
-                        style: textTheme.titleMedium?.copyWith(
-                          color: isDark ? Colors.grey[400] : Colors.grey,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Container(
-                        height: 56,
-                        decoration: BoxDecoration(
-                          color: isDark
-                              ? const Color(0xFF14141C)
-                              : Colors.white,
-                          border: Border.all(
-                            color: (exceedsStock || isStockEmpty)
-                                ? (isDark ? Colors.orange[400]! : Colors.orange)
-                                : (isDark
-                                      ? Colors.white24
-                                      : Colors.grey.shade300),
-                            width: 1.5,
-                          ),
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            IconButton(
-                              icon: Icon(
-                                Icons.remove,
-                                color: isDark ? Colors.red[400] : Colors.red,
-                                size: 24,
-                              ),
-                              onPressed: () => _qtyAction(-1, isClient),
-                            ),
-                            Expanded(
-                              child: TextField(
-                                controller: _qtyCtrl,
-                                keyboardType: TextInputType.number,
-                                textAlign: TextAlign.center,
-                                style: textTheme.displayMedium?.copyWith(
-                                  color: textColor,
-                                ),
-                                decoration: const InputDecoration(
-                                  border: InputBorder.none,
-                                  isDense: true,
-                                ),
-                                onChanged: (v) {
-                                  int? parsed = int.tryParse(v);
-                                  final realStock = _getRealStock(
-                                    _selectedPresentation,
-                                  );
-                                  final unitName =
-                                      _selectedPresentation.unidadVenta ?? 'Und';
-
-                                  if (parsed != null &&
-                                      realStock > 0 &&
-                                      parsed > realStock) {
-                                    _qtyCtrl.text = realStock.toString();
-                                    _qtyCtrl.selection =
-                                        TextSelection.fromPosition(
-                                          TextPosition(
-                                            offset: _qtyCtrl.text.length,
-                                          ),
-                                        );
-                                    _triggerMaxStockReached(realStock, unitName);
-                                  }
-                                  setState(
-                                    () => _quantity =
-                                        int.tryParse(_qtyCtrl.text) ??
-                                        _quantity,
-                                  );
-                                },
-                              ),
-                            ),
-                            IconButton(
-                              icon: Icon(
-                                Icons.add,
-                                color: isDark
-                                    ? Colors.green[400]
-                                    : Colors.green,
-                                size: 24,
-                              ),
-                              onPressed: () => _qtyAction(1, isClient),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 20),
-                Expanded(
-                  flex: 4,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      if (savings > 0)
-                        FittedBox(
-                          fit: BoxFit.scaleDown,
-                          child: Text(
-                            "Ahorro Múltiple: ${AppCurrency.format(savings)}",
-                            style: textTheme.titleMedium?.copyWith(
-                              color: isDark ? Colors.green[400] : Colors.green,
-                            ),
-                          ),
-                        ),
-                      Text(
-                        "Subtotal",
-                        style: textTheme.titleMedium?.copyWith(
-                          color: isDark ? Colors.grey[400] : Colors.grey,
-                        ),
-                      ),
-                      FittedBox(
-                        fit: BoxFit.scaleDown,
-                        alignment: Alignment.centerRight,
-                        child: Text(
-                          AppCurrency.format(subtotal),
-                          style: textTheme.displayLarge?.copyWith(
-                            color: isDark ? Colors.blue[300] : Colors.blue,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
+            _buildQuantityAndSubtotalRow(
+              isClient: isClient,
+              isDark: isDark,
+              textTheme: textTheme,
+              textColor: textColor,
+              exceedsStock: exceedsStock,
+              isStockEmpty: isStockEmpty,
+              savings: savings,
+              subtotal: subtotal,
             ),
-
             if (_showMaxStockBanner && _maxStockBannerAnim != null)
-              SizeTransition(
-                sizeFactor: CurvedAnimation(
-                  parent: _maxStockBannerAnim!,
-                  curve: Curves.easeOutCubic,
-                ),
-                axisAlignment: -1.0,
-                child: FadeTransition(
-                  opacity: CurvedAnimation(
-                    parent: _maxStockBannerAnim!,
-                    curve: Curves.easeIn,
-                  ),
-                  child: Container(
-                    margin: const EdgeInsets.only(top: 10),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 8,
-                    ),
-                    decoration: BoxDecoration(
-                      color: isDark
-                          ? Colors.amber.shade900.withValues(alpha: 0.25)
-                          : const Color(0xFFFEF3C7),
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(
-                        color: isDark
-                            ? Colors.amber.shade700
-                            : const Color(0xFFF59E0B),
-                        width: 1,
-                      ),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(
-                          Icons.info_outline_rounded,
-                          size: 16,
-                          color: isDark
-                              ? Colors.amber.shade300
-                              : const Color(0xFFB45309),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            "Stock máximo alcanzado: solo hay ${_getRealStock(_selectedPresentation)} ${_selectedPresentation.unidadVenta ?? 'Und'} disponibles para vender",
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.bold,
-                              color: isDark
-                                  ? Colors.amber.shade200
-                                  : const Color(0xFF92400E),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-
-            if (isStockEmpty)
-              Padding(
-                padding: const EdgeInsets.only(top: 12),
-                child: Text(
-                  "⚠️ Producto agotado en inventario. Podrás guardar, pero se marcará como Pendiente de Stock.",
-                  style: textTheme.titleSmall?.copyWith(
-                    color: isDark ? Colors.red[300] : Colors.red[700],
-                  ),
-                ),
-              )
-            else if (exceedsStock && !isClient)
-              Padding(
-                padding: const EdgeInsets.only(top: 12),
-                child: Text(
-                  "⚠️ Supera el stock actual de $realStock. Se permitirá cotizar, pero requerirá reabastecimiento.",
-                  style: textTheme.titleSmall?.copyWith(
-                    color: isDark ? Colors.orange[400] : Colors.orange[800],
-                  ),
-                ),
-              ),
+              _buildMaxStockBanner(isDark),
+            _buildStockStatusNotice(
+              isStockEmpty: isStockEmpty,
+              exceedsStock: exceedsStock,
+              isClient: isClient,
+              realStock: realStock,
+              isDark: isDark,
+              textTheme: textTheme,
+            ),
           ],
         ),
       ),
     );
   }
 }
+
+class _ProductQuoteDetailModalState extends _ProductQuoteDetailStateBase
+    with
+        _ProductQuoteDetailLogicMixin,
+        _ProductQuoteHeaderAndVariantsMixin,
+        _ProductQuotePricingAndBundlesMixin,
+        _ProductQuoteQtyAndTotalsMixin {}
