@@ -137,28 +137,33 @@ class _ManualPriceModifierState extends State<ManualPriceModifier> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Row(
-                      children: [
-                        Icon(
-                          Icons.local_offer_outlined,
-                          size: 18,
-                          color: widget.isManualPrice
-                              ? (isDark ? Colors.orange[300] : Colors.orange[800])
-                              : (isDark ? Colors.grey[400] : Colors.grey[700]),
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          "Aplicar Descuento",
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 15,
+                    Expanded(
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.local_offer_outlined,
+                            size: 18,
                             color: widget.isManualPrice
-                                ? (isDark ? Colors.orange[300] : Colors.orange[900])
-                                : textColor,
+                                ? (isDark ? Colors.orange[300] : Colors.orange[800])
+                                : (isDark ? Colors.grey[400] : Colors.grey[700]),
                           ),
-                        ),
-                      ],
+                          const SizedBox(width: 8),
+                          Flexible(
+                            child: Text(
+                              "Aplicar Descuento",
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 15,
+                                color: widget.isManualPrice
+                                    ? (isDark ? Colors.orange[300] : Colors.orange[900])
+                                    : textColor,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
+                    const SizedBox(width: 8),
                     Switch(
                       value: widget.isManualPrice,
                       activeThumbColor: Colors.orange,
@@ -168,81 +173,93 @@ class _ManualPriceModifierState extends State<ManualPriceModifier> {
                 ),
                 if (badgeText != null) ...[
                   const SizedBox(height: 6),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3.5),
-                        decoration: BoxDecoration(
-                          color: badgeBgColor,
-                          borderRadius: BorderRadius.circular(6),
-                          border: Border.all(color: badgeBorderColor!),
-                        ),
-                        child: Text(
-                          badgeText,
-                          style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.bold,
-                            color: badgeTextColor,
+                  SizedBox(
+                    width: double.infinity,
+                    child: Wrap(
+                      alignment: WrapAlignment.spaceBetween,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      spacing: 8,
+                      runSpacing: 6,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3.5),
+                          decoration: BoxDecoration(
+                            color: badgeBgColor,
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(color: badgeBorderColor!),
+                          ),
+                          child: Text(
+                            badgeText,
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                              color: badgeTextColor,
+                            ),
                           ),
                         ),
-                      ),
-                      if (widget.catalogHasOffer &&
-                          widget.catalogOfferPrice != null &&
-                          widget.isCustomPrice &&
-                          widget.isManualPrice)
-                        InkWell(
-                          onTap: () {
-                            if (widget.onRestoreCatalogOffer != null) {
-                              widget.onRestoreCatalogOffer!();
-                            } else {
-                              final offerPriceStr = widget.catalogOfferPrice!.toStringAsFixed(2);
-                              final disc = (widget.systemPrice - widget.catalogOfferPrice!).clamp(0.0, double.infinity);
-                              final discStr = disc > 0 ? disc.toStringAsFixed(2) : "";
-                              widget.priceCtrl.text = offerPriceStr;
-                              widget.discountCtrl.text = discStr;
-                              widget.onPriceChanged(offerPriceStr);
-                              widget.onDiscountChanged(discStr);
-                            }
-                          },
-                          borderRadius: BorderRadius.circular(6),
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                            decoration: BoxDecoration(
-                              color: isDark ? Colors.blue.withValues(alpha: 0.18) : Colors.blue.shade50,
-                              borderRadius: BorderRadius.circular(6),
-                              border: Border.all(
-                                color: isDark ? Colors.blue.withValues(alpha: 0.4) : Colors.blue.shade300,
-                                width: 0.8,
+                        if (widget.catalogHasOffer &&
+                            widget.catalogOfferPrice != null &&
+                            widget.isCustomPrice &&
+                            widget.isManualPrice)
+                          InkWell(
+                            onTap: () {
+                              if (widget.onRestoreCatalogOffer != null) {
+                                widget.onRestoreCatalogOffer!();
+                              } else {
+                                final offerPriceStr = widget.catalogOfferPrice!.toStringAsFixed(2);
+                                final disc = (widget.systemPrice - widget.catalogOfferPrice!).clamp(0.0, double.infinity);
+                                final discStr = disc > 0 ? disc.toStringAsFixed(2) : "";
+                                widget.priceCtrl.text = offerPriceStr;
+                                widget.discountCtrl.text = discStr;
+                                widget.onPriceChanged(offerPriceStr);
+                                widget.onDiscountChanged(discStr);
+                              }
+                            },
+                            borderRadius: BorderRadius.circular(6),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                              decoration: BoxDecoration(
+                                color: isDark ? Colors.blue.withValues(alpha: 0.18) : Colors.blue.shade50,
+                                borderRadius: BorderRadius.circular(6),
+                                border: Border.all(
+                                  color: isDark ? Colors.blue.withValues(alpha: 0.4) : Colors.blue.shade300,
+                                  width: 0.8,
+                                ),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(Icons.refresh_rounded, size: 12, color: isDark ? Colors.blue[300] : Colors.blue[700]),
+                                  const SizedBox(width: 3),
+                                  Flexible(
+                                    child: Text(
+                                      "↺ Usar oferta de catálogo",
+                                      style: TextStyle(
+                                        fontSize: 10.5,
+                                        fontWeight: FontWeight.bold,
+                                        color: isDark ? Colors.blue[300] : Colors.blue[800],
+                                      ),
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(Icons.refresh_rounded, size: 12, color: isDark ? Colors.blue[300] : Colors.blue[700]),
-                                const SizedBox(width: 3),
-                                Text(
-                                  "↺ Usar oferta de catálogo",
-                                  style: TextStyle(
-                                    fontSize: 10.5,
-                                    fontWeight: FontWeight.bold,
-                                    color: isDark ? Colors.blue[300] : Colors.blue[800],
-                                  ),
-                                ),
-                              ],
-                            ),
                           ),
-                        ),
-                    ],
+                      ],
+                    ),
                   ),
                 ],
                 const SizedBox(height: 8),
                 // Nivel 2: Precio Reactivo (a 0ms por pulsación de tecla) + Botón Editar Catálogo
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Expanded(
-                      child: ListenableBuilder(
+                SizedBox(
+                  width: double.infinity,
+                  child: Wrap(
+                    alignment: WrapAlignment.spaceBetween,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    spacing: 8,
+                    runSpacing: 6,
+                    children: [
+                      ListenableBuilder(
                         listenable: Listenable.merge([widget.priceCtrl, widget.discountCtrl]),
                         builder: (context, _) {
                           // Si el switch está apagado: Mostrar siempre "Precio Base: S/ X"
@@ -276,7 +293,10 @@ class _ManualPriceModifierState extends State<ManualPriceModifier> {
 
                           if (hasDiscount) {
                             final int percent = (((widget.systemPrice - activePrice) / widget.systemPrice) * 100).round();
-                            return Row(
+                            return Wrap(
+                              crossAxisAlignment: WrapCrossAlignment.center,
+                              spacing: 6,
+                              runSpacing: 4,
                               children: [
                                 Text(
                                   AppCurrency.format(widget.systemPrice),
@@ -286,7 +306,6 @@ class _ManualPriceModifierState extends State<ManualPriceModifier> {
                                     color: isDark ? Colors.grey[500] : Colors.grey[500],
                                   ),
                                 ),
-                                const SizedBox(width: 6),
                                 Text(
                                   AppCurrency.format(activePrice),
                                   style: TextStyle(
@@ -295,7 +314,6 @@ class _ManualPriceModifierState extends State<ManualPriceModifier> {
                                     color: isDark ? Colors.green[300] : Colors.green[700],
                                   ),
                                 ),
-                                const SizedBox(width: 6),
                                 Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
                                   decoration: BoxDecoration(
@@ -325,31 +343,35 @@ class _ManualPriceModifierState extends State<ManualPriceModifier> {
                           }
                         },
                       ),
-                    ),
-                    if (widget.onEditCatalogPrice != null)
-                      InkWell(
-                        onTap: widget.onEditCatalogPrice,
-                        borderRadius: BorderRadius.circular(4),
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(Icons.edit_outlined, size: 14, color: isDark ? Colors.blue[300] : Colors.blue[700]),
-                              const SizedBox(width: 4),
-                              Text(
-                                "Editar Catálogo",
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.bold,
-                                  color: isDark ? Colors.blue[300] : Colors.blue[700],
+                      if (widget.onEditCatalogPrice != null)
+                        InkWell(
+                          onTap: widget.onEditCatalogPrice,
+                          borderRadius: BorderRadius.circular(4),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.edit_outlined, size: 14, color: isDark ? Colors.blue[300] : Colors.blue[700]),
+                                const SizedBox(width: 4),
+                                Flexible(
+                                  child: Text(
+                                    "Editar Catálogo",
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.bold,
+                                      color: isDark ? Colors.blue[300] : Colors.blue[700],
+                                    ),
+                                  ),
                                 ),
-                              ),
-                            ],
+                              ],
+                            ),
                           ),
                         ),
-                      ),
-                  ],
+                    ],
+                  ),
                 ),
               ],
             ),
@@ -368,37 +390,43 @@ class _ManualPriceModifierState extends State<ManualPriceModifier> {
               borderRadius: BorderRadius.circular(8),
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      _isCustomExpanded ? "Modificar monto o precio unitario" : "Personalizar descuento u oferta",
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: isDark ? Colors.orange[200] : Colors.orange[800],
+                child: SizedBox(
+                  width: double.infinity,
+                  child: Wrap(
+                    alignment: WrapAlignment.spaceBetween,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    spacing: 8,
+                    runSpacing: 4,
+                    children: [
+                      Text(
+                        _isCustomExpanded ? "Modificar monto o precio unitario" : "Personalizar descuento u oferta",
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: isDark ? Colors.orange[200] : Colors.orange[800],
+                        ),
                       ),
-                    ),
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          _isCustomExpanded ? "Contraer" : "Personalizar",
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold,
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            _isCustomExpanded ? "Contraer" : "Personalizar",
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                              color: isDark ? Colors.orange[300] : Colors.orange[900],
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          Icon(
+                            _isCustomExpanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
+                            size: 16,
                             color: isDark ? Colors.orange[300] : Colors.orange[900],
                           ),
-                        ),
-                        const SizedBox(width: 4),
-                        Icon(
-                          _isCustomExpanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
-                          size: 16,
-                          color: isDark ? Colors.orange[300] : Colors.orange[900],
-                        ),
-                      ],
-                    ),
-                  ],
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
