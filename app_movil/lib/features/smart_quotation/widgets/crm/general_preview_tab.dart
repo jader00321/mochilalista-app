@@ -19,18 +19,22 @@ class GeneralPreviewTab extends StatelessWidget {
   Widget build(BuildContext context) {
     if (amount <= 0) {
       return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.auto_awesome, size: 70, color: isDark ? Colors.white10 : Colors.blue[200]),
-            const SizedBox(height: 16),
-            Text(
-              "Ingresa un monto arriba\npara ver cómo se distribuirá el pago.", 
-              textAlign: TextAlign.center, 
-              style: TextStyle(color: isDark ? Colors.grey[500] : Colors.grey[600], fontSize: 16)
-            ),
-          ],
-        )
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.auto_awesome, size: 70, color: isDark ? Colors.white10 : Colors.blue[200]),
+              const SizedBox(height: 16),
+              Text(
+                "Ingresa un monto arriba\npara ver cómo se distribuirá el pago.", 
+                textAlign: TextAlign.center, 
+                style: TextStyle(color: isDark ? Colors.grey[500] : Colors.grey[600], fontSize: 16)
+              ),
+            ],
+          ),
+        ),
       );
     }
 
