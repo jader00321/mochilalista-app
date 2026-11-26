@@ -6,15 +6,18 @@ import 'package:app_movil/features/catalog/models/category_model.dart';
 import 'package:app_movil/features/catalog/models/brand_model.dart';
 import 'package:app_movil/features/catalog/models/provider_model.dart';
 import 'package:app_movil/features/catalog/models/product_create_draft.dart';
-
 import 'package:app_movil/core/services/master_data_cache.dart';
 import 'package:app_movil/core/database/local_db.dart';
 import 'package:app_movil/features/catalog/services/product_service.dart';
 import 'package:app_movil/core/services/image_service.dart';
 
+part 'inventory/inventory_provider_catalog_meta.dart';
+part 'inventory/inventory_provider_queries.dart';
+part 'inventory/inventory_provider_mutations.dart';
+
 enum SortType { id, alpha }
 
-class InventoryProvider with ChangeNotifier {
+abstract class _InventoryProviderBase with ChangeNotifier {
   int? _negocioId;
 
   final MasterDataCache _masterDataCache = MasterDataCache();
@@ -52,14 +55,31 @@ class InventoryProvider with ChangeNotifier {
   bool _lastHasOffer = false;
   bool _lastOnlyDefaults = false;
 
-  // 🎨 Configuración discreta de alertas de color de stock
-  static const String _kStockAlertColorsKey = 'inventory_show_stock_alert_colors';
+  static const String _kStockAlertColorsKey =
+      'inventory_show_stock_alert_colors';
   bool _showStockAlertColors = true;
   bool get showStockAlertColors => _showStockAlertColors;
 
-  InventoryProvider() {
+  _InventoryProviderBase() {
     _loadPreferences();
   }
+
+  Future<void> loadMasterData({bool showAll = true});
+
+  Future<void> loadInventory({
+    bool reset = false,
+    String? searchQuery,
+    List<int>? categoryIds,
+    List<int>? brandIds,
+    List<int>? providerIds,
+    String? filterState,
+    double? minPrice,
+    double? maxPrice,
+    int? minStock,
+    int? maxStock,
+    bool? hasOffer,
+    bool? onlyDefaults,
+  });
 
   Future<void> _loadPreferences() async {
     try {
@@ -88,7 +108,6 @@ class InventoryProvider with ChangeNotifier {
     } catch (_) {}
   }
 
-  // 📝 Borrador en memoria de Crear Producto
   ProductCreateDraft? _creationDraft;
   ProductCreateDraft? get creationDraft => _creationDraft;
   bool get hasCreationDraft =>
@@ -165,17 +184,43 @@ class InventoryProvider with ChangeNotifier {
   SortType get provSort => _provSort;
   bool get provAsc => _provAsc;
 
-  // Elimina símbolos al principio para un ordenamiento más natural
   String _normalizeForSort(String text) {
     return text
         .replaceAll(RegExp(r'^[^a-zA-Z0-9áéíóúÁÉÍÓÚñÑ]+'), '')
         .toLowerCase();
   }
 
+  List<T> _sortMasterList<T>(
+    List<T> source, {
+    required bool Function(T) isActive,
+    required SortType sortType,
+    required bool asc,
+    required String Function(T) nameOf,
+    required int Function(T) idOf,
+  }) {
+    final list = List<T>.from(source);
+    list.sort((a, b) {
+      if (isActive(a) != isActive(b)) return isActive(a) ? -1 : 1;
+      final int cmp;
+      switch (sortType) {
+        case SortType.alpha:
+          cmp = _normalizeForSort(
+            nameOf(a),
+          ).compareTo(_normalizeForSort(nameOf(b)));
+          break;
+        case SortType.id:
+          cmp = idOf(a).compareTo(idOf(b));
+          break;
+      }
+      return asc ? cmp : -cmp;
+    });
+    return list;
+  }
+
   List<InventoryWrapper> get items {
     final list = List<InventoryWrapper>.from(_inventoryItems);
     list.sort((a, b) {
-      int cmp;
+      final int cmp;
       switch (_prodSort) {
         case SortType.alpha:
           cmp = _normalizeForSort(
@@ -191,65 +236,32 @@ class InventoryProvider with ChangeNotifier {
     return list;
   }
 
-  List<Category> get categories {
-    final list = List<Category>.from(_masterDataCache.categories);
-    list.sort((a, b) {
-      if (a.activo != b.activo) return a.activo ? -1 : 1;
-      int cmp;
-      switch (_catSort) {
-        case SortType.alpha:
-          cmp = _normalizeForSort(
-            a.nombre,
-          ).compareTo(_normalizeForSort(b.nombre));
-          break;
-        case SortType.id:
-          cmp = a.id.compareTo(b.id);
-          break;
-      }
-      return _catAsc ? cmp : -cmp;
-    });
-    return list;
-  }
+  List<Category> get categories => _sortMasterList<Category>(
+    _masterDataCache.categories,
+    isActive: (c) => c.activo,
+    sortType: _catSort,
+    asc: _catAsc,
+    nameOf: (c) => c.nombre,
+    idOf: (c) => c.id,
+  );
 
-  List<Brand> get brands {
-    final list = List<Brand>.from(_masterDataCache.brands);
-    list.sort((a, b) {
-      if (a.activo != b.activo) return a.activo ? -1 : 1;
-      int cmp;
-      switch (_brandSort) {
-        case SortType.alpha:
-          cmp = _normalizeForSort(
-            a.nombre,
-          ).compareTo(_normalizeForSort(b.nombre));
-          break;
-        case SortType.id:
-          cmp = a.id.compareTo(b.id);
-          break;
-      }
-      return _brandAsc ? cmp : -cmp;
-    });
-    return list;
-  }
+  List<Brand> get brands => _sortMasterList<Brand>(
+    _masterDataCache.brands,
+    isActive: (b) => b.activo,
+    sortType: _brandSort,
+    asc: _brandAsc,
+    nameOf: (b) => b.nombre,
+    idOf: (b) => b.id,
+  );
 
-  List<ProviderModel> get providers {
-    final list = List<ProviderModel>.from(_masterDataCache.providers);
-    list.sort((a, b) {
-      if (a.activo != b.activo) return a.activo ? -1 : 1;
-      int cmp;
-      switch (_provSort) {
-        case SortType.alpha:
-          cmp = _normalizeForSort(
-            a.nombreEmpresa,
-          ).compareTo(_normalizeForSort(b.nombreEmpresa));
-          break;
-        case SortType.id:
-          cmp = a.id.compareTo(b.id);
-          break;
-      }
-      return _provAsc ? cmp : -cmp;
-    });
-    return list;
-  }
+  List<ProviderModel> get providers => _sortMasterList<ProviderModel>(
+    _masterDataCache.providers,
+    isActive: (p) => p.activo,
+    sortType: _provSort,
+    asc: _provAsc,
+    nameOf: (p) => p.nombreEmpresa,
+    idOf: (p) => p.id,
+  );
 
   List<Category> get activeCategories =>
       _masterDataCache.categories.where((c) => c.activo).toList();
@@ -274,7 +286,6 @@ class InventoryProvider with ChangeNotifier {
       _productService.updateContext(negocioId);
 
       _inventoryItems.clear();
-
       _currentSkip = 0;
       _hasMoreData = true;
       _lastQuery = null;
@@ -312,6 +323,7 @@ class InventoryProvider with ChangeNotifier {
       ? ""
       : _masterDataCache.brands.where((b) => b.id == id).firstOrNull?.nombre ??
             "";
+
   String getProviderName(int? id) => id == null
       ? ""
       : _masterDataCache.providers
@@ -331,844 +343,10 @@ class InventoryProvider with ChangeNotifier {
       return "";
     }
   }
-
-  Future<Product?> fetchProductById(int productId) async =>
-      await _productService.fetchProductById(productId);
-
-  /// 🔥 FASE 1 FIX: Construye un Product con TODAS sus presentaciones
-  /// recopiladas de la lista en memoria (_inventoryItems).
-  /// Si no se encuentran en memoria, hace un fetch directo a la DB.
-  Product getFullProduct(int productId) {
-    // Recopilar todas las presentaciones de este producto desde el inventario en memoria
-    final matchingWrappers = _inventoryItems
-        .where((w) => w.product.id == productId)
-        .toList();
-
-    if (matchingWrappers.isEmpty) {
-      // Fallback: devolver un producto vacío (no debería ocurrir)
-      return Product(
-        id: productId,
-        nombre: "Producto #$productId",
-        categoriaId: 0,
-      );
-    }
-
-    // Tomar el primer wrapper como base del producto
-    final baseProduct = matchingWrappers.first.product;
-
-    // Recopilar todas las presentaciones únicas (por ID) de los wrappers
-    final Map<int, ProductPresentation> uniquePresentations = {};
-    for (var wrapper in matchingWrappers) {
-      final presId = wrapper.presentation.id;
-      if (presId != null && !uniquePresentations.containsKey(presId)) {
-        uniquePresentations[presId] = wrapper.presentation;
-      }
-    }
-
-    // Crear un nuevo Product con la lista completa de presentaciones
-    return Product(
-      id: baseProduct.id,
-      nombre: baseProduct.nombre,
-      marcaId: baseProduct.marcaId,
-      marcaNombre: baseProduct.marcaNombre,
-      descripcion: baseProduct.descripcion,
-      categoriaId: baseProduct.categoriaId,
-      imagenUrl: baseProduct.imagenUrl,
-      codigoBarras: baseProduct.codigoBarras,
-      estado: baseProduct.estado,
-      presentaciones: uniquePresentations.values.toList(),
-      stockTotalCalculado: baseProduct.stockTotalCalculado,
-    );
-  }
-
-  /// 🔥 FASE 1 FIX: Versión async que intenta memoria primero, y si falla, va a DB.
-  Future<Product?> getFullProductWithFallback(int productId) async {
-    final memoryProduct = getFullProduct(productId);
-    if (memoryProduct.presentaciones.isNotEmpty) {
-      return memoryProduct;
-    }
-    // Fallback a la base de datos
-    return await fetchProductById(productId);
-  }
-
-  Future<void> loadMasterData({bool showAll = true}) async {
-    try {
-      await _masterDataCache.load(true, showAll: showAll);
-      final orphans = await _productService.countOrphans(estado: _lastEstado);
-      _orphanCategoriesCount = orphans['orphan_categories'] ?? 0;
-      _orphanBrandsCount = orphans['orphan_brands'] ?? 0;
-      notifyListeners();
-    } catch (e) {
-      debugPrint("Error loading master data: $e");
-    }
-  }
-
-  Future<void> loadCategories() async => await loadMasterData();
-  Future<void> loadBrands() async => await loadMasterData();
-  Future<void> loadProviders() async => await loadMasterData();
-
-  Future<int?> createCategory(String nombre, {String? descripcion}) async {
-    int? id = await _masterDataCache.createCategory(nombre, descripcion);
-    if (id != null) await loadMasterData();
-    return id;
-  }
-
-  Future<bool> updateCategory(
-    int id,
-    String nombre, {
-    String? descripcion,
-    bool? activo,
-  }) async {
-    bool ok = await _masterDataCache.updateCategory(
-      id,
-      nombre,
-      descripcion,
-      activo,
-    );
-    if (ok) await loadMasterData();
-    return ok;
-  }
-
-  Future<bool> deleteCategory(int id) async {
-    _lastActionError = await _masterDataCache.deleteCategory(id);
-    if (_lastActionError == null) {
-      await loadMasterData();
-      return true;
-    }
-    return false;
-  }
-
-  Future<int?> createBrand(String nombre, {String? urlImagen}) async {
-    int? id = await _masterDataCache.createBrand(nombre, urlImagen);
-    if (id != null) await loadMasterData();
-    return id;
-  }
-
-  Future<bool> updateBrand(
-    int id,
-    String nombre, {
-    String? urlImagen,
-    bool? activo,
-  }) async {
-    bool ok = await _masterDataCache.updateBrand(id, nombre, urlImagen, activo);
-    if (ok) await loadMasterData();
-    return ok;
-  }
-
-  Future<bool> deleteBrand(int id) async {
-    _lastActionError = await _masterDataCache.deleteBrand(id);
-    if (_lastActionError == null) {
-      await loadMasterData();
-      return true;
-    }
-    return false;
-  }
-
-  Future<int?> createProvider(
-    String nombre, {
-    String? ruc,
-    String? contacto,
-    String? telefono,
-    String? correo,
-  }) async {
-    int? id = await _masterDataCache.createProvider(
-      nombre,
-      ruc,
-      contacto,
-      telefono,
-      correo,
-    );
-    if (id != null) await loadMasterData();
-    return id;
-  }
-
-  Future<bool> updateProvider(
-    int id,
-    String nombre, {
-    String? ruc,
-    String? contacto,
-    String? telefono,
-    String? correo,
-    bool? activo,
-  }) async {
-    bool ok = await _masterDataCache.updateProvider(
-      id,
-      nombre,
-      ruc,
-      contacto,
-      telefono,
-      correo,
-      activo,
-    );
-    if (ok) await loadMasterData();
-    return ok;
-  }
-
-  Future<bool> deleteProvider(int id) async {
-    _lastActionError = await _masterDataCache.deleteProvider(id);
-    if (_lastActionError == null) {
-      await loadMasterData();
-      return true;
-    }
-    return false;
-  }
-
-  // =========================================================================
-  // 🔧 TAREA 2.4: Sistema de Fusión de Duplicados
-  // Permite fusionar dos registros: reasigna las FK del duplicado al que
-  // permanece y luego elimina el duplicado
-  // =========================================================================
-
-  /// Fusiona dos marcas: reasigna productos del duplicado a la que permanece
-  Future<bool> mergeBrands(int keepId, int removeId) async {
-    try {
-      final db = await LocalDatabase.instance.database;
-      await db.transaction((txn) async {
-        // Reasignar todos los productos que usan la marca duplicada
-        await txn.rawUpdate(
-          'UPDATE productos SET marca_id = ? WHERE marca_id = ?',
-          [keepId, removeId],
-        );
-        // Eliminar la marca duplicada
-        await txn.delete('marcas', where: 'id = ?', whereArgs: [removeId]);
-      });
-      await loadMasterData();
-      return true;
-    } catch (e) {
-      debugPrint("Error fusionando marcas: $e");
-      return false;
-    }
-  }
-
-  /// Fusiona dos categorías: reasigna productos del duplicado a la que permanece
-  Future<bool> mergeCategories(int keepId, int removeId) async {
-    try {
-      final db = await LocalDatabase.instance.database;
-      await db.transaction((txn) async {
-        await txn.rawUpdate(
-          'UPDATE productos SET categoria_id = ? WHERE categoria_id = ?',
-          [keepId, removeId],
-        );
-        await txn.delete('categorias', where: 'id = ?', whereArgs: [removeId]);
-      });
-      await loadMasterData();
-      return true;
-    } catch (e) {
-      debugPrint("Error fusionando categorías: $e");
-      return false;
-    }
-  }
-
-  /// Fusiona dos proveedores: reasigna productos, presentaciones y facturas
-  Future<bool> mergeProviders(int keepId, int removeId) async {
-    try {
-      final db = await LocalDatabase.instance.database;
-      await db.transaction((txn) async {
-        // Reasignar presentaciones que usan el proveedor duplicado
-        await txn.rawUpdate(
-          'UPDATE presentaciones_producto SET proveedor_id = ? WHERE proveedor_id = ?',
-          [keepId, removeId],
-        );
-        // Reasignar facturas de carga
-        await txn.rawUpdate(
-          'UPDATE facturas_carga SET proveedor_id = ? WHERE proveedor_id = ?',
-          [keepId, removeId],
-        );
-        // Eliminar el proveedor duplicado
-        await txn.delete('proveedores', where: 'id = ?', whereArgs: [removeId]);
-      });
-      await loadMasterData();
-      return true;
-    } catch (e) {
-      debugPrint("Error fusionando proveedores: $e");
-      return false;
-    }
-  }
-
-  // 🔥 SOLUCIÓN A LA CARGA INFINITA
-  Future<void> loadInventory({
-    bool reset = false,
-    String? searchQuery,
-    List<int>? categoryIds,
-    List<int>? brandIds,
-    List<int>? providerIds,
-    String? filterState,
-    double? minPrice,
-    double? maxPrice,
-    int? minStock,
-    int? maxStock,
-    bool? hasOffer,
-    bool? onlyDefaults,
-  }) async {
-    if (_negocioId == null) return;
-
-    if (reset) {
-      _isLoading = true;
-      _currentSkip = 0;
-      _inventoryItems = [];
-      _hasMoreData = true;
-      _lastQuery = searchQuery;
-      _lastCategoryIds = categoryIds;
-      _lastBrandIds = brandIds;
-      _lastProviderIds = providerIds;
-      _lastEstado = filterState;
-      _lastMinPrice = minPrice;
-      _lastMaxPrice = maxPrice;
-      _lastMinStock = minStock;
-      _lastMaxStock = maxStock;
-      _lastHasOffer = hasOffer ?? false;
-      _lastOnlyDefaults = onlyDefaults ?? false;
-      notifyListeners();
-    } else {
-      if (_isLoadingMore || !_hasMoreData) return;
-      _isLoadingMore = true;
-      notifyListeners();
-    }
-
-    if (_masterDataCache.brands.isEmpty) await loadMasterData();
-
-    try {
-      Map<String, String> queryParams = {
-        'skip': _currentSkip.toString(),
-        'limit': _limit.toString(),
-      };
-
-      void addIfNotNull(String key, dynamic value) {
-        if (value != null) queryParams[key] = value.toString();
-      }
-
-      addIfNotNull('q', _lastQuery);
-      addIfNotNull('estado', _lastEstado);
-      addIfNotNull('min_price', _lastMinPrice);
-      addIfNotNull('max_price', _lastMaxPrice);
-      addIfNotNull('min_stock', _lastMinStock);
-      addIfNotNull('max_stock', _lastMaxStock);
-      if (_lastHasOffer) queryParams['has_offer'] = 'true';
-      if (_lastOnlyDefaults) queryParams['only_defaults'] = 'true';
-
-      if (_lastCategoryIds != null && _lastCategoryIds!.isNotEmpty) {
-        queryParams['category_ids'] = _lastCategoryIds!.join(",");
-      }
-      if (_lastBrandIds != null && _lastBrandIds!.isNotEmpty) {
-        queryParams['brand_ids'] = _lastBrandIds!.join(",");
-      }
-      if (_lastProviderIds != null && _lastProviderIds!.isNotEmpty) {
-        queryParams['provider_ids'] = _lastProviderIds!.join(",");
-      }
-
-      final newItems = await _productService.fetchInventory(queryParams);
-
-      if (reset) {
-        final totals = await _productService.countInventory(queryParams);
-        _realTotalProductsCount = totals['products'] ?? 0;
-        _realTotalPresentationsCount = totals['presentations'] ?? 0;
-
-        final orphans = await _productService.countOrphans(estado: _lastEstado);
-        _orphanCategoriesCount = orphans['orphan_categories'] ?? 0;
-        _orphanBrandsCount = orphans['orphan_brands'] ?? 0;
-      }
-
-      if (newItems != null) {
-        if (newItems.length < _limit) _hasMoreData = false;
-        if (reset) {
-          _inventoryItems = newItems;
-        } else {
-          _inventoryItems.addAll(newItems);
-        }
-        _currentSkip += newItems.length;
-      } else {
-        _errorMessage = "Error de conexión con el inventario";
-      }
-    } catch (e) {
-      _errorMessage = "Error inesperado al cargar inventario: $e";
-    } finally {
-      // 🔥 ESTO ASEGURA QUE LA CARGA INFINITA NO OCURRA NUNCA MÁS
-      _isLoading = false;
-      _isLoadingMore = false;
-      notifyListeners();
-    }
-  }
-
-  /// Silently refreshes inventory data from DB after a sale,
-  /// keeping the same filters but forcing a re-read of stock values.
-  Future<void> refreshAfterSale() async {
-    if (_negocioId == null) return;
-    await loadInventory(
-      reset: true,
-      searchQuery: _lastQuery,
-      categoryIds: _lastCategoryIds,
-      brandIds: _lastBrandIds,
-      providerIds: _lastProviderIds,
-      filterState: _lastEstado,
-      minPrice: _lastMinPrice,
-      maxPrice: _lastMaxPrice,
-      minStock: _lastMinStock,
-      maxStock: _lastMaxStock,
-      hasOffer: _lastHasOffer,
-      onlyDefaults: _lastOnlyDefaults,
-    );
-  }
-
-  /// Realiza un conteo rápido y preciso en SQLite de los items según filtros (< 2ms)
-  Future<int> countFilteredItems(Map<String, dynamic> filters) async {
-    try {
-      final Map<String, dynamic> queryParams = {};
-
-      if (_lastQuery != null && _lastQuery!.trim().isNotEmpty) {
-        queryParams['q'] = _lastQuery!.trim();
-      }
-
-      if (filters.containsKey('estado') && filters['estado'] != null) {
-        queryParams['estado'] = filters['estado'];
-      }
-
-      if (filters.containsKey('minPrice') && filters['minPrice'] != null) {
-        queryParams['min_price'] = filters['minPrice'].toString();
-      }
-      if (filters.containsKey('maxPrice') && filters['maxPrice'] != null) {
-        queryParams['max_price'] = filters['maxPrice'].toString();
-      }
-
-      if (filters.containsKey('minStock') && filters['minStock'] != null) {
-        queryParams['min_stock'] = filters['minStock'].toString();
-      }
-      if (filters.containsKey('maxStock') && filters['maxStock'] != null) {
-        queryParams['max_stock'] = filters['maxStock'].toString();
-      }
-
-      if (filters['hasOffer'] == true || filters['has_offer'] == true) {
-        queryParams['has_offer'] = 'true';
-      }
-      if (filters['onlyDefaults'] == true || filters['only_defaults'] == true) {
-        queryParams['only_defaults'] = 'true';
-      }
-
-      if (filters.containsKey('categoryIds')) {
-        final list = filters['categoryIds'] as List;
-        if (list.isNotEmpty) {
-          queryParams['category_ids'] = list.join(',');
-        }
-      }
-      if (filters.containsKey('brandIds')) {
-        final list = filters['brandIds'] as List;
-        if (list.isNotEmpty) {
-          queryParams['brand_ids'] = list.join(',');
-        }
-      }
-      if (filters.containsKey('providerIds')) {
-        final list = filters['providerIds'] as List;
-        if (list.isNotEmpty) {
-          queryParams['provider_ids'] = list.join(',');
-        }
-      }
-
-      final totals = await _productService.countInventory(queryParams);
-      if (queryParams['only_defaults'] == 'true') {
-        return totals['products'] ?? totals['presentations'] ?? 0;
-      }
-      return totals['presentations'] ?? totals['products'] ?? 0;
-    } catch (e) {
-      return _inventoryItems.length;
-    }
-  }
-
-  Future<void> loadMore() async => await loadInventory(reset: false);
-
-  Future<bool> deleteProduct(int id) async {
-    _isLoading = true;
-    notifyListeners();
-    try {
-      bool ok = await _productService.deleteProduct(id);
-      if (ok) {
-        _inventoryItems.removeWhere((w) => w.product.id == id);
-      }
-      return ok;
-    } finally {
-      _isLoading = false;
-      notifyListeners();
-    }
-  }
-
-  Future<bool> createFullProduct({
-    required String nombre,
-    int? marcaId,
-    String? deferredBrandName,
-    int? categoriaId,
-    String? deferredCategoryName,
-    int? proveedorId,
-    String? deferredProviderName,
-    required String estado,
-    String? descripcion,
-    String? imagenUrl,
-    String? codigoBarras,
-    required List<ProductPresentation> presentaciones,
-    String modoStock = 'INDEPENDIENTE',
-    int stockCompartido = 0,
-    double costoBase = 0.0,
-  }) async {
-    _isLoading = true;
-    notifyListeners();
-    try {
-      bool ok = await _productService.createFullProduct(
-        nombre: nombre,
-        marcaId: marcaId,
-        deferredBrandName: deferredBrandName,
-        categoriaId: categoriaId,
-        deferredCategoryName: deferredCategoryName,
-        proveedorId: proveedorId,
-        deferredProviderName: deferredProviderName,
-        estado: estado,
-        descripcion: descripcion,
-        imagenUrl: imagenUrl,
-        codigoBarras: codigoBarras,
-        presentaciones: presentaciones,
-        modoStock: modoStock,
-        stockCompartido: stockCompartido,
-        costoBase: costoBase,
-      );
-      if (ok) {
-        _errorMessage = '';
-        _masterDataCache.clearCache();
-        await loadMasterData(showAll: true);
-        await loadInventory(reset: true);
-      } else {
-        _errorMessage = _productService.lastError ?? "Error al registrar el producto";
-      }
-      return ok;
-    } finally {
-      _isLoading = false;
-      notifyListeners();
-    }
-  }
-
-  Future<bool> editFullProduct({
-    required int productId,
-    required String nombre,
-    int? marcaId,
-    String? deferredBrandName,
-    int? categoriaId,
-    String? deferredCategoryName,
-    int? proveedorId,
-    String? deferredProviderName,
-    required String estado,
-    String? descripcion,
-    String? imagenUrl,
-    String? codigoBarras,
-    required List<ProductPresentation> presentaciones,
-    required List<int> idsToDelete,
-    String? modoStock,
-    int? stockCompartido,
-    double? costoBase,
-  }) async {
-    _isLoading = true;
-    notifyListeners();
-    try {
-      bool ok = await _productService.editFullProduct(
-        productId: productId,
-        nombre: nombre,
-        marcaId: marcaId,
-        deferredBrandName: deferredBrandName,
-        categoriaId: categoriaId,
-        deferredCategoryName: deferredCategoryName,
-        proveedorId: proveedorId,
-        deferredProviderName: deferredProviderName,
-        estado: estado,
-        descripcion: descripcion,
-        imagenUrl: imagenUrl,
-        codigoBarras: codigoBarras,
-        presentaciones: presentaciones,
-        idsToDelete: idsToDelete,
-        modoStock: modoStock,
-        stockCompartido: stockCompartido,
-        costoBase: costoBase,
-      );
-      if (ok) {
-        _errorMessage = '';
-        _masterDataCache.clearCache();
-        await loadMasterData(showAll: true);
-        await loadInventory(reset: true);
-      } else {
-        _errorMessage = _productService.lastError ?? "Error al actualizar el producto";
-      }
-      return ok;
-    } finally {
-      _isLoading = false;
-      notifyListeners();
-    }
-  }
-
-  /// Retira una variante cortada en SQLite de forma atómica y actualiza catálogos a 0ms
-  Future<bool> cutVariantFromProduct({
-    required int presentationId,
-    required int originProductId,
-    int? promoteToDefaultPresentationId,
-    String? transferredBarcode,
-    int transferredStock = 0,
-    int transferredBaseUnits = 0,
-    bool isSharedVariant = false,
-    bool shouldDeductSharedPool = true,
-  }) async {
-    _isLoading = true;
-    notifyListeners();
-    try {
-      final ok = await _productService.cutVariantFromProduct(
-        presentationId: presentationId,
-        originProductId: originProductId,
-        promoteToDefaultPresentationId: promoteToDefaultPresentationId,
-        transferredBarcode: transferredBarcode,
-        transferredStock: transferredStock,
-        transferredBaseUnits: transferredBaseUnits,
-        isSharedVariant: isSharedVariant,
-        shouldDeductSharedPool: shouldDeductSharedPool,
-      );
-      if (ok) {
-        _errorMessage = '';
-        _masterDataCache.clearCache();
-        await loadMasterData(showAll: true);
-        await loadInventory(reset: true);
-      } else {
-        _errorMessage =
-            _productService.lastError ?? "Error al trasladar la variante";
-      }
-      return ok;
-    } finally {
-      _isLoading = false;
-      notifyListeners();
-    }
-  }
-
-  Future<bool> updatePresentation(
-    int presentationId, {
-    String? umpCompra,
-    double? precioUmpProveedor,
-    double? cantidadUmpComprada,
-    double? totalPagoLote,
-    int? unidadesPorLote,
-    String? unidadVenta,
-    int? unidadesPorVenta,
-    double? costoUnitarioCalculado,
-    double? factorGananciaVenta,
-    double? precioVentaFinal,
-    double? oferta,
-    String? tipoDesc,
-    double? valorDesc,
-    int? stock,
-    int? cupoMaximoVariante,
-    bool clearCupo = false,
-    String? estado,
-    String? imagenUrl,
-  }) async {
-    Map<String, dynamic> body = {};
-    if (umpCompra != null) body['ump_compra'] = umpCompra;
-    if (precioUmpProveedor != null) {
-      body['precio_ump_proveedor'] = precioUmpProveedor;
-    }
-    if (cantidadUmpComprada != null) {
-      body['cantidad_ump_comprada'] = cantidadUmpComprada;
-    }
-    if (totalPagoLote != null) body['total_pago_lote'] = totalPagoLote;
-    if (unidadesPorLote != null) body['unidades_por_lote'] = unidadesPorLote;
-
-    if (unidadVenta != null) body['unidad_venta'] = unidadVenta;
-    if (unidadesPorVenta != null) body['unidades_por_venta'] = unidadesPorVenta;
-
-    if (costoUnitarioCalculado != null) {
-      body['costo_unitario_calculado'] = costoUnitarioCalculado;
-    }
-    if (factorGananciaVenta != null) {
-      body['factor_ganancia_venta'] = factorGananciaVenta;
-    }
-    if (precioVentaFinal != null) body['precio_venta_final'] = precioVentaFinal;
-
-    if (oferta != null) {
-      if (oferta == -1) {
-        body['precio_oferta'] = null;
-        body['tipo_descuento'] = null;
-        body['valor_descuento'] = null;
-      } else {
-        body['precio_oferta'] = oferta;
-        if (oferta > 0) {
-          body['tipo_descuento'] = tipoDesc;
-          body['valor_descuento'] = valorDesc;
-        }
-      }
-    }
-    if (stock != null) body['stock_actual'] = stock;
-    if (clearCupo) {
-      body['cupo_maximo_variante'] = null;
-    } else if (cupoMaximoVariante != null) {
-      body['cupo_maximo_variante'] = cupoMaximoVariante;
-    }
-    if (estado != null) body['estado'] = estado;
-
-    if (imagenUrl != null) {
-      final oldIndex = _inventoryItems.indexWhere(
-        (wrapper) => wrapper.presentation.id == presentationId,
-      );
-      String? oldPath = oldIndex != -1
-          ? _inventoryItems[oldIndex].presentation.imagenUrl
-          : null;
-      body['imagen_url'] = await ImageService.processAndSaveImage(
-        imagenUrl,
-        oldImagePath: oldPath,
-      );
-    }
-
-    bool ok = await _productService.updatePresentation(presentationId, body);
-    if (ok) {
-      final index = _inventoryItems.indexWhere(
-        (wrapper) => wrapper.presentation.id == presentationId,
-      );
-      if (index != -1) {
-        final oldPres = _inventoryItems[index].presentation;
-        final updatedPres = ProductPresentation(
-          id: oldPres.id,
-          nombreEspecifico: oldPres.nombreEspecifico,
-          codigoBarras: oldPres.codigoBarras,
-          descripcion: oldPres.descripcion,
-          proveedorId: oldPres.proveedorId,
-          esDefault: oldPres.esDefault,
-          imagenUrl: body.containsKey('imagen_url')
-              ? body['imagen_url']
-              : oldPres.imagenUrl,
-
-          umpCompra: umpCompra ?? oldPres.umpCompra,
-          precioUmpProveedor: precioUmpProveedor ?? oldPres.precioUmpProveedor,
-          cantidadUmpComprada:
-              cantidadUmpComprada ?? oldPres.cantidadUmpComprada,
-          totalPagoLote: totalPagoLote ?? oldPres.totalPagoLote,
-          unidadesPorLote: unidadesPorLote ?? oldPres.unidadesPorLote,
-
-          unidadVenta: unidadVenta ?? oldPres.unidadVenta,
-          unidadesPorVenta: unidadesPorVenta ?? oldPres.unidadesPorVenta,
-
-          costoUnitarioCalculado:
-              costoUnitarioCalculado ?? oldPres.costoUnitarioCalculado,
-          factorGananciaVenta:
-              factorGananciaVenta ?? oldPres.factorGananciaVenta,
-          precioVentaFinal: precioVentaFinal ?? oldPres.precioVentaFinal,
-
-          stockActual: stock ?? oldPres.stockActual,
-          cupoMaximoVariante: clearCupo
-              ? null
-              : (cupoMaximoVariante ?? oldPres.cupoMaximoVariante),
-          precioOferta: oferta == -1 ? null : (oferta ?? oldPres.precioOferta),
-          tipoDescuento:
-              oferta == -1 ? null : (tipoDesc ?? oldPres.tipoDescuento),
-          valorDescuento:
-              oferta == -1 ? null : (valorDesc ?? oldPres.valorDescuento),
-          estado: estado ?? oldPres.estado,
-          activo: oldPres.activo,
-          usaStockCompartido: oldPres.usaStockCompartido,
-        );
-
-        _inventoryItems[index] = InventoryWrapper(
-          product: _inventoryItems[index].product,
-          presentation: updatedPres,
-        );
-        final productRef = _inventoryItems[index].product;
-        final presIndex = productRef.presentaciones.indexWhere(
-          (p) => p.id == presentationId,
-        );
-        if (presIndex != -1) productRef.presentaciones[presIndex] = updatedPres;
-
-        // 🔥 Sincronización en memoria a 0ms de Variantes Hermanas con Stock Compartido
-        if (oldPres.usaStockCompartido && stock != null) {
-          final updatedProduct = productRef.copyWith(
-            stockCompartido: stock,
-          );
-
-          for (int i = 0; i < _inventoryItems.length; i++) {
-            final w = _inventoryItems[i];
-            if (w.product.id == productRef.id) {
-              if (w.presentation.usaStockCompartido) {
-                final siblingPres = ProductPresentation(
-                  id: w.presentation.id,
-                  nombreEspecifico: w.presentation.nombreEspecifico,
-                  codigoBarras: w.presentation.codigoBarras,
-                  descripcion: w.presentation.descripcion,
-                  proveedorId: w.presentation.proveedorId,
-                  esDefault: w.presentation.esDefault,
-                  imagenUrl: w.presentation.imagenUrl,
-                  umpCompra: w.presentation.umpCompra,
-                  precioUmpProveedor: w.presentation.precioUmpProveedor,
-                  cantidadUmpComprada: w.presentation.cantidadUmpComprada,
-                  totalPagoLote: w.presentation.totalPagoLote,
-                  unidadesPorLote: w.presentation.unidadesPorLote,
-                  unidadVenta: w.presentation.unidadVenta,
-                  unidadesPorVenta: w.presentation.unidadesPorVenta,
-                  costoUnitarioCalculado: w.presentation.costoUnitarioCalculado,
-                  factorGananciaVenta: w.presentation.factorGananciaVenta,
-                  precioVentaFinal: w.presentation.precioVentaFinal,
-                  stockActual: stock,
-                  cupoMaximoVariante: w.presentation.cupoMaximoVariante,
-                  precioOferta: w.presentation.precioOferta,
-                  tipoDescuento: w.presentation.tipoDescuento,
-                  valorDescuento: w.presentation.valorDescuento,
-                  estado: w.presentation.estado,
-                  activo: w.presentation.activo,
-                  usaStockCompartido: true,
-                );
-                _inventoryItems[i] = InventoryWrapper(
-                  product: updatedProduct,
-                  presentation: siblingPres,
-                );
-              } else {
-                _inventoryItems[i] = InventoryWrapper(
-                  product: updatedProduct,
-                  presentation: w.presentation,
-                );
-              }
-            }
-          }
-
-          for (int pIdx = 0; pIdx < updatedProduct.presentaciones.length; pIdx++) {
-            final p = updatedProduct.presentaciones[pIdx];
-            if (p.usaStockCompartido) {
-              updatedProduct.presentaciones[pIdx] = ProductPresentation(
-                id: p.id,
-                nombreEspecifico: p.nombreEspecifico,
-                codigoBarras: p.codigoBarras,
-                descripcion: p.descripcion,
-                proveedorId: p.proveedorId,
-                esDefault: p.esDefault,
-                imagenUrl: p.imagenUrl,
-                umpCompra: p.umpCompra,
-                precioUmpProveedor: p.precioUmpProveedor,
-                cantidadUmpComprada: p.cantidadUmpComprada,
-                totalPagoLote: p.totalPagoLote,
-                unidadesPorLote: p.unidadesPorLote,
-                unidadVenta: p.unidadVenta,
-                unidadesPorVenta: p.unidadesPorVenta,
-                costoUnitarioCalculado: p.costoUnitarioCalculado,
-                factorGananciaVenta: p.factorGananciaVenta,
-                precioVentaFinal: p.precioVentaFinal,
-                stockActual: stock,
-                cupoMaximoVariante: p.cupoMaximoVariante,
-                precioOferta: p.precioOferta,
-                tipoDescuento: p.tipoDescuento,
-                valorDescuento: p.valorDescuento,
-                estado: p.estado,
-                activo: p.activo,
-                usaStockCompartido: true,
-              );
-            }
-          }
-        }
-        notifyListeners();
-      }
-    } else {
-      _lastActionError = "Error al actualizar presentación";
-    }
-    return ok;
-  }
-
-  /// 🎯 Actualiza únicamente el cupo máximo de una variante con stock compartido
-  Future<bool> updateVariantQuota(int presentationId, int? newQuota) async {
-    return await updatePresentation(
-      presentationId,
-      cupoMaximoVariante: newQuota,
-      clearCupo: newQuota == null,
-    );
-  }
 }
+
+class InventoryProvider extends _InventoryProviderBase
+    with
+        _InventoryProviderCatalogMetaMixin,
+        _InventoryProviderQueriesMixin,
+        _InventoryProviderMutationsMixin {}

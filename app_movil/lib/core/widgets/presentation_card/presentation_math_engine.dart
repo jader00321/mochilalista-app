@@ -2,6 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:app_movil/core/services/unit_catalog_service.dart';
 
+part 'math_engine/presentation_math_stock_ops.dart';
+part 'math_engine/presentation_math_pricing_ops.dart';
+part 'math_engine/presentation_math_strategy_ops.dart';
+
 /// Motor matemático y reactivo para la Tarjeta de Presentación / Variante.
 /// Centraliza la conversión de factores, cálculo de stock final, margen comercial,
 /// descuentos, redondeo (.50, .90, .00) y sincronización con compras.
@@ -34,7 +38,6 @@ class PresentationMathEngine {
   final TextEditingController stockFinalCtrl;
   final TextEditingController ajusteBaseCtrl;
 
-  // Estado interno de cálculo
   StockValidationResult stockValidation = StockValidationResult(
     fullUnits: 0,
     leftover: 0,
@@ -50,7 +53,6 @@ class PresentationMathEngine {
   double originalBaseCost = 0.0;
   int originalFactor = 1;
 
-  // Estado conmutable de redondeo
   double? activeRoundingTarget;
   String? preRoundedPrice;
   String? preRoundedMargen;
@@ -88,15 +90,16 @@ class PresentationMathEngine {
     preRoundedMargen = controllerMap['preRoundedMargen'] as String?;
     _isApplyingRounding = false;
 
-    bool isEdit = controllerMap['isEditMode'] == true;
+    final bool isEdit = controllerMap['isEditMode'] == true;
     if (isEdit) {
       int factorVenta = int.tryParse(unidadesVentaCtrl.text) ?? 1;
       if (factorVenta <= 0) factorVenta = 1;
-      int visualStock = int.tryParse(stockInicialCtrl.text) ?? 0;
-      double visualCost = double.tryParse(costoPresCtrl.text) ?? 0.0;
+      final int visualStock = int.tryParse(stockInicialCtrl.text) ?? 0;
+      final double visualCost = double.tryParse(costoPresCtrl.text) ?? 0.0;
 
       originalFactor = factorVenta;
-      originalBaseStock = controllerMap['originalBaseStock'] ??
+      originalBaseStock =
+          controllerMap['originalBaseStock'] ??
           controllerMap['stockActualBase'] ??
           (visualStock * factorVenta);
       trueOriginalBaseStock = originalBaseStock;
@@ -105,93 +108,20 @@ class PresentationMathEngine {
       costoBaseParaSobrante = originalBaseCost;
 
       matematicaSimpleEdicion();
+    } else if (stockInicialCtrl.text.isNotEmpty &&
+        stockInicialCtrl.text != "0") {
+      calcularStockFinal();
     } else {
-      if (stockInicialCtrl.text.isNotEmpty && stockInicialCtrl.text != "0") {
-        calcularStockFinal();
-      } else {
-        recalcularDesdeCompra();
-      }
+      recalcularDesdeCompra();
     }
   }
 
   /// Sincroniza el residuo cuando cambia externamente
-  void syncLeftoverState(bool? oldVal, bool? newVal) {
-    if (oldVal != newVal) {
-      bool isEdit = controllerMap['isEditMode'] == true;
-      if (isEdit) {
-        int currentFactor = int.tryParse(unidadesVentaCtrl.text) ?? 1;
-        if (currentFactor <= 0) currentFactor = 1;
+  void syncLeftoverState(bool? oldVal, bool? newVal) =>
+      _implSyncLeftoverState(oldVal, newVal);
 
-        if (controllerMap['leftoverCreated'] == true) {
-          originalBaseStock =
-              trueOriginalBaseStock - (trueOriginalBaseStock % currentFactor);
-        } else {
-          originalBaseStock = trueOriginalBaseStock;
-        }
-
-        stockInicialCtrl.text = (originalBaseStock ~/ currentFactor).toString();
-        matematicaSimpleEdicion();
-      } else {
-        calcularStockFinal();
-      }
-    }
-  }
-
-  void onUnidadVentaChanged(String unitName, int factor, bool isAutomatic) {
-    final bool isShared = controllerMap['usaStockCompartido'] == true;
-    if (isShared) {
-      final safeFactor = factor <= 0 ? 1 : factor;
-      final double baseCost =
-          (controllerMap['costoBaseUnitario'] as num?)?.toDouble() ??
-              costoBaseParaSobrante;
-      if (baseCost > 0) {
-        costoPresCtrl.text = formatDecimal(baseCost * safeFactor);
-        recalcularPrecios(fromMargen: true);
-        if (activeRoundingTarget != null) {
-          roundPrice(activeRoundingTarget!);
-        }
-      }
-
-      // Sincronizar reactivamente el cupo disponible ante cambio de factor de venta
-      final dynamic sharedCtrl = controllerMap['sharedStockCtrl'];
-      final String? sharedStr = sharedCtrl is TextEditingController
-          ? sharedCtrl.text
-          : controllerMap['stockBaseTotal']?.toString();
-      final int sharedBase = int.tryParse(sharedStr ?? "0") ?? 0;
-      final int availableSalesUnits = safeFactor > 0 ? (sharedBase ~/ safeFactor) : sharedBase;
-
-      if (controllerMap['cupoMaximoVariante'] == null) {
-        stockFinalCtrl.text = availableSalesUnits.toString();
-      } else {
-        final int cupo = (controllerMap['cupoMaximoVariante'] as num).toInt();
-        if (cupo > availableSalesUnits) {
-          controllerMap['cupoMaximoVariante'] = availableSalesUnits;
-          stockFinalCtrl.text = availableSalesUnits.toString();
-        } else {
-          stockFinalCtrl.text = cupo.toString();
-        }
-      }
-
-      onStateUpdate();
-      return;
-    }
-
-    bool isEdit = controllerMap['isEditMode'] == true;
-    if (isEdit) {
-      convertirUnidadEnEdicion(factor);
-    } else {
-      double totalPago = double.tryParse(totalPagoCtrl.text) ?? 0.0;
-      double cantComprada = double.tryParse(cantCompraCtrl.text) ?? 0.0;
-      if (totalPago > 0 && cantComprada > 0) {
-        recalcularDesdeCompra();
-      } else {
-        costoPresCtrl.text = formatDecimal(costoBaseParaSobrante * factor);
-        calcularStockFinal();
-        recalcularPrecios(fromMargen: true);
-        onStateUpdate();
-      }
-    }
-  }
+  void onUnidadVentaChanged(String unitName, int factor, bool isAutomatic) =>
+      _implOnUnidadVentaChanged(unitName, factor, isAutomatic);
 
   void onUmpCompraChanged(String unitName, int factor, bool isAutomatic) {
     if (controllerMap['isEditMode'] != true) {
@@ -199,680 +129,47 @@ class PresentationMathEngine {
     }
   }
 
-  void matematicaSimpleEdicion() {
-    if (controllerMap['usaStockCompartido'] == true) {
-      // En modo stock compartido, stockFinalCtrl representa el cupo vendible en paquetes
-      // y no debe sobrescribirse con la matemática de inventario independiente.
-      onStateUpdate();
-      return;
-    }
+  void matematicaSimpleEdicion() => _implMatematicaSimpleEdicion();
 
-    int factorVenta = int.tryParse(unidadesVentaCtrl.text) ?? 1;
-    if (factorVenta <= 0) factorVenta = 1;
+  void convertirUnidadEnEdicion(int nuevoFactor) =>
+      _implConvertirUnidadEnEdicion(nuevoFactor);
 
-    // Asegurar que Stock Sistema muestre siempre los paquetes en base de datos
-    final int systemPackages = originalBaseStock ~/ factorVenta;
-    stockInicialCtrl.text = systemPackages.toString();
+  void calcularStockFinal() => _implCalcularStockFinal();
 
-    int inicial = systemPackages;
-    int ingreso = int.tryParse(nuevoIngresoCtrl.text) ?? 0;
-    int descuento = int.tryParse(stockDescuentoCtrl.text) ?? 0;
+  void recalcularDesdeCompra() => _implRecalcularDesdeCompra();
 
-    // Validar que el descuento por ventas previas jamás deje el stock final por debajo de 0
-    if (descuento > inicial + ingreso) {
-      descuento = inicial + ingreso;
-      stockDescuentoCtrl.text = descuento.toString();
-    }
+  void aplicarAjusteBaseManual() => _implAplicarAjusteBaseManual();
 
-    int finalVisual = inicial + ingreso - descuento;
-    if (finalVisual < 0) finalVisual = 0;
-    stockFinalCtrl.text = finalVisual.toString();
+  void recalcularHaciaAtrasDesdeVisual({bool fromMargen = true}) =>
+      _implRecalcularHaciaAtrasDesdeVisual(fromMargen: fromMargen);
 
-    int residuoOriginal = controllerMap['leftoverCreated'] == true
-        ? 0
-        : (originalBaseStock % factorVenta);
+  void verifyLeftoverInvalidation() => _implVerifyLeftoverInvalidation();
 
-    int totalUnitsBase = (finalVisual * factorVenta) + residuoOriginal;
-
-    stockValidation = UnitCatalogService.validateStockForUnit(
-      totalUnitsBase: totalUnitsBase,
-      presentationFactor: factorVenta,
-      baseUnitCost: costoBaseParaSobrante,
-      unitName: unidadVentaCtrl.text,
-    );
-    controllerMap['stockValidation'] = stockValidation;
-    controllerMap['mathEngine'] = this;
-    controllerMap['originalBaseStock'] = originalBaseStock;
-    verifyLeftoverInvalidation();
-    onStateUpdate();
-  }
-
-  void convertirUnidadEnEdicion(int nuevoFactor) {
-    if (nuevoFactor <= 0) nuevoFactor = 1;
-
-    if (nuevoFactor == originalFactor) {
-      costoPresCtrl.text = formatDecimal(originalBaseCost * originalFactor);
-      stockInicialCtrl.text = (originalBaseStock ~/ originalFactor).toString();
-    } else {
-      costoPresCtrl.text = formatDecimal(originalBaseCost * nuevoFactor);
-      stockInicialCtrl.text = (originalBaseStock ~/ nuevoFactor).toString();
-    }
-
-    nuevoIngresoCtrl.text = "";
-    stockDescuentoCtrl.text = "";
-
-    recalcularPrecios(fromMargen: true);
-    matematicaSimpleEdicion();
-  }
-
-  void calcularStockFinal() {
-    if (controllerMap['usaStockCompartido'] == true) {
-      // En modo compartido, el stock final se gestiona mediante el cupo vendible
-      return;
-    }
-
-    int factorVenta = int.tryParse(unidadesVentaCtrl.text) ?? 1;
-    if (factorVenta <= 0) factorVenta = 1;
-
-    int inicial = int.tryParse(stockInicialCtrl.text) ?? 0;
-    int ingreso = int.tryParse(nuevoIngresoCtrl.text) ?? 0;
-    int descuento = int.tryParse(stockDescuentoCtrl.text) ?? 0;
-
-    int totalBase = inicial + ingreso - descuento;
-    if (totalBase < 0) totalBase = 0;
-
-    int finalVisual = totalBase ~/ factorVenta;
-    stockFinalCtrl.text = finalVisual.toString();
-
-    stockValidation = UnitCatalogService.validateStockForUnit(
-      totalUnitsBase: totalBase,
-      presentationFactor: factorVenta,
-      baseUnitCost: costoBaseParaSobrante,
-      unitName: unidadVentaCtrl.text,
-    );
-    controllerMap['stockValidation'] = stockValidation;
-    controllerMap['mathEngine'] = this;
-    verifyLeftoverInvalidation();
-    onStateUpdate();
-  }
-
-  void recalcularDesdeCompra() {
-    double cantComprada = double.tryParse(cantCompraCtrl.text) ?? 0.0;
-    double totalPago = double.tryParse(totalPagoCtrl.text) ?? 0.0;
-    int unidLote = int.tryParse(unidadesLoteCtrl.text) ?? 1;
-    int factorVenta = int.tryParse(unidadesVentaCtrl.text) ?? 1;
-    if (factorVenta <= 0) factorVenta = 1;
-
-    if (cantComprada > 0 && unidLote > 0 && totalPago > 0) {
-      int totalUnidadesBase = (cantComprada * unidLote).toInt();
-      if (ajusteBaseCtrl.text.isNotEmpty) {
-        totalUnidadesBase =
-            int.tryParse(ajusteBaseCtrl.text) ?? totalUnidadesBase;
-      }
-      double costoBaseIndiv = totalPago / (cantComprada * unidLote);
-
-      stockInicialCtrl.text = totalUnidadesBase.toString();
-      nuevoIngresoCtrl.text = "0";
-      stockDescuentoCtrl.text = "0";
-
-      costoPresCtrl.text = formatDecimal(costoBaseIndiv * factorVenta);
-      costoBaseParaSobrante = costoBaseIndiv;
-
-      calcularStockFinal();
-    } else {
-      stockInicialCtrl.text = "0";
-      calcularStockFinal();
-      stockValidation = StockValidationResult(
-        fullUnits: 0,
-        leftover: 0,
-        deficit: 0,
-        status: StockValidationStatus.empty,
-        costoBaseSobrante: 0.0,
-      );
-      controllerMap['stockValidation'] = stockValidation;
-      controllerMap['mathEngine'] = this;
-    }
-
-    verifyLeftoverInvalidation();
-    recalcularPrecios(fromMargen: true);
-    onStateUpdate();
-  }
-
-  void aplicarAjusteBaseManual() {
-    if (ajusteBaseCtrl.text.isEmpty) {
-      if (controllerMap['isEditMode'] == true) {
-        int factorVenta = int.tryParse(unidadesVentaCtrl.text) ?? 1;
-        if (factorVenta <= 0) factorVenta = 1;
-
-        if (controllerMap['leftoverCreated'] == true) {
-          originalBaseStock =
-              trueOriginalBaseStock - (trueOriginalBaseStock % factorVenta);
-        } else {
-          originalBaseStock = trueOriginalBaseStock;
-        }
-
-        stockInicialCtrl.text = (originalBaseStock ~/ factorVenta).toString();
-        nuevoIngresoCtrl.text = "0";
-        stockDescuentoCtrl.text = "0";
-        matematicaSimpleEdicion();
-      } else {
-        recalcularDesdeCompra();
-      }
-      return;
-    }
-    int nuevaBase = int.tryParse(ajusteBaseCtrl.text) ?? 0;
-    int factorVenta = int.tryParse(unidadesVentaCtrl.text) ?? 1;
-    if (factorVenta <= 0) factorVenta = 1;
-
-    if (controllerMap['isEditMode'] == true) {
-      trueOriginalBaseStock = nuevaBase;
-      if (controllerMap['leftoverCreated'] == true) {
-        originalBaseStock = nuevaBase - (nuevaBase % factorVenta);
-      } else {
-        originalBaseStock = nuevaBase;
-      }
-      controllerMap['originalBaseStock'] = originalBaseStock;
-      stockInicialCtrl.text = (originalBaseStock ~/ factorVenta).toString();
-      nuevoIngresoCtrl.text = "";
-      stockDescuentoCtrl.text = "";
-      matematicaSimpleEdicion();
-    } else {
-      stockInicialCtrl.text = nuevaBase.toString();
-      nuevoIngresoCtrl.text = "";
-      stockDescuentoCtrl.text = "";
-      calcularStockFinal();
-    }
-  }
-
-  void recalcularHaciaAtrasDesdeVisual({bool fromMargen = true}) {
-    if (!_isApplyingRounding) {
-      activeRoundingTarget = null;
-      preRoundedPrice = null;
-      preRoundedMargen = null;
-      controllerMap['activeRoundingTarget'] = null;
-      controllerMap['preRoundedPrice'] = null;
-      controllerMap['preRoundedMargen'] = null;
-    }
-
-    bool isEdit = controllerMap['isEditMode'] == true;
-    if (isEdit) {
-      matematicaSimpleEdicion();
-      recalcularPrecios(fromMargen: fromMargen);
-      return;
-    }
-
-    calcularStockFinal();
-
-    int factorVenta = int.tryParse(unidadesVentaCtrl.text) ?? 1;
-    if (factorVenta <= 0) factorVenta = 1;
-
-    double costoVis = double.tryParse(costoPresCtrl.text) ?? 0.0;
-    costoBaseParaSobrante = costoVis / factorVenta;
-
-    double totalPago = double.tryParse(totalPagoCtrl.text) ?? 0.0;
-    double cantComprada = double.tryParse(cantCompraCtrl.text) ?? 0.0;
-    int unidLote = int.tryParse(unidadesLoteCtrl.text) ?? 1;
-    if (unidLote <= 0) unidLote = 1;
-
-    if (totalPago > 0 && cantComprada > 0) {
-      int inicial = int.tryParse(stockInicialCtrl.text) ?? 0;
-      int ingreso = int.tryParse(nuevoIngresoCtrl.text) ?? 0;
-      int descuento = int.tryParse(stockDescuentoCtrl.text) ?? 0;
-      int totalBase = inicial + ingreso - descuento;
-      if (totalBase < 0) totalBase = 0;
-
-      double nuevaCantComprada = totalBase / unidLote;
-      double nuevoTotalPago = costoBaseParaSobrante * totalBase;
-
-      cantCompraCtrl.text = formatDecimal(nuevaCantComprada);
-      totalPagoCtrl.text = formatDecimal(nuevoTotalPago);
-    }
-
-    recalcularPrecios(fromMargen: fromMargen);
-    onStateUpdate();
-  }
-
-  void verifyLeftoverInvalidation() {
-    controllerMap['stockValidation'] = stockValidation;
-    controllerMap['validationStatus'] = stockValidation.status;
-    if (stockValidation.status != previousStatus ||
-        stockValidation.status == StockValidationStatus.empty) {
-      if (controllerMap['leftoverCreated'] == true &&
-          onInvalidateLeftover != null) {
-        onInvalidateLeftover!();
-      }
-      previousStatus = stockValidation.status;
-    }
-  }
-
-  void recalcularPrecios({required bool fromMargen}) {
-    if (!_isApplyingRounding && fromMargen) {
-      activeRoundingTarget = null;
-      preRoundedPrice = null;
-      preRoundedMargen = null;
-      controllerMap['activeRoundingTarget'] = null;
-      controllerMap['preRoundedPrice'] = null;
-      controllerMap['preRoundedMargen'] = null;
-    }
-
-    double costoPres = double.tryParse(costoPresCtrl.text) ?? 0.0;
-
-    if (fromMargen) {
-      double margen = double.tryParse(margenCtrl.text) ?? 1.35;
-      double pVenta = costoPres * margen;
-      if (costoPresCtrl.text.isNotEmpty && costoPresCtrl.text != "0") {
-        ventaCtrl.text = format2(pVenta);
-      }
-    } else {
-      double pVenta = double.tryParse(ventaCtrl.text) ?? 0.0;
-      if (costoPres > 0) {
-        double margen = pVenta / costoPres;
-        margenCtrl.text = format2(margen);
-      }
-    }
-
-    // 🔥 Sincronización 360° en vivo del Módulo de Descuentos al cambiar el precio base normal
-    if (controllerMap['descuentoActivo'] == true) {
-      double pVentaActual = double.tryParse(ventaCtrl.text) ?? 0.0;
-      if (controllerMap['precioOfertaExacto'] != null) {
-        double exact = (controllerMap['precioOfertaExacto'] as num).toDouble();
-        if (exact >= pVentaActual || exact <= 0) {
-          controllerMap['precioOfertaExacto'] = null;
-          controllerMap['activeDiscountRoundingTarget'] = null;
-          controllerMap['preRoundedOfferPrice'] = null;
-          controllerMap['preRoundedDiscountValor'] = null;
-        }
-      }
-    }
-
-    onStateUpdate();
-  }
+  void recalcularPrecios({required bool fromMargen}) =>
+      _implRecalcularPrecios(fromMargen: fromMargen);
 
   double? get activeDiscountRoundingTarget =>
       controllerMap['activeDiscountRoundingTarget'] as double?;
 
-  double? get precioOferta {
-    if (controllerMap['descuentoActivo'] != true) return null;
-    double baseVenta = double.tryParse(ventaCtrl.text) ?? 0.0;
-    if (baseVenta <= 0.0) return null;
-    double valorDcto = double.tryParse(valorDescuentoCtrl.text) ?? 0.0;
-    if (valorDcto <= 0) return null;
+  double? get precioOferta => _implPrecioOferta();
 
-    if (controllerMap['precioOfertaExacto'] != null &&
-        (controllerMap['precioOfertaExacto'] as num) > 0 &&
-        (controllerMap['precioOfertaExacto'] as num) < baseVenta) {
-      return (controllerMap['precioOfertaExacto'] as num).toDouble();
-    }
+  void onDiscountValueChanged() => _implOnDiscountValueChanged();
 
-    final String tipo = (controllerMap['tipoDescuento'] as String?) ?? 'porcentaje';
-    final bool isFijo = tipo == 'monto' || tipo == 'fijo';
+  void switchDiscountType(String newType) => _implSwitchDiscountType(newType);
 
-    if (!isFijo) {
-      return baseVenta - (baseVenta * (valorDcto / 100));
-    } else {
-      if (valorDcto < baseVenta) {
-        return valorDcto;
-      }
-      return null;
-    }
-  }
+  void roundDiscountPrice(double targetFraction) =>
+      _implRoundDiscountPrice(targetFraction);
 
-  void onDiscountValueChanged() {
-    controllerMap['activeDiscountRoundingTarget'] = null;
-    controllerMap['precioOfertaExacto'] = null;
-    controllerMap['preRoundedDiscountValor'] = null;
-    controllerMap['preRoundedOfferPrice'] = null;
-    onStateUpdate();
-  }
-
-  void switchDiscountType(String newType) {
-    String currentType = (controllerMap['tipoDescuento'] as String?) ?? 'porcentaje';
-    if (currentType == newType) return;
-
-    double baseVenta = double.tryParse(ventaCtrl.text) ?? 0.0;
-    double currentVal = double.tryParse(valorDescuentoCtrl.text) ?? 0.0;
-
-    final bool wasFijo = currentType == 'monto' || currentType == 'fijo';
-    final bool willBeFijo = newType == 'monto' || newType == 'fijo';
-
-    if (baseVenta > 0 && currentVal > 0) {
-      if (!wasFijo && willBeFijo) {
-        // De % Porcentaje a S/ Fijo:
-        // currentVal es el porcentaje a descontar (ej. 15%)
-        // El nuevo input en S/ Fijo es el Precio Oferta deseado: baseVenta * (1 - currentVal / 100)
-        double calculatedOffer = baseVenta * (1.0 - (currentVal / 100.0));
-        if (calculatedOffer < 0) calculatedOffer = 0.0;
-        valorDescuentoCtrl.text = calculatedOffer.toStringAsFixed(2);
-      } else if (wasFijo && !willBeFijo) {
-        // De S/ Fijo a % Porcentaje:
-        // currentVal es el Precio Oferta (ej. 0.85)
-        // El nuevo porcentaje es: ((baseVenta - currentVal) / baseVenta) * 100
-        if (currentVal < baseVenta) {
-          double calculatedPercent = ((baseVenta - currentVal) / baseVenta) * 100.0;
-          if ((calculatedPercent - calculatedPercent.roundToDouble()).abs() < 0.001) {
-            valorDescuentoCtrl.text = calculatedPercent.round().toString();
-          } else {
-            valorDescuentoCtrl.text = calculatedPercent.toStringAsFixed(2);
-          }
-        }
-      }
-    }
-
-    controllerMap['tipoDescuento'] = newType;
-    controllerMap['activeDiscountRoundingTarget'] = null;
-    controllerMap['precioOfertaExacto'] = null;
-    controllerMap['preRoundedDiscountValor'] = null;
-    controllerMap['preRoundedOfferPrice'] = null;
-    onStateUpdate();
-  }
-
-  void roundDiscountPrice(double targetFraction) {
-    double baseVenta = double.tryParse(ventaCtrl.text) ?? 0.0;
-    if (baseVenta <= 0) return;
-    HapticFeedback.selectionClick();
-
-    double? currentOffer = precioOferta;
-    if (currentOffer == null || currentOffer <= 0 || currentOffer >= baseVenta) {
-      currentOffer = baseVenta * 0.90;
-    }
-
-    double? activeTarget =
-        controllerMap['activeDiscountRoundingTarget'] as double?;
-    String? preRoundedValor =
-        controllerMap['preRoundedDiscountValor'] as String?;
-    double? preRoundedOffer =
-        controllerMap['preRoundedOfferPrice'] as double?;
-
-    final bool isSameActive = activeTarget != null &&
-        ((activeTarget - targetFraction).abs() < 0.01 ||
-            ((activeTarget == 1.00 || activeTarget == 0.00) &&
-                (targetFraction == 1.00 || targetFraction == 0.00)));
-
-    if (isSameActive) {
-      if (preRoundedValor != null) {
-        valorDescuentoCtrl.text = preRoundedValor;
-      }
-      controllerMap['activeDiscountRoundingTarget'] = null;
-      controllerMap['precioOfertaExacto'] = preRoundedOffer;
-      controllerMap['preRoundedDiscountValor'] = null;
-      controllerMap['preRoundedOfferPrice'] = null;
-      onStateUpdate();
-      return;
-    }
-
-    preRoundedValor ??= valorDescuentoCtrl.text.trim();
-    controllerMap['preRoundedDiscountValor'] = preRoundedValor;
-    controllerMap['preRoundedOfferPrice'] = controllerMap['precioOfertaExacto'];
-
-    double floor = currentOffer.floorToDouble();
-    double roundedOffer;
-
-    if (targetFraction == 0.50) {
-      roundedOffer = floor + 0.50;
-    } else if (targetFraction == 0.90) {
-      roundedOffer = floor + 0.90;
-    } else if (targetFraction == 1.00 || targetFraction == 0.00) {
-      roundedOffer = floor;
-    } else {
-      roundedOffer = currentOffer;
-    }
-
-    if (roundedOffer >= baseVenta) {
-      roundedOffer = (baseVenta - 0.10) > 0 ? (baseVenta - 0.10) : 0.50;
-    }
-    if (roundedOffer <= 0) {
-      roundedOffer = 0.50;
-    }
-
-    String tipo = (controllerMap['tipoDescuento'] as String?) ?? 'porcentaje';
-    final bool isFijo = tipo == 'monto' || tipo == 'fijo';
-    if (!isFijo) {
-      double newPercent = ((baseVenta - roundedOffer) / baseVenta) * 100;
-      if ((newPercent - newPercent.roundToDouble()).abs() < 0.001) {
-        valorDescuentoCtrl.text = newPercent.round().toString();
-      } else {
-        valorDescuentoCtrl.text = newPercent.toStringAsFixed(2);
-      }
-    } else {
-      valorDescuentoCtrl.text = roundedOffer.toStringAsFixed(2);
-    }
-
-    controllerMap['activeDiscountRoundingTarget'] = targetFraction;
-    controllerMap['precioOfertaExacto'] = roundedOffer;
-    onStateUpdate();
-  }
-
-  void roundPrice(double targetFraction) {
-    double current = double.tryParse(ventaCtrl.text) ?? 0.0;
-    if (current <= 0) return;
-    HapticFeedback.selectionClick();
-
-    // Toggle off: si el chip pulsado ya estaba activo, restaurar el precio y margen originales
-    final bool isSameActive = activeRoundingTarget != null &&
-        ((activeRoundingTarget! - targetFraction).abs() < 0.01 ||
-            ((activeRoundingTarget! == 1.00 || activeRoundingTarget! == 0.00) &&
-                (targetFraction == 1.00 || targetFraction == 0.00)));
-
-    if (isSameActive) {
-      if (preRoundedPrice != null) {
-        _isApplyingRounding = true;
-        try {
-          ventaCtrl.text = preRoundedPrice!;
-          if (preRoundedMargen != null) {
-            margenCtrl.text = preRoundedMargen!;
-          }
-          recalcularHaciaAtrasDesdeVisual(fromMargen: false);
-        } finally {
-          _isApplyingRounding = false;
-        }
-      }
-      activeRoundingTarget = null;
-      preRoundedPrice = null;
-      preRoundedMargen = null;
-      controllerMap['activeRoundingTarget'] = null;
-      controllerMap['preRoundedPrice'] = null;
-      controllerMap['preRoundedMargen'] = null;
-      onStateUpdate();
-      return;
-    }
-
-    // Guardar el precio y margen previos si es la primera vez que se aplica un redondeo
-    if (preRoundedPrice == null) {
-      preRoundedPrice = ventaCtrl.text.trim();
-      preRoundedMargen = margenCtrl.text.trim();
-    }
-
-    // Calcular siempre sobre el precio base antes de redondeos
-    double basePrice = double.tryParse(preRoundedPrice!) ?? current;
-    double floor = basePrice.floorToDouble();
-    double fraction = basePrice - floor;
-    double rounded;
-
-    if (targetFraction == 0.50) {
-      rounded = floor + 0.50;
-    } else if (targetFraction == 0.90) {
-      rounded = floor + 0.90;
-    } else if (targetFraction == 1.00 || targetFraction == 0.00) {
-      if (fraction < 0.4999) {
-        rounded = floor;
-      } else {
-        rounded = floor + 1.00;
-      }
-      if (rounded < 1.0) {
-        rounded = 1.0;
-      }
-    } else {
-      rounded = basePrice;
-    }
-
-    _isApplyingRounding = true;
-    try {
-      ventaCtrl.text = rounded.toStringAsFixed(2);
-      recalcularHaciaAtrasDesdeVisual(fromMargen: false);
-    } finally {
-      _isApplyingRounding = false;
-    }
-
-    activeRoundingTarget = targetFraction;
-    controllerMap['activeRoundingTarget'] = activeRoundingTarget;
-    controllerMap['preRoundedPrice'] = preRoundedPrice;
-    controllerMap['preRoundedMargen'] = preRoundedMargen;
-    onStateUpdate();
-  }
+  void roundPrice(double targetFraction) => _implRoundPrice(targetFraction);
 
   /// Aplica el Costo Base Unitario en cascada si esta variante opera en modo Compartido
-  void applyBaseCost(double baseCost) {
-    controllerMap['costoBaseUnitario'] = baseCost;
-    final bool isShared = controllerMap['usaStockCompartido'] == true;
-    if (!isShared) return;
-
-    final int factor = int.tryParse(unidadesVentaCtrl.text) ?? 1;
-    final int safeFactor = factor <= 0 ? 1 : factor;
-    final double newCost = baseCost * safeFactor;
-
-    costoPresCtrl.text = formatDecimal(newCost);
-    recalcularPrecios(fromMargen: true);
-
-    if (controllerMap['activeRoundingTarget'] != null) {
-      roundPrice(controllerMap['activeRoundingTarget'] as double);
-    }
-    onStateUpdate();
-  }
+  void applyBaseCost(double baseCost) => _implApplyBaseCost(baseCost);
 
   /// Alterna entre modo Compartido y Stock Propio preservando memoria bidireccional
   void toggleSharedStockMode({
     required bool isShared,
     required double baseCost,
-  }) {
-    final bool isEdit = controllerMap['isEditMode'] == true;
-
-    if (isShared) {
-      // 1. Guardar Snapshot de Modo Propio
-      controllerMap['savedPropioSnapshot'] = {
-        'costoPres': costoPresCtrl.text,
-        'margen': margenCtrl.text,
-        'precioVenta': ventaCtrl.text,
-        'stockInicial': stockInicialCtrl.text,
-        'nuevoIngreso': nuevoIngresoCtrl.text,
-        'stockDescuento': stockDescuentoCtrl.text,
-        'stockFinal': stockFinalCtrl.text,
-        'descuentoActivo': controllerMap['descuentoActivo'],
-        'tipoDescuento': controllerMap['tipoDescuento'],
-        'valorDescuento': valorDescuentoCtrl.text,
-        'precioOfertaExacto': controllerMap['precioOfertaExacto'],
-        'activeRoundingTarget': controllerMap['activeRoundingTarget'],
-        'preRoundedPrice': controllerMap['preRoundedPrice'],
-        'preRoundedMargen': controllerMap['preRoundedMargen'],
-      };
-
-      controllerMap['usaStockCompartido'] = true;
-      controllerMap['costoBaseUnitario'] = baseCost;
-
-      // 2. Restaurar snapshot de Compartido si existía previamente
-      final snap = controllerMap['savedCompartidoSnapshot'] as Map<String, dynamic>?;
-      if (snap != null) {
-        controllerMap['cupoMaximoVariante'] = snap['cupoMaximoVariante'];
-        if (snap['margen'] != null && snap['margen'].toString().isNotEmpty) {
-          margenCtrl.text = snap['margen'].toString();
-        }
-        if (snap['descuentoActivo'] != null) {
-          controllerMap['descuentoActivo'] = snap['descuentoActivo'];
-        }
-        if (snap['tipoDescuento'] != null) {
-          controllerMap['tipoDescuento'] = snap['tipoDescuento'];
-        }
-        if (snap['valorDescuento'] != null) {
-          valorDescuentoCtrl.text = snap['valorDescuento'].toString();
-        }
-        controllerMap['precioOfertaExacto'] = snap['precioOfertaExacto'];
-        controllerMap['activeRoundingTarget'] = snap['activeRoundingTarget'];
-        controllerMap['preRoundedPrice'] = snap['preRoundedPrice'];
-        controllerMap['preRoundedMargen'] = snap['preRoundedMargen'];
-      }
-
-      // 3. Aplicar costo en cascada desde Costo Base Unitario
-      final int factor = int.tryParse(unidadesVentaCtrl.text) ?? 1;
-      final int safeFactor = factor <= 0 ? 1 : factor;
-      final double newCost = baseCost * safeFactor;
-      costoPresCtrl.text = formatDecimal(newCost);
-      recalcularPrecios(fromMargen: true);
-      if (controllerMap['activeRoundingTarget'] != null) {
-        roundPrice(controllerMap['activeRoundingTarget'] as double);
-      }
-
-      // 4. Sincronizar inmediatamente el stock disponible para vender
-      final dynamic sharedCtrl = controllerMap['sharedStockCtrl'];
-      final String? sharedStr = sharedCtrl is TextEditingController
-          ? sharedCtrl.text
-          : controllerMap['stockBaseTotal']?.toString();
-      final int sharedBase = int.tryParse(sharedStr ?? "0") ?? 0;
-      final int availableSalesUnits = safeFactor > 0 ? (sharedBase ~/ safeFactor) : sharedBase;
-
-      if (controllerMap['cupoMaximoVariante'] == null) {
-        stockFinalCtrl.text = availableSalesUnits.toString();
-      } else {
-        final int cupo = (controllerMap['cupoMaximoVariante'] as num).toInt();
-        stockFinalCtrl.text = (cupo <= availableSalesUnits ? cupo : availableSalesUnits).toString();
-      }
-    } else {
-      // 1. Guardar Snapshot de Modo Compartido
-      controllerMap['savedCompartidoSnapshot'] = {
-        'cupoMaximoVariante': controllerMap['cupoMaximoVariante'],
-        'margen': margenCtrl.text,
-        'precioVenta': ventaCtrl.text,
-        'descuentoActivo': controllerMap['descuentoActivo'],
-        'tipoDescuento': controllerMap['tipoDescuento'],
-        'valorDescuento': valorDescuentoCtrl.text,
-        'precioOfertaExacto': controllerMap['precioOfertaExacto'],
-        'activeRoundingTarget': controllerMap['activeRoundingTarget'],
-        'preRoundedPrice': controllerMap['preRoundedPrice'],
-        'preRoundedMargen': controllerMap['preRoundedMargen'],
-      };
-
-      controllerMap['usaStockCompartido'] = false;
-      controllerMap.remove('cupoMaximoVariante');
-
-      final snap = controllerMap['savedPropioSnapshot'] as Map<String, dynamic>?;
-      if (snap != null) {
-        // Restaurar datos propios guardados
-        costoPresCtrl.text = snap['costoPres'] ?? "0.00";
-        margenCtrl.text = snap['margen'] ?? "1.35";
-        ventaCtrl.text = snap['precioVenta'] ?? "0.00";
-        stockInicialCtrl.text = snap['stockInicial'] ?? "0";
-        nuevoIngresoCtrl.text = snap['nuevoIngreso'] ?? "0";
-        stockDescuentoCtrl.text = snap['stockDescuento'] ?? "0";
-        stockFinalCtrl.text = snap['stockFinal'] ?? "0";
-        controllerMap['descuentoActivo'] = snap['descuentoActivo'];
-        controllerMap['tipoDescuento'] = snap['tipoDescuento'];
-        valorDescuentoCtrl.text = snap['valorDescuento'] ?? "";
-        controllerMap['precioOfertaExacto'] = snap['precioOfertaExacto'];
-        controllerMap['activeRoundingTarget'] = snap['activeRoundingTarget'];
-        controllerMap['preRoundedPrice'] = snap['preRoundedPrice'];
-        controllerMap['preRoundedMargen'] = snap['preRoundedMargen'];
-
-        recalcularHaciaAtrasDesdeVisual(fromMargen: true);
-      } else {
-        if (!isEdit) {
-          // En Crear Producto sin snapshot previo: limpiar Costo para que el usuario escriba su propio costo
-          costoPresCtrl.text = "0.00";
-          ventaCtrl.text = "0.00";
-          margenCtrl.text = "1.35";
-          controllerMap['descuentoActivo'] = false;
-          valorDescuentoCtrl.text = "";
-          controllerMap.remove('precioOfertaExacto');
-          controllerMap.remove('activeRoundingTarget');
-          controllerMap.remove('preRoundedPrice');
-          controllerMap.remove('preRoundedMargen');
-          calcularStockFinal();
-        } else {
-          // En Editar Producto: restaurar costo base original
-          costoPresCtrl.text = formatDecimal(originalBaseCost * originalFactor);
-          recalcularPrecios(fromMargen: true);
-        }
-      }
-    }
-    onStateUpdate();
-  }
+  }) => _implToggleSharedStockMode(isShared: isShared, baseCost: baseCost);
 
   /// Aplica el cambio global de estrategia a una lista de controllerMaps
   static void applyGlobalStrategyChange({
@@ -880,141 +177,10 @@ class PresentationMathEngine {
     required String newStrategy,
     required double baseCost,
     required bool isEditMode,
-  }) {
-    for (var c in controllers) {
-      c['costoBaseUnitario'] = baseCost;
-      final bool wasShared = c['usaStockCompartido'] == true;
-
-      if (newStrategy == 'COMPARTIDO') {
-        if (!wasShared) {
-          _applySnapshotToggle(c, isShared: true, baseCost: baseCost, isEditMode: isEditMode);
-        } else {
-          _refreshSharedCost(c, baseCost);
-        }
-      } else if (newStrategy == 'INDEPENDIENTE') {
-        if (wasShared) {
-          _applySnapshotToggle(c, isShared: false, baseCost: baseCost, isEditMode: isEditMode);
-        }
-      } else if (newStrategy == 'MIXTO') {
-        if (wasShared) {
-          _refreshSharedCost(c, baseCost);
-        }
-      }
-    }
-  }
-
-  static void _refreshSharedCost(Map<String, dynamic> c, double baseCost) {
-    final factorCtrl = c['unidadesVenta'] as TextEditingController?;
-    final costoCtrl = c['costoPres'] as TextEditingController?;
-    final margenCtrl = c['margen'] as TextEditingController?;
-    final ventaCtrl = c['precioVenta'] as TextEditingController?;
-    if (factorCtrl == null || costoCtrl == null || margenCtrl == null || ventaCtrl == null) return;
-
-    final int factor = int.tryParse(factorCtrl.text) ?? 1;
-    final int safeFactor = factor <= 0 ? 1 : factor;
-    final double newCost = baseCost * safeFactor;
-    costoCtrl.text = newCost.toStringAsFixed(2);
-    final double margen = double.tryParse(margenCtrl.text) ?? 1.35;
-    ventaCtrl.text = (newCost * margen).toStringAsFixed(2);
-  }
-
-  static void _applySnapshotToggle(
-    Map<String, dynamic> c, {
-    required bool isShared,
-    required double baseCost,
-    required bool isEditMode,
-  }) {
-    final costoCtrl = c['costoPres'] as TextEditingController?;
-    final margenCtrl = c['margen'] as TextEditingController?;
-    final ventaCtrl = c['precioVenta'] as TextEditingController?;
-    final stockIniCtrl = c['stockInicial'] as TextEditingController?;
-    final nuevoIngCtrl = c['nuevoIngreso'] as TextEditingController?;
-    final stockDescCtrl = c['stockDescuento'] as TextEditingController?;
-    final stockFinCtrl = c['stockFinal'] as TextEditingController?;
-    final valorDescCtrl = c['valorDescuento'] as TextEditingController?;
-
-    if (isShared) {
-      c['savedPropioSnapshot'] = {
-        'costoPres': costoCtrl?.text ?? "0.00",
-        'margen': margenCtrl?.text ?? "1.35",
-        'precioVenta': ventaCtrl?.text ?? "0.00",
-        'stockInicial': stockIniCtrl?.text ?? "0",
-        'nuevoIngreso': nuevoIngCtrl?.text ?? "0",
-        'stockDescuento': stockDescCtrl?.text ?? "0",
-        'stockFinal': stockFinCtrl?.text ?? "0",
-        'descuentoActivo': c['descuentoActivo'],
-        'tipoDescuento': c['tipoDescuento'],
-        'valorDescuento': valorDescCtrl?.text ?? "",
-        'precioOfertaExacto': c['precioOfertaExacto'],
-        'activeRoundingTarget': c['activeRoundingTarget'],
-        'preRoundedPrice': c['preRoundedPrice'],
-        'preRoundedMargen': c['preRoundedMargen'],
-      };
-      c['usaStockCompartido'] = true;
-
-      final snap = c['savedCompartidoSnapshot'] as Map<String, dynamic>?;
-      if (snap != null) {
-        c['cupoMaximoVariante'] = snap['cupoMaximoVariante'];
-        if (snap['margen'] != null && margenCtrl != null) {
-          margenCtrl.text = snap['margen'].toString();
-        }
-        c['descuentoActivo'] = snap['descuentoActivo'];
-        c['tipoDescuento'] = snap['tipoDescuento'];
-        if (snap['valorDescuento'] != null && valorDescCtrl != null) {
-          valorDescCtrl.text = snap['valorDescuento'].toString();
-        }
-        c['precioOfertaExacto'] = snap['precioOfertaExacto'];
-        c['activeRoundingTarget'] = snap['activeRoundingTarget'];
-        c['preRoundedPrice'] = snap['preRoundedPrice'];
-        c['preRoundedMargen'] = snap['preRoundedMargen'];
-      }
-
-      _refreshSharedCost(c, baseCost);
-    } else {
-      c['savedCompartidoSnapshot'] = {
-        'cupoMaximoVariante': c['cupoMaximoVariante'],
-        'margen': margenCtrl?.text ?? "1.35",
-        'precioVenta': ventaCtrl?.text ?? "0.00",
-        'descuentoActivo': c['descuentoActivo'],
-        'tipoDescuento': c['tipoDescuento'],
-        'valorDescuento': valorDescCtrl?.text ?? "",
-        'precioOfertaExacto': c['precioOfertaExacto'],
-        'activeRoundingTarget': c['activeRoundingTarget'],
-        'preRoundedPrice': c['preRoundedPrice'],
-        'preRoundedMargen': c['preRoundedMargen'],
-      };
-      c['usaStockCompartido'] = false;
-      c.remove('cupoMaximoVariante');
-
-      final snap = c['savedPropioSnapshot'] as Map<String, dynamic>?;
-      if (snap != null) {
-        if (costoCtrl != null) costoCtrl.text = snap['costoPres'] ?? "0.00";
-        if (margenCtrl != null) margenCtrl.text = snap['margen'] ?? "1.35";
-        if (ventaCtrl != null) ventaCtrl.text = snap['precioVenta'] ?? "0.00";
-        if (stockIniCtrl != null) stockIniCtrl.text = snap['stockInicial'] ?? "0";
-        if (nuevoIngCtrl != null) nuevoIngCtrl.text = snap['nuevoIngreso'] ?? "0";
-        if (stockDescCtrl != null) stockDescCtrl.text = snap['stockDescuento'] ?? "0";
-        if (stockFinCtrl != null) stockFinCtrl.text = snap['stockFinal'] ?? "0";
-        c['descuentoActivo'] = snap['descuentoActivo'];
-        c['tipoDescuento'] = snap['tipoDescuento'];
-        if (valorDescCtrl != null) valorDescCtrl.text = snap['valorDescuento'] ?? "";
-        c['precioOfertaExacto'] = snap['precioOfertaExacto'];
-        c['activeRoundingTarget'] = snap['activeRoundingTarget'];
-        c['preRoundedPrice'] = snap['preRoundedPrice'];
-        c['preRoundedMargen'] = snap['preRoundedMargen'];
-      } else {
-        if (!isEditMode) {
-          if (costoCtrl != null) costoCtrl.text = "0.00";
-          if (ventaCtrl != null) ventaCtrl.text = "0.00";
-          if (margenCtrl != null) margenCtrl.text = "1.35";
-          c['descuentoActivo'] = false;
-          if (valorDescCtrl != null) valorDescCtrl.text = "";
-          c.remove('precioOfertaExacto');
-          c.remove('activeRoundingTarget');
-          c.remove('preRoundedPrice');
-          c.remove('preRoundedMargen');
-        }
-      }
-    }
-  }
+  }) => _implApplyGlobalStrategyChange(
+    controllers: controllers,
+    newStrategy: newStrategy,
+    baseCost: baseCost,
+    isEditMode: isEditMode,
+  );
 }
