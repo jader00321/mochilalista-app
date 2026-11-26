@@ -5,7 +5,7 @@ import 'package:app_movil/core/utils/app_date_formatter.dart';
 
 import 'package:app_movil/core/providers/notification_provider.dart';
 import 'package:app_movil/features/catalog/providers/inventory_provider.dart';
-import 'package:app_movil/core/providers/auth_provider.dart'; 
+import 'package:app_movil/core/providers/auth_provider.dart';
 import 'package:app_movil/core/models/notification_model.dart';
 import 'package:app_movil/features/smart_quotation/models/crm_models.dart';
 import 'package:app_movil/core/database/local_db.dart';
@@ -49,15 +49,17 @@ class NotificationsScreen extends StatefulWidget {
   State<NotificationsScreen> createState() => _NotificationsScreenState();
 }
 
-class _NotificationsScreenState extends State<NotificationsScreen> with SingleTickerProviderStateMixin {
+class _NotificationsScreenState extends State<NotificationsScreen>
+    with SingleTickerProviderStateMixin {
   late TabController _tabController;
   late final NotificationsTourKeys _tourKeys;
   bool _didAttemptAutoTour = false;
-  
-  String _categoryFilter = 'Todas'; // Todas, Cobranzas, Inventario, Cotizaciones
+
+  String _categoryFilter =
+      'Todas'; // Todas, Cobranzas, Inventario, Cotizaciones
   String _timeFilter = 'Todo'; // Todo, Hoy, 7 Días, Específico
   DateTime? _specificDate;
-  
+
   InventoryProvider? _inventoryProvider;
 
   bool _isSelectionMode = false;
@@ -82,9 +84,15 @@ class _NotificationsScreenState extends State<NotificationsScreen> with SingleTi
     });
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted) return;
-      _inventoryProvider = Provider.of<InventoryProvider>(context, listen: false);
+      _inventoryProvider = Provider.of<InventoryProvider>(
+        context,
+        listen: false,
+      );
       _inventoryProvider?.addListener(_onInventoryChanged);
-      await Provider.of<NotificationProvider>(context, listen: false).fetchNotifications();
+      await Provider.of<NotificationProvider>(
+        context,
+        listen: false,
+      ).fetchNotifications();
       if (mounted) _maybeStartAutoTour();
     });
   }
@@ -111,7 +119,10 @@ class _NotificationsScreenState extends State<NotificationsScreen> with SingleTi
 
   void _onInventoryChanged() {
     if (mounted) {
-      Provider.of<NotificationProvider>(context, listen: false).fetchNotifications();
+      Provider.of<NotificationProvider>(
+        context,
+        listen: false,
+      ).fetchNotifications();
     }
   }
 
@@ -136,7 +147,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> with SingleTi
   List<dynamic> _buildGroupedList(List<NotificationModel> notifs) {
     List<dynamic> result = [];
     String currentGroup = "";
-    
+
     for (var n in notifs) {
       String group = _getGroupHeader(n.createdAt);
       if (group != currentGroup) {
@@ -155,10 +166,16 @@ class _NotificationsScreenState extends State<NotificationsScreen> with SingleTi
   void _onActionRecordarCuota(NotificationModel notif) async {
     final cuotaId = notif.objetoRelacionadoId;
     if (cuotaId == null) return;
-    
-    showDialog(context: context, barrierDismissible: false, builder: (_) => const Center(child: CircularProgressIndicator()));
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const Center(child: CircularProgressIndicator()),
+    );
     final salesService = SalesService();
-    Map<String, dynamic>? cuotaData = await salesService.getCuotaConCliente(cuotaId);
+    Map<String, dynamic>? cuotaData = await salesService.getCuotaConCliente(
+      cuotaId,
+    );
     if (!mounted) return;
     Navigator.pop(context); // cerrar cargador
 
@@ -169,7 +186,8 @@ class _NotificationsScreenState extends State<NotificationsScreen> with SingleTi
       'monto_original': notif.montoBase ?? 0.0,
       'mora_monto': notif.moraAcumulada,
       'monto_pagado': 0.0,
-      'fecha_vencimiento': notif.fechaVencimiento ?? DateTime.now().toIso8601String(),
+      'fecha_vencimiento':
+          notif.fechaVencimiento ?? DateTime.now().toIso8601String(),
       'cliente_nombre': notif.clientName,
       'cliente_telefono': notif.clientPhone,
     };
@@ -183,7 +201,10 @@ class _NotificationsScreenState extends State<NotificationsScreen> with SingleTi
       operationTitle: notif.folioOperacion,
     );
     if (mounted) {
-      Provider.of<NotificationProvider>(context, listen: false).fetchNotifications();
+      Provider.of<NotificationProvider>(
+        context,
+        listen: false,
+      ).fetchNotifications();
     }
   }
 
@@ -191,14 +212,21 @@ class _NotificationsScreenState extends State<NotificationsScreen> with SingleTi
     final clientId = notif.clientId;
     if (clientId == null) return;
 
-    showDialog(context: context, barrierDismissible: false, builder: (_) => const Center(child: CircularProgressIndicator()));
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const Center(child: CircularProgressIndicator()),
+    );
     final clientService = ClientService();
     final clientData = await clientService.getClientById(clientId);
     if (!mounted) return;
     Navigator.pop(context);
 
     if (clientData == null) {
-      NotificationToastFeedback.showError(context, "No se pudo cargar el cliente");
+      NotificationToastFeedback.showError(
+        context,
+        "No se pudo cargar el cliente",
+      );
       return;
     }
 
@@ -215,7 +243,10 @@ class _NotificationsScreenState extends State<NotificationsScreen> with SingleTi
       ),
     );
     if (mounted) {
-      Provider.of<NotificationProvider>(context, listen: false).fetchNotifications();
+      Provider.of<NotificationProvider>(
+        context,
+        listen: false,
+      ).fetchNotifications();
     }
   }
 
@@ -223,14 +254,21 @@ class _NotificationsScreenState extends State<NotificationsScreen> with SingleTi
     final cuotaId = notif.objetoRelacionadoId;
     if (cuotaId == null) return;
 
-    showDialog(context: context, barrierDismissible: false, builder: (_) => const Center(child: CircularProgressIndicator()));
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const Center(child: CircularProgressIndicator()),
+    );
     final salesService = SalesService();
     final cuotaData = await salesService.getCuotaConCliente(cuotaId);
     if (!mounted) return;
     Navigator.pop(context);
 
     if (cuotaData == null) {
-      NotificationToastFeedback.showError(context, "No se pudo cargar la cuota");
+      NotificationToastFeedback.showError(
+        context,
+        "No se pudo cargar la cuota",
+      );
       return;
     }
 
@@ -240,12 +278,18 @@ class _NotificationsScreenState extends State<NotificationsScreen> with SingleTi
       isDark: Theme.of(context).brightness == Brightness.dark,
       onSaved: () {
         if (mounted) {
-          Provider.of<NotificationProvider>(context, listen: false).fetchNotifications();
+          Provider.of<NotificationProvider>(
+            context,
+            listen: false,
+          ).fetchNotifications();
         }
       },
     );
     if (mounted) {
-      Provider.of<NotificationProvider>(context, listen: false).fetchNotifications();
+      Provider.of<NotificationProvider>(
+        context,
+        listen: false,
+      ).fetchNotifications();
     }
   }
 
@@ -253,7 +297,11 @@ class _NotificationsScreenState extends State<NotificationsScreen> with SingleTi
     final pId = notif.objetoRelacionadoId;
     if (pId == null) return;
 
-    showDialog(context: context, barrierDismissible: false, builder: (_) => const Center(child: CircularProgressIndicator()));
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const Center(child: CircularProgressIndicator()),
+    );
     final invProv = Provider.of<InventoryProvider>(context, listen: false);
     final product = await invProv.getFullProductWithFallback(pId);
     if (!mounted) return;
@@ -264,7 +312,12 @@ class _NotificationsScreenState extends State<NotificationsScreen> with SingleTi
       return;
     }
 
-    await Navigator.push(context, MaterialPageRoute(builder: (_) => ProductEditScreen(productToEdit: product)));
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ProductEditScreen(productToEdit: product),
+      ),
+    );
     if (!mounted) return;
     final notifProv = Provider.of<NotificationProvider>(context, listen: false);
     await notifProv.resolveProductStockNotification(pId);
@@ -277,9 +330,18 @@ class _NotificationsScreenState extends State<NotificationsScreen> with SingleTi
 
   void _onActionVerCotizacion(NotificationModel notif) async {
     if (notif.objetoRelacionadoId != null) {
-      await Navigator.push(context, MaterialPageRoute(builder: (_) => QuotationDetailScreen(quotationId: notif.objetoRelacionadoId!)));
+      await Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) =>
+              QuotationDetailScreen(quotationId: notif.objetoRelacionadoId!),
+        ),
+      );
       if (mounted) {
-        Provider.of<NotificationProvider>(context, listen: false).fetchNotifications();
+        Provider.of<NotificationProvider>(
+          context,
+          listen: false,
+        ).fetchNotifications();
       }
     }
   }
@@ -289,7 +351,11 @@ class _NotificationsScreenState extends State<NotificationsScreen> with SingleTi
     if (rewardId == null) return;
 
     final db = await LocalDatabase.instance.database;
-    final rRows = await db.query('recompensas_cliente', where: 'id = ?', whereArgs: [rewardId]);
+    final rRows = await db.query(
+      'recompensas_cliente',
+      where: 'id = ?',
+      whereArgs: [rewardId],
+    );
     if (rRows.isEmpty || !mounted) return;
     final rData = rRows.first;
 
@@ -308,7 +374,9 @@ class _NotificationsScreenState extends State<NotificationsScreen> with SingleTi
     );
 
     final clientService = ClientService();
-    final client = await clientService.getClientById(rData['cliente_id'] as int);
+    final client = await clientService.getClientById(
+      rData['cliente_id'] as int,
+    );
     if (client == null || !mounted) return;
 
     await RewardReviewModal.show(
@@ -317,18 +385,33 @@ class _NotificationsScreenState extends State<NotificationsScreen> with SingleTi
       client: client,
       onActionCompleted: () {
         if (mounted) {
-          Provider.of<NotificationProvider>(context, listen: false).fetchNotifications();
+          Provider.of<NotificationProvider>(
+            context,
+            listen: false,
+          ).fetchNotifications();
         }
       },
     );
 
     if (mounted) {
-      Provider.of<NotificationProvider>(context, listen: false).fetchNotifications();
+      Provider.of<NotificationProvider>(
+        context,
+        listen: false,
+      ).fetchNotifications();
     }
   }
 
-  void _onActionRecordarConsolidado(int clientId, String clientName, String? clientPhone, List<NotificationModel> cuotas) async {
-    showDialog(context: context, barrierDismissible: false, builder: (_) => const Center(child: CircularProgressIndicator()));
+  void _onActionRecordarConsolidado(
+    int clientId,
+    String clientName,
+    String? clientPhone,
+    List<NotificationModel> cuotas,
+  ) async {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const Center(child: CircularProgressIndicator()),
+    );
     final salesService = SalesService();
     List<Map<String, dynamic>> cuotasData = [];
     double totalDebt = 0.0;
@@ -346,14 +429,17 @@ class _NotificationsScreenState extends State<NotificationsScreen> with SingleTi
         'monto_original': n.montoBase ?? 0.0,
         'mora_monto': n.moraAcumulada,
         'monto_pagado': 0.0,
-        'fecha_vencimiento': n.fechaVencimiento ?? DateTime.now().toIso8601String(),
+        'fecha_vencimiento':
+            n.fechaVencimiento ?? DateTime.now().toIso8601String(),
         'cliente_nombre': clientName,
         'cliente_telefono': clientPhone,
       };
 
       cuotasData.add(cData);
-      final double due = (num.tryParse(cData['monto'].toString()) ?? 0.0).toDouble() -
-          (num.tryParse((cData['monto_pagado'] ?? 0.0).toString()) ?? 0.0).toDouble();
+      final double due =
+          (num.tryParse(cData['monto'].toString()) ?? 0.0).toDouble() -
+          (num.tryParse((cData['monto_pagado'] ?? 0.0).toString()) ?? 0.0)
+              .toDouble();
       totalDebt += (due > 0 ? due : 0.0);
     }
 
@@ -361,7 +447,10 @@ class _NotificationsScreenState extends State<NotificationsScreen> with SingleTi
     Navigator.pop(context);
 
     if (cuotasData.isEmpty) {
-      NotificationToastFeedback.showInfo(context, "No se encontraron cuotas para este cliente");
+      NotificationToastFeedback.showInfo(
+        context,
+        "No se encontraron cuotas para este cliente",
+      );
       return;
     }
 
@@ -375,21 +464,24 @@ class _NotificationsScreenState extends State<NotificationsScreen> with SingleTi
     );
 
     if (mounted) {
-      Provider.of<NotificationProvider>(context, listen: false).fetchNotifications();
+      Provider.of<NotificationProvider>(
+        context,
+        listen: false,
+      ).fetchNotifications();
     }
   }
 
   void _handleDeepLink(NotificationModel notif, BuildContext context) async {
     final prov = Provider.of<NotificationProvider>(context, listen: false);
-    final authProv = Provider.of<AuthProvider>(context, listen: false); 
-    
+    final authProv = Provider.of<AuthProvider>(context, listen: false);
+
     if (!notif.isRead) prov.markAsRead(notif.id);
 
     final tipo = notif.objetoRelacionadoTipo;
     final id = notif.objetoRelacionadoId;
 
     if (tipo == null || id == null) {
-      _showNotificationDetails(notif); 
+      _showNotificationDetails(notif);
       return;
     }
 
@@ -401,20 +493,30 @@ class _NotificationsScreenState extends State<NotificationsScreen> with SingleTi
         case 'venta_admin':
         case 'venta_cliente':
         case 'cotizacion':
-          Navigator.push(context, MaterialPageRoute(builder: (_) => QuotationDetailScreen(quotationId: id)));
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => QuotationDetailScreen(quotationId: id),
+            ),
+          );
           break;
-        
+
         case 'factura_carga':
           if (isClient) {
-            _showNotificationDetails(notif); 
+            _showNotificationDetails(notif);
           } else {
-            Navigator.push(context, MaterialPageRoute(builder: (_) => InvoiceDetailScreen(invoiceId: id)));
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => InvoiceDetailScreen(invoiceId: id),
+              ),
+            );
           }
           break;
 
         case 'producto':
           if (isClient) {
-            _showNotificationDetails(notif); 
+            _showNotificationDetails(notif);
           } else {
             _showStockAnalysisModal(notif, context);
           }
@@ -434,13 +536,16 @@ class _NotificationsScreenState extends State<NotificationsScreen> with SingleTi
     } catch (e) {
       _showNotificationDetails(notif);
     }
-    
+
     if (mounted) {
       prov.fetchNotifications();
     }
   }
 
-  void _showStockAnalysisModal(NotificationModel notif, BuildContext context) async {
+  void _showStockAnalysisModal(
+    NotificationModel notif,
+    BuildContext context,
+  ) async {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final notifProv = Provider.of<NotificationProvider>(context, listen: false);
     await StockAnalysisModal.show(context, notif: notif, isDark: isDark);
@@ -448,26 +553,43 @@ class _NotificationsScreenState extends State<NotificationsScreen> with SingleTi
     notifProv.fetchNotifications();
   }
 
-  void _showCuotaVencidaModal(NotificationModel notif, BuildContext context) async {
+  void _showCuotaVencidaModal(
+    NotificationModel notif,
+    BuildContext context,
+  ) async {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    
-    showDialog(context: context, barrierDismissible: false, builder: (_) => const Center(child: CircularProgressIndicator()));
-    
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const Center(child: CircularProgressIndicator()),
+    );
+
     final salesService = SalesService();
-    final cuotaData = await salesService.getCuotaConCliente(notif.objetoRelacionadoId!);
-    
+    final cuotaData = await salesService.getCuotaConCliente(
+      notif.objetoRelacionadoId!,
+    );
+
     if (!context.mounted) return;
     Navigator.pop(context); // cerrar cargador
 
     if (cuotaData == null) {
-      NotificationToastFeedback.showError(context, "No se pudo cargar la cuota");
+      NotificationToastFeedback.showError(
+        context,
+        "No se pudo cargar la cuota",
+      );
       return;
     }
 
-    final clienteNombre = cuotaData['cliente_nombre'] ?? notif.clientName ?? 'Cliente Desconocido';
+    final clienteNombre =
+        cuotaData['cliente_nombre'] ??
+        notif.clientName ??
+        'Cliente Desconocido';
     final clienteTelefono = cuotaData['cliente_telefono'] ?? notif.clientPhone;
     final clienteId = cuotaData['cliente_id'] ?? notif.clientId;
-    final double deuda = (cuotaData['monto'] as num).toDouble() - ((cuotaData['monto_pagado'] as num?)?.toDouble() ?? 0.0);
+    final double deuda =
+        (cuotaData['monto'] as num).toDouble() -
+        ((cuotaData['monto_pagado'] as num?)?.toDouble() ?? 0.0);
     final String estado = cuotaData['estado'] ?? 'pendiente';
     final bool estaPagada = estado.toLowerCase() == 'pagado';
 
@@ -477,7 +599,11 @@ class _NotificationsScreenState extends State<NotificationsScreen> with SingleTi
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
       builder: (ctx) {
-        final effectiveBottom = InteractiveSheetWrapper.getEffectiveBottomPadding(ctx, minPadding: kMinDefensiveBottomClearance);
+        final effectiveBottom =
+            InteractiveSheetWrapper.getEffectiveBottomPadding(
+              ctx,
+              minPadding: kMinDefensiveBottomClearance,
+            );
         return SafeArea(
           top: false,
           bottom: true,
@@ -485,7 +611,9 @@ class _NotificationsScreenState extends State<NotificationsScreen> with SingleTi
             padding: EdgeInsets.fromLTRB(24, 24, 24, effectiveBottom + 8),
             decoration: BoxDecoration(
               color: isDark ? const Color(0xFF23232F) : Colors.white,
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(32),
+              ),
             ),
             child: SingleChildScrollView(
               physics: const BouncingScrollPhysics(),
@@ -493,23 +621,60 @@ class _NotificationsScreenState extends State<NotificationsScreen> with SingleTi
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Center(child: Container(width: 50, height: 6, decoration: BoxDecoration(color: isDark ? Colors.white24 : Colors.grey.shade300, borderRadius: BorderRadius.circular(10)))),
+                  Center(
+                    child: Container(
+                      width: 50,
+                      height: 6,
+                      decoration: BoxDecoration(
+                        color: isDark ? Colors.white24 : Colors.grey.shade300,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                  ),
                   const SizedBox(height: 24),
                   Row(
                     children: [
                       Container(
                         padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(color: estaPagada ? Colors.green.withValues(alpha: 0.15) : Colors.red.withValues(alpha: 0.15), shape: BoxShape.circle),
-                        child: Icon(estaPagada ? Icons.check_circle : Icons.warning_rounded, color: estaPagada ? Colors.green : Colors.red[600], size: 28),
+                        decoration: BoxDecoration(
+                          color: estaPagada
+                              ? Colors.green.withValues(alpha: 0.15)
+                              : Colors.red.withValues(alpha: 0.15),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          estaPagada
+                              ? Icons.check_circle
+                              : Icons.warning_rounded,
+                          color: estaPagada ? Colors.green : Colors.red[600],
+                          size: 28,
+                        ),
                       ),
                       const SizedBox(width: 16),
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(estaPagada ? "Cuota Pagada" : "Cuota Vencida", style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: isDark ? Colors.white : Colors.black87, letterSpacing: -0.5)),
+                            Text(
+                              estaPagada ? "Cuota Pagada" : "Cuota Vencida",
+                              style: TextStyle(
+                                fontSize: 20,
+                                fontWeight: FontWeight.w900,
+                                color: isDark ? Colors.white : Colors.black87,
+                                letterSpacing: -0.5,
+                              ),
+                            ),
                             const SizedBox(height: 4),
-                            Text(clienteNombre, style: TextStyle(fontSize: 15, color: isDark ? Colors.grey[400] : Colors.grey[700], fontWeight: FontWeight.w600)),
+                            Text(
+                              clienteNombre,
+                              style: TextStyle(
+                                fontSize: 15,
+                                color: isDark
+                                    ? Colors.grey[400]
+                                    : Colors.grey[700],
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
                           ],
                         ),
                       ),
@@ -520,36 +685,92 @@ class _NotificationsScreenState extends State<NotificationsScreen> with SingleTi
                     padding: const EdgeInsets.all(20),
                     width: double.infinity,
                     decoration: BoxDecoration(
-                      color: isDark ? const Color(0xFF14141C) : Colors.grey.shade50,
+                      color: isDark
+                          ? const Color(0xFF14141C)
+                          : Colors.grey.shade50,
                       borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: isDark ? Colors.white10 : Colors.grey.shade200)
+                      border: Border.all(
+                        color: isDark ? Colors.white10 : Colors.grey.shade200,
+                      ),
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text("Detalles de la Deuda", style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: isDark ? Colors.grey[500] : Colors.grey[600])),
+                        Text(
+                          "Detalles de la Deuda",
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                            color: isDark ? Colors.grey[500] : Colors.grey[600],
+                          ),
+                        ),
                         const SizedBox(height: 12),
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Text("Cuota N°", style: TextStyle(fontSize: 16, color: isDark ? Colors.grey[300] : Colors.grey[800])),
-                            Text("${cuotaData['numero_cuota']}", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black)),
+                            Text(
+                              "Cuota N°",
+                              style: TextStyle(
+                                fontSize: 16,
+                                color: isDark
+                                    ? Colors.grey[300]
+                                    : Colors.grey[800],
+                              ),
+                            ),
+                            Text(
+                              "${cuotaData['numero_cuota']}",
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                                color: isDark ? Colors.white : Colors.black,
+                              ),
+                            ),
                           ],
                         ),
                         const SizedBox(height: 8),
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Text("F. Vencimiento", style: TextStyle(fontSize: 16, color: isDark ? Colors.grey[300] : Colors.grey[800])),
-                            Text("${cuotaData['fecha_vencimiento']}", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black)),
+                            Text(
+                              "F. Vencimiento",
+                              style: TextStyle(
+                                fontSize: 16,
+                                color: isDark
+                                    ? Colors.grey[300]
+                                    : Colors.grey[800],
+                              ),
+                            ),
+                            Text(
+                              "${cuotaData['fecha_vencimiento']}",
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                                color: isDark ? Colors.white : Colors.black,
+                              ),
+                            ),
                           ],
                         ),
                         const SizedBox(height: 8),
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Text("Monto Pendiente", style: TextStyle(fontSize: 16, color: isDark ? Colors.grey[300] : Colors.grey[800])),
-                            Text("S/ ${deuda.toStringAsFixed(2)}", style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: estaPagada ? Colors.green : Colors.red)),
+                            Text(
+                              "Monto Pendiente",
+                              style: TextStyle(
+                                fontSize: 16,
+                                color: isDark
+                                    ? Colors.grey[300]
+                                    : Colors.grey[800],
+                              ),
+                            ),
+                            Text(
+                              "S/ ${deuda.toStringAsFixed(2)}",
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.w900,
+                                color: estaPagada ? Colors.green : Colors.red,
+                              ),
+                            ),
                           ],
                         ),
                       ],
@@ -565,15 +786,27 @@ class _NotificationsScreenState extends State<NotificationsScreen> with SingleTi
                           Navigator.pop(ctx);
                           _onActionRecordarCuota(notif);
                         },
-                        icon: const Icon(Icons.chat_bubble_outline_rounded, color: Colors.green),
-                        label: const Text("Enviar Recordatorio por WhatsApp", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.green)),
+                        icon: const Icon(
+                          Icons.chat_bubble_outline_rounded,
+                          color: Colors.green,
+                        ),
+                        label: const Text(
+                          "Enviar Recordatorio por WhatsApp",
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: Colors.green,
+                          ),
+                        ),
                         style: OutlinedButton.styleFrom(
                           side: const BorderSide(color: Colors.green),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                          ),
                         ),
                       ),
                     ),
-                  if (clienteTelefono != null && clienteTelefono.isNotEmpty) const SizedBox(height: 12),
+                  if (clienteTelefono != null && clienteTelefono.isNotEmpty)
+                    const SizedBox(height: 12),
                   if (clienteId != null)
                     SizedBox(
                       width: double.infinity,
@@ -581,26 +814,50 @@ class _NotificationsScreenState extends State<NotificationsScreen> with SingleTi
                       child: ElevatedButton.icon(
                         onPressed: () async {
                           Navigator.pop(ctx);
-                          showDialog(context: context, barrierDismissible: false, builder: (_) => const Center(child: CircularProgressIndicator()));
-                          final clientData = await ClientService().getClientById(clienteId);
+                          showDialog(
+                            context: context,
+                            barrierDismissible: false,
+                            builder: (_) => const Center(
+                              child: CircularProgressIndicator(),
+                            ),
+                          );
+                          final clientData = await ClientService()
+                              .getClientById(clienteId);
                           if (!context.mounted) return;
                           Navigator.pop(context); // Cerrar indicador
                           if (clientData != null) {
-                            await Navigator.push(context, MaterialPageRoute(builder: (_) => ClientDetailScreen(client: clientData)));
+                            await Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) =>
+                                    ClientDetailScreen(client: clientData),
+                              ),
+                            );
                             if (context.mounted) {
-                               Provider.of<NotificationProvider>(context, listen: false).fetchNotifications();
+                              Provider.of<NotificationProvider>(
+                                context,
+                                listen: false,
+                              ).fetchNotifications();
                             }
                           } else {
-                            NotificationToastFeedback.showError(context, "No se pudo cargar el cliente");
+                            NotificationToastFeedback.showError(
+                              context,
+                              "No se pudo cargar el cliente",
+                            );
                           }
                         },
                         icon: const Icon(Icons.person_rounded),
-                        label: const Text("Ir al Perfil del Cliente", style: TextStyle(fontWeight: FontWeight.w900)),
+                        label: const Text(
+                          "Ir al Perfil del Cliente",
+                          style: TextStyle(fontWeight: FontWeight.w900),
+                        ),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: Colors.blue[700],
                           foregroundColor: Colors.white,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                          elevation: 0
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          elevation: 0,
                         ),
                       ),
                     ),
@@ -610,7 +867,13 @@ class _NotificationsScreenState extends State<NotificationsScreen> with SingleTi
                     height: 50,
                     child: TextButton(
                       onPressed: () => Navigator.pop(ctx),
-                      child: Text("Cerrar", style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[700], fontWeight: FontWeight.bold)),
+                      child: Text(
+                        "Cerrar",
+                        style: TextStyle(
+                          color: isDark ? Colors.grey[400] : Colors.grey[700],
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
                     ),
                   ),
                   const SizedBox(height: 16),
@@ -629,16 +892,22 @@ class _NotificationsScreenState extends State<NotificationsScreen> with SingleTi
     final subtitleColor = isDark ? Colors.grey[400] : Colors.grey[600];
     final bgCardColor = isDark ? const Color(0xFF23232F) : Colors.white;
     final innerCardColor = isDark ? const Color(0xFF161622) : Colors.grey[50];
-    
+
     showModalBottomSheet(
       context: context,
       useSafeArea: true,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
       builder: (ctx) {
-        final effectiveBottom = InteractiveSheetWrapper.getEffectiveBottomPadding(ctx, minPadding: kMinDefensiveBottomClearance);
+        final effectiveBottom =
+            InteractiveSheetWrapper.getEffectiveBottomPadding(
+              ctx,
+              minPadding: kMinDefensiveBottomClearance,
+            );
         final bool isCritica = notif.nivelPrioridad == 'critica';
-        final Color accentColor = isCritica ? Colors.red : (notif.isResolved ? Colors.green : Colors.blue);
+        final Color accentColor = isCritica
+            ? Colors.red
+            : (notif.isResolved ? Colors.green : Colors.blue);
 
         return SafeArea(
           top: false,
@@ -647,7 +916,9 @@ class _NotificationsScreenState extends State<NotificationsScreen> with SingleTi
             padding: EdgeInsets.fromLTRB(20, 16, 20, effectiveBottom + 8),
             decoration: BoxDecoration(
               color: bgCardColor,
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(28),
+              ),
             ),
             child: SingleChildScrollView(
               physics: const BouncingScrollPhysics(),
@@ -674,13 +945,17 @@ class _NotificationsScreenState extends State<NotificationsScreen> with SingleTi
                       Container(
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
-                          color: accentColor.withValues(alpha: isDark ? 0.2 : 0.1),
+                          color: accentColor.withValues(
+                            alpha: isDark ? 0.2 : 0.1,
+                          ),
                           shape: BoxShape.circle,
                         ),
                         child: Icon(
-                          notif.isResolved 
-                              ? Icons.check_circle_rounded 
-                              : (isCritica ? Icons.error_rounded : Icons.notifications_active_rounded),
+                          notif.isResolved
+                              ? Icons.check_circle_rounded
+                              : (isCritica
+                                    ? Icons.error_rounded
+                                    : Icons.notifications_active_rounded),
                           color: accentColor,
                           size: 26,
                         ),
@@ -702,7 +977,11 @@ class _NotificationsScreenState extends State<NotificationsScreen> with SingleTi
                             const SizedBox(height: 4),
                             Text(
                               "Registrado el ${AppDateFormatter.ddMMyyyyHHmm.format(notif.createdAt)}",
-                              style: TextStyle(fontSize: 12, color: subtitleColor, fontWeight: FontWeight.w500),
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: subtitleColor,
+                                fontWeight: FontWeight.w500,
+                              ),
                             ),
                           ],
                         ),
@@ -717,25 +996,45 @@ class _NotificationsScreenState extends State<NotificationsScreen> with SingleTi
                     runSpacing: 6,
                     children: [
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 4,
+                        ),
                         decoration: BoxDecoration(
-                          color: accentColor.withValues(alpha: isDark ? 0.2 : 0.1),
+                          color: accentColor.withValues(
+                            alpha: isDark ? 0.2 : 0.1,
+                          ),
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: Text(
-                          notif.isResolved ? "Resuelta" : (notif.isArchived ? "Archivada" : "Pendiente activa"),
-                          style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: accentColor),
+                          notif.isResolved
+                              ? "Resuelta"
+                              : (notif.isArchived
+                                    ? "Archivada"
+                                    : "Pendiente activa"),
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                            color: accentColor,
+                          ),
                         ),
                       ),
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 4,
+                        ),
                         decoration: BoxDecoration(
                           color: isDark ? Colors.white12 : Colors.grey[200],
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: Text(
                           notif.categoria.toUpperCase(),
-                          style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: subtitleColor),
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                            color: subtitleColor,
+                          ),
                         ),
                       ),
                     ],
@@ -749,17 +1048,24 @@ class _NotificationsScreenState extends State<NotificationsScreen> with SingleTi
                     decoration: BoxDecoration(
                       color: innerCardColor,
                       borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: isDark ? Colors.white10 : Colors.grey.shade200),
+                      border: Border.all(
+                        color: isDark ? Colors.white10 : Colors.grey.shade200,
+                      ),
                     ),
                     child: Text(
                       notif.message,
-                      style: TextStyle(fontSize: 14.5, height: 1.5, color: textColor),
+                      style: TextStyle(
+                        fontSize: 14.5,
+                        height: 1.5,
+                        color: textColor,
+                      ),
                     ),
                   ),
                   const SizedBox(height: 20),
 
                   // Acciones Contextuales Directas
-                  if (notif.objetoRelacionadoTipo == 'producto' && notif.objetoRelacionadoId != null) ...[
+                  if (notif.objetoRelacionadoTipo == 'producto' &&
+                      notif.objetoRelacionadoId != null) ...[
                     SizedBox(
                       width: double.infinity,
                       child: ElevatedButton.icon(
@@ -768,18 +1074,27 @@ class _NotificationsScreenState extends State<NotificationsScreen> with SingleTi
                           _showStockAnalysisModal(notif, context);
                         },
                         icon: const Icon(Icons.insights_rounded, size: 18),
-                        label: const Text("Abrir Análisis de Stock", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5)),
+                        label: const Text(
+                          "Abrir Análisis de Stock",
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 13.5,
+                          ),
+                        ),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: Colors.blue[700],
                           foregroundColor: Colors.white,
                           padding: const EdgeInsets.symmetric(vertical: 12),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
                           elevation: 0,
                         ),
                       ),
                     ),
                     const SizedBox(height: 10),
-                  ] else if (notif.objetoRelacionadoTipo == 'cuota' && notif.objetoRelacionadoId != null) ...[
+                  ] else if (notif.objetoRelacionadoTipo == 'cuota' &&
+                      notif.objetoRelacionadoId != null) ...[
                     SizedBox(
                       width: double.infinity,
                       child: ElevatedButton.icon(
@@ -788,12 +1103,20 @@ class _NotificationsScreenState extends State<NotificationsScreen> with SingleTi
                           _showCuotaVencidaModal(notif, context);
                         },
                         icon: const Icon(Icons.payments_outlined, size: 18),
-                        label: const Text("Ver Detalle de Deuda y Cuota", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5)),
+                        label: const Text(
+                          "Ver Detalle de Deuda y Cuota",
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 13.5,
+                          ),
+                        ),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: Colors.blue[700],
                           foregroundColor: Colors.white,
                           padding: const EdgeInsets.symmetric(vertical: 12),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
                           elevation: 0,
                         ),
                       ),
@@ -808,11 +1131,21 @@ class _NotificationsScreenState extends State<NotificationsScreen> with SingleTi
                       onPressed: () => Navigator.pop(ctx),
                       style: OutlinedButton.styleFrom(
                         foregroundColor: textColor,
-                        side: BorderSide(color: isDark ? Colors.white24 : Colors.grey.shade300),
+                        side: BorderSide(
+                          color: isDark ? Colors.white24 : Colors.grey.shade300,
+                        ),
                         padding: const EdgeInsets.symmetric(vertical: 12),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
                       ),
-                      child: const Text("Cerrar Detalle", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                      child: const Text(
+                        "Cerrar Detalle",
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 13,
+                        ),
+                      ),
                     ),
                   ),
                 ],
@@ -838,8 +1171,14 @@ class _NotificationsScreenState extends State<NotificationsScreen> with SingleTi
   }) {
     final isExpanded = _expandedClientGroupIds.contains(clientId);
     final int cuotasCount = cuotas.length;
-    final double totalDeuda = cuotas.fold(0.0, (sum, c) => sum + (c.saldoTotal ?? (c.montoBase ?? 0.0)));
-    final double totalMora = cuotas.fold(0.0, (sum, c) => sum + c.moraAcumulada);
+    final double totalDeuda = cuotas.fold(
+      0.0,
+      (sum, c) => sum + (c.saldoTotal ?? (c.montoBase ?? 0.0)),
+    );
+    final double totalMora = cuotas.fold(
+      0.0,
+      (sum, c) => sum + c.moraAcumulada,
+    );
 
     return AnimatedContainer(
       duration: const Duration(milliseconds: 300),
@@ -849,7 +1188,9 @@ class _NotificationsScreenState extends State<NotificationsScreen> with SingleTi
         color: isDark ? const Color(0xFF2A1C22) : const Color(0xFFFFF4F4),
         borderRadius: BorderRadius.circular(22),
         border: Border.all(
-          color: isDark ? Colors.red[800]!.withValues(alpha: 0.5) : Colors.red.shade200,
+          color: isDark
+              ? Colors.red[800]!.withValues(alpha: 0.5)
+              : Colors.red.shade200,
           width: 1.4,
         ),
         boxShadow: [
@@ -881,7 +1222,9 @@ class _NotificationsScreenState extends State<NotificationsScreen> with SingleTi
                 children: [
                   CircleAvatar(
                     radius: 22,
-                    backgroundColor: isDark ? Colors.red[900]!.withValues(alpha: 0.6) : Colors.red[100],
+                    backgroundColor: isDark
+                        ? Colors.red[900]!.withValues(alpha: 0.6)
+                        : Colors.red[100],
                     child: Text(
                       clientName.isNotEmpty ? clientName[0].toUpperCase() : 'C',
                       style: TextStyle(
@@ -911,7 +1254,10 @@ class _NotificationsScreenState extends State<NotificationsScreen> with SingleTi
                             ),
                             const SizedBox(width: 8),
                             Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 2,
+                              ),
                               decoration: BoxDecoration(
                                 color: Colors.red[600],
                                 borderRadius: BorderRadius.circular(10),
@@ -940,16 +1286,31 @@ class _NotificationsScreenState extends State<NotificationsScreen> with SingleTi
                     ),
                   ),
                   IconButton(
-                    icon: Icon(Icons.more_vert_rounded, size: 22, color: isDark ? Colors.grey[400] : Colors.grey[600]),
+                    icon: Icon(
+                      Icons.more_vert_rounded,
+                      size: 22,
+                      color: isDark ? Colors.grey[400] : Colors.grey[600],
+                    ),
                     tooltip: "Opciones de cobranzas",
                     visualDensity: VisualDensity.compact,
                     padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-                    onPressed: () => _showGroupActionMenu(clientId, clientName, cuotas, prov, isDark),
+                    constraints: const BoxConstraints(
+                      minWidth: 32,
+                      minHeight: 32,
+                    ),
+                    onPressed: () => _showGroupActionMenu(
+                      clientId,
+                      clientName,
+                      cuotas,
+                      prov,
+                      isDark,
+                    ),
                   ),
                   const SizedBox(width: 2),
                   Icon(
-                    isExpanded ? Icons.keyboard_arrow_up_rounded : Icons.keyboard_arrow_down_rounded,
+                    isExpanded
+                        ? Icons.keyboard_arrow_up_rounded
+                        : Icons.keyboard_arrow_down_rounded,
                     color: isDark ? Colors.grey[400] : Colors.grey[600],
                     size: 26,
                   ),
@@ -965,7 +1326,12 @@ class _NotificationsScreenState extends State<NotificationsScreen> with SingleTi
               width: double.infinity,
               height: 42,
               child: ElevatedButton.icon(
-                onPressed: () => _onActionRecordarConsolidado(clientId, clientName, clientPhone, cuotas),
+                onPressed: () => _onActionRecordarConsolidado(
+                  clientId,
+                  clientName,
+                  clientPhone,
+                  cuotas,
+                ),
                 icon: const Icon(Icons.chat_bubble_outline_rounded, size: 17),
                 label: const Text(
                   "Recordatorio Consolidado por WhatsApp",
@@ -975,7 +1341,9 @@ class _NotificationsScreenState extends State<NotificationsScreen> with SingleTi
                   backgroundColor: const Color(0xFF25D366),
                   foregroundColor: Colors.white,
                   elevation: 0,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
                 ),
               ),
             ),
@@ -993,9 +1361,9 @@ class _NotificationsScreenState extends State<NotificationsScreen> with SingleTi
                         return Padding(
                           padding: const EdgeInsets.only(top: 8.0),
                           child: _buildNotificationCardItem(
-                            cNotif, 
-                            prov, 
-                            isDark, 
+                            cNotif,
+                            prov,
+                            isDark,
                             tabIndex: 0,
                           ),
                         );
@@ -1009,7 +1377,13 @@ class _NotificationsScreenState extends State<NotificationsScreen> with SingleTi
     );
   }
 
-  void _showGroupActionMenu(int clientId, String clientName, List<NotificationModel> cuotas, NotificationProvider prov, bool isDark) {
+  void _showGroupActionMenu(
+    int clientId,
+    String clientName,
+    List<NotificationModel> cuotas,
+    NotificationProvider prov,
+    bool isDark,
+  ) {
     HapticFeedback.lightImpact();
     final textColor = isDark ? Colors.white : Colors.black87;
     final subtitleColor = isDark ? Colors.grey[400] : Colors.grey[600];
@@ -1050,7 +1424,10 @@ class _NotificationsScreenState extends State<NotificationsScreen> with SingleTi
                           const SizedBox(height: 2),
                           Text(
                             "${cuotas.length} cuotas pendientes asociadas",
-                            style: TextStyle(fontSize: 12, color: subtitleColor),
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: subtitleColor,
+                            ),
                           ),
                         ],
                       ),
@@ -1072,10 +1449,20 @@ class _NotificationsScreenState extends State<NotificationsScreen> with SingleTi
                     color: Colors.amber.withValues(alpha: isDark ? 0.2 : 0.1),
                     shape: BoxShape.circle,
                   ),
-                  child: Icon(Icons.inventory_2_outlined, color: isDark ? Colors.amber[300] : Colors.orange[800], size: 20),
+                  child: Icon(
+                    Icons.inventory_2_outlined,
+                    color: isDark ? Colors.amber[300] : Colors.orange[800],
+                    size: 20,
+                  ),
                 ),
-                title: const Text("Archivar todas las alertas de este cliente", style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14.5)),
-                subtitle: const Text("Oculta el grupo de pendientes con opción de deshacer", style: TextStyle(fontSize: 12)),
+                title: const Text(
+                  "Archivar todas las alertas de este cliente",
+                  style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14.5),
+                ),
+                subtitle: const Text(
+                  "Oculta el grupo de pendientes con opción de deshacer",
+                  style: TextStyle(fontSize: 12),
+                ),
                 onTap: () {
                   Navigator.pop(ctx);
                   prov.archiveClientCuotas(clientId);
@@ -1097,10 +1484,20 @@ class _NotificationsScreenState extends State<NotificationsScreen> with SingleTi
                     color: Colors.red.withValues(alpha: isDark ? 0.2 : 0.1),
                     shape: BoxShape.circle,
                   ),
-                  child: Icon(Icons.notifications_off_outlined, color: isDark ? Colors.red[300] : Colors.red[700], size: 20),
+                  child: Icon(
+                    Icons.notifications_off_outlined,
+                    color: isDark ? Colors.red[300] : Colors.red[700],
+                    size: 20,
+                  ),
                 ),
-                title: const Text("Mover a No Deseadas (Silenciar cliente)", style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14.5)),
-                subtitle: const Text("Bloquea futuras alertas de cobranza para este cliente", style: TextStyle(fontSize: 12)),
+                title: const Text(
+                  "Mover a No Deseadas (Silenciar cliente)",
+                  style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14.5),
+                ),
+                subtitle: const Text(
+                  "Bloquea futuras alertas de cobranza para este cliente",
+                  style: TextStyle(fontSize: 12),
+                ),
                 onTap: () {
                   Navigator.pop(ctx);
                   prov.silenceClient(clientId);
@@ -1122,10 +1519,20 @@ class _NotificationsScreenState extends State<NotificationsScreen> with SingleTi
                     color: Colors.green.withValues(alpha: isDark ? 0.2 : 0.1),
                     shape: BoxShape.circle,
                   ),
-                  child: Icon(Icons.done_all_rounded, color: isDark ? Colors.green[300] : Colors.green[800], size: 20),
+                  child: Icon(
+                    Icons.done_all_rounded,
+                    color: isDark ? Colors.green[300] : Colors.green[800],
+                    size: 20,
+                  ),
                 ),
-                title: const Text("Marcar todas como resueltas", style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14.5)),
-                subtitle: const Text("Resuelve las cuotas de este cliente en lote", style: TextStyle(fontSize: 12)),
+                title: const Text(
+                  "Marcar todas como resueltas",
+                  style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14.5),
+                ),
+                subtitle: const Text(
+                  "Resuelve las cuotas de este cliente en lote",
+                  style: TextStyle(fontSize: 12),
+                ),
                 onTap: () {
                   Navigator.pop(ctx);
                   final ids = cuotas.map((c) => c.id).toList();
@@ -1154,16 +1561,38 @@ class _NotificationsScreenState extends State<NotificationsScreen> with SingleTi
   // DASHBOARD DE PULSO EJECUTIVO (EN PENDIENTES)
   // =========================================================================
 
-  Widget _buildPulseDashboard(List<NotificationModel> allPendientes, bool isDark) {
-    final overdueCuotas = allPendientes.where((n) => n.objetoRelacionadoTipo == 'cuota' && n.nivelPrioridad == 'critica').toList();
-    final upcomingCuotas = allPendientes.where((n) => n.objetoRelacionadoTipo == 'cuota' && n.nivelPrioridad == 'preventiva').toList();
-    final double totalMoraExigible = overdueCuotas.fold(0.0, (sum, n) => sum + (n.saldoTotal ?? (n.montoBase ?? 0.0)));
+  Widget _buildPulseDashboard(
+    List<NotificationModel> allPendientes,
+    bool isDark,
+  ) {
+    final overdueCuotas = allPendientes
+        .where(
+          (n) =>
+              n.objetoRelacionadoTipo == 'cuota' &&
+              n.nivelPrioridad == 'critica',
+        )
+        .toList();
+    final upcomingCuotas = allPendientes
+        .where(
+          (n) =>
+              n.objetoRelacionadoTipo == 'cuota' &&
+              n.nivelPrioridad == 'preventiva',
+        )
+        .toList();
+    final double totalMoraExigible = overdueCuotas.fold(
+      0.0,
+      (sum, n) => sum + (n.saldoTotal ?? (n.montoBase ?? 0.0)),
+    );
     final int cuotasCount = overdueCuotas.length;
     final int upcomingCount = upcomingCuotas.length;
 
-    final inventoryAlerts = allPendientes.where((n) => n.objetoRelacionadoTipo == 'producto').toList();
+    final inventoryAlerts = allPendientes
+        .where((n) => n.objetoRelacionadoTipo == 'producto')
+        .toList();
     final int stockCount = inventoryAlerts.length;
-    final int agotadosCount = inventoryAlerts.where((n) => n.nivelPrioridad == 'critica').length;
+    final int agotadosCount = inventoryAlerts
+        .where((n) => n.nivelPrioridad == 'critica')
+        .length;
 
     return Container(
       margin: const EdgeInsets.fromLTRB(16, 12, 16, 8),
@@ -1171,13 +1600,15 @@ class _NotificationsScreenState extends State<NotificationsScreen> with SingleTi
       decoration: BoxDecoration(
         color: isDark ? const Color(0xFF1E1E28) : Colors.white,
         borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: isDark ? Colors.white10 : Colors.grey.shade200),
+        border: Border.all(
+          color: isDark ? Colors.white10 : Colors.grey.shade200,
+        ),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.04),
             blurRadius: 10,
             offset: const Offset(0, 4),
-          )
+          ),
         ],
       ),
       child: Row(
@@ -1185,15 +1616,23 @@ class _NotificationsScreenState extends State<NotificationsScreen> with SingleTi
           // KPI 1: Cobranzas y Mora
           Expanded(
             child: InkWell(
-              onTap: () => setState(() => _categoryFilter = _categoryFilter == 'Cobranzas' ? 'Todas' : 'Cobranzas'),
+              onTap: () => setState(
+                () => _categoryFilter = _categoryFilter == 'Cobranzas'
+                    ? 'Todas'
+                    : 'Cobranzas',
+              ),
               borderRadius: BorderRadius.circular(16),
               child: Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: isDark ? Colors.red[900]!.withValues(alpha: 0.25) : Colors.red[50],
+                  color: isDark
+                      ? Colors.red[900]!.withValues(alpha: 0.25)
+                      : Colors.red[50],
                   borderRadius: BorderRadius.circular(16),
                   border: Border.all(
-                    color: _categoryFilter == 'Cobranzas' ? Colors.red[400]! : Colors.transparent,
+                    color: _categoryFilter == 'Cobranzas'
+                        ? Colors.red[400]!
+                        : Colors.transparent,
                     width: 1.5,
                   ),
                 ),
@@ -1202,15 +1641,19 @@ class _NotificationsScreenState extends State<NotificationsScreen> with SingleTi
                   children: [
                     Row(
                       children: [
-                        Icon(Icons.warning_amber_rounded, size: 16, color: isDark ? Colors.red[300] : Colors.red[700]),
+                        Icon(
+                          Icons.warning_amber_rounded,
+                          size: 16,
+                          color: isDark ? Colors.red[300] : Colors.red[700],
+                        ),
                         const SizedBox(width: 4),
                         Expanded(
                           child: Text(
-                            "Mora Exigible", 
+                            "Mora Exigible",
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
-                              fontSize: 11, 
+                              fontSize: 11,
                               fontWeight: FontWeight.w800,
                               color: isDark ? Colors.red[200] : Colors.red[800],
                             ),
@@ -1252,15 +1695,23 @@ class _NotificationsScreenState extends State<NotificationsScreen> with SingleTi
           // KPI 2: Inventario
           Expanded(
             child: InkWell(
-              onTap: () => setState(() => _categoryFilter = _categoryFilter == 'Inventario' ? 'Todas' : 'Inventario'),
+              onTap: () => setState(
+                () => _categoryFilter = _categoryFilter == 'Inventario'
+                    ? 'Todas'
+                    : 'Inventario',
+              ),
               borderRadius: BorderRadius.circular(16),
               child: Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: isDark ? Colors.amber[900]!.withValues(alpha: 0.25) : Colors.amber[50],
+                  color: isDark
+                      ? Colors.amber[900]!.withValues(alpha: 0.25)
+                      : Colors.amber[50],
                   borderRadius: BorderRadius.circular(16),
                   border: Border.all(
-                    color: _categoryFilter == 'Inventario' ? Colors.amber[400]! : Colors.transparent,
+                    color: _categoryFilter == 'Inventario'
+                        ? Colors.amber[400]!
+                        : Colors.transparent,
                     width: 1.5,
                   ),
                 ),
@@ -1269,17 +1720,25 @@ class _NotificationsScreenState extends State<NotificationsScreen> with SingleTi
                   children: [
                     Row(
                       children: [
-                        Icon(Icons.inventory_2_outlined, size: 16, color: isDark ? Colors.amber[300] : Colors.orange[800]),
+                        Icon(
+                          Icons.inventory_2_outlined,
+                          size: 16,
+                          color: isDark
+                              ? Colors.amber[300]
+                              : Colors.orange[800],
+                        ),
                         const SizedBox(width: 4),
                         Expanded(
                           child: Text(
-                            "Inventario", 
+                            "Inventario",
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
-                              fontSize: 11, 
+                              fontSize: 11,
                               fontWeight: FontWeight.w800,
-                              color: isDark ? Colors.amber[200] : Colors.orange[900],
+                              color: isDark
+                                  ? Colors.amber[200]
+                                  : Colors.orange[900],
                             ),
                           ),
                         ),
@@ -1337,13 +1796,19 @@ class _NotificationsScreenState extends State<NotificationsScreen> with SingleTi
       final now = DateTime.now();
       final today = DateTime(now.year, now.month, now.day);
       filteredNotifs = filteredNotifs.where((n) {
-        final notifDate = DateTime(n.createdAt.year, n.createdAt.month, n.createdAt.day);
+        final notifDate = DateTime(
+          n.createdAt.year,
+          n.createdAt.month,
+          n.createdAt.day,
+        );
         if (_timeFilter == 'Hoy') {
           return notifDate == today;
         } else if (_timeFilter == '7 Días') {
-          return notifDate.isAfter(today.subtract(const Duration(days: 7))) || notifDate == today;
+          return notifDate.isAfter(today.subtract(const Duration(days: 7))) ||
+              notifDate == today;
         } else if (_timeFilter == 'Específico' && _specificDate != null) {
-           return notifDate.year == _specificDate!.year && notifDate.month == _specificDate!.month;
+          return notifDate.year == _specificDate!.year &&
+              notifDate.month == _specificDate!.month;
         }
         return true;
       }).toList();
@@ -1355,27 +1820,47 @@ class _NotificationsScreenState extends State<NotificationsScreen> with SingleTi
         final tipo = n.objetoRelacionadoTipo?.toLowerCase();
         if (_categoryFilter == 'Cobranzas') return tipo == 'cuota';
         if (_categoryFilter == 'Inventario') return tipo == 'producto';
-        if (_categoryFilter == 'Cotizaciones') return tipo == 'cotizacion' || tipo == 'venta';
+        if (_categoryFilter == 'Cotizaciones') {
+          return tipo == 'cotizacion' || tipo == 'venta';
+        }
         return true;
       }).toList();
     }
 
     // Split by tabs
-    final pendientes = filteredNotifs.where((n) => n.isActionable && !n.isResolved).toList();
-    final resueltas = filteredNotifs.where((n) => n.isActionable && n.isResolved).toList();
+    final pendientes = filteredNotifs
+        .where((n) => n.isActionable && !n.isResolved)
+        .toList();
+    final resueltas = filteredNotifs
+        .where((n) => n.isActionable && n.isResolved)
+        .toList();
     final historial = filteredNotifs;
 
     // Conteo para chips de categoría
-    final currentTabNotifs = _tabController.index == 0 
-        ? notifProv.notifications.where((n) => n.isActionable && !n.isResolved).toList()
-        : (_tabController.index == 1 
-            ? notifProv.notifications.where((n) => n.isActionable && n.isResolved).toList()
-            : notifProv.notifications);
+    final currentTabNotifs = _tabController.index == 0
+        ? notifProv.notifications
+              .where((n) => n.isActionable && !n.isResolved)
+              .toList()
+        : (_tabController.index == 1
+              ? notifProv.notifications
+                    .where((n) => n.isActionable && n.isResolved)
+                    .toList()
+              : notifProv.notifications);
 
     final int totalCount = currentTabNotifs.length;
-    final int cobranzasCount = currentTabNotifs.where((n) => n.objetoRelacionadoTipo == 'cuota').length;
-    final int inventarioCount = currentTabNotifs.where((n) => n.objetoRelacionadoTipo == 'producto').length;
-    final int cotizacionesCount = currentTabNotifs.where((n) => n.objetoRelacionadoTipo == 'cotizacion' || n.objetoRelacionadoTipo == 'venta').length;
+    final int cobranzasCount = currentTabNotifs
+        .where((n) => n.objetoRelacionadoTipo == 'cuota')
+        .length;
+    final int inventarioCount = currentTabNotifs
+        .where((n) => n.objetoRelacionadoTipo == 'producto')
+        .length;
+    final int cotizacionesCount = currentTabNotifs
+        .where(
+          (n) =>
+              n.objetoRelacionadoTipo == 'cotizacion' ||
+              n.objetoRelacionadoTipo == 'venta',
+        )
+        .length;
 
     return Scaffold(
       backgroundColor: bgColor,
@@ -1385,11 +1870,11 @@ class _NotificationsScreenState extends State<NotificationsScreen> with SingleTi
           fit: BoxFit.scaleDown,
           alignment: Alignment.centerLeft,
           child: Text(
-            "Notificaciones", 
+            "Notificaciones",
             style: TextStyle(
-              fontWeight: FontWeight.w900, 
-              color: textColor, 
-              fontSize: 19, 
+              fontWeight: FontWeight.w900,
+              color: textColor,
+              fontSize: 19,
               letterSpacing: -0.5,
             ),
           ),
@@ -1404,13 +1889,34 @@ class _NotificationsScreenState extends State<NotificationsScreen> with SingleTi
             padding: const EdgeInsets.all(6),
             onStartInteractiveTour: () => _startTour(context),
             title: 'Notificaciones',
-            description: 'Centro de control inteligente de tu negocio: cobranzas en mora, vencimientos preventivos, inventario bajo y cotizaciones.',
+            description:
+                'Centro de control inteligente de tu negocio: cobranzas en mora, vencimientos preventivos, inventario bajo y cotizaciones.',
             tips: const [
-              InfoTip(icon: Icons.swipe_rounded, text: 'Desliza horizontalmente para navegar entre pestañas con total seguridad.'),
-              InfoTip(icon: Icons.more_vert_rounded, text: 'Toca los tres puntos en cualquier tarjeta para archivar, silenciar o resolver con opción Deshacer.'),
-              InfoTip(icon: Icons.chat_bubble_outline, text: 'Envía recordatorios instantáneos por WhatsApp con mensaje pre-armado.'),
-              InfoTip(icon: Icons.payments_outlined, text: 'Cobra y registra abonos directamente desde la notificación.'),
-              InfoTip(icon: Icons.settings_suggest_outlined, text: 'Personaliza canales, umbrales y alertas desde el botón de configuración.'),
+              InfoTip(
+                icon: Icons.swipe_rounded,
+                text:
+                    'Desliza horizontalmente para navegar entre pestañas con total seguridad.',
+              ),
+              InfoTip(
+                icon: Icons.more_vert_rounded,
+                text:
+                    'Toca los tres puntos en cualquier tarjeta para archivar, silenciar o resolver con opción Deshacer.',
+              ),
+              InfoTip(
+                icon: Icons.chat_bubble_outline,
+                text:
+                    'Envía recordatorios instantáneos por WhatsApp con mensaje pre-armado.',
+              ),
+              InfoTip(
+                icon: Icons.payments_outlined,
+                text:
+                    'Cobra y registra abonos directamente desde la notificación.',
+              ),
+              InfoTip(
+                icon: Icons.settings_suggest_outlined,
+                text:
+                    'Personaliza canales, umbrales y alertas desde el botón de configuración.',
+              ),
             ],
           ),
           KeyedSubtree(
@@ -1425,21 +1931,33 @@ class _NotificationsScreenState extends State<NotificationsScreen> with SingleTi
                       icon: const Icon(Icons.inventory_2_outlined),
                       tooltip: "Notificaciones Archivadas",
                       visualDensity: VisualDensity.compact,
-                      constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                      constraints: const BoxConstraints(
+                        minWidth: 32,
+                        minHeight: 32,
+                      ),
                       padding: const EdgeInsets.all(6),
-                      onPressed: () => ArchivedNotificationsModal.show(context, isDark: isDark),
+                      onPressed: () => ArchivedNotificationsModal.show(
+                        context,
+                        isDark: isDark,
+                      ),
                     ),
                     if (notifProv.archivedCount > 0)
                       Positioned(
                         top: 6,
                         right: 6,
                         child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 4,
+                            vertical: 1,
+                          ),
                           decoration: BoxDecoration(
                             color: Colors.amber[700],
                             borderRadius: BorderRadius.circular(8),
                           ),
-                          constraints: const BoxConstraints(minWidth: 14, minHeight: 14),
+                          constraints: const BoxConstraints(
+                            minWidth: 14,
+                            minHeight: 14,
+                          ),
                           child: Text(
                             "${notifProv.archivedCount}",
                             textAlign: TextAlign.center,
@@ -1455,10 +1973,16 @@ class _NotificationsScreenState extends State<NotificationsScreen> with SingleTi
                 ),
                 if (notifProv.unreadCount > 0)
                   IconButton(
-                    icon: Icon(Icons.done_all_rounded, color: isDark ? Colors.blue[300] : Colors.blue[700]),
+                    icon: Icon(
+                      Icons.done_all_rounded,
+                      color: isDark ? Colors.blue[300] : Colors.blue[700],
+                    ),
                     tooltip: "Marcar todas como leídas",
                     visualDensity: VisualDensity.compact,
-                    constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                    constraints: const BoxConstraints(
+                      minWidth: 32,
+                      minHeight: 32,
+                    ),
                     padding: const EdgeInsets.all(6),
                     onPressed: () => notifProv.markAllAsRead(),
                   ),
@@ -1473,7 +1997,8 @@ class _NotificationsScreenState extends State<NotificationsScreen> with SingleTi
               visualDensity: VisualDensity.compact,
               constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
               padding: const EdgeInsets.all(6),
-              onPressed: () => NotificationSettingsModal.show(context, isDark: isDark),
+              onPressed: () =>
+                  NotificationSettingsModal.show(context, isDark: isDark),
             ),
           ),
           const SizedBox(width: 4),
@@ -1483,7 +2008,10 @@ class _NotificationsScreenState extends State<NotificationsScreen> with SingleTi
           labelColor: isDark ? Colors.white : Colors.blue[800],
           unselectedLabelColor: isDark ? Colors.grey[500] : Colors.grey[600],
           indicatorColor: isDark ? Colors.blue[400] : Colors.blue[700],
-          labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+          labelStyle: const TextStyle(
+            fontWeight: FontWeight.bold,
+            fontSize: 13,
+          ),
           labelPadding: const EdgeInsets.symmetric(horizontal: 4),
           indicatorWeight: 3,
           tabs: [
@@ -1497,17 +2025,24 @@ class _NotificationsScreenState extends State<NotificationsScreen> with SingleTi
                     if (notifProv.pendingCount > 0) ...[
                       const SizedBox(width: 4),
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 5,
+                          vertical: 1.5,
+                        ),
                         decoration: BoxDecoration(
                           color: Colors.red[600],
                           borderRadius: BorderRadius.circular(10),
                         ),
                         child: Text(
                           "${notifProv.pendingCount}",
-                          style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
-                      )
-                    ]
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -1522,9 +2057,14 @@ class _NotificationsScreenState extends State<NotificationsScreen> with SingleTi
                     if (notifProv.resolvedCount > 0) ...[
                       const SizedBox(width: 4),
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 5,
+                          vertical: 1.5,
+                        ),
                         decoration: BoxDecoration(
-                          color: isDark ? Colors.white.withValues(alpha: 0.15) : Colors.grey[300],
+                          color: isDark
+                              ? Colors.white.withValues(alpha: 0.15)
+                              : Colors.grey[300],
                           borderRadius: BorderRadius.circular(10),
                         ),
                         child: Text(
@@ -1535,8 +2075,8 @@ class _NotificationsScreenState extends State<NotificationsScreen> with SingleTi
                             fontWeight: FontWeight.bold,
                           ),
                         ),
-                      )
-                    ]
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -1551,9 +2091,14 @@ class _NotificationsScreenState extends State<NotificationsScreen> with SingleTi
                     if (notifProv.totalHistoryCount > 0) ...[
                       const SizedBox(width: 4),
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 5,
+                          vertical: 1.5,
+                        ),
                         decoration: BoxDecoration(
-                          color: isDark ? Colors.white.withValues(alpha: 0.15) : Colors.grey[300],
+                          color: isDark
+                              ? Colors.white.withValues(alpha: 0.15)
+                              : Colors.grey[300],
                           borderRadius: BorderRadius.circular(10),
                         ),
                         child: Text(
@@ -1564,8 +2109,8 @@ class _NotificationsScreenState extends State<NotificationsScreen> with SingleTi
                             fontWeight: FontWeight.bold,
                           ),
                         ),
-                      )
-                    ]
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -1586,7 +2131,8 @@ class _NotificationsScreenState extends State<NotificationsScreen> with SingleTi
               inventarioCount: inventarioCount,
               cotizacionesCount: cotizacionesCount,
               specificDate: _specificDate,
-              onCategoryFilterChanged: (v) => setState(() => _categoryFilter = v),
+              onCategoryFilterChanged: (v) =>
+                  setState(() => _categoryFilter = v),
               onTimeFilterChanged: (f) => setState(() => _timeFilter = f),
               onSpecificDateTapped: () async {
                 DateTime? picked = await showDatePicker(
@@ -1608,7 +2154,10 @@ class _NotificationsScreenState extends State<NotificationsScreen> with SingleTi
             NotificationSelectionBar(
               isDark: isDark,
               selectedCount: _selectedIds.length,
-              onCancel: () => setState(() { _isSelectionMode = false; _selectedIds.clear(); }),
+              onCancel: () => setState(() {
+                _isSelectionMode = false;
+                _selectedIds.clear();
+              }),
               onDelete: () => _confirmDelete(notifProv),
             ),
           Expanded(
@@ -1616,7 +2165,8 @@ class _NotificationsScreenState extends State<NotificationsScreen> with SingleTi
               key: _tourKeys.cardsFeedKey,
               child: TabBarView(
                 controller: _tabController,
-                physics: notifProv.preferences.comportamientoSwipe == 'card_actions'
+                physics:
+                    notifProv.preferences.comportamientoSwipe == 'card_actions'
                     ? const NeverScrollableScrollPhysics()
                     : null,
                 children: [
@@ -1626,35 +2176,51 @@ class _NotificationsScreenState extends State<NotificationsScreen> with SingleTi
                 ],
               ),
             ),
-          )
+          ),
         ],
       ),
     );
   }
 
   void _confirmDelete(NotificationProvider prov) {
-     showDialog(
-        context: context,
-        builder: (ctx) => AlertDialog(
-           title: const Text("Eliminar Notificaciones"),
-           content: Text("¿Estás seguro de eliminar permanentemente ${_selectedIds.length} notificaciones? Esta acción no se puede deshacer."),
-           actions: [
-              TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Cancelar")),
-              ElevatedButton(
-                 onPressed: () {
-                    prov.deleteMultiple(_selectedIds.toList());
-                    setState(() { _isSelectionMode = false; _selectedIds.clear(); });
-                    Navigator.pop(ctx);
-                 },
-                 style: ElevatedButton.styleFrom(backgroundColor: Colors.red[600], foregroundColor: Colors.white),
-                 child: const Text("Sí, Eliminar"),
-              )
-           ],
-        )
-     );
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text("Eliminar Notificaciones"),
+        content: Text(
+          "¿Estás seguro de eliminar permanentemente ${_selectedIds.length} notificaciones? Esta acción no se puede deshacer.",
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text("Cancelar"),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              prov.deleteMultiple(_selectedIds.toList());
+              setState(() {
+                _isSelectionMode = false;
+                _selectedIds.clear();
+              });
+              Navigator.pop(ctx);
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red[600],
+              foregroundColor: Colors.white,
+            ),
+            child: const Text("Sí, Eliminar"),
+          ),
+        ],
+      ),
+    );
   }
 
-  Widget _buildTabContent(List<NotificationModel> notifs, NotificationProvider prov, bool isDark, {required int tabIndex}) {
+  Widget _buildTabContent(
+    List<NotificationModel> notifs,
+    NotificationProvider prov,
+    bool isDark, {
+    required int tabIndex,
+  }) {
     if (prov.isLoading && notifs.isEmpty) {
       return const Center(child: CircularProgressIndicator());
     }
@@ -1671,7 +2237,9 @@ class _NotificationsScreenState extends State<NotificationsScreen> with SingleTi
 
     if (tabIndex == 0 && smartGroupingActive) {
       for (var n in notifs) {
-        if (n.objetoRelacionadoTipo == 'cuota' && n.clientId != null && n.nivelPrioridad == 'critica') {
+        if (n.objetoRelacionadoTipo == 'cuota' &&
+            n.clientId != null &&
+            n.nivelPrioridad == 'critica') {
           multiCuotasByClient.putIfAbsent(n.clientId!, () => []).add(n);
         }
       }
@@ -1684,7 +2252,9 @@ class _NotificationsScreenState extends State<NotificationsScreen> with SingleTi
     }
 
     // Filtrar los items regulares (excluyendo los que están en tarjetas agrupadas en Pendientes)
-    final regularNotifs = notifs.where((n) => !multiCuotaNotificationIds.contains(n.id)).toList();
+    final regularNotifs = notifs
+        .where((n) => !multiCuotaNotificationIds.contains(n.id))
+        .toList();
     final groupedList = _buildGroupedList(regularNotifs);
 
     return ListView(
@@ -1695,7 +2265,9 @@ class _NotificationsScreenState extends State<NotificationsScreen> with SingleTi
           _buildPulseDashboard(notifs, isDark),
 
         // 2. Tarjetas Maestras de Clientes Agrupados (Smart Grouping)
-        if (tabIndex == 0 && smartGroupingActive && multiCuotasByClient.isNotEmpty) ...[
+        if (tabIndex == 0 &&
+            smartGroupingActive &&
+            multiCuotasByClient.isNotEmpty) ...[
           Padding(
             padding: const EdgeInsets.fromLTRB(24, 16, 24, 6),
             child: Text(
@@ -1743,21 +2315,32 @@ class _NotificationsScreenState extends State<NotificationsScreen> with SingleTi
           final notif = item as NotificationModel;
           return Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: _buildNotificationCardItem(notif, prov, isDark, tabIndex: tabIndex),
+            child: _buildNotificationCardItem(
+              notif,
+              prov,
+              isDark,
+              tabIndex: tabIndex,
+            ),
           );
         }),
       ],
     );
   }
 
-  Widget _buildNotificationCardItem(NotificationModel notif, NotificationProvider prov, bool isDark, {required int tabIndex}) {
+  Widget _buildNotificationCardItem(
+    NotificationModel notif,
+    NotificationProvider prov,
+    bool isDark, {
+    required int tabIndex,
+  }) {
     return NotificationItemCard(
       notif: notif,
       isDark: isDark,
       isSelected: _selectedIds.contains(notif.id),
       isSelectionMode: _isSelectionMode,
       tabIndex: tabIndex,
-      enableSwipeActions: prov.preferences.comportamientoSwipe == 'card_actions',
+      enableSwipeActions:
+          prov.preferences.comportamientoSwipe == 'card_actions',
       onArchive: () => _handleArchive(notif, prov),
       onSilence: () => _handleSilence(notif, prov),
       onToggleResolve: () => _handleToggleResolve(notif, prov),
@@ -1786,13 +2369,27 @@ class _NotificationsScreenState extends State<NotificationsScreen> with SingleTi
           _handleDeepLink(notif, context);
         }
       },
-      onActionRecordar: notif.objetoRelacionadoTipo == 'cuota' ? () => _onActionRecordarCuota(notif) : null,
-      onActionCobrar: notif.objetoRelacionadoTipo == 'cuota' ? () => _onActionCobrarCuota(notif) : null,
-      onActionMora: notif.objetoRelacionadoTipo == 'cuota' ? () => _onActionMoraCuota(notif) : null,
-      onActionAbastecer: notif.objetoRelacionadoTipo == 'producto' ? () => _onActionAbastecer(notif) : null,
-      onActionKardex: notif.objetoRelacionadoTipo == 'producto' ? () => _onActionKardex(notif) : null,
-      onActionVerCotizacion: notif.objetoRelacionadoTipo == 'cotizacion' ? () => _onActionVerCotizacion(notif) : null,
-      onActionVerPremio: notif.objetoRelacionadoTipo == 'recompensa' ? () => _onActionVerPremio(notif) : null,
+      onActionRecordar: notif.objetoRelacionadoTipo == 'cuota'
+          ? () => _onActionRecordarCuota(notif)
+          : null,
+      onActionCobrar: notif.objetoRelacionadoTipo == 'cuota'
+          ? () => _onActionCobrarCuota(notif)
+          : null,
+      onActionMora: notif.objetoRelacionadoTipo == 'cuota'
+          ? () => _onActionMoraCuota(notif)
+          : null,
+      onActionAbastecer: notif.objetoRelacionadoTipo == 'producto'
+          ? () => _onActionAbastecer(notif)
+          : null,
+      onActionKardex: notif.objetoRelacionadoTipo == 'producto'
+          ? () => _onActionKardex(notif)
+          : null,
+      onActionVerCotizacion: notif.objetoRelacionadoTipo == 'cotizacion'
+          ? () => _onActionVerCotizacion(notif)
+          : null,
+      onActionVerPremio: notif.objetoRelacionadoTipo == 'recompensa'
+          ? () => _onActionVerPremio(notif)
+          : null,
     );
   }
 
@@ -1818,7 +2415,10 @@ class _NotificationsScreenState extends State<NotificationsScreen> with SingleTi
     );
   }
 
-  void _handleToggleResolve(NotificationModel notif, NotificationProvider prov) {
+  void _handleToggleResolve(
+    NotificationModel notif,
+    NotificationProvider prov,
+  ) {
     if (notif.isResolved) {
       prov.markAsUnresolved(notif.id);
       NotificationToastFeedback.showSuccess(
@@ -1838,7 +2438,11 @@ class _NotificationsScreenState extends State<NotificationsScreen> with SingleTi
     }
   }
 
-  void _showCardActionMenu(NotificationModel notif, NotificationProvider prov, bool isDark) {
+  void _showCardActionMenu(
+    NotificationModel notif,
+    NotificationProvider prov,
+    bool isDark,
+  ) {
     HapticFeedback.lightImpact();
     final textColor = isDark ? Colors.white : Colors.black87;
     final subtitleColor = isDark ? Colors.grey[400] : Colors.grey[600];
@@ -1851,18 +2455,25 @@ class _NotificationsScreenState extends State<NotificationsScreen> with SingleTi
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       builder: (ctx) {
-        final effectiveBottom = InteractiveSheetWrapper.getEffectiveBottomPadding(ctx, minPadding: kMinDefensiveBottomClearance);
+        final effectiveBottom =
+            InteractiveSheetWrapper.getEffectiveBottomPadding(
+              ctx,
+              minPadding: kMinDefensiveBottomClearance,
+            );
 
         // Determinación de Icono y Color de Cabecera
         IconData catIcon = Icons.notifications_outlined;
         Color catColor = Colors.blue;
-        if (notif.categoria == 'inventario' || notif.objetoRelacionadoTipo == 'producto') {
+        if (notif.categoria == 'inventario' ||
+            notif.objetoRelacionadoTipo == 'producto') {
           catIcon = Icons.inventory_2_outlined;
           catColor = Colors.amber;
-        } else if (notif.categoria == 'cobranza' || notif.objetoRelacionadoTipo == 'cuota') {
+        } else if (notif.categoria == 'cobranza' ||
+            notif.objetoRelacionadoTipo == 'cuota') {
           catIcon = Icons.monetization_on_outlined;
           catColor = Colors.red;
-        } else if (notif.categoria == 'cotizacion' || notif.objetoRelacionadoTipo == 'cotizacion') {
+        } else if (notif.categoria == 'cotizacion' ||
+            notif.objetoRelacionadoTipo == 'cotizacion') {
           catIcon = Icons.receipt_long_rounded;
           catColor = Colors.indigo;
         }
@@ -1909,7 +2520,10 @@ class _NotificationsScreenState extends State<NotificationsScreen> with SingleTi
                           Row(
                             children: [
                               Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 7,
+                                  vertical: 2,
+                                ),
                                 decoration: BoxDecoration(
                                   color: statusBg,
                                   borderRadius: BorderRadius.circular(6),
@@ -1927,7 +2541,11 @@ class _NotificationsScreenState extends State<NotificationsScreen> with SingleTi
                               const SizedBox(width: 8),
                               Text(
                                 "Opciones",
-                                style: TextStyle(fontSize: 12, color: subtitleColor, fontWeight: FontWeight.w600),
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: subtitleColor,
+                                  fontWeight: FontWeight.w600,
+                                ),
                               ),
                             ],
                           ),
@@ -1953,7 +2571,10 @@ class _NotificationsScreenState extends State<NotificationsScreen> with SingleTi
                   ],
                 ),
                 const SizedBox(height: 12),
-                Divider(height: 1, color: isDark ? Colors.white10 : Colors.grey.shade200),
+                Divider(
+                  height: 1,
+                  color: isDark ? Colors.white10 : Colors.grey.shade200,
+                ),
                 const SizedBox(height: 8),
 
                 // ZONA A: ACCIONES RÁPIDAS CONTEXTUALES
@@ -1962,19 +2583,38 @@ class _NotificationsScreenState extends State<NotificationsScreen> with SingleTi
                     leading: Container(
                       padding: const EdgeInsets.all(8),
                       decoration: BoxDecoration(
-                        color: Colors.blue.withValues(alpha: isDark ? 0.2 : 0.1),
+                        color: Colors.blue.withValues(
+                          alpha: isDark ? 0.2 : 0.1,
+                        ),
                         shape: BoxShape.circle,
                       ),
-                      child: Icon(Icons.insights_rounded, color: isDark ? Colors.blue[300] : Colors.blue[700], size: 20),
+                      child: Icon(
+                        Icons.insights_rounded,
+                        color: isDark ? Colors.blue[300] : Colors.blue[700],
+                        size: 20,
+                      ),
                     ),
-                    title: const Text("Análisis y Abastecimiento de Stock", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                    subtitle: const Text("Ver métricas, sumar stock rápido o ajustar umbral", style: TextStyle(fontSize: 12)),
+                    title: const Text(
+                      "Análisis y Abastecimiento de Stock",
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14,
+                      ),
+                    ),
+                    subtitle: const Text(
+                      "Ver métricas, sumar stock rápido o ajustar umbral",
+                      style: TextStyle(fontSize: 12),
+                    ),
                     onTap: () {
                       Navigator.pop(ctx);
                       _showStockAnalysisModal(notif, context);
                     },
                   ),
-                  Divider(height: 1, indent: 56, color: isDark ? Colors.white10 : Colors.grey.shade200),
+                  Divider(
+                    height: 1,
+                    indent: 56,
+                    color: isDark ? Colors.white10 : Colors.grey.shade200,
+                  ),
                 ],
 
                 if (notif.objetoRelacionadoTipo == 'cuota') ...[
@@ -1982,36 +2622,74 @@ class _NotificationsScreenState extends State<NotificationsScreen> with SingleTi
                     leading: Container(
                       padding: const EdgeInsets.all(8),
                       decoration: BoxDecoration(
-                        color: Colors.green.withValues(alpha: isDark ? 0.2 : 0.1),
+                        color: Colors.green.withValues(
+                          alpha: isDark ? 0.2 : 0.1,
+                        ),
                         shape: BoxShape.circle,
                       ),
-                      child: Icon(Icons.chat_bubble_outline_rounded, color: isDark ? Colors.green[300] : Colors.green[700], size: 20),
+                      child: Icon(
+                        Icons.chat_bubble_outline_rounded,
+                        color: isDark ? Colors.green[300] : Colors.green[700],
+                        size: 20,
+                      ),
                     ),
-                    title: const Text("Enviar Recordatorio por WhatsApp", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                    subtitle: const Text("Mensaje listo con detalle de cuota y mora", style: TextStyle(fontSize: 12)),
+                    title: const Text(
+                      "Enviar Recordatorio por WhatsApp",
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14,
+                      ),
+                    ),
+                    subtitle: const Text(
+                      "Mensaje listo con detalle de cuota y mora",
+                      style: TextStyle(fontSize: 12),
+                    ),
                     onTap: () {
                       Navigator.pop(ctx);
                       _onActionRecordarCuota(notif);
                     },
                   ),
-                  Divider(height: 1, indent: 56, color: isDark ? Colors.white10 : Colors.grey.shade200),
+                  Divider(
+                    height: 1,
+                    indent: 56,
+                    color: isDark ? Colors.white10 : Colors.grey.shade200,
+                  ),
                   ListTile(
                     leading: Container(
                       padding: const EdgeInsets.all(8),
                       decoration: BoxDecoration(
-                        color: Colors.blue.withValues(alpha: isDark ? 0.2 : 0.1),
+                        color: Colors.blue.withValues(
+                          alpha: isDark ? 0.2 : 0.1,
+                        ),
                         shape: BoxShape.circle,
                       ),
-                      child: Icon(Icons.point_of_sale_rounded, color: isDark ? Colors.blue[300] : Colors.blue[700], size: 20),
+                      child: Icon(
+                        Icons.point_of_sale_rounded,
+                        color: isDark ? Colors.blue[300] : Colors.blue[700],
+                        size: 20,
+                      ),
                     ),
-                    title: const Text("Cobrar Cuota Ahora", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                    subtitle: const Text("Registrar pago total o abono a esta cuota", style: TextStyle(fontSize: 12)),
+                    title: const Text(
+                      "Cobrar Cuota Ahora",
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14,
+                      ),
+                    ),
+                    subtitle: const Text(
+                      "Registrar pago total o abono a esta cuota",
+                      style: TextStyle(fontSize: 12),
+                    ),
                     onTap: () {
                       Navigator.pop(ctx);
                       _onActionCobrarCuota(notif);
                     },
                   ),
-                  Divider(height: 1, indent: 56, color: isDark ? Colors.white10 : Colors.grey.shade200),
+                  Divider(
+                    height: 1,
+                    indent: 56,
+                    color: isDark ? Colors.white10 : Colors.grey.shade200,
+                  ),
                 ],
 
                 if (notif.objetoRelacionadoTipo == 'cotizacion') ...[
@@ -2019,19 +2697,38 @@ class _NotificationsScreenState extends State<NotificationsScreen> with SingleTi
                     leading: Container(
                       padding: const EdgeInsets.all(8),
                       decoration: BoxDecoration(
-                        color: Colors.indigo.withValues(alpha: isDark ? 0.2 : 0.1),
+                        color: Colors.indigo.withValues(
+                          alpha: isDark ? 0.2 : 0.1,
+                        ),
                         shape: BoxShape.circle,
                       ),
-                      child: Icon(Icons.receipt_long_rounded, color: isDark ? Colors.indigo[300] : Colors.indigo[700], size: 20),
+                      child: Icon(
+                        Icons.receipt_long_rounded,
+                        color: isDark ? Colors.indigo[300] : Colors.indigo[700],
+                        size: 20,
+                      ),
                     ),
-                    title: const Text("Ver Cotización", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                    subtitle: const Text("Revisar productos y emitir venta", style: TextStyle(fontSize: 12)),
+                    title: const Text(
+                      "Ver Cotización",
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14,
+                      ),
+                    ),
+                    subtitle: const Text(
+                      "Revisar productos y emitir venta",
+                      style: TextStyle(fontSize: 12),
+                    ),
                     onTap: () {
                       Navigator.pop(ctx);
                       _onActionVerCotizacion(notif);
                     },
                   ),
-                  Divider(height: 1, indent: 56, color: isDark ? Colors.white10 : Colors.grey.shade200),
+                  Divider(
+                    height: 1,
+                    indent: 56,
+                    color: isDark ? Colors.white10 : Colors.grey.shade200,
+                  ),
                 ],
 
                 // ZONA B: POSPONER RECORDATORIO (SNOOZE)
@@ -2042,7 +2739,11 @@ class _NotificationsScreenState extends State<NotificationsScreen> with SingleTi
                     children: [
                       Row(
                         children: [
-                          Icon(Icons.snooze_rounded, size: 16, color: isDark ? Colors.grey[400] : Colors.grey[600]),
+                          Icon(
+                            Icons.snooze_rounded,
+                            size: 16,
+                            color: isDark ? Colors.grey[400] : Colors.grey[600],
+                          ),
                           const SizedBox(width: 6),
                           Text(
                             "POSPONER RECORDATORIO",
@@ -2050,7 +2751,9 @@ class _NotificationsScreenState extends State<NotificationsScreen> with SingleTi
                               fontSize: 11,
                               fontWeight: FontWeight.w900,
                               letterSpacing: 0.8,
-                              color: isDark ? Colors.grey[400] : Colors.grey[600],
+                              color: isDark
+                                  ? Colors.grey[400]
+                                  : Colors.grey[600],
                             ),
                           ),
                         ],
@@ -2091,7 +2794,10 @@ class _NotificationsScreenState extends State<NotificationsScreen> with SingleTi
                     ],
                   ),
                 ),
-                Divider(height: 1, color: isDark ? Colors.white10 : Colors.grey.shade200),
+                Divider(
+                  height: 1,
+                  color: isDark ? Colors.white10 : Colors.grey.shade200,
+                ),
                 const SizedBox(height: 4),
 
                 // ZONA C: GESTIÓN DE BANDEJAS
@@ -2103,10 +2809,20 @@ class _NotificationsScreenState extends State<NotificationsScreen> with SingleTi
                       color: Colors.amber.withValues(alpha: isDark ? 0.2 : 0.1),
                       shape: BoxShape.circle,
                     ),
-                    child: Icon(Icons.inventory_2_outlined, color: isDark ? Colors.amber[300] : Colors.orange[800], size: 20),
+                    child: Icon(
+                      Icons.inventory_2_outlined,
+                      color: isDark ? Colors.amber[300] : Colors.orange[800],
+                      size: 20,
+                    ),
                   ),
-                  title: const Text("Archivar notificación", style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
-                  subtitle: const Text("Retirar de lista activa con opción de restaurar luego", style: TextStyle(fontSize: 12)),
+                  title: const Text(
+                    "Archivar notificación",
+                    style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                  ),
+                  subtitle: const Text(
+                    "Retirar de lista activa con opción de restaurar luego",
+                    style: TextStyle(fontSize: 12),
+                  ),
                   onTap: () {
                     Navigator.pop(ctx);
                     _handleArchive(notif, prov);
@@ -2121,10 +2837,20 @@ class _NotificationsScreenState extends State<NotificationsScreen> with SingleTi
                       color: Colors.red.withValues(alpha: isDark ? 0.2 : 0.1),
                       shape: BoxShape.circle,
                     ),
-                    child: Icon(Icons.notifications_off_outlined, color: isDark ? Colors.red[300] : Colors.red[700], size: 20),
+                    child: Icon(
+                      Icons.notifications_off_outlined,
+                      color: isDark ? Colors.red[300] : Colors.red[700],
+                      size: 20,
+                    ),
                   ),
-                  title: const Text("Mover a No Deseadas (Silenciar ítem)", style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
-                  subtitle: Text("Bloquear futuras alertas de este ${notif.objetoRelacionadoTipo ?? 'ítem'}", style: const TextStyle(fontSize: 12)),
+                  title: const Text(
+                    "Mover a No Deseadas (Silenciar ítem)",
+                    style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                  ),
+                  subtitle: Text(
+                    "Bloquear futuras alertas de este ${notif.objetoRelacionadoTipo ?? 'ítem'}",
+                    style: const TextStyle(fontSize: 12),
+                  ),
                   onTap: () {
                     Navigator.pop(ctx);
                     _handleSilence(notif, prov);
@@ -2140,17 +2866,26 @@ class _NotificationsScreenState extends State<NotificationsScreen> with SingleTi
                       shape: BoxShape.circle,
                     ),
                     child: Icon(
-                      notif.isResolved ? Icons.restart_alt_rounded : Icons.check_circle_outline_rounded,
+                      notif.isResolved
+                          ? Icons.restart_alt_rounded
+                          : Icons.check_circle_outline_rounded,
                       color: isDark ? Colors.green[300] : Colors.green[800],
                       size: 20,
                     ),
                   ),
                   title: Text(
-                    notif.isResolved ? "Marcar como pendiente" : "Marcar como resuelta",
-                    style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                    notif.isResolved
+                        ? "Marcar como pendiente"
+                        : "Marcar como resuelta",
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w600,
+                      fontSize: 14,
+                    ),
                   ),
                   subtitle: Text(
-                    notif.isResolved ? "Devolver al flujo de tareas pendientes" : "Finalizar y archivar en resueltas",
+                    notif.isResolved
+                        ? "Devolver al flujo de tareas pendientes"
+                        : "Finalizar y archivar en resueltas",
                     style: const TextStyle(fontSize: 12),
                   ),
                   onTap: () {
@@ -2167,13 +2902,24 @@ class _NotificationsScreenState extends State<NotificationsScreen> with SingleTi
                       color: Colors.red.withValues(alpha: isDark ? 0.2 : 0.08),
                       shape: BoxShape.circle,
                     ),
-                    child: Icon(Icons.delete_outline_rounded, color: Colors.red[600], size: 20),
+                    child: Icon(
+                      Icons.delete_outline_rounded,
+                      color: Colors.red[600],
+                      size: 20,
+                    ),
                   ),
                   title: Text(
                     "Eliminar definitivamente",
-                    style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14, color: Colors.red[600]),
+                    style: TextStyle(
+                      fontWeight: FontWeight.w600,
+                      fontSize: 14,
+                      color: Colors.red[600],
+                    ),
                   ),
-                  subtitle: const Text("Borrado permanente en base de datos", style: TextStyle(fontSize: 12)),
+                  subtitle: const Text(
+                    "Borrado permanente en base de datos",
+                    style: TextStyle(fontSize: 12),
+                  ),
                   onTap: () {
                     Navigator.pop(ctx);
                     _confirmSingleDelete(notif, prov);
@@ -2214,7 +2960,9 @@ class _NotificationsScreenState extends State<NotificationsScreen> with SingleTi
           decoration: BoxDecoration(
             color: isDark ? const Color(0xFF2A2A38) : Colors.grey[100],
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: isDark ? Colors.white12 : Colors.grey.shade300),
+            border: Border.all(
+              color: isDark ? Colors.white12 : Colors.grey.shade300,
+            ),
           ),
           child: Text(
             label,
@@ -2229,14 +2977,22 @@ class _NotificationsScreenState extends State<NotificationsScreen> with SingleTi
     );
   }
 
-  void _confirmSingleDelete(NotificationModel notif, NotificationProvider prov) {
+  void _confirmSingleDelete(
+    NotificationModel notif,
+    NotificationProvider prov,
+  ) {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text("Eliminar Notificación"),
-        content: Text("¿Deseas eliminar permanentemente '${notif.cleanTitle}'? Esta acción no se puede deshacer."),
+        content: Text(
+          "¿Deseas eliminar permanentemente '${notif.cleanTitle}'? Esta acción no se puede deshacer.",
+        ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Cancelar")),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text("Cancelar"),
+          ),
           ElevatedButton(
             onPressed: () {
               prov.deleteNotification(notif.id);
@@ -2247,7 +3003,10 @@ class _NotificationsScreenState extends State<NotificationsScreen> with SingleTi
                 icon: Icons.delete_outline_rounded,
               );
             },
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red[600], foregroundColor: Colors.white),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red[600],
+              foregroundColor: Colors.white,
+            ),
             child: const Text("Sí, Eliminar"),
           ),
         ],
