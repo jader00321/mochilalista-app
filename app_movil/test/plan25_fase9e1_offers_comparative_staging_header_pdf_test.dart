@@ -399,10 +399,24 @@ void main() {
         );
         expect(
           b800_999.length,
-          equals(17),
+          lessThanOrEqualTo(17),
           reason:
-              'Se esperaba FILES_800_TO_999L_IN_APP_MOVIL=17, lista: $b800_999',
+              'Se esperaba FILES_800_TO_999L_IN_APP_MOVIL <= 17 tras 9E-1, lista: $b800_999',
         );
+        for (final closed9e1 in const [
+          'lib/features/promotions/screens/offers_tab.dart',
+          'lib/features/scanner/widgets/staging/comparative_modal/comparative_update_modal.dart',
+          'lib/features/scanner/screens/invoice_staging_screen.dart',
+          'lib/features/smart_quotation/widgets/quick_sale/quick_sale_header.dart',
+          'lib/features/scanner/services/invoice_pdf_report_service.dart',
+        ]) {
+          expect(
+            b800_999.any((entry) => entry.startsWith(closed9e1)),
+            isFalse,
+            reason:
+                'El archivo $closed9e1 cerrado en 9E-1 no puede volver a >= 800 L',
+          );
+        }
       },
     );
 
