@@ -107,37 +107,52 @@ class WaMessageEditor extends StatelessWidget {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text(
-              "ESTILO DE PLANTILLA",
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.bold,
-                color: isDark ? Colors.grey[400] : Colors.grey[600],
-                letterSpacing: 0.8,
+            Expanded(
+              flex: 3,
+              child: Text(
+                "ESTILO DE PLANTILLA",
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                  color: isDark ? Colors.grey[400] : Colors.grey[600],
+                  letterSpacing: 0.8,
+                ),
               ),
             ),
-            if (isManualEdit)
-              InkWell(
-                onTap: onRegenerateAuto,
-                borderRadius: BorderRadius.circular(6),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                  child: Row(
-                    children: [
-                      const Icon(Icons.refresh, size: 14, color: Colors.orange),
-                      const SizedBox(width: 4),
-                      Text(
-                        "Regenerar auto",
-                        style: TextStyle(
-                          color: isDark ? Colors.orange[300] : Colors.orange[800],
-                          fontSize: 11,
-                          fontWeight: FontWeight.bold,
-                        ),
+            if (isManualEdit) ...[
+              const SizedBox(width: 8),
+              Flexible(
+                flex: 2,
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerRight,
+                  child: InkWell(
+                    onTap: onRegenerateAuto,
+                    borderRadius: BorderRadius.circular(6),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.refresh, size: 14, color: Colors.orange),
+                          const SizedBox(width: 4),
+                          Text(
+                            "Regenerar auto",
+                            style: TextStyle(
+                              color: isDark ? Colors.orange[300] : Colors.orange[800],
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
                       ),
-                    ],
+                    ),
                   ),
                 ),
               ),
+            ],
           ],
         ),
         const SizedBox(height: 8),
@@ -269,19 +284,30 @@ class WaMessageEditor extends StatelessWidget {
         const SizedBox(height: 16),
 
         // Título de la vista previa editable
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        Wrap(
+          alignment: WrapAlignment.spaceBetween,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          spacing: 8,
+          runSpacing: 6,
           children: [
-            Text(
-              "VISTA PREVIA (EDITABLE)",
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.bold,
-                color: isDark ? Colors.grey[400] : Colors.grey[700],
-                letterSpacing: 0.8,
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerLeft,
+              child: Text(
+                "VISTA PREVIA (EDITABLE)",
+                maxLines: 1,
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.bold,
+                  color: isDark ? Colors.grey[400] : Colors.grey[700],
+                  letterSpacing: 0.8,
+                ),
               ),
             ),
-            Row(
+            Wrap(
+              spacing: 8,
+              runSpacing: 4,
+              crossAxisAlignment: WrapCrossAlignment.center,
               children: [
                 InkWell(
                   onTap: onRegenerateAuto,
@@ -289,6 +315,7 @@ class WaMessageEditor extends StatelessWidget {
                   child: Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                     child: Row(
+                      mainAxisSize: MainAxisSize.min,
                       children: [
                         const Icon(Icons.refresh, size: 14, color: Colors.orange),
                         const SizedBox(width: 4),
@@ -304,7 +331,6 @@ class WaMessageEditor extends StatelessWidget {
                     ),
                   ),
                 ),
-                const SizedBox(width: 10),
                 InkWell(
                   onTap: () {
                     ClipboardHelper.copyWithFeedback(
@@ -317,6 +343,7 @@ class WaMessageEditor extends StatelessWidget {
                   child: Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                     child: Row(
+                      mainAxisSize: MainAxisSize.min,
                       children: [
                         Icon(Icons.copy, size: 14, color: isDark ? Colors.teal[300] : const Color(0xFF00A884)),
                         const SizedBox(width: 4),
@@ -690,14 +717,21 @@ class WaMessageEditor extends StatelessWidget {
                     : (isDark ? Colors.grey[400] : Colors.grey[600]),
               ),
               const SizedBox(width: 5),
-              Text(
-                label,
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
-                  color: isSelected
-                      ? (isDark ? const Color(0xFF25D366) : const Color(0xFF007A5E))
-                      : (isDark ? Colors.grey[300] : Colors.grey[800]),
+              Flexible(
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
+                      color: isSelected
+                          ? (isDark ? const Color(0xFF25D366) : const Color(0xFF007A5E))
+                          : (isDark ? Colors.grey[300] : Colors.grey[800]),
+                    ),
+                  ),
                 ),
               ),
             ],

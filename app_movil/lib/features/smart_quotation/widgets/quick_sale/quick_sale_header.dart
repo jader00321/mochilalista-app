@@ -791,47 +791,60 @@ class _QuickSaleHeaderState extends State<QuickSaleHeader> {
               const SizedBox(height: 6),
 
               // Botón desplegar datos adicionales para cliente de paso
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              Wrap(
+                alignment: WrapAlignment.spaceBetween,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                spacing: 8,
+                runSpacing: 4,
                 children: [
-                  TextButton.icon(
-                    onPressed: () {
-                      setState(() {
-                        _showExtraWalkInFields = !_showExtraWalkInFields;
-                      });
-                    },
-                    icon: Icon(
-                      _showExtraWalkInFields ? Icons.remove_circle_outline : Icons.add_circle_outline,
-                      size: 15,
-                      color: widget.isDark ? Colors.blue[300] : Colors.blue[700],
-                    ),
-                    label: Text(
-                      _showExtraWalkInFields ? "Ocultar datos extra" : "+ DNI, Dirección y Notas",
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold,
+                  FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerLeft,
+                    child: TextButton.icon(
+                      onPressed: () {
+                        setState(() {
+                          _showExtraWalkInFields = !_showExtraWalkInFields;
+                        });
+                      },
+                      icon: Icon(
+                        _showExtraWalkInFields ? Icons.remove_circle_outline : Icons.add_circle_outline,
+                        size: 15,
                         color: widget.isDark ? Colors.blue[300] : Colors.blue[700],
+                      ),
+                      label: Text(
+                        _showExtraWalkInFields ? "Ocultar datos extra" : "+ DNI, Dirección y Notas",
+                        maxLines: 1,
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                          color: widget.isDark ? Colors.blue[300] : Colors.blue[700],
+                        ),
                       ),
                     ),
                   ),
 
                   // Botón para guardar en directorio CRM
                   if (_nameCtrl.text.trim().isNotEmpty)
-                    TextButton.icon(
-                      onPressed: _isSavingClient ? null : () => _registerWalkInClient(provider),
-                      icon: _isSavingClient
-                          ? const SizedBox(
-                              width: 12,
-                              height: 12,
-                              child: CircularProgressIndicator(strokeWidth: 1.5, color: Color(0xFF00C853)),
-                            )
-                          : const Icon(Icons.person_add_alt_1_rounded, size: 15, color: Color(0xFF00C853)),
-                      label: Text(
-                        "Guardar en Directorio",
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold,
-                          color: widget.isDark ? const Color(0xFF69F0AE) : const Color(0xFF2E7D32),
+                    FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerLeft,
+                      child: TextButton.icon(
+                        onPressed: _isSavingClient ? null : () => _registerWalkInClient(provider),
+                        icon: _isSavingClient
+                            ? const SizedBox(
+                                width: 12,
+                                height: 12,
+                                child: CircularProgressIndicator(strokeWidth: 1.5, color: Color(0xFF00C853)),
+                              )
+                            : const Icon(Icons.person_add_alt_1_rounded, size: 15, color: Color(0xFF00C853)),
+                        label: Text(
+                          "Guardar en Directorio",
+                          maxLines: 1,
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            color: widget.isDark ? const Color(0xFF69F0AE) : const Color(0xFF2E7D32),
+                          ),
                         ),
                       ),
                     ),

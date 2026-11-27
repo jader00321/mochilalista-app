@@ -113,7 +113,10 @@ class _WaBusinessSectionState extends State<WaBusinessSection> {
   }
 
   void _populateInitialMemory() {
-    final cleanPaymentText = widget.paymentCtrl.text.replaceAll(RegExp(r'[📱🏦🏛️]\s*'), '');
+    final cleanPaymentText = widget.paymentCtrl.text.replaceAll(
+      RegExp(r'[📱🏦🏛️]\s*'),
+      '',
+    );
     final lines = cleanPaymentText.split('\n');
     for (final type in PaymentChipType.values) {
       for (final line in lines) {
@@ -130,13 +133,19 @@ class _WaBusinessSectionState extends State<WaBusinessSection> {
   /// Si está activo, guarda la línea digitada en memoria de sesión y la remueve limpiamente.
   void _togglePaymentMethod(PaymentChipType type) {
     // 1. Limpiar posibles emojis legados incrustados
-    String currentText = widget.paymentCtrl.text.replaceAll(RegExp(r'[📱🏦🏛️]\s*'), '');
+    String currentText = widget.paymentCtrl.text.replaceAll(
+      RegExp(r'[📱🏦🏛️]\s*'),
+      '',
+    );
     final lines = currentText.split('\n').map((l) => l.trim()).toList();
     final bool isPresent = lines.any((l) => type.matchesLine(l));
 
     if (isPresent) {
       // Guardar en memoria de sesión el contenido completo de la línea antes de remover
-      final matchingLine = lines.firstWhere((l) => type.matchesLine(l), orElse: () => "");
+      final matchingLine = lines.firstWhere(
+        (l) => type.matchesLine(l),
+        orElse: () => "",
+      );
       if (matchingLine.trim().isNotEmpty) {
         _activeMemory[type] = matchingLine.trim();
       }
@@ -144,20 +153,27 @@ class _WaBusinessSectionState extends State<WaBusinessSection> {
     } else {
       // Restaurar desde memoria de sesión o generar snippet predeterminado
       final cleanPhone = widget.phoneCtrl.text.replaceAll(RegExp(r'\D'), '');
-      final phone = cleanPhone.isNotEmpty ? cleanPhone : widget.phoneCtrl.text.trim();
+      final phone = cleanPhone.isNotEmpty
+          ? cleanPhone
+          : widget.phoneCtrl.text.trim();
       final snippetToInsert = _activeMemory[type] ?? type.defaultSnippet(phone);
       lines.add(snippetToInsert);
     }
 
     final newText = lines.where((l) => l.isNotEmpty).join('\n');
     widget.paymentCtrl.text = newText;
-    widget.paymentCtrl.selection = TextSelection.collapsed(offset: widget.paymentCtrl.text.length);
+    widget.paymentCtrl.selection = TextSelection.collapsed(
+      offset: widget.paymentCtrl.text.length,
+    );
     widget.onDataChanged();
     setState(() {});
   }
 
   bool _isChipActive(PaymentChipType type) {
-    final cleanText = widget.paymentCtrl.text.replaceAll(RegExp(r'[📱🏦🏛️]\s*'), '');
+    final cleanText = widget.paymentCtrl.text.replaceAll(
+      RegExp(r'[📱🏦🏛️]\s*'),
+      '',
+    );
     final lines = cleanText.split('\n');
     return lines.any((l) => type.matchesLine(l));
   }
@@ -195,19 +211,34 @@ class _WaBusinessSectionState extends State<WaBusinessSection> {
           children: [
             Row(
               children: [
-                Icon(Icons.storefront_rounded, color: isDark ? Colors.blue[300] : Colors.blue, size: 24),
+                Icon(
+                  Icons.storefront_rounded,
+                  color: isDark ? Colors.blue[300] : Colors.blue,
+                  size: 24,
+                ),
                 const SizedBox(width: 10),
-                Text(
-                  "Mi Negocio & Pagos",
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: textColor),
+                Expanded(
+                  child: Text(
+                    "Mi Negocio & Pagos",
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 18,
+                      color: textColor,
+                    ),
+                  ),
                 ),
               ],
             ),
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 16),
-              child: Divider(height: 1, color: isDark ? Colors.white10 : Colors.grey[200]),
+              child: Divider(
+                height: 1,
+                color: isDark ? Colors.white10 : Colors.grey[200],
+              ),
             ),
-            
+
             _buildTextField(
               controller: widget.phoneCtrl,
               label: "Teléfono Contacto",
@@ -216,7 +247,7 @@ class _WaBusinessSectionState extends State<WaBusinessSection> {
               isDark: isDark,
             ),
             const SizedBox(height: 16),
-            
+
             _buildTextField(
               controller: widget.rucCtrl,
               label: "RUC",
@@ -230,36 +261,62 @@ class _WaBusinessSectionState extends State<WaBusinessSection> {
             TextFormField(
               controller: widget.addressCtrl,
               style: TextStyle(fontSize: 16, color: textColor),
-              maxLines: null, 
+              maxLines: null,
               decoration: InputDecoration(
                 labelText: "Dirección / Ubicación GPS",
-                labelStyle: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[600], fontSize: 15),
-                prefixIcon: Icon(Icons.location_on_rounded, size: 22, color: isDark ? Colors.blueGrey[300] : Colors.blueGrey),
+                labelStyle: TextStyle(
+                  color: isDark ? Colors.grey[400] : Colors.grey[600],
+                  fontSize: 15,
+                ),
+                prefixIcon: Icon(
+                  Icons.location_on_rounded,
+                  size: 22,
+                  color: isDark ? Colors.blueGrey[300] : Colors.blueGrey,
+                ),
                 filled: true,
                 fillColor: isDark ? const Color(0xFF14141C) : Colors.grey[100],
                 isDense: true,
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide.none,
+                ),
                 suffixIcon: IconButton(
-                  icon: widget.isGpsLoading 
-                      ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
-                      : Icon(Icons.my_location_rounded, color: isDark ? Colors.red[300] : Colors.redAccent, size: 24),
+                  icon: widget.isGpsLoading
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : Icon(
+                          Icons.my_location_rounded,
+                          color: isDark ? Colors.red[300] : Colors.redAccent,
+                          size: 24,
+                        ),
                   tooltip: "Usar mi ubicación actual",
-                  onPressed: widget.isGpsLoading ? null : widget.onGpsTap, 
+                  onPressed: widget.isGpsLoading ? null : widget.onGpsTap,
                 ),
               ),
-              onTapOutside: (_) => FocusManager.instance.primaryFocus?.unfocus(),
+              onTapOutside: (_) =>
+                  FocusManager.instance.primaryFocus?.unfocus(),
               onChanged: (_) => widget.onDataChanged(),
             ),
-            
+
             const SizedBox(height: 24),
             Text(
               "Cuentas Bancarias / Yape / Plin",
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: isDark ? Colors.grey[300] : Colors.grey[800]),
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 14,
+                color: isDark ? Colors.grey[300] : Colors.grey[800],
+              ),
             ),
             const SizedBox(height: 4),
             Text(
               "Toca un chip para activar o remover rápidamente:",
-              style: TextStyle(fontSize: 12, color: isDark ? Colors.grey[400] : Colors.grey[600]),
+              style: TextStyle(
+                fontSize: 12,
+                color: isDark ? Colors.grey[400] : Colors.grey[600],
+              ),
             ),
             const SizedBox(height: 8),
 
@@ -285,22 +342,34 @@ class _WaBusinessSectionState extends State<WaBusinessSection> {
               style: TextStyle(fontSize: 15, color: textColor, height: 1.4),
               decoration: InputDecoration(
                 hintText: "Ej: Yape: 987654321\nBCP Soles: 191-xxxx...",
-                hintStyle: TextStyle(color: isDark ? Colors.grey[600] : Colors.grey),
+                hintStyle: TextStyle(
+                  color: isDark ? Colors.grey[600] : Colors.grey,
+                ),
                 filled: true,
-                fillColor: isDark ? Colors.blue.withValues(alpha: 0.1) : Colors.blue[50],
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                fillColor: isDark
+                    ? Colors.blue.withValues(alpha: 0.1)
+                    : Colors.blue[50],
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide.none,
+                ),
               ),
-              onTapOutside: (_) => FocusManager.instance.primaryFocus?.unfocus(),
+              onTapOutside: (_) =>
+                  FocusManager.instance.primaryFocus?.unfocus(),
               onChanged: (_) => widget.onDataChanged(),
             ),
-            
+
             const SizedBox(height: 16),
             Container(
               decoration: BoxDecoration(
-                color: isDark ? Colors.blue.withValues(alpha: 0.08) : Colors.blue.withValues(alpha: 0.04),
+                color: isDark
+                    ? Colors.blue.withValues(alpha: 0.08)
+                    : Colors.blue.withValues(alpha: 0.04),
                 borderRadius: BorderRadius.circular(14),
                 border: Border.all(
-                  color: isDark ? Colors.blue.withValues(alpha: 0.25) : Colors.blue.withValues(alpha: 0.2),
+                  color: isDark
+                      ? Colors.blue.withValues(alpha: 0.25)
+                      : Colors.blue.withValues(alpha: 0.2),
                 ),
               ),
               child: CheckboxListTile(
@@ -319,7 +388,10 @@ class _WaBusinessSectionState extends State<WaBusinessSection> {
                     if (widget.hasBusinessChanges) ...[
                       const SizedBox(width: 6),
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 6,
+                          vertical: 2,
+                        ),
                         decoration: BoxDecoration(
                           color: Colors.amber.withValues(alpha: 0.2),
                           borderRadius: BorderRadius.circular(6),
@@ -348,9 +420,14 @@ class _WaBusinessSectionState extends State<WaBusinessSection> {
                     ),
                   ),
                 ),
-                value: widget.hasBusinessChanges ? widget.updateBusinessData : false,
+                value: widget.hasBusinessChanges
+                    ? widget.updateBusinessData
+                    : false,
                 activeColor: isDark ? Colors.blue[400] : Colors.blue[700],
-                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 6,
+                ),
                 dense: true,
                 controlAffinity: ListTileControlAffinity.leading,
                 onChanged: widget.hasBusinessChanges
@@ -377,9 +454,11 @@ class _WaBusinessSectionState extends State<WaBusinessSection> {
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
         decoration: BoxDecoration(
-          color: isActive 
+          color: isActive
               ? chipColor.withValues(alpha: isDark ? 0.35 : 0.20)
-              : (isDark ? chipColor.withValues(alpha: 0.12) : chipColor.withValues(alpha: 0.06)),
+              : (isDark
+                    ? chipColor.withValues(alpha: 0.12)
+                    : chipColor.withValues(alpha: 0.06)),
           borderRadius: BorderRadius.circular(10),
           border: Border.all(
             color: isActive ? chipColor : chipColor.withValues(alpha: 0.3),
@@ -407,12 +486,15 @@ class _WaBusinessSectionState extends State<WaBusinessSection> {
                 children: [
                   AnimatedSwitcher(
                     duration: const Duration(milliseconds: 200),
-                    transitionBuilder: (child, anim) => ScaleTransition(scale: anim, child: child),
+                    transitionBuilder: (child, anim) =>
+                        ScaleTransition(scale: anim, child: child),
                     child: Icon(
                       isActive ? Icons.check_circle_rounded : type.icon,
                       key: ValueKey("${type.name}_$isActive"),
                       size: 14,
-                      color: isActive ? (isDark ? Colors.white : chipColor) : (isDark ? Colors.grey[400] : chipColor),
+                      color: isActive
+                          ? (isDark ? Colors.white : chipColor)
+                          : (isDark ? Colors.grey[400] : chipColor),
                     ),
                   ),
                   const SizedBox(width: 5),
@@ -421,7 +503,9 @@ class _WaBusinessSectionState extends State<WaBusinessSection> {
                     style: TextStyle(
                       fontSize: 12,
                       fontWeight: isActive ? FontWeight.bold : FontWeight.w600,
-                      color: isActive ? (isDark ? Colors.white : chipColor) : (isDark ? Colors.grey[300] : chipColor),
+                      color: isActive
+                          ? (isDark ? Colors.white : chipColor)
+                          : (isDark ? Colors.grey[300] : chipColor),
                     ),
                   ),
                 ],
@@ -445,19 +529,30 @@ class _WaBusinessSectionState extends State<WaBusinessSection> {
       controller: controller,
       keyboardType: isNumber ? TextInputType.number : TextInputType.text,
       maxLength: maxLength,
-      inputFormatters: [
-        if (isNumber) FilteringTextInputFormatter.digitsOnly,
-      ],
-      style: TextStyle(fontSize: 16, color: isDark ? Colors.white : Colors.black87),
+      inputFormatters: [if (isNumber) FilteringTextInputFormatter.digitsOnly],
+      style: TextStyle(
+        fontSize: 16,
+        color: isDark ? Colors.white : Colors.black87,
+      ),
       decoration: InputDecoration(
         labelText: label,
-        labelStyle: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[600], fontSize: 15),
-        prefixIcon: Icon(icon, size: 22, color: isDark ? Colors.blueGrey[300] : Colors.blueGrey),
+        labelStyle: TextStyle(
+          color: isDark ? Colors.grey[400] : Colors.grey[600],
+          fontSize: 15,
+        ),
+        prefixIcon: Icon(
+          icon,
+          size: 22,
+          color: isDark ? Colors.blueGrey[300] : Colors.blueGrey,
+        ),
         filled: true,
         fillColor: isDark ? const Color(0xFF14141C) : Colors.grey[100],
         isDense: true,
         counterText: "",
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide.none,
+        ),
       ),
       onTapOutside: (_) => FocusManager.instance.primaryFocus?.unfocus(),
       onChanged: (_) => widget.onDataChanged(),

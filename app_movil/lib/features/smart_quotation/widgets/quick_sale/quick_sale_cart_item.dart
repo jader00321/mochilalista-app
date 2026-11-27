@@ -30,13 +30,13 @@ class QuickSaleCartItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final subtotal = effectivePrice * quantity;
-    
-    final double baseSystemPrice = product.price; 
+
+    final double baseSystemPrice = product.price;
     final bool isDiscounted = (baseSystemPrice - effectivePrice) > 0.01;
     final int discountPct = (isDiscounted && baseSystemPrice > 0)
         ? (((baseSystemPrice - effectivePrice) / baseSystemPrice) * 100).round()
         : 0;
-    
+
     final invProv = Provider.of<InventoryProvider>(context, listen: false);
     String brandName = "";
     if (product.brand != null && product.brand != "null") {
@@ -57,7 +57,7 @@ class QuickSaleCartItem extends StatelessWidget {
 
     // Evaluamos si, tras un refresco de backend, el producto se quedó sin stock
     final bool isOut = product.stock <= 0;
-    
+
     bool showBrand = brandName.isNotEmpty && !isBundle;
 
     return Dismissible(
@@ -67,269 +67,476 @@ class QuickSaleCartItem extends StatelessWidget {
         alignment: Alignment.centerRight,
         padding: const EdgeInsets.only(right: 24),
         margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        decoration: BoxDecoration(color: isDark ? Colors.red[900] : Colors.red[100], borderRadius: BorderRadius.circular(16)),
-        child: Icon(Icons.delete, color: isDark ? Colors.white : Colors.red, size: 32),
+        decoration: BoxDecoration(
+          color: isDark ? Colors.red[900] : Colors.red[100],
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Icon(
+          Icons.delete,
+          color: isDark ? Colors.white : Colors.red,
+          size: 32,
+        ),
       ),
       onDismissed: (_) => onDelete(),
       child: Card(
         margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         elevation: isDark ? 0 : 2,
-      color: cardColor,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16), 
-        side: BorderSide(
-          color: isOut ? (isDark ? Colors.red.withValues(alpha: 0.5) : Colors.red.shade300) : (isDark ? Colors.white10 : Colors.transparent),
-          width: isOut ? 1.5 : 1.0
-        )
-      ),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(16),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            children: [
-              // 🔥 PISO 1: IMAGEN, MARCA Y NOMBRE 
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.only(top: 8.0),
-                    child: ReorderableDragStartListener(index: 0, child: Icon(Icons.drag_indicator, color: isDark ? Colors.white24 : Colors.grey, size: 28)),
-                  ),
-                  const SizedBox(width: 8),
-                  
-                  Container(
-                    width: 65, height: 65,
-                    decoration: BoxDecoration(
-                      color: isDark ? const Color(0xFF14141C) : Colors.white,
-                      border: Border.all(color: isDark ? Colors.transparent : Colors.grey.shade200), 
-                      borderRadius: BorderRadius.circular(12)
-                    ),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(12),
-                      child: UniversalImage(
-                        path: product.imageUrl,
-                        productName: product.productName.trim().isNotEmpty
-                            ? product.productName.trim()
-                            : (product.fullName.trim().isNotEmpty ? product.fullName.trim() : "Producto"),
-                        categoryName: brandName.isNotEmpty ? brandName : (product.specificName ?? "Artículo"),
-                        fit: BoxFit.contain,
+        color: cardColor,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: BorderSide(
+            color: isOut
+                ? (isDark
+                      ? Colors.red.withValues(alpha: 0.5)
+                      : Colors.red.shade300)
+                : (isDark ? Colors.white10 : Colors.transparent),
+            width: isOut ? 1.5 : 1.0,
+          ),
+        ),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(16),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              children: [
+                // 🔥 PISO 1: IMAGEN, MARCA Y NOMBRE
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8.0),
+                      child: ReorderableDragStartListener(
+                        index: 0,
+                        child: Icon(
+                          Icons.drag_indicator,
+                          color: isDark ? Colors.white24 : Colors.grey,
+                          size: 28,
+                        ),
                       ),
                     ),
-                  ),
-                  const SizedBox(width: 14),
+                    const SizedBox(width: 8),
 
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        if (showBrand)
-                          Padding(
-                            padding: const EdgeInsets.only(bottom: 2),
-                            child: Text(
-                              brandName.toUpperCase(),
-                              style: TextStyle(
-                                color: isDark ? Colors.blue[300] : Colors.blue[700],
-                                fontWeight: FontWeight.w800,
-                                fontSize: 11,
-                                letterSpacing: 0.5,
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                        Text(product.productName, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: textColor, height: 1.25), maxLines: 3, overflow: TextOverflow.ellipsis),
-                        
-                        if (product.specificName != null && product.specificName!.isNotEmpty && product.specificName != "Paquete")
-                          Padding(
-                            padding: const EdgeInsets.only(top: 2),
-                            child: Text(
-                              product.specificName!, 
-                              style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[600], fontSize: 14), 
-                              maxLines: 3, 
-                              overflow: TextOverflow.ellipsis
-                            ),
-                          ),
-                        
-                        // Muestra Empaque y Factor (omitimos para paquetes para que se vea más limpio)
-                        if (product.unit.isNotEmpty && !isBundle)
-                          Padding(
-                            padding: const EdgeInsets.only(top: 4),
-                            child: Text("${product.unit} (x${product.conversionFactor})", style: TextStyle(color: isDark ? Colors.grey[500] : Colors.grey[600], fontSize: 14, fontStyle: FontStyle.italic)),
-                          ),
-
-                        if (isBundle)
-                          Container(
-                            margin: const EdgeInsets.only(top: 6),
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                            decoration: BoxDecoration(color: isDark ? Colors.purple.withValues(alpha: 0.3) : Colors.purple[50], borderRadius: BorderRadius.circular(6), border: Border.all(color: isDark ? Colors.purple.withValues(alpha: 0.5) : Colors.purple.withValues(alpha: 0.2))),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(Icons.local_offer, size: 10, color: isDark ? Colors.purple[300] : Colors.purple[700]),
-                                const SizedBox(width: 4),
-                                Text("OFERTA", style: TextStyle(color: isDark ? Colors.purple[300] : Colors.purple[700], fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 0.5)),
-                              ],
-                            ),
-                          ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-              
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 12),
-                child: Divider(height: 1, color: isDark ? Colors.white10 : Colors.grey[200]),
-              ),
-
-              // 🔥 PISO 2: PRECIOS Y CONTROLES 
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Text("Unitario", style: TextStyle(fontSize: 13, color: isDark ? Colors.grey[500] : Colors.grey[600], fontWeight: FontWeight.w600)),
-                            if (product.cost != null && product.cost! > 0) ...[
-                              Builder(
-                                builder: (ctx) {
-                                  final quickProv = Provider.of<QuickSaleProvider>(ctx);
-                                  final double margin = ((effectivePrice - product.cost!) / effectivePrice) * 100;
-                                  final Color marginColor = margin >= 20
-                                      ? (isDark ? Colors.green[400]! : Colors.green[700]!)
-                                      : (margin >= 10
-                                          ? (isDark ? Colors.amber[400]! : Colors.amber[800]!)
-                                          : (isDark ? Colors.red[400]! : Colors.red[700]!));
-
-                                  return AnimatedSwitcher(
-                                    duration: const Duration(milliseconds: 250),
-                                    child: quickProv.hideProfits
-                                        ? const SizedBox.shrink(key: ValueKey('margin_hidden'))
-                                        : Row(
-                                            key: const ValueKey('margin_visible'),
-                                            mainAxisSize: MainAxisSize.min,
-                                            children: [
-                                              const SizedBox(width: 6),
-                                              Container(
-                                                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
-                                                decoration: BoxDecoration(
-                                                  color: marginColor.withValues(alpha: 0.12),
-                                                  borderRadius: BorderRadius.circular(4),
-                                                ),
-                                                child: Row(
-                                                  mainAxisSize: MainAxisSize.min,
-                                                  children: [
-                                                    Container(width: 5, height: 5, decoration: BoxDecoration(color: marginColor, shape: BoxShape.circle)),
-                                                    const SizedBox(width: 3),
-                                                    Text(
-                                                      "${margin.round()}% mrg",
-                                                      style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: marginColor),
-                                                    ),
-                                                  ],
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                  );
-                                },
-                              ),
-                            ],
-                          ],
+                    Container(
+                      width: 65,
+                      height: 65,
+                      decoration: BoxDecoration(
+                        color: isDark ? const Color(0xFF14141C) : Colors.white,
+                        border: Border.all(
+                          color: isDark
+                              ? Colors.transparent
+                              : Colors.grey.shade200,
                         ),
-                        const SizedBox(height: 2),
-                        Wrap(
-                          crossAxisAlignment: WrapCrossAlignment.end,
-                          spacing: 6, 
-                          runSpacing: 4, 
-                          children: [
-                            if (isDiscounted) ...[
-                              Text(
-                                AppCurrency.format(baseSystemPrice), 
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(12),
+                        child: UniversalImage(
+                          path: product.imageUrl,
+                          productName: product.productName.trim().isNotEmpty
+                              ? product.productName.trim()
+                              : (product.fullName.trim().isNotEmpty
+                                    ? product.fullName.trim()
+                                    : "Producto"),
+                          categoryName: brandName.isNotEmpty
+                              ? brandName
+                              : (product.specificName ?? "Artículo"),
+                          fit: BoxFit.contain,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 14),
+
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          if (showBrand)
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 2),
+                              child: Text(
+                                brandName.toUpperCase(),
                                 style: TextStyle(
-                                  decoration: TextDecoration.lineThrough, 
-                                  fontSize: 12, 
-                                  color: isDark ? Colors.grey[500] : Colors.grey, 
-                                  fontWeight: FontWeight.bold,
+                                  color: isDark
+                                      ? Colors.blue[300]
+                                      : Colors.blue[700],
+                                  fontWeight: FontWeight.w800,
+                                  fontSize: 11,
+                                  letterSpacing: 0.5,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          Text(
+                            product.productName,
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 14,
+                              color: textColor,
+                              height: 1.25,
+                            ),
+                            maxLines: 3,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+
+                          if (product.specificName != null &&
+                              product.specificName!.isNotEmpty &&
+                              product.specificName != "Paquete")
+                            Padding(
+                              padding: const EdgeInsets.only(top: 2),
+                              child: Text(
+                                product.specificName!,
+                                style: TextStyle(
+                                  color: isDark
+                                      ? Colors.grey[400]
+                                      : Colors.grey[600],
+                                  fontSize: 14,
+                                ),
+                                maxLines: 3,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+
+                          // Muestra Empaque y Factor (omitimos para paquetes para que se vea más limpio)
+                          if (product.unit.isNotEmpty && !isBundle)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 4),
+                              child: Text(
+                                "${product.unit} (x${product.conversionFactor})",
+                                style: TextStyle(
+                                  color: isDark
+                                      ? Colors.grey[500]
+                                      : Colors.grey[600],
+                                  fontSize: 14,
+                                  fontStyle: FontStyle.italic,
                                 ),
                               ),
-                              if (discountPct > 0)
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
-                                  decoration: BoxDecoration(
-                                    color: isDark ? Colors.red[900]!.withValues(alpha: 0.35) : Colors.red[50],
-                                    borderRadius: BorderRadius.circular(4),
-                                    border: Border.all(color: isDark ? Colors.red[700]! : Colors.red.shade300),
+                            ),
+
+                          if (isBundle)
+                            Container(
+                              margin: const EdgeInsets.only(top: 6),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 3,
+                              ),
+                              decoration: BoxDecoration(
+                                color: isDark
+                                    ? Colors.purple.withValues(alpha: 0.3)
+                                    : Colors.purple[50],
+                                borderRadius: BorderRadius.circular(6),
+                                border: Border.all(
+                                  color: isDark
+                                      ? Colors.purple.withValues(alpha: 0.5)
+                                      : Colors.purple.withValues(alpha: 0.2),
+                                ),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    Icons.local_offer,
+                                    size: 10,
+                                    color: isDark
+                                        ? Colors.purple[300]
+                                        : Colors.purple[700],
                                   ),
-                                  child: Text(
-                                    "-$discountPct%",
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    "OFERTA",
                                     style: TextStyle(
+                                      color: isDark
+                                          ? Colors.purple[300]
+                                          : Colors.purple[700],
                                       fontSize: 10,
                                       fontWeight: FontWeight.bold,
-                                      color: isDark ? Colors.red[300] : Colors.red[800],
+                                      letterSpacing: 0.5,
                                     ),
                                   ),
-                                ),
-                            ],
-                            Text(
-                              AppCurrency.format(effectivePrice), 
-                              style: TextStyle(
-                                fontWeight: FontWeight.w900, 
-                                fontSize: 16, 
-                                color: isDiscounted 
-                                    ? (isDark ? Colors.orange[300] : Colors.orange[800]) 
-                                    : textColor,
+                                ],
                               ),
                             ),
-                          ],
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 8),
+                  ],
+                ),
 
-                  Container(
-                    height: 40,
-                    decoration: BoxDecoration(color: isDark ? const Color(0xFF14141C) : Colors.grey[100], borderRadius: BorderRadius.circular(10), border: Border.all(color: isDark ? Colors.white10 : Colors.grey.shade300)),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        _iconBtn(Icons.remove, isDark ? Colors.red[300]! : Colors.red, onDecrease),
-                        Container(
-                          width: 32, alignment: Alignment.center,
-                          child: Text("$quantity", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: textColor)),
-                        ),
-                        _iconBtn(Icons.add, isDark ? Colors.green[400]! : Colors.green, onIncrease),
-                      ],
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  child: Divider(
+                    height: 1,
+                    color: isDark ? Colors.white10 : Colors.grey[200],
+                  ),
+                ),
+
+                // 🔥 PISO 2: PRECIOS Y CONTROLES
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Expanded(
+                      flex: 3,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Wrap(
+                            crossAxisAlignment: WrapCrossAlignment.center,
+                            spacing: 6,
+                            runSpacing: 2,
+                            children: [
+                              Text(
+                                "Unitario",
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  color: isDark
+                                      ? Colors.grey[500]
+                                      : Colors.grey[600],
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              if (product.cost != null && product.cost! > 0)
+                                Builder(
+                                  builder: (ctx) {
+                                    final quickProv =
+                                        Provider.of<QuickSaleProvider>(ctx);
+                                    final double margin =
+                                        ((effectivePrice - product.cost!) /
+                                            effectivePrice) *
+                                        100;
+                                    final Color marginColor = margin >= 20
+                                        ? (isDark
+                                              ? Colors.green[400]!
+                                              : Colors.green[700]!)
+                                        : (margin >= 10
+                                              ? (isDark
+                                                    ? Colors.amber[400]!
+                                                    : Colors.amber[800]!)
+                                              : (isDark
+                                                    ? Colors.red[400]!
+                                                    : Colors.red[700]!));
+
+                                    return AnimatedSwitcher(
+                                      duration: const Duration(
+                                        milliseconds: 250,
+                                      ),
+                                      child: quickProv.hideProfits
+                                          ? const SizedBox.shrink(
+                                              key: ValueKey('margin_hidden'),
+                                            )
+                                          : Container(
+                                              key: const ValueKey(
+                                                'margin_visible',
+                                              ),
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                    horizontal: 5,
+                                                    vertical: 1.5,
+                                                  ),
+                                              decoration: BoxDecoration(
+                                                color: marginColor.withValues(
+                                                  alpha: 0.12,
+                                                ),
+                                                borderRadius:
+                                                    BorderRadius.circular(4),
+                                              ),
+                                              child: Row(
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: [
+                                                  Container(
+                                                    width: 5,
+                                                    height: 5,
+                                                    decoration: BoxDecoration(
+                                                      color: marginColor,
+                                                      shape: BoxShape.circle,
+                                                    ),
+                                                  ),
+                                                  const SizedBox(width: 3),
+                                                  Text(
+                                                    "${margin.round()}% mrg",
+                                                    style: TextStyle(
+                                                      fontSize: 9,
+                                                      fontWeight:
+                                                          FontWeight.bold,
+                                                      color: marginColor,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                    );
+                                  },
+                                ),
+                            ],
+                          ),
+                          const SizedBox(height: 2),
+                          Wrap(
+                            crossAxisAlignment: WrapCrossAlignment.end,
+                            spacing: 6,
+                            runSpacing: 4,
+                            children: [
+                              if (isDiscounted) ...[
+                                Text(
+                                  AppCurrency.format(baseSystemPrice),
+                                  style: TextStyle(
+                                    decoration: TextDecoration.lineThrough,
+                                    fontSize: 12,
+                                    color: isDark
+                                        ? Colors.grey[500]
+                                        : Colors.grey,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                if (discountPct > 0)
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 5,
+                                      vertical: 1.5,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: isDark
+                                          ? Colors.red[900]!.withValues(
+                                              alpha: 0.35,
+                                            )
+                                          : Colors.red[50],
+                                      borderRadius: BorderRadius.circular(4),
+                                      border: Border.all(
+                                        color: isDark
+                                            ? Colors.red[700]!
+                                            : Colors.red.shade300,
+                                      ),
+                                    ),
+                                    child: Text(
+                                      "-$discountPct%",
+                                      style: TextStyle(
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.bold,
+                                        color: isDark
+                                            ? Colors.red[300]
+                                            : Colors.red[800],
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                              Text(
+                                AppCurrency.format(effectivePrice),
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w900,
+                                  fontSize: 16,
+                                  color: isDiscounted
+                                      ? (isDark
+                                            ? Colors.orange[300]
+                                            : Colors.orange[800])
+                                      : textColor,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 12),
+                    const SizedBox(width: 6),
 
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      if (isOut)
-                        Text("AGOTADO", style: TextStyle(fontSize: 12, color: isDark ? Colors.red[300] : Colors.red, fontWeight: FontWeight.bold))
-                      else
-                        Text("Total", style: TextStyle(fontSize: 13, color: isDark ? Colors.grey[500] : Colors.grey[600], fontWeight: FontWeight.w600)),
-                      const SizedBox(height: 2),
-                      Text(AppCurrency.format(subtotal), style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: isDark ? Colors.blue[300] : Colors.blue[800])),
-                    ],
-                  ),
-                ],
-              ),
-            ],
+                    Container(
+                      height: 38,
+                      decoration: BoxDecoration(
+                        color: isDark
+                            ? const Color(0xFF14141C)
+                            : Colors.grey[100],
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(
+                          color: isDark ? Colors.white10 : Colors.grey.shade300,
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          _iconBtn(
+                            Icons.remove,
+                            isDark ? Colors.red[300]! : Colors.red,
+                            onDecrease,
+                          ),
+                          Container(
+                            constraints: const BoxConstraints(minWidth: 26),
+                            padding: const EdgeInsets.symmetric(horizontal: 2),
+                            alignment: Alignment.center,
+                            child: Text(
+                              "$quantity",
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 15,
+                                color: textColor,
+                              ),
+                            ),
+                          ),
+                          _iconBtn(
+                            Icons.add,
+                            isDark ? Colors.green[400]! : Colors.green,
+                            onIncrease,
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+
+                    Flexible(
+                      flex: 2,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          if (isOut)
+                            Text(
+                              "AGOTADO",
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: isDark ? Colors.red[300] : Colors.red,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            )
+                          else
+                            Text(
+                              "Total",
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: isDark
+                                    ? Colors.grey[500]
+                                    : Colors.grey[600],
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          const SizedBox(height: 2),
+                          FittedBox(
+                            fit: BoxFit.scaleDown,
+                            alignment: Alignment.centerRight,
+                            child: Text(
+                              AppCurrency.format(subtotal),
+                              maxLines: 1,
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.w900,
+                                color: isDark
+                                    ? Colors.blue[300]
+                                    : Colors.blue[800],
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ),
         ),
       ),
-    ),
-  );
-}
+    );
+  }
 
   Widget _iconBtn(IconData icon, Color color, VoidCallback onTap) {
     return InkWell(

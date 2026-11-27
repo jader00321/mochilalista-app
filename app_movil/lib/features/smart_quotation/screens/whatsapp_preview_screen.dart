@@ -1,43 +1,47 @@
-import 'dart:io';
-import 'dart:convert';
 import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:provider/provider.dart';
-import 'package:url_launcher/url_launcher.dart';
 import 'package:geolocator/geolocator.dart';
-import 'package:share_plus/share_plus.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:provider/provider.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:url_launcher/url_launcher.dart';
 
-import 'package:app_movil/features/smart_quotation/providers/smart_quotation_provider.dart';
-import 'package:app_movil/features/smart_quotation/providers/sale_provider.dart';
-import 'package:app_movil/core/providers/auth_provider.dart';
-import 'package:app_movil/core/models/user_model.dart';
-import 'package:app_movil/features/smart_quotation/services/client_service.dart';
 import 'package:app_movil/core/database/local_db.dart';
+import 'package:app_movil/core/models/user_model.dart';
+import 'package:app_movil/core/providers/auth_provider.dart';
 import 'package:app_movil/core/utils/app_date_formatter.dart';
-import 'package:app_movil/core/utils/currency_formatter.dart';
+import 'package:app_movil/core/utils/app_feedback_helper.dart';
 import 'package:app_movil/core/utils/cuota_date_helper.dart';
+import 'package:app_movil/core/utils/currency_formatter.dart';
 import 'package:app_movil/core/utils/whatsapp_uri_builder.dart';
-
-import 'package:app_movil/features/smart_quotation/models/smart_quotation_model.dart';
+import 'package:app_movil/core/widgets/info_tooltip_button.dart';
 import 'package:app_movil/features/smart_quotation/models/crm_models.dart';
-import 'package:app_movil/features/smart_quotation/models/whatsapp_config_model.dart';
+import 'package:app_movil/features/smart_quotation/models/extracted_list_model.dart';
 import 'package:app_movil/features/smart_quotation/models/pdf_config_model.dart';
+import 'package:app_movil/features/smart_quotation/models/smart_quotation_model.dart';
+import 'package:app_movil/features/smart_quotation/models/whatsapp_config_model.dart';
+import 'package:app_movil/features/smart_quotation/providers/sale_provider.dart';
+import 'package:app_movil/features/smart_quotation/providers/smart_quotation_provider.dart';
+import 'package:app_movil/features/smart_quotation/services/client_service.dart';
 import 'package:app_movil/features/smart_quotation/services/pdf_preferences_service.dart';
 import 'package:app_movil/features/smart_quotation/services/whatsapp_preferences_service.dart';
 import 'package:app_movil/features/smart_quotation/utils/pdf_generator.dart';
-
-import 'package:app_movil/core/widgets/custom_snackbar.dart';
-import 'package:app_movil/core/widgets/info_tooltip_button.dart';
 import 'package:app_movil/features/smart_quotation/widgets/manual/client_search_modal.dart';
+import 'package:app_movil/features/smart_quotation/widgets/whatsapp/wa_business_section.dart';
 import 'package:app_movil/features/smart_quotation/widgets/whatsapp/wa_client_section.dart';
 import 'package:app_movil/features/smart_quotation/widgets/whatsapp/wa_config_section.dart';
-import 'package:app_movil/features/smart_quotation/widgets/whatsapp/wa_business_section.dart';
-import 'package:app_movil/features/smart_quotation/widgets/whatsapp/wa_message_editor.dart';
 import 'package:app_movil/features/smart_quotation/widgets/whatsapp/wa_final_preview_modal.dart';
+import 'package:app_movil/features/smart_quotation/widgets/whatsapp/wa_message_editor.dart';
 
-import 'package:app_movil/features/smart_quotation/models/extracted_list_model.dart';
+part 'whatsapp_preview/whatsapp_state_and_history_mixin.dart';
+part 'whatsapp_preview/whatsapp_message_builder_mixin.dart';
+part 'whatsapp_preview/whatsapp_message_financial_mixin.dart';
+part 'whatsapp_preview/whatsapp_actions_and_gps_mixin.dart';
+part 'whatsapp_preview/whatsapp_pdf_and_send_mixin.dart';
 
 class WhatsAppPreviewScreen extends StatefulWidget {
   final int? quotationId;
@@ -45,8 +49,8 @@ class WhatsAppPreviewScreen extends StatefulWidget {
   final QuotationContextMode? contextMode;
 
   const WhatsAppPreviewScreen({
-    super.key, 
-    this.quotationId, 
+    super.key,
+    this.quotationId,
     this.saleId,
     this.contextMode,
   });
@@ -55,7 +59,8 @@ class WhatsAppPreviewScreen extends StatefulWidget {
   State<WhatsAppPreviewScreen> createState() => _WhatsAppPreviewScreenState();
 }
 
-class _WhatsAppPreviewScreenState extends State<WhatsAppPreviewScreen> {
+abstract class _WhatsAppPreviewScreenStateBase
+    extends State<WhatsAppPreviewScreen> {
   bool _isLoading = true;
   bool _isManualEdit = false;
   bool _isGpsLoading = false;
@@ -68,8 +73,7 @@ class _WhatsAppPreviewScreenState extends State<WhatsAppPreviewScreen> {
   ClientModel? _selectedClient;
   bool _isUsingSelectedClient = false;
 
-  // ↶ Pila de Historial Undo / Redo Blindada
-  // ↶ Pila de Historial Undo / Redo Blindada (1 Solo Toque Garantizado)
+  // Pila de Historial Undo / Redo (1 Solo Toque Garantizado)
   final List<String> _undoStack = [];
   final List<String> _redoStack = [];
   bool _isApplyingUndoRedo = false;
@@ -96,20 +100,11 @@ class _WhatsAppPreviewScreenState extends State<WhatsAppPreviewScreen> {
 
   final Map<PaymentChipType, String> _sessionPaymentMemory = {};
 
-  static String _normalizePaymentText(String raw) {
-    return raw
-        .replaceAll('\r\n', '\n')
-        .replaceAll('\r', '\n')
-        .replaceAll(RegExp(r'[📱🏦🏛️]\s*'), '')
-        .split('\n')
-        .map((l) => l.trim())
-        .where((l) => l.isNotEmpty)
-        .join('\n');
-  }
-
   String get _currentContextKey {
     if (_saleData != null) {
-      final bool isLoan = _saleData!['origen_venta'] == 'prestamo_personal' || _saleData!['is_loan'] == true;
+      final bool isLoan =
+          _saleData!['origen_venta'] == 'prestamo_personal' ||
+          _saleData!['is_loan'] == true;
       return isLoan ? 'loan' : 'sale';
     }
     return 'quote';
@@ -135,690 +130,32 @@ class _WhatsAppPreviewScreenState extends State<WhatsAppPreviewScreen> {
     super.dispose();
   }
 
-  void _onMessageEdited(String newText) {
-    if (!_isManualEdit) {
-      setState(() => _isManualEdit = true);
-    }
-    if (_isApplyingUndoRedo) return;
-
-    // Al iniciar una ráfaga de escritura, salvaguardamos el estado anterior en _undoStack
-    if (_typingDebounceTimer == null || !_typingDebounceTimer!.isActive) {
-      if (_lastCommittedText.isNotEmpty && _lastCommittedText != newText) {
-        if (_undoStack.isEmpty || _undoStack.last != _lastCommittedText) {
-          _undoStack.add(_lastCommittedText);
-          if (_undoStack.length > 50) _undoStack.removeAt(0);
-          _redoStack.clear();
-        }
-      }
-    }
-
-    _typingDebounceTimer?.cancel();
-    _typingDebounceTimer = Timer(const Duration(milliseconds: 350), () {
-      _lastCommittedText = newText;
-      if (mounted) setState(() {});
-    });
-  }
-
-  void _recordUndoSnapshot([String? specificText]) {
-    if (_isApplyingUndoRedo) return;
-    _typingDebounceTimer?.cancel();
-    final current = specificText ?? _messageCtrl.text;
-    if (_undoStack.isEmpty || _undoStack.last != current) {
-      _undoStack.add(current);
-      if (_undoStack.length > 50) _undoStack.removeAt(0);
-      _redoStack.clear();
-      _lastCommittedText = current;
-      if (mounted) setState(() {});
-    }
-  }
-
-  void _handleUndo() {
-    _typingDebounceTimer?.cancel();
-    final currentText = _messageCtrl.text;
-
-    // Descartar del tope de _undoStack cualquier entrada que sea idéntica al texto actual
-    while (_undoStack.isNotEmpty && _undoStack.last == currentText) {
-      _undoStack.removeLast();
-    }
-
-    if (_undoStack.isEmpty) return;
-
-    HapticFeedback.selectionClick();
-    _isApplyingUndoRedo = true;
-    _redoStack.add(currentText);
-    final previousText = _undoStack.removeLast();
-    _messageCtrl.text = previousText;
-    _messageCtrl.selection = TextSelection.collapsed(offset: previousText.length);
-    _lastCommittedText = previousText;
-    _isManualEdit = true;
-    setState(() {});
-    _isApplyingUndoRedo = false;
-  }
-
-  void _handleRedo() {
-    _typingDebounceTimer?.cancel();
-    final currentText = _messageCtrl.text;
-
-    while (_redoStack.isNotEmpty && _redoStack.last == currentText) {
-      _redoStack.removeLast();
-    }
-
-    if (_redoStack.isEmpty) return;
-
-    HapticFeedback.selectionClick();
-    _isApplyingUndoRedo = true;
-    _undoStack.add(currentText);
-    final nextText = _redoStack.removeLast();
-    _messageCtrl.text = nextText;
-    _messageCtrl.selection = TextSelection.collapsed(offset: nextText.length);
-    _lastCommittedText = nextText;
-    _isManualEdit = true;
-    setState(() {});
-    _isApplyingUndoRedo = false;
-  }
-
-  Future<void> _loadData() async {
-    final authProv = Provider.of<AuthProvider>(context, listen: false);
-    final clientService = ClientService();
-
-    try {
-      if (widget.saleId != null) {
-        final saleProv = Provider.of<SaleProvider>(context, listen: false);
-        _saleData = await saleProv.getSaleDetailSilently(widget.saleId!);
-        if (_saleData != null && _saleData!['cotizacion'] != null) {
-          _quotation = SmartQuotationModel.fromJson(_saleData!['cotizacion']);
-        }
-      } else if (widget.quotationId != null) {
-        final qProv = Provider.of<SmartQuotationProvider>(context, listen: false);
-        _quotation = await qProv.getQuotationById(widget.quotationId!);
-      }
-
-      if (_quotation != null) {
-        final rawClientName = _saleData?['cliente_nombre'] ?? _quotation!.clientName;
-        _clientNameCtrl.text = PdfGenerator.cleanClientDisplayName(rawClientName);
-
-        final int? targetClientId = _saleData?['cliente_id'] ?? _quotation!.clientId;
-        if (targetClientId != null) {
-          final clientData = await clientService.getClientById(targetClientId);
-          if (clientData != null) {
-            _originalClient = clientData;
-            _clientNameCtrl.text = PdfGenerator.cleanClientDisplayName(clientData.fullName);
-            _clientPhoneCtrl.text = clientData.phone;
-          }
-        } else if (_saleData?['cliente_telefono'] != null) {
-          _clientPhoneCtrl.text = _saleData!['cliente_telefono'];
-        }
-
-        final biz = authProv.currentBusiness;
-        if (biz != null) {
-          _originalBizAddress = (biz.address ?? "").trim();
-          _originalBizRuc = (biz.ruc ?? "").trim();
-          _originalBizPhone = (authProv.user?.phone ?? "").trim();
-          _originalBizPayment = (biz.paymentInfo != null && biz.paymentInfo!.trim().isNotEmpty)
-              ? biz.paymentInfo!.trim()
-              : "";
-          _originalBizLat = biz.latitud;
-          _originalBizLng = biz.longitud;
-
-          _bizAddressCtrl.text = _originalBizAddress;
-          _bizRucCtrl.text = _originalBizRuc;
-          _bizPhoneCtrl.text = _originalBizPhone;
-          _bizPaymentCtrl.text = _originalBizPayment;
-          _bizLat = _originalBizLat;
-          _bizLng = _originalBizLng;
-        }
-
-        // Aplicamos preferencias guardadas del usuario de WhatsApp indexadas por contexto
-        _config = await WhatsAppPreferencesService.applySavedPreferences(
-          _config,
-          contextKey: _currentContextKey,
-        );
-
-        final effectiveMode = widget.contextMode ?? _quotation?.contextMode;
-        if (effectiveMode != null) {
-          switch (effectiveMode) {
-            case QuotationContextMode.general:
-              _config.style = WhatsAppMessageStyle.commercial;
-              break;
-            case QuotationContextMode.wholesale:
-              _config.style = WhatsAppMessageStyle.wholesale;
-              break;
-            case QuotationContextMode.school:
-              _config.style = WhatsAppMessageStyle.school;
-              break;
-          }
-        }
-      }
-
-      _regenerateMessage();
-    } catch (e) {
-      debugPrint("Error loading WA data: $e");
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
-    }
-  }
-
-  /// Hidrata las rutas locales de fotos de productos desde SQLite para ítems sin imagen
-  Future<void> _hydrateProductImages() async {
-    if (_quotation == null || _quotation!.items.isEmpty) return;
-    try {
-      final db = await LocalDatabase.instance.database;
-      final List<QuotationItem> updatedItems = [];
-
-      for (final item in _quotation!.items) {
-        if ((item.imageUrl == null || item.imageUrl!.trim().isEmpty) && item.productId != null) {
-          final res = await db.query(
-            'productos',
-            columns: ['imagen_url'],
-            where: 'id = ?',
-            whereArgs: [item.productId],
-            limit: 1,
-          );
-          if (res.isNotEmpty && res.first['imagen_url'] != null) {
-            final String? dbImg = res.first['imagen_url'] as String?;
-            if (dbImg != null && dbImg.isNotEmpty) {
-              updatedItems.add(QuotationItem(
-                id: item.id,
-                productId: item.productId,
-                presentationId: item.presentationId,
-                bundleId: item.bundleId,
-                productName: item.productName,
-                brandName: item.brandName,
-                specificName: item.specificName,
-                salesUnit: item.salesUnit,
-                quantity: item.quantity,
-                unitPriceApplied: item.unitPriceApplied,
-                originalUnitPrice: item.originalUnitPrice,
-                isAvailable: item.isAvailable,
-                isManualPrice: item.isManualPrice,
-                originalText: item.originalText,
-                imageUrl: dbImg,
-              ));
-              continue;
-            }
-          }
-        }
-        updatedItems.add(item);
-      }
-      _quotation = _quotation!.copyWith(items: updatedItems);
-    } catch (e) {
-      debugPrint("⚠️ Error hidratando fotos de productos desde SQLite en WhatsAppPreviewScreen: $e");
-    }
-  }
-
-  /// Actualización reactiva a 0ms cuando cambia el texto del nombre del cliente
-  void _onClientDataChanged() {
-    final cleanName = _clientNameCtrl.text.trim();
-    if (_isManualEdit) {
-      final currentText = _messageCtrl.text;
-      final greetingRegex = RegExp(r'^¡Hola(?:\s+\*[^*]+\*)?!\s*👋', multiLine: true);
-      final String newGreeting = cleanName.isEmpty || PdfGenerator.isInternalDraftCode(cleanName)
-          ? '¡Hola! 👋'
-          : '¡Hola *$cleanName*! 👋';
-      if (greetingRegex.hasMatch(currentText)) {
-        _messageCtrl.text = currentText.replaceFirst(greetingRegex, newGreeting);
-      }
-    } else {
-      _regenerateMessage();
-    }
-  }
-
-  void _regenerateMessage() {
-    if (_isManualEdit || _quotation == null) return;
-
-    final sb = StringBuffer();
-    final bool isSale = _saleData != null;
-    final bool isLoan = isSale && (_saleData!['origen_venta'] == 'prestamo_personal' || _saleData!['is_loan'] == true);
-
-    final rawName = _clientNameCtrl.text.trim();
-    final bool hasClient = rawName.isNotEmpty && !PdfGenerator.isInternalDraftCode(rawName);
-    final String greeting = hasClient ? "¡Hola *$rawName*! 👋" : "¡Hola! 👋";
-
-    sb.writeln(greeting);
-    sb.writeln("");
-
-    // 1. INTRODUCCIÓN SEGÚN ESTILO Y CONTEXTO
-    if (_config.customIntro != null && _config.customIntro!.trim().isNotEmpty) {
-      sb.writeln(_config.customIntro!.trim());
-    } else {
-      if (isLoan) {
-        switch (_config.style) {
-          case WhatsAppMessageStyle.commercial:
-            sb.writeln("Es un gusto saludarte. Te comparto el detalle formal del préstamo personal registrado:");
-            break;
-          case WhatsAppMessageStyle.wholesale:
-            sb.writeln("Estimados, les compartimos el detalle formal del financiamiento/préstamo comercial registrado:");
-            break;
-          case WhatsAppMessageStyle.school:
-            sb.writeln("Estimado apoderado/a, le compartimos el detalle del financiamiento registrado:");
-            break;
-          case WhatsAppMessageStyle.compact:
-            sb.writeln("Resumen de tu préstamo personal:");
-            break;
-          case WhatsAppMessageStyle.urgentOffer:
-            sb.writeln("Información y condiciones aprobadas de tu préstamo personal:");
-            break;
-          case WhatsAppMessageStyle.accountDebt:
-            sb.writeln("Recordatorio del estado actual de tu préstamo personal:");
-            break;
-          case WhatsAppMessageStyle.followUp:
-            sb.writeln("Espero que te encuentres muy bien. Te escribo para consultar si pudiste revisar los términos del préstamo personal:");
-            break;
-          case WhatsAppMessageStyle.deliveryReady:
-            sb.writeln("¡Buenas noticias! La documentación y desembolso de tu préstamo están listos para firma y entrega:");
-            break;
-        }
-      } else if (isSale) {
-        final double total = (_saleData!['monto_total'] ?? 0).toDouble();
-        final double paid = (_saleData!['monto_pagado'] ?? 0).toDouble();
-        final double debt = total - paid;
-        final bool isQuickSale = _saleData!['origen_venta'] == 'pos_rapido';
-
-        if (debt > 0.01) {
-          switch (_config.style) {
-            case WhatsAppMessageStyle.commercial:
-              sb.writeln("Muchas gracias por tu preferencia. A continuación, te comparto el comprobante y estado de tu compra:");
-              break;
-            case WhatsAppMessageStyle.wholesale:
-              sb.writeln("Estimados, muchas gracias por su compra al por mayor. A continuación, les compartimos el comprobante y saldo pendiente:");
-              break;
-            case WhatsAppMessageStyle.school:
-              sb.writeln("¡Hola! Muchas gracias por tu compra de útiles escolares. Te compartimos el comprobante y saldo pendiente:");
-              break;
-            case WhatsAppMessageStyle.compact:
-              sb.writeln("Resumen de compra y saldo pendiente:");
-              break;
-            case WhatsAppMessageStyle.urgentOffer:
-              sb.writeln("¡Gracias por tu compra! Aprovechamos para recordarte el detalle de tu pedido y saldo restante:");
-              break;
-            case WhatsAppMessageStyle.accountDebt:
-              sb.writeln("📌 *ESTADO DE CUENTA:* Te compartimos el balance actualizado de tu pedido y el saldo pendiente de abono:");
-              break;
-            case WhatsAppMessageStyle.followUp:
-              sb.writeln("Hola, paso a consultar si tienes alguna duda sobre tu pedido o si requieres coordinar el abono del saldo pendiente:");
-              break;
-            case WhatsAppMessageStyle.deliveryReady:
-              sb.writeln("📦 *¡Tu pedido está listo!* Puedes pasar a recogerlo a tienda o coordinar la entrega final del saldo restante:");
-              break;
-          }
-        } else {
-          switch (_config.style) {
-            case WhatsAppMessageStyle.commercial:
-              sb.writeln(isQuickSale
-                  ? "¡Muchas gracias por tu compra! Te adjunto el detalle de los productos que llevaste:"
-                  : "¡Gracias por confirmar tu pedido! Aquí tienes el comprobante detallado de tu compra cancelada:");
-              break;
-            case WhatsAppMessageStyle.wholesale:
-              sb.writeln("¡Muchas gracias por su preferencia comercial! Adjuntamos el comprobante de su compra mayorista 100% CANCELADA:");
-              break;
-            case WhatsAppMessageStyle.school:
-              sb.writeln("¡Muchas gracias por tu compra de útiles escolares! Tu pedido se encuentra 100% CANCELADO:");
-              break;
-            case WhatsAppMessageStyle.compact:
-              sb.writeln("Comprobante de compra cancelada:");
-              break;
-            case WhatsAppMessageStyle.urgentOffer:
-              sb.writeln("¡Felicidades por tu compra! Comprobante de los productos adquiridos con descuento:");
-              break;
-            case WhatsAppMessageStyle.accountDebt:
-              sb.writeln("Comprobante de operación: ¡Tu compra se encuentra 100% CANCELADA! ✅");
-              break;
-            case WhatsAppMessageStyle.followUp:
-              sb.writeln("¡Hola! Esperamos que estés disfrutando tu compra. Quedamos a tu entera disposición si necesitas algo más:");
-              break;
-            case WhatsAppMessageStyle.deliveryReady:
-              sb.writeln("📦 *¡Tu pedido está listo y 100% cancelado!* Ya puedes recogerlo o te lo enviamos según lo acordado:");
-              break;
-          }
-        }
-      } else {
-        // Cotización
-        switch (_config.style) {
-          case WhatsAppMessageStyle.commercial:
-            sb.writeln("Es un gusto saludarte. Aquí te envío la cotización detallada de los productos solicitados:");
-            break;
-          case WhatsAppMessageStyle.wholesale:
-            sb.writeln("Estimados, les compartimos la proforma comercial por volumen solicitada para su negocio:");
-            break;
-          case WhatsAppMessageStyle.school:
-            sb.writeln("¡Hola! Aquí te comparto la cotización detallada de la lista de útiles escolares solicitada:");
-            break;
-          case WhatsAppMessageStyle.compact:
-            sb.writeln("Resumen directo de tu cotización solicitada:");
-            break;
-          case WhatsAppMessageStyle.urgentOffer:
-            sb.writeln("🔥 ¡Aprovecha nuestros precios especiales! Aquí tienes tu cotización con descuentos exclusivos:");
-            break;
-          case WhatsAppMessageStyle.accountDebt:
-            sb.writeln("Te enviamos el presupuesto detallado para tu revisión y confirmación:");
-            break;
-          case WhatsAppMessageStyle.followUp:
-            sb.writeln("🤝 *Seguimiento de Cotización:* Quería consultar si tuviste oportunidad de revisar la propuesta o si deseas ajustar algún ítem:");
-            break;
-          case WhatsAppMessageStyle.deliveryReady:
-            sb.writeln("📦 *Productos listos para despacho:* Contamos con stock inmediato para preparar tu pedido en cuanto nos des tu visto bueno:");
-            break;
-        }
-      }
-    }
-    sb.writeln("");
-
-    // 2. SECCIÓN PRINCIPAL: ITEMS (O DETALLE DEL PRÉSTAMO CON PARIDAD CONTABLE)
-    if (isLoan) {
-      final double totalWithInterest = (_saleData!['monto_total'] ?? _quotation!.totalAmount).toDouble();
-      final double paid = (_saleData!['monto_pagado'] ?? 0.0).toDouble();
-      final double interestRate = (_saleData!['porcentaje_interes'] ?? 0.0).toDouble();
-      final double abonoInicial = (_saleData!['abono_inicial'] ?? 0.0).toDouble();
-
-      double moraTotal = (_saleData!['mora_total'] as num?)?.toDouble() ?? 0.0;
-      if (moraTotal <= 0 && _saleData!['cuotas'] != null) {
-        final list = _saleData!['cuotas'] as List;
-        moraTotal = list.fold(0.0, (acc, c) => acc + ((c['mora_monto'] as num?)?.toDouble() ?? 0.0));
-      }
-
-      // Regla de Oro: Proteger Capital e Interés Original ante recargos de mora
-      final double pureTotalWithInterest = (totalWithInterest - moraTotal) > 0 ? (totalWithInterest - moraTotal) : 0.0;
-      final double debtWithInterest = (pureTotalWithInterest - abonoInicial) > 0 ? (pureTotalWithInterest - abonoInicial) : 0.0;
-      final double debtBase = (interestRate > 0 && debtWithInterest > 0)
-          ? debtWithInterest / (1 + (interestRate / 100))
-          : debtWithInterest;
-      final double interestAmount = debtWithInterest - debtBase;
-      final double capitalNeto = abonoInicial + debtBase;
-      final double debt = totalWithInterest - paid > 0 ? totalWithInterest - paid : 0.0;
-
-      final String rateLabel = interestRate > 0 ? '${interestRate.toStringAsFixed(1).replaceAll('.0', '')}%' : '0%';
-      final String interestDisplay = interestAmount > 0.01 
-          ? "+ ${AppCurrency.format(interestAmount)}" 
-          : AppCurrency.format(0.0);
-
-      sb.writeln("🏦 *DETALLE DEL PRÉSTAMO*");
-      sb.writeln("▪ Capital Prestado: *${AppCurrency.format(capitalNeto)}*");
-      sb.writeln("▪ Interés Aplicado ($rateLabel): *$interestDisplay*");
-      if (moraTotal > 0.01) {
-        sb.writeln("▪ Recargo por Mora: *+ ${AppCurrency.format(moraTotal)}*");
-      }
-      sb.writeln("▪ Total a Devolver: *${AppCurrency.format(totalWithInterest)}*");
-
-      if (abonoInicial > 0.01) {
-        sb.writeln("▪ Abono Inicial: *${AppCurrency.format(abonoInicial)}*");
-      }
-      if (paid > 0.01) {
-        sb.writeln("▪ Monto Total Abonado: *${AppCurrency.format(paid)}* ✅");
-      }
-      if (debt > 0.01 && _config.showDebtInfo) {
-        sb.writeln("▪ *Saldo Pendiente por Pagar: ${AppCurrency.format(debt)}* ⚠️");
-      } else if (debt <= 0.01) {
-        sb.writeln("▪ Estado del Préstamo: *TOTALMENTE CANCELADO* ✅");
-      }
-      sb.writeln("");
-    } else {
-      if (_config.showClientData) {
-        final String? inst = _quotation?.institutionName;
-        final String student = _clientNameCtrl.text.trim();
-        final String? grade = _quotation?.gradeLevel;
-        if (_config.style == WhatsAppMessageStyle.wholesale) {
-          if (inst != null && inst.isNotEmpty) sb.writeln("🏢 *Negocio / RUC:* $inst");
-          if (student.isNotEmpty && !PdfGenerator.isInternalDraftCode(student)) sb.writeln("👤 *Contacto:* $student");
-          if ((inst != null && inst.isNotEmpty) || (student.isNotEmpty && !PdfGenerator.isInternalDraftCode(student))) sb.writeln("");
-        } else if (_config.style == WhatsAppMessageStyle.school) {
-          if (inst != null && inst.isNotEmpty) sb.writeln("🏫 *Colegio:* $inst");
-          if (student.isNotEmpty && !PdfGenerator.isInternalDraftCode(student)) sb.writeln("👦 *Alumno:* $student");
-          if (grade != null && grade.isNotEmpty) sb.writeln("📚 *Grado:* $grade");
-          if ((inst != null && inst.isNotEmpty) || (student.isNotEmpty && !PdfGenerator.isInternalDraftCode(student))) sb.writeln("");
-        } else {
-          if (student.isNotEmpty && !PdfGenerator.isInternalDraftCode(student)) {
-            sb.writeln("👤 *Cliente:* $student");
-            sb.writeln("");
-          }
-        }
-      }
-
-      String sectionTitle;
-      if (isSale) {
-        sectionTitle = "🛍️ *DETALLE DE TU COMPRA*";
-      } else {
-        switch (_config.style) {
-          case WhatsAppMessageStyle.wholesale:
-            sectionTitle = "📦 *DETALLE DE PEDIDO AL POR MAYOR*";
-            break;
-          case WhatsAppMessageStyle.school:
-            sectionTitle = "🎓 *LISTA DE ÚTILES ESCOLARES*";
-            break;
-          case WhatsAppMessageStyle.compact:
-            sectionTitle = "⚡ *RESUMEN DE PRODUCTOS*";
-            break;
-          default:
-            sectionTitle = "🛍️ *DETALLE DE PRODUCTOS*";
-            break;
-        }
-      }
-      sb.writeln(sectionTitle);
-
-      for (var item in _quotation!.items) {
-        final lineTotal = item.quantity * item.unitPriceApplied;
-        final hasDiscount = (item.originalUnitPrice - item.unitPriceApplied) > 0.01;
-
-        String name = (item.bundleId != null)
-            ? (item.productName ?? 'Paquete')
-            : (_config.showBrandPackage ? item.displayNameClean : (item.productName ?? item.displayNameClean));
-
-        final String unitPriceSuffix = _config.showUnitPrices
-            ? " — ${AppCurrency.format(item.unitPriceApplied)} c/u"
-            : "";
-
-        if (_config.style == WhatsAppMessageStyle.compact) {
-          String line = "▪ ${item.quantity}x $name";
-          if (_config.showSubtotals) {
-            line += " -> *${AppCurrency.format(lineTotal)}*";
-          }
-          sb.writeln(line);
-        } else {
-          String line = "▪ ${item.quantity}x $name$unitPriceSuffix";
-          if (_config.showSubtotals) {
-            line += " -> *${AppCurrency.format(lineTotal)}*";
-          }
-          if (item.bundleId != null && item.specificName != null && item.specificName!.isNotEmpty && item.specificName != "Paquete") {
-            line += "\n   _${item.specificName}_";
-          }
-          if (_config.showSavingsSection && _config.showDiscountDetail && hasDiscount) {
-            final savings = item.originalUnitPrice - item.unitPriceApplied;
-            line += "\n   └ _Ahorras: ${AppCurrency.format(savings)} c/u_";
-          }
-          sb.writeln(line);
-        }
-      }
-      sb.writeln("");
-    }
-
-    // 3. RESUMEN TOTAL / AHORRO / SALDO
-    if (_config.showTotalGlobal && !isLoan) {
-      double finalTotal = isSale ? (_saleData!['monto_total'] ?? 0).toDouble() : _quotation!.totalAmount;
-      final double finalSavings = isSale ? (_saleData!['descuento_aplicado'] ?? 0).toDouble() : _quotation!.totalSavings;
-
-      double moraTotalSale = 0.0;
-      if (isSale) {
-        moraTotalSale = (_saleData!['mora_total'] as num?)?.toDouble() ?? 0.0;
-        if (moraTotalSale <= 0 && _saleData!['cuotas'] != null) {
-          final list = _saleData!['cuotas'] as List;
-          moraTotalSale = list.fold(0.0, (acc, c) => acc + ((c['mora_monto'] as num?)?.toDouble() ?? 0.0));
-        }
-      }
-
-      sb.writeln("📊 *RESUMEN TOTAL*");
-      sb.writeln("▪ Importe Total: *${AppCurrency.format(finalTotal)}*");
-
-      if (_config.showSavingsSection && finalSavings > 0.01) {
-        if (_config.style == WhatsAppMessageStyle.urgentOffer) {
-          sb.writeln("▪ 🎉 *¡AHORRO ESPECIAL: ${AppCurrency.format(finalSavings)}!*");
-        } else {
-          sb.writeln("▪ Ahorro Total: *${AppCurrency.format(finalSavings)}* 🎉");
-        }
-      }
-
-      if (moraTotalSale > 0.01) {
-        sb.writeln("▪ Recargo por Mora: *+ ${AppCurrency.format(moraTotalSale)}*");
-      }
-
-      if (isSale) {
-        double paid = (_saleData!['monto_pagado'] ?? 0.0).toDouble();
-        double debt = finalTotal - paid;
-        if (debt < 0) debt = 0;
-
-        if (paid > 0.01) {
-          sb.writeln("▪ Abonado: *${AppCurrency.format(paid)}* ✅");
-        }
-        if (debt > 0.01 && _config.showDebtInfo) {
-          sb.writeln("▪ *Saldo Pendiente por Pagar: ${AppCurrency.format(debt)}* ⚠️");
-        }
-      }
-      sb.writeln("");
-    }
-
-    // 4. CRONOGRAMA DE CUOTAS (PARA PRÉSTAMOS O VENTAS CON CRÉDITO)
-    if ((isLoan || isSale) && _config.showInstallmentDetails) {
-      final List<dynamic>? cuotasRaw = _saleData?['cuotas'];
-      if (cuotasRaw != null && cuotasRaw.isNotEmpty) {
-        sb.writeln("📅 *CRONOGRAMA DE PAGOS* (${cuotasRaw.length} Cuotas)");
-
-        for (var c in cuotasRaw) {
-          final double cuotaMonto = (num.tryParse(c['monto'].toString()) ?? 0.0).toDouble();
-          final double cuotaPagado = (num.tryParse((c['monto_pagado'] ?? 0.0).toString()) ?? 0.0).toDouble();
-          final double saldoFalta = (cuotaMonto - cuotaPagado) > 0.001 ? (cuotaMonto - cuotaPagado) : 0.0;
-          final double moraMonto = (num.tryParse((c['mora_monto'] ?? 0.0).toString()) ?? 0.0).toDouble();
-          final double montoOriginal = (num.tryParse((c['monto_original'] ?? cuotaMonto).toString()) ?? cuotaMonto).toDouble();
-          final bool tieneMora = moraMonto > 0.01;
-          final bool pagado = c['estado'] == 'pagado' || (saldoFalta <= 0.01 && cuotaMonto > 0);
-
-          final dateInfo = CuotaDateHelper.evaluate(c['fecha_vencimiento']);
-          final int daysOverdue = dateInfo.daysOverdue;
-          final bool isVencida = !pagado && dateInfo.isPast;
-
-          final String amountText = tieneMora
-              ? "*${AppCurrency.format(cuotaMonto)}* (Base: ${AppCurrency.format(montoOriginal)} + Mora: ${AppCurrency.format(moraMonto)})"
-              : "*${AppCurrency.format(cuotaMonto)}*";
-
-          if (pagado) {
-            sb.writeln("✅ Cuota ${c['numero_cuota']}: $amountText (${dateInfo.fullLabel}) - *Pagada*");
-          } else if (isVencida) {
-            final String vencidaStatus = "- *Vencida (hace $daysOverdue ${daysOverdue == 1 ? 'día' : 'días'})*";
-            if (cuotaPagado > 0.01) {
-              sb.writeln("🔴 Cuota ${c['numero_cuota']}: $amountText (Abonó: ${AppCurrency.format(cuotaPagado)} • Falta: ${AppCurrency.format(saldoFalta)}) (${dateInfo.fullLabel}) $vencidaStatus");
-            } else {
-              sb.writeln("🔴 Cuota ${c['numero_cuota']}: $amountText (${dateInfo.fullLabel}) $vencidaStatus");
-            }
-          } else {
-            if (cuotaPagado > 0.01) {
-              sb.writeln("🟠 Cuota ${c['numero_cuota']}: $amountText (Abonó: ${AppCurrency.format(cuotaPagado)} • Falta: ${AppCurrency.format(saldoFalta)}) (${dateInfo.fullLabel}) - *Pago Parcial*");
-            } else if (dateInfo.isToday) {
-              sb.writeln("⏳ Cuota ${c['numero_cuota']}: $amountText (${dateInfo.fullLabel}) - *Vence Hoy*");
-            } else {
-              sb.writeln("⏳ Cuota ${c['numero_cuota']}: $amountText (${dateInfo.fullLabel}) - *Pendiente*");
-            }
-          }
-        }
-        sb.writeln("");
-      }
-    }
-
-    // 5. ESTADO DE ENTREGA
-    if (isSale && !isLoan && _config.showDeliveryInfo) {
-      final String deliveryStatus = _saleData!['estado_entrega'] ?? 'entregado';
-      if (deliveryStatus != 'entregado') {
-        sb.writeln("📦 *ESTADO DEL PEDIDO*");
-        sb.writeln("▪ Estado: *${deliveryStatus.toUpperCase().replaceAll('_', ' ')}*");
-        if (_saleData!['fecha_entrega'] != null) {
-          final dateFormatted = AppDateFormatter.ddMMyyyy.format(DateTime.parse(_saleData!['fecha_entrega']));
-          sb.writeln("▪ Entrega programada: $dateFormatted");
-        }
-        sb.writeln("");
-      }
-    }
-
-    // 6. VALIDEZ DE OFERTA EN COTIZACIÓN
-    if (!isSale && _config.includeValidity) {
-      if (_config.style == WhatsAppMessageStyle.urgentOffer) {
-        sb.writeln("⏳ *Promoción por tiempo limitado:* Precios válidos por 7 días calendario.");
-        sb.writeln("");
-      } else {
-        sb.writeln("⏳ *Validez:* Precios válidos por 7 días calendario.");
-        sb.writeln("");
-      }
-    }
-
-    // 7. MEDIOS DE PAGO
-    if (_config.showPaymentInfo) {
-      final paymentText = _bizPaymentCtrl.text.trim();
-      if (isLoan) {
-        final double totalDebt = (_saleData!['monto_total'] ?? 0).toDouble();
-        final double paid = (_saleData!['monto_pagado'] ?? 0).toDouble();
-        if ((totalDebt - paid) > 0.01 && paymentText.isNotEmpty) {
-          sb.writeln("💳 *CUENTAS DE ABONO* (Para amortizar o cancelar cuotas)");
-          sb.writeln(paymentText);
-          sb.writeln("");
-        }
-      } else if (isSale) {
-        final double total = (_saleData!['monto_total'] ?? 0).toDouble();
-        final double paid = (_saleData!['monto_pagado'] ?? 0).toDouble();
-
-        if ((total - paid) > 0.01 && paymentText.isNotEmpty) {
-          sb.writeln("💳 *MEDIOS DE PAGO* (Para cancelar saldo)");
-          sb.writeln(paymentText);
-          sb.writeln("");
-        } else if ((total - paid) <= 0.01 && _saleData!['metodo_pago'] != null) {
-          sb.writeln("💳 *PAGADO MEDIANTE:* ${_saleData!['metodo_pago'].toString().toUpperCase()}");
-          sb.writeln("");
-        }
-      } else {
-        sb.writeln("💳 *MEDIOS DE PAGO*");
-        sb.writeln(paymentText.isNotEmpty ? paymentText : "Aceptamos efectivo, transferencias y pagos digitales (Yape / Plin).");
-        sb.writeln("");
-      }
-    }
-
-    // 8. INFORMACIÓN DEL NEGOCIO
-    if (_config.showBusinessInfo && _config.style != WhatsAppMessageStyle.compact) {
-      final authProv = Provider.of<AuthProvider>(context, listen: false);
-      final bizName = authProv.businessName;
-
-      sb.writeln("🏢 *Visítanos en $bizName*");
-
-      if (_config.includeShopAddress && _bizAddressCtrl.text.isNotEmpty) {
-        sb.writeln("📍 Dirección: ${_bizAddressCtrl.text}");
-      }
-
-      if (_config.includeShopAddress && _bizLat != null && _bizLng != null) {
-        final String mapLink = "https://www.google.com/maps/search/?api=1&query=$_bizLat,$_bizLng";
-        sb.writeln("🗺️ Ver en Mapa: $mapLink");
-      }
-
-      if (_config.includeShopRuc && _bizRucCtrl.text.isNotEmpty) {
-        sb.writeln("📄 RUC: ${_bizRucCtrl.text}");
-      }
-      if (_config.includeOwnerPhone && _bizPhoneCtrl.text.isNotEmpty) {
-        sb.writeln("📞 Contacto: ${_bizPhoneCtrl.text}");
-      }
-      sb.writeln("");
-    }
-
-    // 9. DESPEDIDA / CIERRE
-    if (_config.customClosing != null && _config.customClosing!.trim().isNotEmpty) {
-      sb.writeln(_config.customClosing!.trim());
-    } else {
-      if (!isSale) {
-        if (_config.style == WhatsAppMessageStyle.urgentOffer) {
-          sb.writeln("¡No dejes pasar esta oportunidad! Confírmanos tu pedido para reservarte el stock.");
-        } else {
-          sb.writeln("¡Quedamos atentos a tu confirmación!");
-        }
-      } else if (isLoan) {
-        sb.writeln("Cualquier duda o consulta sobre tu estado de pagos, contáctanos.");
-      }
-    }
-
-    _messageCtrl.text = sb.toString();
-    _lastCommittedText = _messageCtrl.text;
-  }
-
+  Future<void> _loadData();
+  void _onMessageEdited(String newText);
+  void _onClientDataChanged();
+
+  void _regenerateMessage();
+  void _appendLoanDetailSection(StringBuffer sb);
+  void _appendTotalSummarySection(StringBuffer sb, {required bool isSale});
+  void _appendInstallmentsScheduleSection(StringBuffer sb);
+  void _appendDeliveryValidityPaymentBusinessClosing(
+    StringBuffer sb, {
+    required bool isSale,
+    required bool isLoan,
+  });
+
+  Future<void> _hydrateProductImages();
+  Future<void> _sharePdfAndMessage();
+  Future<void> _executeSendProcess();
+}
+
+class _WhatsAppPreviewScreenState extends _WhatsAppPreviewScreenStateBase
+    with
+        _WhatsAppStateAndHistoryMixin,
+        _WhatsAppMessageFinancialMixin,
+        _WhatsAppMessageBuilderMixin,
+        _WhatsAppActionsAndGpsMixin,
+        _WhatsAppPdfAndSendMixin {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -831,26 +168,11 @@ class _WhatsAppPreviewScreenState extends State<WhatsAppPreviewScreen> {
         body: const Center(child: CircularProgressIndicator()),
       );
     }
+
     final bool isSale = _saleData != null;
-    final biz = authProv.currentBusiness;
-    final List<String> changedBusinessFields = [];
-    if (biz != null) {
-      if (_bizPhoneCtrl.text.trim() != _originalBizPhone) {
-        changedBusinessFields.add("Teléfono");
-      }
-      if (_bizRucCtrl.text.trim() != _originalBizRuc) {
-        changedBusinessFields.add("RUC");
-      }
-      final bool isGpsChanged = _bizLat != _originalBizLat || _bizLng != _originalBizLng;
-      if (_bizAddressCtrl.text.trim() != _originalBizAddress || isGpsChanged) {
-        changedBusinessFields.add("Dirección");
-      }
-      final normPayment = _normalizePaymentText(_bizPaymentCtrl.text);
-      final normOrigPayment = _normalizePaymentText(_originalBizPayment);
-      if (normPayment != normOrigPayment) {
-        changedBusinessFields.add("Cuentas de pago");
-      }
-    }
+    final changedBusinessFields = _computeChangedBusinessFields(
+      authProv.currentBusiness,
+    );
     final bool hasBusinessChanges = changedBusinessFields.isNotEmpty;
     if (!hasBusinessChanges && _config.updateBusinessData) {
       _config.updateBusinessData = false;
@@ -858,62 +180,7 @@ class _WhatsAppPreviewScreenState extends State<WhatsAppPreviewScreen> {
 
     return Scaffold(
       backgroundColor: bgColor,
-      appBar: AppBar(
-        titleSpacing: 0,
-        title: const FittedBox(
-          fit: BoxFit.scaleDown,
-          alignment: Alignment.centerLeft,
-          child: Text(
-            "Editor WhatsApp",
-            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20),
-          ),
-        ),
-        backgroundColor: isDark ? const Color(0xFF142C23) : const Color(0xFF00A884),
-        foregroundColor: Colors.white,
-        elevation: 0,
-        actions: [
-          const InfoTooltipButton(
-            iconColor: Colors.white,
-            constraints: BoxConstraints(minWidth: 32, minHeight: 32),
-            padding: EdgeInsets.all(6),
-            title: "Guía del Editor WhatsApp",
-            description: "Personaliza mensajes de cotización, comprobantes de venta o recordatorios de cuotas con estilos comerciales y vista previa realista.",
-            tips: [
-              InfoTip(
-                icon: Icons.style_rounded,
-                text: "Elige entre 6 estilos comerciales (Formal, Ejecutivo, Oferta Urgente y más) con 1 solo toque.",
-              ),
-              InfoTip(
-                icon: Icons.tune_rounded,
-                text: "Activa o oculta subtotales, ahorros, cronograma de pagos, cuentas bancarias y datos del negocio al instante.",
-              ),
-              InfoTip(
-                icon: Icons.visibility_rounded,
-                text: "Toca el botón de ayuda (i) en las tarjetas para previsualizar el bloque exacto generado con tus datos.",
-              ),
-              InfoTip(
-                icon: Icons.history_rounded,
-                text: "Edita libremente el mensaje con historial deshacer/rehacer ilimitado y envío directo al contacto.",
-              ),
-              InfoTip(
-                icon: Icons.chat_bubble_outline_rounded,
-                text: "Verifica la burbuja de chat realista y confirma la actualización del teléfono o negocio antes de enviar.",
-              ),
-            ],
-          ),
-          IconButton(
-            icon: const Icon(Icons.restart_alt, size: 24),
-            tooltip: "Restaurar Mensaje Original",
-            visualDensity: VisualDensity.compact,
-            onPressed: () {
-              _recordUndoSnapshot();
-              setState(() => _isManualEdit = false);
-              _regenerateMessage();
-              CustomSnackBar.show(context, message: "Mensaje restaurado a su plantilla original", isError: false);
-            },
-          )
-        ],
-      ),
+      appBar: _buildAppBar(isDark),
       body: GestureDetector(
         behavior: HitTestBehavior.translucent,
         onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
@@ -932,26 +199,12 @@ class _WhatsAppPreviewScreenState extends State<WhatsAppPreviewScreen> {
                       originalClient: _originalClient,
                       updateClientData: _config.updateClientData,
                       onSearchTap: () => _showClientSelectorModal(isDark),
-                      onRevertTap: () {
-                        setState(() {
-                          _isUsingSelectedClient = false;
-                          _selectedClient = null;
-                          if (_originalClient != null) {
-                            _clientNameCtrl.text = PdfGenerator.cleanClientDisplayName(_originalClient!.fullName);
-                            _clientPhoneCtrl.text = _originalClient!.phone;
-                          } else {
-                            final raw = _saleData?['cliente_nombre'] ?? _quotation?.clientName ?? "";
-                            _clientNameCtrl.text = PdfGenerator.cleanClientDisplayName(raw);
-                            _clientPhoneCtrl.clear();
-                          }
-                          _onClientDataChanged();
-                        });
-                      },
-                      onUpdateDataChanged: (v) => setState(() => _config.updateClientData = v),
+                      onRevertTap: _revertToOriginalClient,
+                      onUpdateDataChanged: (v) =>
+                          setState(() => _config.updateClientData = v),
                       onDataChanged: _onClientDataChanged,
                     ),
                     const SizedBox(height: 16),
-
                     WaConfigSection(
                       config: _config,
                       isSale: isSale,
@@ -964,7 +217,6 @@ class _WhatsAppPreviewScreenState extends State<WhatsAppPreviewScreen> {
                       onChanged: () => setState(() => _regenerateMessage()),
                     ),
                     const SizedBox(height: 16),
-
                     WaBusinessSection(
                       phoneCtrl: _bizPhoneCtrl,
                       rucCtrl: _bizRucCtrl,
@@ -976,371 +228,221 @@ class _WhatsAppPreviewScreenState extends State<WhatsAppPreviewScreen> {
                       changedBusinessFields: changedBusinessFields,
                       sessionPaymentMemory: _sessionPaymentMemory,
                       onGpsTap: _fillCurrentLocation,
-                      onUpdateDataChanged: (v) => setState(() => _config.updateBusinessData = v),
+                      onUpdateDataChanged: (v) =>
+                          setState(() => _config.updateBusinessData = v),
                       onDataChanged: () => setState(() => _regenerateMessage()),
                     ),
                     const SizedBox(height: 20),
-
-                    WaMessageEditor(
-                      isDark: isDark,
-                      isManualEdit: _isManualEdit,
-                      messageCtrl: _messageCtrl,
-                      config: _config,
-                      paymentAccountsText: _bizPaymentCtrl.text,
-                      canUndo: _undoStack.isNotEmpty,
-                      canRedo: _redoStack.isNotEmpty,
-                      onUndo: _undoStack.isNotEmpty ? _handleUndo : null,
-                      onRedo: _redoStack.isNotEmpty ? _handleRedo : null,
-                      onBeforeChange: () => _recordUndoSnapshot(),
-                      onStyleChanged: (newStyle) {
-                        _recordUndoSnapshot();
-                        setState(() {
-                          _config.applyTemplateStyle(newStyle);
-                          _isManualEdit = false;
-                          _regenerateMessage();
-                        });
-                      },
-                      onOptionToggled: (optionKey, newValue) {
-                        _recordUndoSnapshot();
-                        setState(() {
-                          switch (optionKey) {
-                            case 'unit_prices':
-                              _config.showUnitPrices = newValue;
-                              break;
-                            case 'brand_package':
-                              _config.showBrandPackage = newValue;
-                              break;
-                            case 'client_data':
-                              _config.showClientData = newValue;
-                              break;
-                            case 'validity':
-                              _config.includeValidity = newValue;
-                              break;
-                            case 'delivery':
-                              _config.includeDelivery = newValue;
-                              break;
-                            case 'payment':
-                              _config.showPaymentInfo = newValue;
-                              break;
-                          }
-                          _isManualEdit = false;
-                          _regenerateMessage();
-                        });
-                      },
-                      onRegenerateAuto: () {
-                        _recordUndoSnapshot();
-                        setState(() {
-                          _isManualEdit = false;
-                          _regenerateMessage();
-                        });
-                        CustomSnackBar.show(context, message: "Plantilla regenerada automáticamente", isError: false);
-                      },
-                      onChanged: _onMessageEdited,
-                    ),
+                    _buildMessageEditor(isDark),
                     const SizedBox(height: 80),
                   ],
                 ),
               ),
             ),
-
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-              decoration: BoxDecoration(
-                color: Theme.of(context).cardTheme.color,
-                boxShadow: [
-                  if (!isDark)
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.05),
-                      blurRadius: 15,
-                      offset: const Offset(0, -10),
-                    )
-                ],
-              ),
-              child: SafeArea(
-                child: SizedBox(
-                  width: double.infinity,
-                  height: 54,
-                  child: ElevatedButton.icon(
-                    onPressed: () => _showFinalPreviewModal(isDark),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF00A884),
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                      elevation: isDark ? 0 : 4,
-                    ),
-                    icon: const Icon(Icons.remove_red_eye, size: 22),
-                    label: const Text(
-                      "VISUALIZAR MENSAJE FINAL",
-                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, letterSpacing: 0.5),
-                    ),
-                  ),
-                ),
-              ),
-            ),
+            _buildBottomPreviewButton(context, isDark),
           ],
         ),
       ),
     );
   }
 
-  void _showClientSelectorModal(bool isDark) {
-    ClientSearchModal.show(
-      context,
-      onClientSelected: (client) {
-        setState(() {
-          _selectedClient = client;
-          _isUsingSelectedClient = true;
-          _clientNameCtrl.text = PdfGenerator.cleanClientDisplayName(client.fullName);
-          _clientPhoneCtrl.text = client.phone;
-          _onClientDataChanged();
-        });
-      },
+  PreferredSizeWidget _buildAppBar(bool isDark) {
+    return AppBar(
+      titleSpacing: 0,
+      actionsPadding: EdgeInsets.zero,
+      title: const FittedBox(
+        fit: BoxFit.scaleDown,
+        alignment: Alignment.centerLeft,
+        child: Text(
+          "Editor WhatsApp",
+          maxLines: 1,
+          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20),
+        ),
+      ),
+      backgroundColor: isDark
+          ? const Color(0xFF142C23)
+          : const Color(0xFF00A884),
+      foregroundColor: Colors.white,
+      elevation: 0,
+      actions: [
+        const InfoTooltipButton(
+          iconColor: Colors.white,
+          constraints: BoxConstraints(minWidth: 32, minHeight: 32),
+          padding: EdgeInsets.all(6),
+          title: "Guía del Editor WhatsApp",
+          description:
+              "Personaliza mensajes de cotización, comprobantes de venta o recordatorios de cuotas con estilos comerciales y vista previa realista.",
+          tips: [
+            InfoTip(
+              icon: Icons.style_rounded,
+              text:
+                  "Elige entre 6 estilos comerciales (Formal, Ejecutivo, Oferta Urgente y más) con 1 solo toque.",
+            ),
+            InfoTip(
+              icon: Icons.tune_rounded,
+              text:
+                  "Activa o oculta subtotales, ahorros, cronograma de pagos, cuentas bancarias y datos del negocio al instante.",
+            ),
+            InfoTip(
+              icon: Icons.visibility_rounded,
+              text:
+                  "Toca el botón de ayuda (i) en las tarjetas para previsualizar el bloque exacto generado con tus datos.",
+            ),
+            InfoTip(
+              icon: Icons.history_rounded,
+              text:
+                  "Edita libremente el mensaje con historial deshacer/rehacer ilimitado y envío directo al contacto.",
+            ),
+            InfoTip(
+              icon: Icons.chat_bubble_outline_rounded,
+              text:
+                  "Verifica la burbuja de chat realista y confirma la actualización del teléfono o negocio antes de enviar.",
+            ),
+          ],
+        ),
+        IconButton(
+          icon: const Icon(Icons.restart_alt, size: 24),
+          tooltip: "Restaurar Mensaje Original",
+          visualDensity: VisualDensity.compact,
+          onPressed: () {
+            _recordUndoSnapshot();
+            setState(() => _isManualEdit = false);
+            _regenerateMessage();
+            AppFeedbackHelper.showSuccess(
+              context,
+              "Mensaje restaurado a su plantilla original",
+            );
+          },
+        ),
+      ],
     );
   }
 
-  Future<void> _fillCurrentLocation() async {
-    setState(() => _isGpsLoading = true);
-    try {
-      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
-      if (!serviceEnabled) throw Exception("El GPS está desactivado. Actívalo e intenta de nuevo.");
-
-      LocationPermission permission = await Geolocator.checkPermission();
-      if (permission == LocationPermission.denied) {
-        permission = await Geolocator.requestPermission();
-        if (permission == LocationPermission.denied) throw Exception("Permiso de ubicación denegado.");
+  void _revertToOriginalClient() {
+    setState(() {
+      _isUsingSelectedClient = false;
+      _selectedClient = null;
+      if (_originalClient != null) {
+        _clientNameCtrl.text = PdfGenerator.cleanClientDisplayName(
+          _originalClient!.fullName,
+        );
+        _clientPhoneCtrl.text = _originalClient!.phone;
+      } else {
+        final raw =
+            _saleData?['cliente_nombre'] ?? _quotation?.clientName ?? "";
+        _clientNameCtrl.text = PdfGenerator.cleanClientDisplayName(raw);
+        _clientPhoneCtrl.clear();
       }
-      if (permission == LocationPermission.deniedForever) {
-        throw Exception("Permiso denegado permanentemente. Habilítalo en configuración.");
-      }
+      _onClientDataChanged();
+    });
+  }
 
-      final Position position = await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(accuracy: LocationAccuracy.high),
-      );
-
-      if (mounted) {
+  Widget _buildMessageEditor(bool isDark) {
+    return WaMessageEditor(
+      isDark: isDark,
+      isManualEdit: _isManualEdit,
+      messageCtrl: _messageCtrl,
+      config: _config,
+      paymentAccountsText: _bizPaymentCtrl.text,
+      canUndo: _undoStack.isNotEmpty,
+      canRedo: _redoStack.isNotEmpty,
+      onUndo: _undoStack.isNotEmpty ? _handleUndo : null,
+      onRedo: _redoStack.isNotEmpty ? _handleRedo : null,
+      onBeforeChange: () => _recordUndoSnapshot(),
+      onStyleChanged: (newStyle) {
+        _recordUndoSnapshot();
         setState(() {
-          _bizLat = position.latitude;
-          _bizLng = position.longitude;
+          _config.applyTemplateStyle(newStyle);
+          _isManualEdit = false;
           _regenerateMessage();
         });
-        CustomSnackBar.show(context, message: "Ubicación agregada con éxito", isError: false);
-      }
-    } catch (e) {
-      if (mounted) {
-        CustomSnackBar.show(
+      },
+      onOptionToggled: (optionKey, newValue) {
+        _recordUndoSnapshot();
+        setState(() {
+          switch (optionKey) {
+            case 'unit_prices':
+              _config.showUnitPrices = newValue;
+              break;
+            case 'brand_package':
+              _config.showBrandPackage = newValue;
+              break;
+            case 'client_data':
+              _config.showClientData = newValue;
+              break;
+            case 'validity':
+              _config.includeValidity = newValue;
+              break;
+            case 'delivery':
+              _config.includeDelivery = newValue;
+              break;
+            case 'payment':
+              _config.showPaymentInfo = newValue;
+              break;
+          }
+          _isManualEdit = false;
+          _regenerateMessage();
+        });
+      },
+      onRegenerateAuto: () {
+        _recordUndoSnapshot();
+        setState(() {
+          _isManualEdit = false;
+          _regenerateMessage();
+        });
+        AppFeedbackHelper.showSuccess(
           context,
-          message: e.toString().replaceAll("Exception:", "").trim(),
-          isError: true,
+          "Plantilla regenerada automáticamente",
         );
-      }
-    } finally {
-      if (mounted) setState(() => _isGpsLoading = false);
-    }
+      },
+      onChanged: _onMessageEdited,
+    );
   }
 
-  void _showFinalPreviewModal(bool isDark) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      enableDrag: false, // 🛡️ Blindaje total contra intercepción de gestos verticales del scroll
-      backgroundColor: Colors.transparent,
-      builder: (ctx) => WaFinalPreviewModal(
-        isDark: isDark,
-        phone: _clientPhoneCtrl.text,
-        messageCtrl: _messageCtrl,
-        onMessageChanged: (text) {
-          _onMessageEdited(text);
-        },
-        onSend: () {
-          Navigator.pop(ctx);
-          _executeSendProcess();
-        },
-        onSharePdfAndMessage: _quotation != null ? () {
-          Navigator.pop(ctx);
-          _sharePdfAndMessage();
-        } : null,
+  Widget _buildBottomPreviewButton(BuildContext context, bool isDark) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+      decoration: BoxDecoration(
+        color: Theme.of(context).cardTheme.color,
+        boxShadow: [
+          if (!isDark)
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.05),
+              blurRadius: 15,
+              offset: const Offset(0, -10),
+            ),
+        ],
+      ),
+      child: SafeArea(
+        child: SizedBox(
+          width: double.infinity,
+          height: 54,
+          child: ElevatedButton.icon(
+            onPressed: () => _showFinalPreviewModal(isDark),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF00A884),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14),
+              ),
+              elevation: isDark ? 0 : 4,
+            ),
+            icon: const Icon(Icons.remove_red_eye, size: 22),
+            label: const FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(
+                "VISUALIZAR MENSAJE FINAL",
+                maxLines: 1,
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16,
+                  letterSpacing: 0.5,
+                ),
+              ),
+            ),
+          ),
+        ),
       ),
     );
-  }
-
-  /// Ejecuta la persistencia de datos del negocio y cliente si el usuario marcó las casillas correspondientes
-  Future<void> _persistPendingDataIfRequested() async {
-    final authProv = Provider.of<AuthProvider>(context, listen: false);
-    final clientService = ClientService();
-    bool savingError = false;
-
-    if (authProv.activeBusinessId == null || authProv.activeUserId == null) {
-      return;
-    }
-
-    if (_config.updateBusinessData) {
-      try {
-        bool showAddress = true;
-        bool showRuc = true;
-
-        final biz = authProv.currentBusiness;
-        if (biz != null && biz.printerConfig != null && biz.printerConfig!.isNotEmpty) {
-          try {
-            final Map<String, dynamic> prefs = json.decode(biz.printerConfig!);
-            showAddress = prefs['show_address'] ?? true;
-            showRuc = prefs['show_ruc'] ?? true;
-          } catch (_) {}
-        }
-
-        await authProv.updateBusinessProfile(
-          authProv.businessName,
-          _bizRucCtrl.text,
-          _bizAddressCtrl.text,
-          _bizPaymentCtrl.text,
-          _bizLat,
-          _bizLng,
-          showAddress,
-          showRuc,
-        );
-
-        // 🛡️ Directiva 4: Actualización atómica del teléfono del titular en usuarios y AuthProvider
-        if (authProv.user != null && _bizPhoneCtrl.text.trim().isNotEmpty) {
-          await authProv.updateUserProfile(
-            authProv.user!.fullName,
-            _bizPhoneCtrl.text.trim(),
-            email: authProv.user!.email,
-          );
-        }
-      } catch (e) {
-        savingError = true;
-      }
-    }
-
-    final cleanPhone = _clientPhoneCtrl.text.replaceAll(RegExp(r'\D'), '');
-
-    if (_config.updateClientData && _clientNameCtrl.text.trim().isNotEmpty) {
-      try {
-        final clientData = {
-          'nombre_completo': _clientNameCtrl.text.trim(),
-          'telefono': cleanPhone,
-        };
-        if (_isUsingSelectedClient && _selectedClient != null) {
-          await clientService.updateClient(_selectedClient!.id, clientData);
-        } else if (_originalClient != null && !_isUsingSelectedClient) {
-          await clientService.updateClient(_originalClient!.id, clientData);
-        } else {
-          await clientService.createClient(
-            clientData,
-            authProv.activeBusinessId!,
-            authProv.activeUserId!,
-          );
-        }
-      } catch (e) {
-        savingError = true;
-      }
-    }
-
-    if (savingError) {
-      if (mounted) CustomSnackBar.show(context, message: "Datos guardados con advertencias", isError: true);
-    } else if ((_config.updateBusinessData || _config.updateClientData) && mounted) {
-      CustomSnackBar.show(context, message: "Datos actualizados correctamente", isError: false);
-    }
-  }
-
-  /// Sincronización Total de Compartir PDF + Texto con hidratación de imágenes y preferencias de la Parte 1
-  Future<void> _sharePdfAndMessage() async {
-    if (_quotation == null) return;
-    try {
-      // Requisito 2: Ejecución de guardar datos pendientes antes de compartir
-      await _persistPendingDataIfRequested();
-      if (!mounted) return;
-
-      final authProv = Provider.of<AuthProvider>(context, listen: false);
-      final bool isLoan = _currentContextKey == 'loan';
-
-      final initialPdfConfig = PdfConfig(
-        documentTitle: isLoan
-            ? "COMPROBANTE DE PRÉSTAMO"
-            : (_saleData != null ? "COMPROBANTE DE PAGO" : "COTIZACIÓN"),
-        customClientName: _clientNameCtrl.text.trim().isNotEmpty ? _clientNameCtrl.text.trim() : null,
-        showTransactionDetails: !isLoan,
-        showInstallments: isLoan || (_saleData != null && _saleData!['cuotas'] != null),
-      );
-
-      // Requisito 1.1: Aplicar configuración predeterminada guardada por el usuario en la Parte 1
-      final finalPdfConfig = await PdfPreferencesService.applySavedPreferences(initialPdfConfig);
-
-      // Requisito 1.2: Si includeImages está activo, hidratar fotos desde SQLite
-      if (finalPdfConfig.showImages) {
-        await _hydrateProductImages();
-      }
-
-      // Requisito 1.3: Sincronizar negocio y cuentas editadas en pantalla
-      UserModel? effectiveOwner = authProv.user;
-      final currentBiz = authProv.currentBusiness;
-      if (effectiveOwner != null && currentBiz != null) {
-        final updatedBiz = BusinessModel(
-          id: currentBiz.id,
-          commercialName: currentBiz.commercialName,
-          ruc: _bizRucCtrl.text.isNotEmpty ? _bizRucCtrl.text : currentBiz.ruc,
-          address: _bizAddressCtrl.text.isNotEmpty ? _bizAddressCtrl.text : currentBiz.address,
-          logoUrl: currentBiz.logoUrl,
-          printerConfig: currentBiz.printerConfig,
-          paymentInfo: _bizPaymentCtrl.text.isNotEmpty ? _bizPaymentCtrl.text : currentBiz.paymentInfo,
-          moneda: currentBiz.moneda,
-          latitud: _bizLat ?? currentBiz.latitud,
-          longitud: _bizLng ?? currentBiz.longitud,
-        );
-        effectiveOwner = UserModel(
-          id: effectiveOwner.id,
-          fullName: effectiveOwner.fullName,
-          phone: _bizPhoneCtrl.text.isNotEmpty ? _bizPhoneCtrl.text : effectiveOwner.phone,
-          email: effectiveOwner.email,
-          isActive: effectiveOwner.isActive,
-          codigoUnicoUsuario: effectiveOwner.codigoUnicoUsuario,
-          business: updatedBiz,
-        );
-      }
-
-      final pdfBytes = await PdfGenerator.generatePdf(
-        quotation: _quotation!,
-        ownerInfo: effectiveOwner,
-        config: finalPdfConfig,
-        saleData: _saleData,
-      );
-
-      final tempDir = await getTemporaryDirectory();
-      final fileName = "MochilaLista_${_quotation!.id}.pdf";
-      final file = File('${tempDir.path}/$fileName');
-      await file.writeAsBytes(pdfBytes, flush: true);
-
-      // ignore: deprecated_member_use
-      await Share.shareXFiles(
-        [XFile(file.path)],
-        text: _messageCtrl.text,
-      );
-    } catch (e) {
-      debugPrint("Error sharing PDF and WA message: $e");
-      if (mounted) {
-        CustomSnackBar.show(context, message: "Error al compartir PDF: $e", isError: true);
-      }
-    }
-  }
-
-  Future<void> _executeSendProcess() async {
-    // Requisito 2: Guardar datos pendientes antes de abrir WhatsApp
-    await _persistPendingDataIfRequested();
-    if (!mounted) return;
-
-    final Uri url = WhatsAppUriBuilder.buildSendUri(
-      phone: _clientPhoneCtrl.text,
-      message: _messageCtrl.text,
-    );
-
-    try {
-      if (await canLaunchUrl(url)) {
-        await launchUrl(url, mode: LaunchMode.externalApplication);
-      } else {
-        if (mounted) CustomSnackBar.show(context, message: "No se pudo abrir WhatsApp", isError: true);
-      }
-    } catch (e) {
-      debugPrint("Error launching WA: $e");
-    }
   }
 }

@@ -304,6 +304,7 @@ class WaConfigSection extends StatelessWidget {
                 Icon(Icons.tune, color: isDark ? const Color(0xFF00C49F) : const Color(0xFF00A884), size: 22),
                 const SizedBox(width: 8),
                 Expanded(
+                  flex: 3,
                   child: Text(
                     "Personalizar Mensaje",
                     style: TextStyle(
@@ -313,26 +314,34 @@ class WaConfigSection extends StatelessWidget {
                     ),
                   ),
                 ),
-                TextButton.icon(
-                  onPressed: () {
-                    WaCustomTextsModal.show(
-                      context,
-                      config: config,
-                      contextKey: contextKey,
-                      isDark: isDark,
-                      onSaved: (intro, closing) {
-                        onChanged();
+                const SizedBox(width: 6),
+                Flexible(
+                  flex: 2,
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerRight,
+                    child: TextButton.icon(
+                      onPressed: () {
+                        WaCustomTextsModal.show(
+                          context,
+                          config: config,
+                          contextKey: contextKey,
+                          isDark: isDark,
+                          onSaved: (intro, closing) {
+                            onChanged();
+                          },
+                        );
                       },
-                    );
-                  },
-                  icon: const Icon(Icons.edit_note, size: 18, color: Color(0xFF00A884)),
-                  label: const Text(
-                    "Intro/Firma",
-                    style: TextStyle(color: Color(0xFF00A884), fontWeight: FontWeight.bold, fontSize: 13),
-                  ),
-                  style: TextButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    visualDensity: VisualDensity.compact,
+                      icon: const Icon(Icons.edit_note, size: 18, color: Color(0xFF00A884)),
+                      label: const Text(
+                        "Intro/Firma",
+                        style: TextStyle(color: Color(0xFF00A884), fontWeight: FontWeight.bold, fontSize: 13),
+                      ),
+                      style: TextButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        visualDensity: VisualDensity.compact,
+                      ),
+                    ),
                   ),
                 ),
               ],
@@ -368,11 +377,12 @@ class WaConfigSection extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Expanded(
+                  flex: 3,
                   child: Text(
                     config.customIntro != null || config.customClosing != null
                         ? "✨ Frase personalizada activa"
                         : "Plantilla original activa",
-                    maxLines: 1,
+                    maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       fontSize: 12,
@@ -384,33 +394,41 @@ class WaConfigSection extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: 8),
-                InkWell(
-                  onTap: () async {
-                    await WhatsAppPreferencesService.saveDefaultConfig(config, contextKey: contextKey);
-                    if (context.mounted) {
-                      CustomSnackBar.show(
-                        context,
-                        message: "Configuración guardada por defecto",
-                        isError: false,
-                      );
-                    }
-                  },
-                  borderRadius: BorderRadius.circular(8),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    child: Row(
-                      children: [
-                        Icon(Icons.save_outlined, size: 16, color: isDark ? Colors.blue[300] : Colors.blue[700]),
-                        const SizedBox(width: 4),
-                        Text(
-                          "Guardar por defecto",
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold,
-                            color: isDark ? Colors.blue[300] : Colors.blue[700],
-                          ),
+                Flexible(
+                  flex: 2,
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerRight,
+                    child: InkWell(
+                      onTap: () async {
+                        await WhatsAppPreferencesService.saveDefaultConfig(config, contextKey: contextKey);
+                        if (context.mounted) {
+                          CustomSnackBar.show(
+                            context,
+                            message: "Configuración guardada por defecto",
+                            isError: false,
+                          );
+                        }
+                      },
+                      borderRadius: BorderRadius.circular(8),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.save_outlined, size: 16, color: isDark ? Colors.blue[300] : Colors.blue[700]),
+                            const SizedBox(width: 4),
+                            Text(
+                              "Guardar por defecto",
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                                color: isDark ? Colors.blue[300] : Colors.blue[700],
+                              ),
+                            ),
+                          ],
                         ),
-                      ],
+                      ),
                     ),
                   ),
                 ),
