@@ -1,18 +1,22 @@
-import 'dart:io';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:multi_split_view/multi_split_view.dart';
 
-import 'package:app_movil/features/smart_quotation/screens/matching_screen.dart';
-import 'package:app_movil/features/smart_quotation/providers/matching_provider.dart'; 
 import 'package:app_movil/core/providers/auth_provider.dart';
-import 'package:app_movil/features/smart_quotation/providers/smart_quotation_provider.dart';
-import 'package:app_movil/features/smart_quotation/models/extracted_list_model.dart';
-import 'package:app_movil/features/smart_quotation/widgets/extraction/quotation_confirmation_modal.dart';
+import 'package:app_movil/core/utils/app_feedback_helper.dart';
 import 'package:app_movil/core/widgets/universal_image.dart';
+import 'package:app_movil/features/smart_quotation/models/extracted_list_model.dart';
+import 'package:app_movil/features/smart_quotation/providers/matching_provider.dart';
+import 'package:app_movil/features/smart_quotation/providers/smart_quotation_provider.dart';
+import 'package:app_movil/features/smart_quotation/screens/matching_screen.dart';
+import 'package:app_movil/features/smart_quotation/widgets/extraction/quotation_confirmation_modal.dart';
 
+part 'extraction_result/extraction_result_metadata_and_list_part.dart';
+part 'extraction_result/extraction_result_cards_part.dart';
+
+/// Pantalla de revisión de datos e ítems extraídos antes de pasar al emparejamiento.
 class ExtractionResultScreen extends StatefulWidget {
   const ExtractionResultScreen({super.key});
 
@@ -35,10 +39,7 @@ class _ExtractionResultScreenState extends State<ExtractionResultScreen> {
   void initState() {
     super.initState();
     _splitController = MultiSplitViewController(
-      areas: [
-        Area(size: 0.35, min: 0.20), 
-        Area(size: 0.65, min: 0.45) 
-      ],
+      areas: [Area(size: 0.35, min: 0.20), Area(size: 0.65, min: 0.45)],
     );
 
     _scrollController.addListener(() {
@@ -50,8 +51,13 @@ class _ExtractionResultScreenState extends State<ExtractionResultScreen> {
     });
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      final provider = Provider.of<SmartQuotationProvider>(context, listen: false);
+      if (!mounted) {
+        return;
+      }
+      final provider = Provider.of<SmartQuotationProvider>(
+        context,
+        listen: false,
+      );
       if (provider.metadata != null) {
         _currentMode = provider.metadata!.contextMode;
         _schoolCtrl.text = provider.metadata!.businessOrInstitutionName ?? "";
@@ -74,35 +80,153 @@ class _ExtractionResultScreenState extends State<ExtractionResultScreen> {
     super.dispose();
   }
 
+  void _updateContextMode(
+    QuotationContextMode mode,
+    SmartQuotationProvider provider,
+  ) {
+    setState(() => _currentMode = mode);
+    provider.updateMetadata(mode: mode);
+  }
+
   void _scrollToTop() {
     _scrollController.animateTo(
-      0, 
-      duration: const Duration(milliseconds: 500), 
-      curve: Curves.easeInOutCubic
+      0,
+      duration: const Duration(milliseconds: 500),
+      curve: Curves.easeInOutCubic,
     );
   }
 
-  void _showDeleteConfirmation(BuildContext parentContext, int itemId, bool isDark) {
+  void _showDeleteConfirmation(
+    BuildContext parentContext,
+    int itemId,
+    bool isDark,
+  ) {
     showDialog(
       context: parentContext,
       builder: (ctx) => AlertDialog(
         backgroundColor: isDark ? const Color(0xFF23232F) : Colors.white,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Row(children: [Icon(Icons.warning_amber_rounded, color: isDark ? Colors.orange[300] : Colors.orange, size: 30), const SizedBox(width: 10), Text("¿Eliminar ítem?", style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontWeight: FontWeight.bold))]),
-        content: Text("Se eliminará este producto de la lista. Esta acción no se puede deshacer.", style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[700], fontSize: 16)),
+        title: Row(
+          children: [
+            Icon(
+              Icons.warning_amber_rounded,
+              color: isDark ? Colors.orange[300] : Colors.orange,
+              size: 30,
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                "¿Eliminar ítem?",
+                style: TextStyle(
+                  color: isDark ? Colors.white : Colors.black87,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ],
+        ),
+        content: Text(
+          "Se eliminará este producto de la lista. Esta acción no se puede deshacer.",
+          style: TextStyle(
+            color: isDark ? Colors.grey[400] : Colors.grey[700],
+            fontSize: 16,
+          ),
+        ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Cancelar", style: TextStyle(color: Colors.grey, fontSize: 16))),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text(
+              "Cancelar",
+              style: TextStyle(color: Colors.grey, fontSize: 16),
+            ),
+          ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: isDark ? Colors.red[800] : Colors.red[50], foregroundColor: isDark ? Colors.white : Colors.red, elevation: 0, padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: isDark ? Colors.red[800] : Colors.red[50],
+              foregroundColor: isDark ? Colors.white : Colors.red,
+              elevation: 0,
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
             onPressed: () {
-              Provider.of<SmartQuotationProvider>(parentContext, listen: false).deleteItem(itemId);
+              Provider.of<SmartQuotationProvider>(
+                parentContext,
+                listen: false,
+              ).deleteItem(itemId);
               Navigator.pop(ctx);
-              ScaffoldMessenger.of(parentContext).showSnackBar(const SnackBar(content: Text("Producto eliminado", style: TextStyle(fontWeight: FontWeight.bold)), duration: Duration(milliseconds: 1500), behavior: SnackBarBehavior.floating));
+              AppFeedbackHelper.showSnackBar(
+                parentContext,
+                "Producto eliminado",
+                duration: const Duration(milliseconds: 1500),
+                behavior: SnackBarBehavior.floating,
+              );
             },
-            child: const Text("Eliminar", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+            child: const Text(
+              "Eliminar",
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+            ),
           ),
         ],
       ),
+    );
+  }
+
+  void _openConfirmModal(BuildContext context, bool isClient) {
+    final smartProvider = Provider.of<SmartQuotationProvider>(
+      context,
+      listen: false,
+    );
+    final matchingProvider = Provider.of<MatchingProvider>(
+      context,
+      listen: false,
+    );
+
+    final totalCount = smartProvider.items.length;
+    final readyCount = smartProvider.items
+        .where((i) => i.fullName.trim().isNotEmpty && i.quantity > 0)
+        .length;
+    final emptyOrZeroCount = totalCount - readyCount;
+
+    QuotationConfirmationModal.show(
+      context: context,
+      totalItems: totalCount,
+      readyItems: readyCount,
+      zeroOrEmptyItems: emptyOrZeroCount,
+      currentMode: _currentMode,
+      isClientRole: isClient,
+      onConfirm: (prioritizeWholesale, selectedMode) {
+        final updatedMetadata = ExtractedMetadata(
+          contextMode: selectedMode,
+          clientOrContactName: _studentCtrl.text.trim().isEmpty
+              ? null
+              : _studentCtrl.text.trim(),
+          businessOrInstitutionName: _schoolCtrl.text.trim().isEmpty
+              ? null
+              : _schoolCtrl.text.trim(),
+          phone: _phoneCtrl.text.trim().isEmpty ? null : _phoneCtrl.text.trim(),
+          referenceNotes: _gradeCtrl.text.trim().isEmpty
+              ? null
+              : _gradeCtrl.text.trim(),
+        );
+
+        matchingProvider.setEvidence(
+          smartProvider.currentImage,
+          smartProvider.fullExtractedText,
+        );
+
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => MatchingScreen(
+              metadata: updatedMetadata,
+              extractedItems: smartProvider.items,
+              prioritizeWholesale: prioritizeWholesale,
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -111,118 +235,111 @@ class _ExtractionResultScreenState extends State<ExtractionResultScreen> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final bgColor = Theme.of(context).scaffoldBackgroundColor;
     final auth = Provider.of<AuthProvider>(context, listen: false);
-    final isClient = auth.isCommunityClient; // 🔥 Variable de Rol
+    final isClient = auth.isCommunityClient;
 
     return Consumer<SmartQuotationProvider>(
       builder: (context, provider, child) {
-        final File? image = provider.currentImage;
+        final String? imagePath = provider.currentImage?.path;
 
-        if (image == null) {
-          return Scaffold(backgroundColor: bgColor, appBar: AppBar(title: const Text("Error")), body: const Center(child: Text("No se pudo cargar la imagen.")));
+        if (imagePath == null) {
+          return Scaffold(
+            backgroundColor: bgColor,
+            appBar: AppBar(title: const Text("Error")),
+            body: const Center(child: Text("No se pudo cargar la imagen.")),
+          );
         }
+
+        final int readyCount = provider.items
+            .where((i) => i.fullName.trim().isNotEmpty && i.quantity > 0)
+            .length;
+        final String actionText = isClient
+            ? "BUSCAR ($readyCount)"
+            : "COTIZAR ($readyCount/${provider.items.length})";
 
         return Scaffold(
           backgroundColor: bgColor,
           appBar: AppBar(
             titleSpacing: 8,
-            title: LayoutBuilder(
-              builder: (context, constraints) {
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    FittedBox(
-                      fit: BoxFit.scaleDown,
-                      alignment: Alignment.centerLeft,
-                      child: Text(
-                        isClient ? "Revisa tu Lista" : "Datos Extraídos",
-                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 17),
-                      ),
+            title: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    isClient ? "Revisa tu Lista" : "Datos Extraídos",
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 17,
                     ),
-                    Text(
-                      "${provider.items.length} productos identificados",
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: isDark ? Colors.blue[200] : Colors.blue[100],
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ],
-                );
-              },
+                  ),
+                ),
+                Text(
+                  "${provider.items.length} productos identificados",
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: isDark ? Colors.blue[200] : Colors.blue[100],
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
             ),
-            backgroundColor: isDark ? const Color(0xFF1A1A24) : Colors.blue[900],
+            backgroundColor: isDark
+                ? const Color(0xFF1A1A24)
+                : Colors.blue[900],
             foregroundColor: Colors.white,
             elevation: 0,
             actions: [
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 8.0),
-                child: FilledButton.icon(
-                  style: FilledButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                    visualDensity: VisualDensity.compact,
-                    backgroundColor: isDark ? Colors.blue[700] : Colors.white,
-                    foregroundColor: isDark ? Colors.white : Colors.blue[900],
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 8.0,
+                  vertical: 8.0,
+                ),
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxWidth: MediaQuery.sizeOf(context).width * 0.42,
                   ),
-                  onPressed: () {
-                    final smartProvider = Provider.of<SmartQuotationProvider>(context, listen: false);
-                    final matchingProvider = Provider.of<MatchingProvider>(context, listen: false); 
-                    
-                    final totalCount = smartProvider.items.length;
-                    final readyCount = smartProvider.items.where((i) => i.fullName.trim().isNotEmpty && i.quantity > 0).length;
-                    final emptyOrZeroCount = totalCount - readyCount;
-
-                    QuotationConfirmationModal.show(
-                      context: context,
-                      totalItems: totalCount,
-                      readyItems: readyCount,
-                      zeroOrEmptyItems: emptyOrZeroCount,
-                      currentMode: _currentMode,
-                      isClientRole: isClient,
-                      onConfirm: (prioritizeWholesale, selectedMode) {
-                        final updatedMetadata = ExtractedMetadata(
-                          contextMode: selectedMode,
-                          clientOrContactName: _studentCtrl.text.trim().isEmpty ? null : _studentCtrl.text.trim(),
-                          businessOrInstitutionName: _schoolCtrl.text.trim().isEmpty ? null : _schoolCtrl.text.trim(),
-                          phone: _phoneCtrl.text.trim().isEmpty ? null : _phoneCtrl.text.trim(),
-                          referenceNotes: _gradeCtrl.text.trim().isEmpty ? null : _gradeCtrl.text.trim(),
-                        );
-
-                        matchingProvider.setEvidence(
-                          smartProvider.currentImage, 
-                          smartProvider.fullExtractedText,
-                        );
-
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => MatchingScreen(
-                              metadata: updatedMetadata, 
-                              extractedItems: smartProvider.items,
-                              prioritizeWholesale: prioritizeWholesale,
+                  child: FilledButton(
+                    style: FilledButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 6,
+                      ),
+                      visualDensity: VisualDensity.compact,
+                      backgroundColor: isDark ? Colors.blue[700] : Colors.white,
+                      foregroundColor: isDark ? Colors.white : Colors.blue[900],
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    onPressed: () => _openConfirmModal(context, isClient),
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.check_circle_rounded, size: 16),
+                          const SizedBox(width: 6),
+                          Text(
+                            actionText,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w900,
+                              fontSize: 12,
                             ),
                           ),
-                        );
-                      },
-                    );
-                  },
-                  icon: const Icon(Icons.check_circle_rounded, size: 16),
-                  label: Builder(
-                    builder: (context) {
-                      int readyCount = provider.items.where((i) => i.fullName.trim().isNotEmpty && i.quantity > 0).length;
-                      String buttonText = isClient ? "BUSCAR ($readyCount)" : "COTIZAR ($readyCount/${provider.items.length})";
-                      return Text(
-                        buttonText, 
-                        style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 12),
-                      );
-                    }
+                        ],
+                      ),
+                    ),
                   ),
                 ),
               ),
             ],
           ),
-
           body: SafeArea(
             child: Container(
               color: isDark ? const Color(0xFF14141C) : Colors.grey[200],
@@ -231,15 +348,18 @@ class _ExtractionResultScreenState extends State<ExtractionResultScreen> {
                 child: MultiSplitView(
                   axis: Axis.vertical,
                   controller: _splitController,
-                  dividerBuilder: (axis, index, resizable, dragging, highlighted, themeData) {
-                    return _PulsingDragHandle(isDark: isDark, dragging: dragging);
-                  },
+                  dividerBuilder:
+                      (axis, index, resizable, dragging, highlighted, data) {
+                        return _PulsingDragHandle(
+                          isDark: isDark,
+                          dragging: dragging,
+                        );
+                      },
                   builder: (BuildContext context, Area area) {
                     if (area.index == 0) {
-                      return _buildImageViewer(image);
-                    } else {
-                      return _buildDataList(provider, isDark, isClient);
+                      return _buildImageViewer(imagePath);
                     }
+                    return _buildDataList(provider, isDark, isClient);
                   },
                 ),
               ),
@@ -250,651 +370,56 @@ class _ExtractionResultScreenState extends State<ExtractionResultScreen> {
     );
   }
 
-  Widget _buildImageViewer(File imageFile) {
+  Widget _buildImageViewer(String imagePath) {
     return Container(
       color: Colors.black,
       child: Stack(
         fit: StackFit.expand,
         children: [
           InteractiveViewer(
-            minScale: 1.0, 
-            maxScale: 5.0, 
-            boundaryMargin: EdgeInsets.zero, 
-            panEnabled: true, 
-            child: UniversalImage(path: imageFile.path, fit: BoxFit.contain)
+            minScale: 1.0,
+            maxScale: 5.0,
+            boundaryMargin: EdgeInsets.zero,
+            panEnabled: true,
+            child: UniversalImage(path: imagePath, fit: BoxFit.contain),
           ),
           Positioned(
-            bottom: 12, left: 0, right: 0, 
+            bottom: 12,
+            left: 16,
+            right: 16,
             child: Center(
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8), 
-                decoration: BoxDecoration(color: Colors.black54, borderRadius: BorderRadius.circular(20)), 
-                child: const Text("🔍 Pellizca para hacer zoom a la lista", style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold))
-              )
-            )
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildDataList(SmartQuotationProvider provider, bool isDark, bool isClient) {
-    return Container(
-      color: isDark ? const Color(0xFF14141C) : Colors.grey[50],
-      child: Stack(
-        children: [
-          provider.items.isEmpty
-            ? Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.receipt_long_outlined, size: 60, color: isDark ? Colors.white24 : Colors.grey[400]),
-                    const SizedBox(height: 16),
-                    Text("No se detectaron items.", style: TextStyle(color: isDark ? Colors.grey[500] : Colors.grey[600], fontSize: 16, fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 16),
-                    ElevatedButton.icon(
-                      onPressed: () => provider.addItem(), 
-                      icon: const Icon(Icons.add), 
-                      label: const Text("Añadir Fila Manual"),
-                      style: ElevatedButton.styleFrom(backgroundColor: isDark ? Colors.blue[800] : Colors.blue[50], foregroundColor: isDark ? Colors.white : Colors.blue[800], elevation: 0),
-                    )
-                  ],
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 8,
                 ),
-              )
-            : ListView.separated(
-                controller: _scrollController,
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 80), 
-                itemCount: provider.items.length + 2, 
-                separatorBuilder: (_, __) => const SizedBox(height: 16),
-                itemBuilder: (ctx, i) {
-                  if (i == 0) {
-                    return _buildMetadataCard(provider, isDark, isClient);
-                  }
-                  
-                  if (i == provider.items.length + 1) {
-                    return Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-                      child: OutlinedButton.icon(
-                        onPressed: () {
-                          provider.addItem();
-                          WidgetsBinding.instance.addPostFrameCallback((_) {
-                            _scrollController.animateTo(
-                              _scrollController.position.maxScrollExtent + 200,
-                              duration: const Duration(milliseconds: 400),
-                              curve: Curves.easeOut,
-                            );
-                          });
-                        },
-                        icon: const Icon(Icons.add_circle_outline, size: 22),
-                        label: const Text("Añadir Fila Manualmente", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
-                        style: OutlinedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                          foregroundColor: isDark ? Colors.blue[300] : Colors.blue[800],
-                          side: BorderSide(color: isDark ? Colors.blue.withValues(alpha: 0.3) : Colors.blue.withValues(alpha: 0.5), width: 1.5),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                decoration: BoxDecoration(
+                  color: Colors.black54,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.zoom_in_rounded, color: Colors.white, size: 16),
+                    SizedBox(width: 6),
+                    Flexible(
+                      child: Text(
+                        "Pellizca para hacer zoom a la lista",
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 13,
+                          fontWeight: FontWeight.bold,
                         ),
                       ),
-                    );
-                  }
-                  
-                  final actualIndex = i - 1;
-                  final item = provider.items[actualIndex];
-                  return _InternalItemCard(
-                    key: ValueKey(item.id), 
-                    item: item, 
-                    index: actualIndex, 
-                    isDark: isDark, 
-                    onDeletePressed: () => _showDeleteConfirmation(context, item.id, isDark)
-                  );
-                },
+                    ),
+                  ],
+                ),
               ),
-
-          if (_showScrollToTop)
-            Positioned(
-              bottom: 16,
-              right: 16,
-              child: FloatingActionButton(
-                mini: true,
-                onPressed: _scrollToTop,
-                backgroundColor: isDark ? Colors.blueGrey[800] : Colors.white,
-                foregroundColor: isDark ? Colors.white : Colors.black87,
-                elevation: 4,
-                child: const Icon(Icons.keyboard_arrow_up, size: 24),
-              ),
-            )
+            ),
+          ),
         ],
-      ),
-    );
-  }
-
-  Widget _buildMetadataCard(SmartQuotationProvider provider, bool isDark, bool isClient) {
-    return Container(
-      decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF23232F) : Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: isDark ? Colors.white10 : Colors.grey.shade300),
-        boxShadow: [if (!isDark) const BoxShadow(color: Colors.black12, blurRadius: 8, offset: Offset(0, 3))]
-      ),
-      child: Theme(
-        data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
-        child: ExpansionTile(
-          initiallyExpanded: true,
-          iconColor: isDark ? Colors.blue[300] : Colors.blue[800],
-          collapsedIconColor: isDark ? Colors.grey[400] : Colors.grey[600],
-          tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-          title: Row(
-            children: [
-              Icon(_currentMode.icon, color: isDark ? Colors.blue[300] : Colors.blue[700], size: 22),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  "Datos de la Cotización",
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: isDark ? Colors.white : Colors.black87),
-                ),
-              ),
-            ],
-          ),
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  // 🎯 Selector de Tipo de Cotización (1 toque con AnimatedSize)
-                  Container(
-                    padding: const EdgeInsets.all(4),
-                    decoration: BoxDecoration(
-                      color: isDark ? const Color(0xFF14141C) : Colors.grey.shade100,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Row(
-                      children: QuotationContextMode.values.map((mode) {
-                        final isSelected = _currentMode == mode;
-                        return Expanded(
-                          child: InkWell(
-                            onTap: () {
-                              HapticFeedback.selectionClick();
-                              setState(() => _currentMode = mode);
-                              provider.updateMetadata(mode: mode);
-                            },
-                            borderRadius: BorderRadius.circular(10),
-                            child: AnimatedContainer(
-                              duration: const Duration(milliseconds: 200),
-                              padding: const EdgeInsets.symmetric(vertical: 8),
-                              decoration: BoxDecoration(
-                                color: isSelected
-                                    ? (isDark ? Colors.blue[800] : Colors.white)
-                                    : Colors.transparent,
-                                borderRadius: BorderRadius.circular(10),
-                                boxShadow: isSelected && !isDark
-                                    ? [const BoxShadow(color: Colors.black12, blurRadius: 4, offset: Offset(0, 1))]
-                                    : null,
-                              ),
-                              child: Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Icon(
-                                    mode.icon,
-                                    size: 14,
-                                    color: isSelected
-                                        ? (isDark ? Colors.white : Colors.blue[900])
-                                        : (isDark ? Colors.grey[400] : Colors.grey[600]),
-                                  ),
-                                  const SizedBox(width: 4),
-                                  Flexible(
-                                    child: Text(
-                                      mode == QuotationContextMode.general
-                                          ? "General"
-                                          : (mode == QuotationContextMode.wholesale ? "Mayorista" : "Escolar"),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: TextStyle(
-                                        fontSize: 12,
-                                        fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
-                                        color: isSelected
-                                            ? (isDark ? Colors.white : Colors.blue[900])
-                                            : (isDark ? Colors.grey[400] : Colors.grey[600]),
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        );
-                      }).toList(),
-                    ),
-                  ),
-
-                  const SizedBox(height: 14),
-
-                  // Campos adaptativos con AnimatedSwitcher
-                  AnimatedSwitcher(
-                    duration: const Duration(milliseconds: 250),
-                    child: _buildAdaptiveFields(isDark, isClient, provider),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildAdaptiveFields(bool isDark, bool isClient, SmartQuotationProvider provider) {
-    switch (_currentMode) {
-      case QuotationContextMode.general:
-        return Column(
-          key: const ValueKey('general_fields'),
-          children: [
-            _MetaInput(
-              icon: Icons.person,
-              hint: isClient ? "Tu Nombre (Cliente)" : "Cliente / Solicitante",
-              ctrl: _studentCtrl,
-              isDark: isDark,
-              onChanged: (v) => provider.updateMetadata(student: v),
-            ),
-            Padding(padding: const EdgeInsets.symmetric(vertical: 8), child: Divider(height: 1, color: isDark ? Colors.white10 : Colors.grey[200])),
-            Row(
-              children: [
-                Expanded(
-                  child: _MetaInput(
-                    icon: Icons.phone,
-                    hint: "Teléfono / WhatsApp",
-                    ctrl: _phoneCtrl,
-                    isDark: isDark,
-                    keyboardType: TextInputType.phone,
-                    onChanged: (v) => provider.updateMetadata(phone: v),
-                  ),
-                ),
-                Container(width: 1, height: 36, color: isDark ? Colors.white10 : Colors.grey[300], margin: const EdgeInsets.symmetric(horizontal: 12)),
-                Expanded(
-                  child: _MetaInput(
-                    icon: Icons.note_alt_outlined,
-                    hint: "Nota / Referencia",
-                    ctrl: _gradeCtrl,
-                    isDark: isDark,
-                    onChanged: (v) => provider.updateMetadata(grade: v),
-                  ),
-                ),
-              ],
-            ),
-          ],
-        );
-      case QuotationContextMode.wholesale:
-        return Column(
-          key: const ValueKey('wholesale_fields'),
-          children: [
-            _MetaInput(
-              icon: Icons.storefront_rounded,
-              hint: "Negocio / Empresa / RUC",
-              ctrl: _schoolCtrl,
-              isDark: isDark,
-              onChanged: (v) => provider.updateMetadata(institution: v),
-            ),
-            Padding(padding: const EdgeInsets.symmetric(vertical: 8), child: Divider(height: 1, color: isDark ? Colors.white10 : Colors.grey[200])),
-            Row(
-              children: [
-                Expanded(
-                  child: _MetaInput(
-                    icon: Icons.person,
-                    hint: "Contacto / Cliente",
-                    ctrl: _studentCtrl,
-                    isDark: isDark,
-                    onChanged: (v) => provider.updateMetadata(student: v),
-                  ),
-                ),
-                Container(width: 1, height: 36, color: isDark ? Colors.white10 : Colors.grey[300], margin: const EdgeInsets.symmetric(horizontal: 12)),
-                Expanded(
-                  child: _MetaInput(
-                    icon: Icons.phone,
-                    hint: "Teléfono / WhatsApp",
-                    ctrl: _phoneCtrl,
-                    isDark: isDark,
-                    keyboardType: TextInputType.phone,
-                    onChanged: (v) => provider.updateMetadata(phone: v),
-                  ),
-                ),
-              ],
-            ),
-          ],
-        );
-      case QuotationContextMode.school:
-        return Column(
-          key: const ValueKey('school_fields'),
-          children: [
-            _MetaInput(
-              icon: Icons.school,
-              hint: "Institución Educativa (Colegio)",
-              ctrl: _schoolCtrl,
-              isDark: isDark,
-              onChanged: (v) => provider.updateMetadata(institution: v),
-            ),
-            Padding(padding: const EdgeInsets.symmetric(vertical: 8), child: Divider(height: 1, color: isDark ? Colors.white10 : Colors.grey[200])),
-            Row(
-              children: [
-                Expanded(
-                  child: _MetaInput(
-                    icon: Icons.person,
-                    hint: isClient ? "Nombre de tu hijo/a (Opcional)" : "Alumno/a o Apoderado",
-                    ctrl: _studentCtrl,
-                    isDark: isDark,
-                    onChanged: (v) => provider.updateMetadata(student: v),
-                  ),
-                ),
-                Container(width: 1, height: 36, color: isDark ? Colors.white10 : Colors.grey[300], margin: const EdgeInsets.symmetric(horizontal: 12)),
-                Expanded(
-                  child: _MetaInput(
-                    icon: Icons.class_,
-                    hint: "Grado / Sección",
-                    ctrl: _gradeCtrl,
-                    isDark: isDark,
-                    onChanged: (v) => provider.updateMetadata(grade: v),
-                  ),
-                ),
-              ],
-            ),
-          ],
-        );
-    }
-  }
-}
-
-class _MetaInput extends StatelessWidget {
-  final IconData icon;
-  final String hint;
-  final TextEditingController ctrl;
-  final Function(String) onChanged;
-  final bool isDark;
-  final TextInputType? keyboardType;
-
-  const _MetaInput({
-    required this.icon, 
-    required this.hint, 
-    required this.ctrl, 
-    required this.onChanged, 
-    required this.isDark,
-    this.keyboardType,
-  });
-  
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Icon(icon, size: 20, color: isDark ? Colors.blue[300] : Colors.blue[800]), 
-        const SizedBox(width: 10), 
-        Expanded(
-          child: TextField(
-            controller: ctrl, 
-            keyboardType: keyboardType,
-            onTapOutside: (_) => FocusScope.of(context).unfocus(),
-            style: TextStyle(fontSize: 14, color: isDark ? Colors.white : Colors.blue[900], fontWeight: FontWeight.w600), 
-            decoration: InputDecoration(
-              hintText: hint, 
-              isDense: true, 
-              border: InputBorder.none, 
-              contentPadding: const EdgeInsets.symmetric(vertical: 6),
-              hintStyle: TextStyle(fontSize: 13, color: isDark ? Colors.grey[600] : Colors.grey[400], fontStyle: FontStyle.italic)
-            ), 
-            onChanged: onChanged
-          )
-        )
-      ]
-    );
-  }
-}
-
-class _InternalItemCard extends StatefulWidget {
-  final ExtractedItem item;
-  final int index;
-  final bool isDark;
-  final VoidCallback onDeletePressed;
-  
-  const _InternalItemCard({super.key, required this.item, required this.index, required this.isDark, required this.onDeletePressed});
-  
-  @override
-  State<_InternalItemCard> createState() => _InternalItemCardState();
-}
-
-class _InternalItemCardState extends State<_InternalItemCard> with SingleTickerProviderStateMixin {
-  late TextEditingController _nameCtrl;
-  late TextEditingController _qtyCtrl;
-  late TextEditingController _unitCtrl;
-  late TextEditingController _brandCtrl;
-  late TextEditingController _notesCtrl;
-
-  late AnimationController _animCtrl;
-  late Animation<double> _fadeAnim;
-  late Animation<Offset> _slideAnim;
-
-  Timer? _debounce;
-
-  @override
-  void initState() { 
-    super.initState(); 
-    _initControllers(); 
-    
-    _animCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 400));
-    _fadeAnim = Tween<double>(begin: 0.0, end: 1.0).animate(CurvedAnimation(parent: _animCtrl, curve: Curves.easeOut));
-    _slideAnim = Tween<Offset>(begin: const Offset(0, 0.2), end: Offset.zero).animate(CurvedAnimation(parent: _animCtrl, curve: Curves.easeOut));
-    
-    Future.delayed(Duration(milliseconds: widget.index * 50), () {
-      if (mounted) _animCtrl.forward();
-    });
-  }
-  
-  void _initControllers() {
-    _nameCtrl = TextEditingController(text: widget.item.fullName);
-    _qtyCtrl = TextEditingController(text: widget.item.quantity.toString());
-    _unitCtrl = TextEditingController(text: widget.item.unit ?? "");
-    _brandCtrl = TextEditingController(text: widget.item.brand ?? "");
-    _notesCtrl = TextEditingController(text: widget.item.notes ?? "");
-  }
-  
-  @override
-  void didUpdateWidget(covariant _InternalItemCard oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (widget.item.id != oldWidget.item.id) {
-      _nameCtrl.text = widget.item.fullName;
-      _qtyCtrl.text = widget.item.quantity.toString();
-      _unitCtrl.text = widget.item.unit ?? "";
-      _brandCtrl.text = widget.item.brand ?? "";
-      _notesCtrl.text = widget.item.notes ?? "";
-    }
-  }
-  
-  @override
-  void dispose() { 
-    _debounce?.cancel();
-    _nameCtrl.dispose(); _qtyCtrl.dispose(); _unitCtrl.dispose(); _brandCtrl.dispose(); _notesCtrl.dispose(); 
-    _animCtrl.dispose();
-    super.dispose(); 
-  }
-  
-  void _saveToProvider() {
-    if (_debounce?.isActive ?? false) _debounce!.cancel();
-    _debounce = Timer(const Duration(milliseconds: 300), () {
-      if (mounted) {
-        Provider.of<SmartQuotationProvider>(context, listen: false).updateItem(widget.item.id, fullName: _nameCtrl.text, quantity: int.tryParse(_qtyCtrl.text) ?? 1, unit: _unitCtrl.text, brand: _brandCtrl.text, notes: _notesCtrl.text);
-      }
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final cardColor = widget.isDark ? const Color(0xFF23232F) : Colors.white;
-
-    return FadeTransition(
-      opacity: _fadeAnim,
-      child: SlideTransition(
-        position: _slideAnim,
-        child: Container(
-          decoration: BoxDecoration(
-            color: cardColor,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: widget.isDark ? Colors.white10 : Colors.grey.shade300),
-            boxShadow: [if (!widget.isDark) BoxShadow(color: Colors.grey.shade200, blurRadius: 6, offset: const Offset(0, 3))]
-          ),
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start, 
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween, 
-              children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4), 
-                  decoration: BoxDecoration(color: widget.isDark ? Colors.blue.withValues(alpha: 0.15) : Colors.blue[50], borderRadius: BorderRadius.circular(8)), 
-                  child: Text("Fila #${widget.index + 1}", style: TextStyle(color: widget.isDark ? Colors.blue[300] : Colors.blue[900], fontWeight: FontWeight.bold, fontSize: 14))
-                ),
-                if (widget.item.originalText.isNotEmpty && widget.item.originalText != "Agregado manual") 
-                  Expanded(
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 12), 
-                      child: Text("IA leyó: \"${widget.item.originalText}\"", style: TextStyle(fontSize: 13, color: widget.isDark ? Colors.grey[500] : Colors.grey[600], fontStyle: FontStyle.italic), maxLines: 1, overflow: TextOverflow.ellipsis)
-                    )
-                  ),
-                IconButton(icon: Icon(Icons.close, color: widget.isDark ? Colors.red[300] : Colors.red, size: 28), onPressed: widget.onDeletePressed, constraints: const BoxConstraints(), padding: EdgeInsets.zero, tooltip: "Eliminar fila"),
-              ]
-            ),
-            const SizedBox(height: 16),
-            _buildTextField(controller: _nameCtrl, label: "Producto / Descripción extraída", icon: Icons.edit_note, isBold: true, isDark: widget.isDark),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(
-                  flex: 3, 
-                  child: _buildTextField(
-                    controller: _qtyCtrl, 
-                    label: "Cant.", 
-                    isNumber: true, 
-                    isDark: widget.isDark,
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
-                  ),
-                ), 
-                const SizedBox(width: 8), 
-                Expanded(
-                  flex: 4, 
-                  child: _buildTextField(
-                    controller: _unitCtrl, 
-                    label: "Unidad", 
-                    isDark: widget.isDark,
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
-                  ),
-                ), 
-                const SizedBox(width: 8), 
-                Expanded(
-                  flex: 5, 
-                  child: _buildTextField(
-                    controller: _brandCtrl, 
-                    label: "Marca", 
-                    isDark: widget.isDark,
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            _buildTextField(controller: _notesCtrl, label: "Detalles adicionales (Colores, tamaños...)", icon: Icons.info_outline, isSoft: true, isDark: widget.isDark),
-          ]
-        ),
-      ),
-    )));
-  }
-
-  Widget _buildTextField({
-    required TextEditingController controller, 
-    required String label, 
-    IconData? icon, 
-    bool isNumber = false, 
-    bool isBold = false, 
-    bool isSoft = false, 
-    required bool isDark,
-    EdgeInsetsGeometry? contentPadding,
-  }) {
-    return TextFormField(
-      controller: controller, 
-      onTapOutside: (_) => FocusScope.of(context).unfocus(),
-      onChanged: (_) => _saveToProvider(), 
-      keyboardType: isNumber ? TextInputType.number : TextInputType.text, 
-      style: TextStyle(fontWeight: isBold ? FontWeight.bold : FontWeight.normal, fontSize: 16, color: isDark ? Colors.white : Colors.black87), 
-      decoration: InputDecoration(
-        labelText: label, 
-        labelStyle: TextStyle(fontSize: 14, color: isDark ? Colors.grey[500] : Colors.grey[700]), 
-        isDense: true, 
-        filled: true, 
-        fillColor: isDark 
-            ? (isSoft ? Colors.orange.withValues(alpha: 0.05) : const Color(0xFF14141C)) 
-            : (isSoft ? Colors.orange[50] : Colors.white), 
-        prefixIcon: icon != null ? Icon(icon, size: 20, color: isDark ? Colors.grey[400] : Colors.grey[600]) : null, 
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none), 
-        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: isDark ? Colors.white24 : Colors.grey.shade300)), 
-        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: isDark ? Colors.blue.withValues(alpha: 0.5) : Colors.blue.withValues(alpha: 0.3))), 
-        contentPadding: contentPadding ?? const EdgeInsets.symmetric(horizontal: 16, vertical: 14)
-      )
-    );
-  }
-}
-
-class _PulsingDragHandle extends StatefulWidget {
-  final bool isDark;
-  final bool dragging;
-
-  const _PulsingDragHandle({required this.isDark, required this.dragging});
-
-  @override
-  State<_PulsingDragHandle> createState() => _PulsingDragHandleState();
-}
-
-class _PulsingDragHandleState extends State<_PulsingDragHandle> with SingleTickerProviderStateMixin {
-  late AnimationController _pulseCtrl;
-
-  @override
-  void initState() {
-    super.initState();
-    _pulseCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 1000));
-    _pulseCtrl.repeat(reverse: true);
-  }
-
-  @override
-  void dispose() {
-    _pulseCtrl.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      color: widget.isDark ? const Color(0xFF1A1A24) : Colors.grey[100], 
-      alignment: Alignment.center,
-      child: AnimatedBuilder(
-        animation: _pulseCtrl,
-        builder: (context, child) {
-          final scale = widget.dragging ? 1.05 : 1.0 + (_pulseCtrl.value * 0.03);
-          return Transform.scale(
-            scale: scale,
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 150),
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 6),
-              decoration: BoxDecoration(
-                color: widget.dragging ? (widget.isDark ? Colors.blue.withValues(alpha: 0.3) : Colors.blue[100]) : (widget.isDark ? const Color(0xFF23232F) : Colors.white),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: widget.dragging ? Colors.transparent : (widget.isDark ? Colors.white10 : Colors.grey.shade300)),
-                boxShadow: [if (!widget.dragging && !widget.isDark) BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 4, offset: const Offset(0, 2))],
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.drag_handle, size: 22, color: widget.dragging ? Colors.blue : (widget.isDark ? Colors.grey[400] : Colors.grey[600])),
-                  const SizedBox(width: 10),
-                  Text("ARRASTRAR", style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, letterSpacing: 1.2, color: widget.dragging ? Colors.blue : (widget.isDark ? Colors.grey[400] : Colors.grey[600]))),
-                ],
-              ),
-            ),
-          );
-        }
       ),
     );
   }
