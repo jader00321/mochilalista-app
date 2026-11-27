@@ -16,7 +16,8 @@ class ClientComplianceSparkline extends StatefulWidget {
   });
 
   @override
-  State<ClientComplianceSparkline> createState() => _ClientComplianceSparklineState();
+  State<ClientComplianceSparkline> createState() =>
+      _ClientComplianceSparklineState();
 }
 
 class _ClientComplianceSparklineState extends State<ClientComplianceSparkline> {
@@ -27,8 +28,9 @@ class _ClientComplianceSparklineState extends State<ClientComplianceSparkline> {
     // Tomamos las ventas filtradas pasadas por parámetro o las del cliente
     final rawSales = widget.sales ?? widget.client.lastSales;
     // Excluir préstamos y ordenar cronológicamente para la línea de tiempo
-    final sales = rawSales.where((s) => s.origenVenta != 'prestamo_personal').toList()
-      ..sort((a, b) => a.date.compareTo(b.date));
+    final sales =
+        rawSales.where((s) => s.origenVenta != 'prestamo_personal').toList()
+          ..sort((a, b) => a.date.compareTo(b.date));
 
     final bool hasOverdue = widget.client.totalDebt > 0;
     final Color lineColor = hasOverdue
@@ -42,13 +44,19 @@ class _ClientComplianceSparklineState extends State<ClientComplianceSparkline> {
         decoration: BoxDecoration(
           color: widget.isDark ? const Color(0xFF1E1E2A) : Colors.white,
           borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: widget.isDark ? Colors.white12 : Colors.grey.shade200),
+          border: Border.all(
+            color: widget.isDark ? Colors.white12 : Colors.grey.shade200,
+          ),
         ),
         child: Column(
           children: [
             Row(
               children: [
-                Icon(Icons.trending_neutral_rounded, color: widget.isDark ? Colors.grey[400] : Colors.grey[600], size: 20),
+                Icon(
+                  Icons.trending_neutral_rounded,
+                  color: widget.isDark ? Colors.grey[400] : Colors.grey[600],
+                  size: 20,
+                ),
                 const SizedBox(width: 8),
                 Text(
                   "Tendencia Comercial",
@@ -61,7 +69,11 @@ class _ClientComplianceSparklineState extends State<ClientComplianceSparkline> {
               ],
             ),
             const SizedBox(height: 16),
-            Icon(Icons.show_chart, size: 40, color: widget.isDark ? Colors.white12 : Colors.grey[300]),
+            Icon(
+              Icons.show_chart,
+              size: 40,
+              color: widget.isDark ? Colors.white12 : Colors.grey[300],
+            ),
             const SizedBox(height: 8),
             Text(
               "Sin compras registradas en este periodo",
@@ -79,22 +91,30 @@ class _ClientComplianceSparklineState extends State<ClientComplianceSparkline> {
     final dataPoints = sales.map((s) => s.total).toList();
     final double maxAmount = dataPoints.reduce((a, b) => a > b ? a : b);
     final double minAmount = dataPoints.reduce((a, b) => a < b ? a : b);
-    final double avgAmount = dataPoints.fold(0.0, (sum, val) => sum + val) / dataPoints.length;
+    final double avgAmount =
+        dataPoints.fold(0.0, (sum, val) => sum + val) / dataPoints.length;
 
     final bool isSingleSale = sales.length == 1;
 
-    final selectedSale = (_selectedIndex != null && _selectedIndex! < sales.length)
+    final selectedSale =
+        (_selectedIndex != null && _selectedIndex! < sales.length)
         ? sales[_selectedIndex!]
         : sales.last;
 
     final String firstDateStr = sales.isNotEmpty
-        ? DateFormat('dd/MM/yy').format(DateTime.tryParse(sales.first.date) ?? DateTime.now())
+        ? DateFormat(
+            'dd/MM/yy',
+          ).format(DateTime.tryParse(sales.first.date) ?? DateTime.now())
         : '';
     final String lastDateStr = sales.isNotEmpty
-        ? DateFormat('dd/MM/yy').format(DateTime.tryParse(sales.last.date) ?? DateTime.now())
+        ? DateFormat(
+            'dd/MM/yy',
+          ).format(DateTime.tryParse(sales.last.date) ?? DateTime.now())
         : '';
     final String singleDateFullStr = sales.isNotEmpty
-        ? DateFormat('dd/MM/yyyy').format(DateTime.tryParse(sales.first.date) ?? DateTime.now())
+        ? DateFormat(
+            'dd/MM/yyyy',
+          ).format(DateTime.tryParse(sales.first.date) ?? DateTime.now())
         : '';
 
     return Container(
@@ -131,7 +151,9 @@ class _ClientComplianceSparklineState extends State<ClientComplianceSparkline> {
                         shape: BoxShape.circle,
                       ),
                       child: Icon(
-                        hasOverdue ? Icons.trending_down_rounded : Icons.trending_up_rounded,
+                        hasOverdue
+                            ? Icons.trending_down_rounded
+                            : Icons.trending_up_rounded,
                         size: 18,
                         color: lineColor,
                       ),
@@ -153,19 +175,28 @@ class _ClientComplianceSparklineState extends State<ClientComplianceSparkline> {
                 ),
               ),
               const SizedBox(width: 8),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: lineColor.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: lineColor.withValues(alpha: 0.3)),
-                ),
-                child: Text(
-                  hasOverdue ? "Deuda Activa" : "Excelente Historial",
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w800,
-                    color: lineColor,
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 112),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: lineColor.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: lineColor.withValues(alpha: 0.3)),
+                  ),
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      hasOverdue ? "Deuda Activa" : "Excelente Historial",
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w800,
+                        color: lineColor,
+                      ),
+                    ),
                   ),
                 ),
               ),
@@ -179,7 +210,9 @@ class _ClientComplianceSparklineState extends State<ClientComplianceSparkline> {
             decoration: BoxDecoration(
               color: widget.isDark ? const Color(0xFF14141C) : Colors.grey[50],
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: widget.isDark ? Colors.white10 : Colors.grey.shade200),
+              border: Border.all(
+                color: widget.isDark ? Colors.white10 : Colors.grey.shade200,
+              ),
             ),
             child: Row(
               children: [
@@ -193,7 +226,9 @@ class _ClientComplianceSparklineState extends State<ClientComplianceSparkline> {
                         style: TextStyle(
                           fontSize: 10,
                           fontWeight: FontWeight.bold,
-                          color: widget.isDark ? Colors.grey[400] : Colors.grey[600],
+                          color: widget.isDark
+                              ? Colors.grey[400]
+                              : Colors.grey[600],
                           letterSpacing: 0.5,
                         ),
                         maxLines: 1,
@@ -206,7 +241,9 @@ class _ClientComplianceSparklineState extends State<ClientComplianceSparkline> {
                             : "Venta #${selectedSale.displayId}",
                         style: TextStyle(
                           fontSize: 12,
-                          color: widget.isDark ? Colors.white70 : Colors.black87,
+                          color: widget.isDark
+                              ? Colors.white70
+                              : Colors.black87,
                         ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
@@ -231,8 +268,10 @@ class _ClientComplianceSparklineState extends State<ClientComplianceSparkline> {
 
           // Gráfico CustomPaint
           GestureDetector(
-            onPanDown: (details) => _handleTouch(details.localPosition, sales.length),
-            onPanUpdate: (details) => _handleTouch(details.localPosition, sales.length),
+            onPanDown: (details) =>
+                _handleTouch(details.localPosition, sales.length),
+            onPanUpdate: (details) =>
+                _handleTouch(details.localPosition, sales.length),
             child: SizedBox(
               height: 70,
               width: double.infinity,
@@ -272,7 +311,9 @@ class _ClientComplianceSparklineState extends State<ClientComplianceSparkline> {
                     style: TextStyle(
                       fontSize: 10,
                       fontWeight: FontWeight.w500,
-                      color: widget.isDark ? Colors.grey[500] : Colors.grey[600],
+                      color: widget.isDark
+                          ? Colors.grey[500]
+                          : Colors.grey[600],
                     ),
                   ),
                   Text(
@@ -280,7 +321,9 @@ class _ClientComplianceSparklineState extends State<ClientComplianceSparkline> {
                     style: TextStyle(
                       fontSize: 9.5,
                       fontStyle: FontStyle.italic,
-                      color: widget.isDark ? Colors.grey[500] : Colors.grey[500],
+                      color: widget.isDark
+                          ? Colors.grey[500]
+                          : Colors.grey[500],
                     ),
                   ),
                   Text(
@@ -288,7 +331,9 @@ class _ClientComplianceSparklineState extends State<ClientComplianceSparkline> {
                     style: TextStyle(
                       fontSize: 10,
                       fontWeight: FontWeight.w500,
-                      color: widget.isDark ? Colors.grey[500] : Colors.grey[600],
+                      color: widget.isDark
+                          ? Colors.grey[500]
+                          : Colors.grey[600],
                     ),
                   ),
                 ],
@@ -301,25 +346,72 @@ class _ClientComplianceSparklineState extends State<ClientComplianceSparkline> {
           if (isSingleSale)
             Row(
               children: [
-                _buildMetricChip("Operación", "Compra Única", widget.isDark, alignment: CrossAxisAlignment.start),
-                _buildMetricChip("Fecha", singleDateFullStr, widget.isDark, alignment: CrossAxisAlignment.center),
-                _buildMetricChip("Monto", AppCurrency.format(sales.first.total), widget.isDark, alignment: CrossAxisAlignment.end),
+                _buildMetricChip(
+                  "Operación",
+                  "Compra Única",
+                  widget.isDark,
+                  alignment: CrossAxisAlignment.start,
+                ),
+                _buildMetricChip(
+                  "Fecha",
+                  singleDateFullStr,
+                  widget.isDark,
+                  alignment: CrossAxisAlignment.center,
+                ),
+                _buildMetricChip(
+                  "Monto",
+                  AppCurrency.format(sales.first.total),
+                  widget.isDark,
+                  alignment: CrossAxisAlignment.end,
+                ),
               ],
             )
           else if (minAmount == maxAmount)
             Row(
               children: [
-                _buildMetricChip("Monto Fijo", AppCurrency.format(minAmount), widget.isDark, alignment: CrossAxisAlignment.start),
-                _buildMetricChip("N° Ventas", "${sales.length}", widget.isDark, alignment: CrossAxisAlignment.center),
-                _buildMetricChip("Monto Total", AppCurrency.format(sales.fold<double>(0.0, (s, e) => s + e.total)), widget.isDark, alignment: CrossAxisAlignment.end),
+                _buildMetricChip(
+                  "Monto Fijo",
+                  AppCurrency.format(minAmount),
+                  widget.isDark,
+                  alignment: CrossAxisAlignment.start,
+                ),
+                _buildMetricChip(
+                  "N° Ventas",
+                  "${sales.length}",
+                  widget.isDark,
+                  alignment: CrossAxisAlignment.center,
+                ),
+                _buildMetricChip(
+                  "Monto Total",
+                  AppCurrency.format(
+                    sales.fold<double>(0.0, (s, e) => s + e.total),
+                  ),
+                  widget.isDark,
+                  alignment: CrossAxisAlignment.end,
+                ),
               ],
             )
           else
             Row(
               children: [
-                _buildMetricChip("Mínimo", AppCurrency.format(minAmount), widget.isDark, alignment: CrossAxisAlignment.start),
-                _buildMetricChip("Promedio", AppCurrency.format(avgAmount), widget.isDark, alignment: CrossAxisAlignment.center),
-                _buildMetricChip("Máximo", AppCurrency.format(maxAmount), widget.isDark, alignment: CrossAxisAlignment.end),
+                _buildMetricChip(
+                  "Mínimo",
+                  AppCurrency.format(minAmount),
+                  widget.isDark,
+                  alignment: CrossAxisAlignment.start,
+                ),
+                _buildMetricChip(
+                  "Promedio",
+                  AppCurrency.format(avgAmount),
+                  widget.isDark,
+                  alignment: CrossAxisAlignment.center,
+                ),
+                _buildMetricChip(
+                  "Máximo",
+                  AppCurrency.format(maxAmount),
+                  widget.isDark,
+                  alignment: CrossAxisAlignment.end,
+                ),
               ],
             ),
         ],
@@ -338,7 +430,12 @@ class _ClientComplianceSparklineState extends State<ClientComplianceSparkline> {
     }
   }
 
-  Widget _buildMetricChip(String label, String value, bool isDark, {CrossAxisAlignment alignment = CrossAxisAlignment.start}) {
+  Widget _buildMetricChip(
+    String label,
+    String value,
+    bool isDark, {
+    CrossAxisAlignment alignment = CrossAxisAlignment.start,
+  }) {
     return Expanded(
       child: Column(
         crossAxisAlignment: alignment,
@@ -346,7 +443,10 @@ class _ClientComplianceSparklineState extends State<ClientComplianceSparkline> {
         children: [
           Text(
             label,
-            style: TextStyle(fontSize: 10, color: isDark ? Colors.grey[500] : Colors.grey[600]),
+            style: TextStyle(
+              fontSize: 10,
+              color: isDark ? Colors.grey[500] : Colors.grey[600],
+            ),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),
@@ -355,7 +455,9 @@ class _ClientComplianceSparklineState extends State<ClientComplianceSparkline> {
             fit: BoxFit.scaleDown,
             alignment: alignment == CrossAxisAlignment.end
                 ? Alignment.centerRight
-                : (alignment == CrossAxisAlignment.center ? Alignment.center : Alignment.centerLeft),
+                : (alignment == CrossAxisAlignment.center
+                      ? Alignment.center
+                      : Alignment.centerLeft),
             child: Text(
               value,
               style: TextStyle(
@@ -439,7 +541,9 @@ class _SparklinePainter extends CustomPainter {
     final Path fillPath = Path();
 
     for (int i = 0; i < data.length; i++) {
-      final double normalizedY = (maxVal == minVal) ? 0.5 : (data[i] - minVal) / range;
+      final double normalizedY = (maxVal == minVal)
+          ? 0.5
+          : (data[i] - minVal) / range;
       final double x = i * stepX;
       final double y = size.height - (normalizedY * (size.height - 16)) - 8;
 
@@ -449,7 +553,9 @@ class _SparklinePainter extends CustomPainter {
         fillPath.lineTo(x, y);
       } else {
         final double prevX = (i - 1) * stepX;
-        final double prevNormY = (maxVal == minVal) ? 0.5 : (data[i - 1] - minVal) / range;
+        final double prevNormY = (maxVal == minVal)
+            ? 0.5
+            : (data[i - 1] - minVal) / range;
         final double prevY = size.height - (prevNormY * (size.height - 16)) - 8;
 
         final double cx1 = prevX + (stepX / 2);
@@ -490,10 +596,13 @@ class _SparklinePainter extends CustomPainter {
 
     // Dibujar nodos interactivos para cada compra
     final Paint dotPaint = Paint()..color = lineColor;
-    final Paint dotInnerPaint = Paint()..color = isDark ? const Color(0xFF1E1E2A) : Colors.white;
+    final Paint dotInnerPaint = Paint()
+      ..color = isDark ? const Color(0xFF1E1E2A) : Colors.white;
 
     for (int i = 0; i < data.length; i++) {
-      final double normalizedY = (maxVal == minVal) ? 0.5 : (data[i] - minVal) / range;
+      final double normalizedY = (maxVal == minVal)
+          ? 0.5
+          : (data[i] - minVal) / range;
       final double x = i * stepX;
       final double y = size.height - (normalizedY * (size.height - 16)) - 8;
 

@@ -1,14 +1,19 @@
 import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
-import 'package:app_movil/features/catalog/providers/catalog_provider.dart';
-import 'package:app_movil/features/catalog/models/category_model.dart';
-import 'package:app_movil/features/catalog/models/brand_model.dart';
+import 'package:app_movil/core/utils/currency_formatter.dart';
 import 'package:app_movil/core/widgets/interactive_sheet_wrapper.dart';
+import 'package:app_movil/features/catalog/models/brand_model.dart';
+import 'package:app_movil/features/catalog/models/category_model.dart';
+import 'package:app_movil/features/catalog/providers/catalog_provider.dart';
 
-/// 🔍 LiveFilterBottomSheet - Mobile Awards Filtros Reactivos con Conteo a 0ms
+part 'live_filter/live_filter_chips_and_inputs_mixin.dart';
+part 'live_filter/live_filter_sections_mixin.dart';
+
+/// LiveFilterBottomSheet - Filtros Reactivos con Conteo a 0ms
 ///
 /// Permite al usuario ajustar filtros de ofertas, estado de stock, rango de precios
 /// con slider + inputs manuales, categorías, marcas y visualización de variantes,
@@ -27,7 +32,7 @@ class LiveFilterBottomSheet extends StatefulWidget {
   State<LiveFilterBottomSheet> createState() => _LiveFilterBottomSheetState();
 }
 
-class _LiveFilterBottomSheetState extends State<LiveFilterBottomSheet> {
+abstract class _LiveFilterBottomSheetBase extends State<LiveFilterBottomSheet> {
   final List<int> _selectedCategoryIds = [];
   final List<int> _selectedBrandIds = [];
   bool _onlyOffers = false;
@@ -49,6 +54,38 @@ class _LiveFilterBottomSheetState extends State<LiveFilterBottomSheet> {
   int? _sqliteCount;
   Timer? _countDebounce;
 
+  void _updateFilter(VoidCallback fn);
+
+  Widget _buildSectionTitle(String title, bool isDark);
+
+  Widget _buildNumericInput({
+    required String label,
+    required TextEditingController controller,
+    required bool isDark,
+    required Function(String) onSubmitted,
+  });
+
+  Widget _buildFilterChip({
+    required String label,
+    required bool isSelected,
+    required VoidCallback onTap,
+    required bool isDark,
+    IconData? icon,
+    Color activeColor = Colors.blue,
+  });
+
+  Widget _buildChoiceChip({
+    required String label,
+    required bool selected,
+    required VoidCallback onSelected,
+    Color color = Colors.blue,
+    IconData? icon,
+    required bool isDark,
+  });
+}
+
+class _LiveFilterBottomSheetState extends _LiveFilterBottomSheetBase
+    with _LiveFilterChipsAndInputsMixin, _LiveFilterSectionsMixin {
   @override
   void initState() {
     super.initState();
@@ -110,6 +147,7 @@ class _LiveFilterBottomSheetState extends State<LiveFilterBottomSheet> {
     super.dispose();
   }
 
+  @override
   void _updateFilter(VoidCallback fn) {
     setState(fn);
     _refreshSqliteCount();
@@ -276,60 +314,60 @@ class _LiveFilterBottomSheetState extends State<LiveFilterBottomSheet> {
         children: [
           // 1. CABECERA MODERNA CON BOTÓN LIMPIAR
           Padding(
-            padding: const EdgeInsets.fromLTRB(20, 8, 16, 12),
+            padding: const EdgeInsets.fromLTRB(20, 8, 12, 12),
             child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: Colors.blue.withValues(alpha: 0.15),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: const Icon(
-                        Icons.tune_rounded,
-                        color: Colors.blue,
-                        size: 20,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Text(
-                      'Filtros del Catálogo',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w900,
-                        color: isDark ? Colors.white : Colors.black87,
-                      ),
-                    ),
-                  ],
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.blue.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(
+                    Icons.tune_rounded,
+                    color: Colors.blue,
+                    size: 20,
+                  ),
                 ),
-                Row(
-                  children: [
-                    if (_hasActiveFilters)
-                      TextButton.icon(
-                        onPressed: _resetFilters,
-                        icon: const Icon(Icons.refresh_rounded, size: 16),
-                        label: const Text(
-                          'Limpiar',
-                          style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
-                        ),
-                        style: TextButton.styleFrom(
-                          foregroundColor: Colors.red[400],
-                          padding: const EdgeInsets.symmetric(horizontal: 8),
-                        ),
-                      ),
-                    IconButton(
-                      icon: Icon(
-                        Icons.close_rounded,
-                        color: isDark ? Colors.grey[400] : Colors.grey[600],
-                        size: 22,
-                      ),
-                      onPressed: () => Navigator.pop(context),
-                      tooltip: "Cerrar",
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'Filtros del Catálogo',
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w900,
+                      color: isDark ? Colors.white : Colors.black87,
                     ),
-                  ],
+                  ),
+                ),
+                if (_hasActiveFilters)
+                  TextButton.icon(
+                    onPressed: _resetFilters,
+                    icon: const Icon(Icons.refresh_rounded, size: 16),
+                    label: const Text(
+                      'Limpiar',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    style: TextButton.styleFrom(
+                      foregroundColor: Colors.red[400],
+                      padding: const EdgeInsets.symmetric(horizontal: 6),
+                      minimumSize: Size.zero,
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                  ),
+                IconButton(
+                  icon: Icon(
+                    Icons.close_rounded,
+                    color: isDark ? Colors.grey[400] : Colors.grey[600],
+                    size: 22,
+                  ),
+                  onPressed: () => Navigator.pop(context),
+                  tooltip: "Cerrar",
                 ),
               ],
             ),
@@ -340,452 +378,36 @@ class _LiveFilterBottomSheetState extends State<LiveFilterBottomSheet> {
           // 2. CONTENIDO SCROLLABLE CON ACORDEONES Y CARDS
           Flexible(
             child: SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(20, 14, 20, InteractiveSheetWrapper.kModalScrollBottomClearance),
+              padding: const EdgeInsets.fromLTRB(
+                20,
+                14,
+                20,
+                InteractiveSheetWrapper.kModalScrollBottomClearance,
+              ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // A. OFERTAS Y VARIANTES
-                  Container(
-                    padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                      color: cardBg,
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: borderColor),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _buildSectionTitle('Promociones y Visualización', isDark),
-                        const SizedBox(height: 10),
-                        Wrap(
-                          spacing: 8,
-                          runSpacing: 8,
-                          children: [
-                            _buildFilterChip(
-                              label: 'Solo ofertas 🔥',
-                              isSelected: _onlyOffers,
-                              activeColor: Colors.deepOrange,
-                              icon: Icons.local_offer_outlined,
-                              onTap: () => _updateFilter(() => _onlyOffers = !_onlyOffers),
-                              isDark: isDark,
-                            ),
-                            _buildFilterChip(
-                              label: 'Solo presentación principal',
-                              isSelected: _onlyDefaults,
-                              activeColor: Colors.indigo,
-                              icon: Icons.star_outline_rounded,
-                              onTap: () =>
-                                  _updateFilter(() => _onlyDefaults = !_onlyDefaults),
-                              isDark: isDark,
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-
+                  _buildPromotionsCard(cardBg, borderColor, isDark),
                   const SizedBox(height: 14),
-
-                  // B. ESTADO DE STOCK
-                  Container(
-                    padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                      color: cardBg,
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: borderColor),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _buildSectionTitle('Disponibilidad de Stock', isDark),
-                        const SizedBox(height: 10),
-                        Wrap(
-                          spacing: 8,
-                          runSpacing: 8,
-                          children: [
-                            _buildChoiceChip(
-                              label: 'Todos',
-                              selected: _stockStatus == 'all',
-                              onSelected: () =>
-                                  _updateFilter(() => _stockStatus = 'all'),
-                              isDark: isDark,
-                            ),
-                            _buildChoiceChip(
-                              label: 'Con Stock',
-                              selected: _stockStatus == 'in_stock',
-                              color: Colors.teal,
-                              icon: Icons.check_circle_outline,
-                              onSelected: () =>
-                                  _updateFilter(() => _stockStatus = 'in_stock'),
-                              isDark: isDark,
-                            ),
-                            _buildChoiceChip(
-                              label: 'Stock Bajo',
-                              selected: _stockStatus == 'low_stock',
-                              color: Colors.amber[700]!,
-                              icon: Icons.warning_amber_rounded,
-                              onSelected: () =>
-                                  _updateFilter(() => _stockStatus = 'low_stock'),
-                              isDark: isDark,
-                            ),
-                            _buildChoiceChip(
-                              label: 'Agotados',
-                              selected: _stockStatus == 'out_of_stock',
-                              color: Colors.red,
-                              icon: Icons.block_outlined,
-                              onSelected: () =>
-                                  _updateFilter(() => _stockStatus = 'out_of_stock'),
-                              isDark: isDark,
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-
+                  _buildStockStatusCard(cardBg, borderColor, isDark),
                   const SizedBox(height: 14),
-
-                  // C. RANGO DE PRECIOS CON SLIDER Y CAMPOS MANUALES
-                  Container(
-                    padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                      color: cardBg,
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: borderColor),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            _buildSectionTitle('Rango de Precios', isDark),
-                            Switch.adaptive(
-                              value: _filterByPrice,
-                              activeThumbColor: Colors.blue[600],
-                              onChanged: (val) {
-                                HapticFeedback.selectionClick();
-                                _updateFilter(() => _filterByPrice = val);
-                              },
-                            ),
-                          ],
-                        ),
-                        if (_filterByPrice) ...[
-                          const SizedBox(height: 8),
-                          RangeSlider(
-                            values: _priceRange,
-                            min: 0,
-                            max: 500,
-                            divisions: 50,
-                            activeColor: isDark ? Colors.blue[300] : Colors.blue[700],
-                            inactiveColor:
-                                isDark ? Colors.white12 : Colors.grey.shade300,
-                            labels: RangeLabels(
-                              "S/ ${_priceRange.start.round()}",
-                              "S/ ${_priceRange.end.round()}",
-                            ),
-                            onChanged: (val) {
-                              _updateFilter(() {
-                                _priceRange = val;
-                                _minPriceController.text =
-                                    val.start.toStringAsFixed(0);
-                                _maxPriceController.text =
-                                    val.end.toStringAsFixed(0);
-                              });
-                            },
-                          ),
-                          Row(
-                            children: [
-                              Expanded(
-                                child: _buildNumericInput(
-                                  label: 'Mínimo',
-                                  controller: _minPriceController,
-                                  isDark: isDark,
-                                  onSubmitted: (val) {
-                                    final n = double.tryParse(val);
-                                    if (n != null && n >= 0 && n <= _priceRange.end) {
-                                      _updateFilter(() {
-                                        _priceRange = RangeValues(
-                                          n.clamp(0.0, 500.0),
-                                          _priceRange.end,
-                                        );
-                                      });
-                                    }
-                                  },
-                                ),
-                              ),
-                              const SizedBox(width: 14),
-                              Padding(
-                                padding: const EdgeInsets.only(top: 14),
-                                child: Text(
-                                  "—",
-                                  style: TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.bold,
-                                    color: isDark ? Colors.white38 : Colors.grey[400],
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 14),
-                              Expanded(
-                                child: _buildNumericInput(
-                                  label: 'Máximo',
-                                  controller: _maxPriceController,
-                                  isDark: isDark,
-                                  onSubmitted: (val) {
-                                    final n = double.tryParse(val);
-                                    if (n != null &&
-                                        n >= _priceRange.start &&
-                                        n <= 500) {
-                                      _updateFilter(() {
-                                        _priceRange = RangeValues(
-                                          _priceRange.start,
-                                          n.clamp(0.0, 500.0),
-                                        );
-                                      });
-                                    }
-                                  },
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
-
+                  _buildPriceRangeCard(cardBg, borderColor, isDark),
                   const SizedBox(height: 14),
-
-                  // D. CATEGORÍAS (ACORDEÓN COLAPSABLE)
                   if (categories.isNotEmpty || catProv.hasOrphanCategories)
-                    Container(
-                      margin: const EdgeInsets.only(bottom: 14),
-                      decoration: BoxDecoration(
-                        color: cardBg,
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: borderColor),
-                      ),
-                      child: Column(
-                        children: [
-                          InkWell(
-                            onTap: () => setState(
-                              () => _categoriesExpanded = !_categoriesExpanded,
-                            ),
-                            borderRadius: BorderRadius.circular(16),
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 14,
-                                vertical: 12,
-                              ),
-                              child: Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                children: [
-                                  Row(
-                                    children: [
-                                      _buildSectionTitle('Categorías', isDark),
-                                      if (_selectedCategoryIds.isNotEmpty) ...[
-                                        const SizedBox(width: 8),
-                                        Container(
-                                          padding: const EdgeInsets.symmetric(
-                                            horizontal: 7,
-                                            vertical: 2,
-                                          ),
-                                          decoration: BoxDecoration(
-                                            color: Colors.blue.withValues(alpha: 0.2),
-                                            borderRadius:
-                                                BorderRadius.circular(10),
-                                          ),
-                                          child: Text(
-                                            '${_selectedCategoryIds.length}',
-                                            style: const TextStyle(
-                                              fontSize: 11,
-                                              fontWeight: FontWeight.bold,
-                                              color: Colors.blue,
-                                            ),
-                                          ),
-                                        ),
-                                      ],
-                                    ],
-                                  ),
-                                  Icon(
-                                    _categoriesExpanded
-                                        ? Icons.keyboard_arrow_up_rounded
-                                        : Icons.keyboard_arrow_down_rounded,
-                                    color:
-                                        isDark ? Colors.white60 : Colors.grey[600],
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                          AnimatedCrossFade(
-                            firstChild: Padding(
-                              padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
-                              child: Wrap(
-                                spacing: 8,
-                                runSpacing: 8,
-                                children: [
-                                  if (catProv.hasOrphanCategories)
-                                    _buildFilterChip(
-                                      label: 'General',
-                                      isSelected: _selectedCategoryIds.contains(0),
-                                      onTap: () {
-                                        _updateFilter(() {
-                                          if (_selectedCategoryIds.contains(0)) {
-                                            _selectedCategoryIds.remove(0);
-                                          } else {
-                                            _selectedCategoryIds.add(0);
-                                          }
-                                        });
-                                      },
-                                      isDark: isDark,
-                                    ),
-                                  ...categories
-                                      .where((c) => c.nombre.trim().toLowerCase() != 'general')
-                                      .map((Category cat) {
-                                    final isSelected =
-                                        _selectedCategoryIds.contains(cat.id);
-                                    return _buildFilterChip(
-                                      label: cat.nombre,
-                                      isSelected: isSelected,
-                                      onTap: () {
-                                        _updateFilter(() {
-                                          if (isSelected) {
-                                            _selectedCategoryIds.remove(cat.id);
-                                          } else {
-                                            _selectedCategoryIds.add(cat.id);
-                                          }
-                                        });
-                                      },
-                                      isDark: isDark,
-                                    );
-                                  }),
-                                ],
-                              ),
-                            ),
-                            secondChild: const SizedBox.shrink(),
-                            crossFadeState: _categoriesExpanded
-                                ? CrossFadeState.showFirst
-                                : CrossFadeState.showSecond,
-                            duration: const Duration(milliseconds: 200),
-                          ),
-                        ],
-                      ),
+                    _buildCategoriesAccordion(
+                      categories: categories,
+                      hasOrphanCategories: catProv.hasOrphanCategories,
+                      cardBg: cardBg,
+                      borderColor: borderColor,
+                      isDark: isDark,
                     ),
-
-                  // E. MARCAS (ACORDEÓN COLAPSABLE)
                   if (brands.isNotEmpty || catProv.hasOrphanBrands)
-                    Container(
-                      margin: const EdgeInsets.only(bottom: 14),
-                      decoration: BoxDecoration(
-                        color: cardBg,
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: borderColor),
-                      ),
-                      child: Column(
-                        children: [
-                          InkWell(
-                            onTap: () => setState(
-                              () => _brandsExpanded = !_brandsExpanded,
-                            ),
-                            borderRadius: BorderRadius.circular(16),
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 14,
-                                vertical: 12,
-                              ),
-                              child: Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                children: [
-                                  Row(
-                                    children: [
-                                      _buildSectionTitle('Marcas', isDark),
-                                      if (_selectedBrandIds.isNotEmpty) ...[
-                                        const SizedBox(width: 8),
-                                        Container(
-                                          padding: const EdgeInsets.symmetric(
-                                            horizontal: 7,
-                                            vertical: 2,
-                                          ),
-                                          decoration: BoxDecoration(
-                                            color: Colors.blue.withValues(alpha: 0.2),
-                                            borderRadius:
-                                                BorderRadius.circular(10),
-                                          ),
-                                          child: Text(
-                                            '${_selectedBrandIds.length}',
-                                            style: const TextStyle(
-                                              fontSize: 11,
-                                              fontWeight: FontWeight.bold,
-                                              color: Colors.blue,
-                                            ),
-                                          ),
-                                        ),
-                                      ],
-                                    ],
-                                  ),
-                                  Icon(
-                                    _brandsExpanded
-                                        ? Icons.keyboard_arrow_up_rounded
-                                        : Icons.keyboard_arrow_down_rounded,
-                                    color:
-                                        isDark ? Colors.white60 : Colors.grey[600],
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                          AnimatedCrossFade(
-                            firstChild: Padding(
-                              padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
-                              child: Wrap(
-                                spacing: 8,
-                                runSpacing: 8,
-                                children: [
-                                  if (catProv.hasOrphanBrands)
-                                    _buildFilterChip(
-                                      label: '[ Sin Marca ]',
-                                      isSelected: _selectedBrandIds.contains(0),
-                                      onTap: () {
-                                        _updateFilter(() {
-                                          if (_selectedBrandIds.contains(0)) {
-                                            _selectedBrandIds.remove(0);
-                                          } else {
-                                            _selectedBrandIds.add(0);
-                                          }
-                                        });
-                                      },
-                                      isDark: isDark,
-                                    ),
-                                  ...brands.map((Brand b) {
-                                    final isSelected =
-                                        _selectedBrandIds.contains(b.id);
-                                    return _buildFilterChip(
-                                      label: b.nombre,
-                                      isSelected: isSelected,
-                                      onTap: () {
-                                        _updateFilter(() {
-                                          if (isSelected) {
-                                            _selectedBrandIds.remove(b.id);
-                                          } else {
-                                            _selectedBrandIds.add(b.id);
-                                          }
-                                        });
-                                      },
-                                      isDark: isDark,
-                                    );
-                                  }),
-                                ],
-                              ),
-                            ),
-                            secondChild: const SizedBox.shrink(),
-                            crossFadeState: _brandsExpanded
-                                ? CrossFadeState.showFirst
-                                : CrossFadeState.showSecond,
-                            duration: const Duration(milliseconds: 200),
-                          ),
-                        ],
-                      ),
+                    _buildBrandsAccordion(
+                      brands: brands,
+                      hasOrphanBrands: catProv.hasOrphanBrands,
+                      cardBg: cardBg,
+                      borderColor: borderColor,
+                      isDark: isDark,
                     ),
                 ],
               ),
@@ -795,10 +417,12 @@ class _LiveFilterBottomSheetState extends State<LiveFilterBottomSheet> {
           // 3. BOTÓN FLOTANTE INFERIOR CON CONTEO EN VIVO A 0MS
           Builder(
             builder: (bCtx) {
-              final effectiveBottom = InteractiveSheetWrapper.getEffectiveBottomPadding(
-                bCtx,
-                minPadding: InteractiveSheetWrapper.kMinDefensiveBottomClearance,
-              );
+              final effectiveBottom =
+                  InteractiveSheetWrapper.getEffectiveBottomPadding(
+                    bCtx,
+                    minPadding:
+                        InteractiveSheetWrapper.kMinDefensiveBottomClearance,
+                  );
               return Container(
                 padding: EdgeInsets.fromLTRB(20, 12, 20, effectiveBottom),
                 decoration: BoxDecoration(
@@ -829,14 +453,19 @@ class _LiveFilterBottomSheetState extends State<LiveFilterBottomSheet> {
                       children: [
                         const Icon(Icons.check_rounded, size: 20),
                         const SizedBox(width: 8),
-                        Text(
-                          liveCount > 0
-                              ? 'Mostrar $liveCount ${_onlyDefaults ? (liveCount == 1 ? "Producto" : "Productos") : (liveCount == 1 ? "Variante" : "Variantes")}'
-                              : 'Aplicar Filtros',
-                          style: const TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.bold,
-                            letterSpacing: 0.5,
+                        Flexible(
+                          child: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: Text(
+                              liveCount > 0
+                                  ? 'Mostrar $liveCount ${_onlyDefaults ? (liveCount == 1 ? "Producto" : "Productos") : (liveCount == 1 ? "Variante" : "Variantes")}'
+                                  : 'Aplicar Filtros',
+                              style: const TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.bold,
+                                letterSpacing: 0.5,
+                              ),
+                            ),
                           ),
                         ),
                       ],
@@ -847,184 +476,6 @@ class _LiveFilterBottomSheetState extends State<LiveFilterBottomSheet> {
             },
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _buildSectionTitle(String title, bool isDark) {
-    return Text(
-      title,
-      style: TextStyle(
-        fontSize: 13,
-        fontWeight: FontWeight.w800,
-        letterSpacing: 0.4,
-        color: isDark ? Colors.grey[300] : Colors.grey[800],
-      ),
-    );
-  }
-
-  Widget _buildNumericInput({
-    required String label,
-    required TextEditingController controller,
-    required bool isDark,
-    required Function(String) onSubmitted,
-  }) {
-    return TextField(
-      controller: controller,
-      keyboardType: const TextInputType.numberWithOptions(decimal: true),
-      onSubmitted: onSubmitted,
-      style: TextStyle(
-        fontSize: 14,
-        fontWeight: FontWeight.bold,
-        color: isDark ? Colors.white : Colors.black87,
-      ),
-      decoration: InputDecoration(
-        labelText: label,
-        labelStyle: TextStyle(
-          fontSize: 12,
-          color: isDark ? Colors.grey[400] : Colors.grey[600],
-        ),
-        prefixText: 'S/ ',
-        prefixStyle: TextStyle(
-          fontSize: 13,
-          fontWeight: FontWeight.bold,
-          color: isDark ? Colors.blue[300] : Colors.blue[800],
-        ),
-        isDense: true,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
-          borderSide: BorderSide(
-            color: isDark ? Colors.white24 : Colors.grey.shade300,
-          ),
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
-          borderSide: BorderSide(
-            color: isDark ? Colors.white12 : Colors.grey.shade300,
-          ),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
-          borderSide: const BorderSide(color: Colors.blue, width: 1.5),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildFilterChip({
-    required String label,
-    required bool isSelected,
-    required VoidCallback onTap,
-    required bool isDark,
-    IconData? icon,
-    Color activeColor = Colors.blue,
-  }) {
-    return InkWell(
-      onTap: () {
-        HapticFeedback.selectionClick();
-        onTap();
-      },
-      borderRadius: BorderRadius.circular(12),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 180),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        decoration: BoxDecoration(
-          color: isSelected
-              ? activeColor.withValues(alpha: isDark ? 0.25 : 0.12)
-              : (isDark ? Colors.white10 : Colors.grey.shade100),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: isSelected
-                ? activeColor
-                : (isDark ? Colors.white12 : Colors.grey.shade300),
-            width: isSelected ? 1.5 : 1.0,
-          ),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (icon != null) ...[
-              Icon(
-                icon,
-                size: 16,
-                color: isSelected
-                    ? activeColor
-                    : (isDark ? Colors.grey[400] : Colors.grey[600]),
-              ),
-              const SizedBox(width: 6),
-            ],
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                color: isSelected
-                    ? (isDark ? Colors.white : activeColor)
-                    : (isDark ? Colors.grey[300] : Colors.black87),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildChoiceChip({
-    required String label,
-    required bool selected,
-    required VoidCallback onSelected,
-    Color color = Colors.blue,
-    IconData? icon,
-    required bool isDark,
-  }) {
-    final activeColor = color;
-    return InkWell(
-      onTap: () {
-        HapticFeedback.selectionClick();
-        onSelected();
-      },
-      borderRadius: BorderRadius.circular(12),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 180),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        decoration: BoxDecoration(
-          color: selected
-              ? activeColor.withValues(alpha: isDark ? 0.25 : 0.12)
-              : (isDark ? Colors.white10 : Colors.grey.shade100),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: selected
-                ? activeColor
-                : (isDark ? Colors.white12 : Colors.grey.shade300),
-            width: selected ? 1.5 : 1.0,
-          ),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (icon != null) ...[
-              Icon(
-                icon,
-                size: 15,
-                color: selected
-                    ? activeColor
-                    : (isDark ? Colors.grey[400] : Colors.grey[600]),
-              ),
-              const SizedBox(width: 5),
-            ],
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: selected ? FontWeight.bold : FontWeight.normal,
-                color: selected
-                    ? (isDark ? Colors.white : activeColor)
-                    : (isDark ? Colors.grey[300] : Colors.black87),
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }
