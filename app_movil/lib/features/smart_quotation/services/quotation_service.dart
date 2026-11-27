@@ -1,38 +1,83 @@
-import 'package:app_movil/features/smart_quotation/models/smart_quotation_model.dart';
-import 'package:app_movil/features/smart_quotation/models/crm_models.dart';
 import 'dart:convert';
+
 import 'package:flutter/foundation.dart';
+
 import 'package:app_movil/core/database/local_db.dart';
-import 'package:app_movil/features/smart_quotation/services/quotation_naming_engine.dart';
 import 'package:app_movil/core/utils/currency_formatter.dart';
+import 'package:app_movil/features/smart_quotation/models/crm_models.dart';
+import 'package:app_movil/features/smart_quotation/models/smart_quotation_model.dart';
+import 'package:app_movil/features/smart_quotation/services/quotation_naming_engine.dart';
+
+part 'quotation/quotation_demand_part.dart';
+part 'quotation/quotation_validation_part.dart';
+part 'quotation/quotation_refresh_part.dart';
 
 class QuotationService {
   final dbHelper = LocalDatabase.instance;
 
-  Future<SmartQuotationModel> cloneQuotation(int quotationId, int usuarioId, {int? targetClientId}) async {
+  String _encodeBundleSnapshot(
+    Map<String, dynamic> bundle,
+    List<Map<String, dynamic>> bundleItems,
+  ) {
+    return jsonEncode({
+      'bundle_name': bundle['nombre_paquete'],
+      'bundle_price': bundle['precio_venta_total'],
+      'bundle_type': bundle['tipo_promocion'] ?? 'paquete',
+      'bundle_active': (bundle['activo'] as int?) == 1,
+      'items': bundleItems
+          .map(
+            (bi) => {
+              'presentacion_id': bi['presentacion_id'],
+              'producto_id': bi['producto_id'],
+              'cantidad_requerida': bi['cantidad_requerida'],
+              'precio_original': bi['precio_original_unitario'],
+            },
+          )
+          .toList(),
+    });
+  }
+
+  Future<SmartQuotationModel> cloneQuotation(
+    int quotationId,
+    int usuarioId, {
+    int? targetClientId,
+  }) async {
     try {
       final db = await dbHelper.database;
-      
-      final qRows = await db.query('smart_quotations', where: 'id = ?', whereArgs: [quotationId], limit: 1);
+
+      final qRows = await db.query(
+        'smart_quotations',
+        where: 'id = ?',
+        whereArgs: [quotationId],
+        limit: 1,
+      );
       if (qRows.isEmpty) throw Exception("Cotización original no encontrada.");
-      
-      final iRows = await db.query('smart_quotation_items', where: 'quotation_id = ?', whereArgs: [quotationId]);
-      
-      Map<String, dynamic> cloneData = Map.from(qRows.first);
+
+      final iRows = await db.query(
+        'smart_quotation_items',
+        where: 'quotation_id = ?',
+        whereArgs: [quotationId],
+      );
+
+      final Map<String, dynamic> cloneData = Map.from(qRows.first);
       final int? origSeq = qRows.first['numero_secuencial'] as int?;
-      final String rawOriginalName = (cloneData['client_name'] as String?) ?? "Cotización";
-      cloneData.remove('id'); 
+      final String rawOriginalName =
+          (cloneData['client_name'] as String?) ?? "Cotización";
+      cloneData.remove('id');
       cloneData['status'] = 'DRAFT';
       cloneData['is_template'] = 0;
       cloneData['clone_source_id'] = quotationId;
-      cloneData['creado_por_usuario_id'] = usuarioId; 
+      cloneData['creado_por_usuario_id'] = usuarioId;
       cloneData['created_at'] = DateTime.now().toIso8601String();
       cloneData['updated_at'] = DateTime.now().toIso8601String();
       if (targetClientId != null) cloneData['client_id'] = targetClientId;
 
       int newId = 0;
       await db.transaction((txn) async {
-        final nextSeqResult = await txn.rawQuery('SELECT COALESCE(MAX(numero_secuencial), 0) + 1 as next_val FROM smart_quotations WHERE negocio_id = ?', [cloneData['negocio_id']]);
+        final nextSeqResult = await txn.rawQuery(
+          'SELECT COALESCE(MAX(numero_secuencial), 0) + 1 as next_val FROM smart_quotations WHERE negocio_id = ?',
+          [cloneData['negocio_id']],
+        );
         final nextSeq = (nextSeqResult.first['next_val'] as int?) ?? 1;
         cloneData['numero_secuencial'] = nextSeq;
         cloneData['client_name'] = QuotationNamingEngine.cleanCloneTitle(
@@ -42,524 +87,55 @@ class QuotationService {
         );
 
         newId = await txn.insert('smart_quotations', cloneData);
-        for (var item in iRows) {
-          Map<String, dynamic> itemClone = Map.from(item);
+        for (final item in iRows) {
+          final Map<String, dynamic> itemClone = Map.from(item);
           itemClone.remove('id');
           itemClone['quotation_id'] = newId;
           await txn.insert('smart_quotation_items', itemClone);
         }
       });
 
-      final newRows = await db.query('smart_quotations', where: 'id = ?', whereArgs: [newId]);
-      Map<String, dynamic> result = Map.from(newRows.first);
-      result['items'] = await db.query('smart_quotation_items', where: 'quotation_id = ?', whereArgs: [newId]);
-      
+      final newRows = await db.query(
+        'smart_quotations',
+        where: 'id = ?',
+        whereArgs: [newId],
+      );
+      final Map<String, dynamic> result = Map.from(newRows.first);
+      result['items'] = await db.query(
+        'smart_quotation_items',
+        where: 'quotation_id = ?',
+        whereArgs: [newId],
+      );
+
       return SmartQuotationModel.fromJson(result);
     } catch (e) {
       throw Exception("Error local al clonar: $e");
     }
   }
 
-  Future<ValidationResult> validateIntegrity(int quotationId) async {
-    try {
-      final db = await dbHelper.database;
-      final iRows = await db.query('smart_quotation_items', where: 'quotation_id = ?', whereArgs: [quotationId]);
-      
-      bool hasIssues = false;
-      bool canSell = true;
-      List<StockWarning> warnings = [];
-      List<PriceChange> prices = [];
-      List<NameChange> nameChanges = [];
-      List<BundleChange> bundleChanges = [];
-      List<UnitChange> unitChanges = [];
-      List<SharedStockConflict> sharedConflicts = [];
-
-      // 1. Acumular demanda total en unidades base para detectar colisiones y desabastecimiento
-      Map<int, int> totalDemandPerPres = {};
-      Map<int, int> factorPerPres = {};
-      Map<int, int> currentStockPerPres = {};
-      Map<int, int?> cupoPerPres = {};
-      Map<int, bool> usaSharedStockPerPres = {};
-      Map<int, int> productIdPerPres = {};
-      Map<int, int> totalDemandPerSharedProduct = {};
-      Map<int, int> sharedStockPerProduct = {};
-
-      for (var item in iRows) {
-        if (item['bundle_id'] != null) {
-          int bId = item['bundle_id'] as int;
-          int qty = (item['quantity'] as int?) ?? 1;
-          final bItems = await db.query('items_paquete', where: 'paquete_id = ?', whereArgs: [bId]);
-          for (var bItem in bItems) {
-            int pId = bItem['presentacion_id'] as int;
-            int reqQty = (bItem['cantidad_requerida'] as int?) ?? 1;
-            if (!factorPerPres.containsKey(pId)) {
-              final prRows = await db.query('presentaciones_producto', columns: ['producto_id', 'stock_actual', 'unidades_por_venta', 'usa_stock_compartido', 'cupo_maximo_variante'], where: 'id = ?', whereArgs: [pId]);
-              if (prRows.isNotEmpty) {
-                int factor = (prRows.first['unidades_por_venta'] as int?) ?? 1;
-                if (factor <= 0) factor = 1;
-                factorPerPres[pId] = factor;
-                currentStockPerPres[pId] = (prRows.first['stock_actual'] as int?) ?? 0;
-                cupoPerPres[pId] = prRows.first['cupo_maximo_variante'] as int?;
-                int prodId = (prRows.first['producto_id'] as int?) ?? 0;
-                bool isShared = (prRows.first['usa_stock_compartido'] as int? ?? 0) == 1;
-                usaSharedStockPerPres[pId] = isShared;
-                productIdPerPres[pId] = prodId;
-                if (isShared && prodId > 0 && !sharedStockPerProduct.containsKey(prodId)) {
-                  final pRows = await db.query('productos', columns: ['stock_compartido'], where: 'id = ?', whereArgs: [prodId]);
-                  sharedStockPerProduct[prodId] = pRows.isNotEmpty ? ((pRows.first['stock_compartido'] as int?) ?? currentStockPerPres[pId]!) : currentStockPerPres[pId]!;
-                }
-              } else {
-                factorPerPres[pId] = 1;
-                currentStockPerPres[pId] = 0;
-                cupoPerPres[pId] = null;
-                usaSharedStockPerPres[pId] = false;
-                productIdPerPres[pId] = 0;
-              }
-            }
-            int factor = factorPerPres[pId]!;
-            int totalBaseUnits = reqQty * qty * factor;
-            bool isShared = usaSharedStockPerPres[pId] ?? false;
-            int prodId = productIdPerPres[pId] ?? 0;
-            if (isShared && prodId > 0) {
-              totalDemandPerSharedProduct[prodId] = (totalDemandPerSharedProduct[prodId] ?? 0) + totalBaseUnits;
-            } else {
-              totalDemandPerPres[pId] = (totalDemandPerPres[pId] ?? 0) + totalBaseUnits;
-            }
-          }
-        } else if (item['presentation_id'] != null) {
-          int pId = item['presentation_id'] as int;
-          int qty = (item['quantity'] as int?) ?? 1;
-          if (!factorPerPres.containsKey(pId)) {
-            final prRows = await db.query('presentaciones_producto', columns: ['producto_id', 'stock_actual', 'unidades_por_venta', 'usa_stock_compartido', 'cupo_maximo_variante'], where: 'id = ?', whereArgs: [pId]);
-            if (prRows.isNotEmpty) {
-              int factor = (prRows.first['unidades_por_venta'] as int?) ?? 1;
-              if (factor <= 0) factor = 1;
-              factorPerPres[pId] = factor;
-              currentStockPerPres[pId] = (prRows.first['stock_actual'] as int?) ?? 0;
-              cupoPerPres[pId] = prRows.first['cupo_maximo_variante'] as int?;
-              int prodId = (prRows.first['producto_id'] as int?) ?? 0;
-              bool isShared = (prRows.first['usa_stock_compartido'] as int? ?? 0) == 1;
-              usaSharedStockPerPres[pId] = isShared;
-              productIdPerPres[pId] = prodId;
-              if (isShared && prodId > 0 && !sharedStockPerProduct.containsKey(prodId)) {
-                final pRows = await db.query('productos', columns: ['stock_compartido'], where: 'id = ?', whereArgs: [prodId]);
-                sharedStockPerProduct[prodId] = pRows.isNotEmpty ? ((pRows.first['stock_compartido'] as int?) ?? currentStockPerPres[pId]!) : currentStockPerPres[pId]!;
-              }
-            } else {
-              factorPerPres[pId] = 1;
-              currentStockPerPres[pId] = 0;
-              cupoPerPres[pId] = null;
-              usaSharedStockPerPres[pId] = false;
-              productIdPerPres[pId] = 0;
-            }
-          }
-          int factor = factorPerPres[pId]!;
-          int totalBaseUnits = qty * factor;
-          bool isShared = usaSharedStockPerPres[pId] ?? false;
-          int prodId = productIdPerPres[pId] ?? 0;
-          if (isShared && prodId > 0) {
-            totalDemandPerSharedProduct[prodId] = (totalDemandPerSharedProduct[prodId] ?? 0) + totalBaseUnits;
-          } else {
-            totalDemandPerPres[pId] = (totalDemandPerPres[pId] ?? 0) + totalBaseUnits;
-          }
-        }
-      }
-
-      // 1.1 Detección precisa de conflictos de stock compartido acumulado (a nivel de pool)
-      final Map<int, List<QuoteItemConflictDetail>> sharedConflictItemsByProd = {};
-      final Set<int> conflictProdIds = {};
-
-      for (var item in iRows) {
-        if (item['presentation_id'] != null) {
-          int pId = item['presentation_id'] as int;
-          bool isShared = usaSharedStockPerPres[pId] ?? false;
-          int prodId = productIdPerPres[pId] ?? 0;
-          if (isShared && prodId > 0) {
-            final pool = sharedStockPerProduct[prodId] ?? 0;
-            final demanded = totalDemandPerSharedProduct[prodId] ?? 0;
-            if (demanded > pool) {
-              conflictProdIds.add(prodId);
-              final factor = factorPerPres[pId] ?? 1;
-              final qty = (item['quantity'] as int?) ?? 1;
-              sharedConflictItemsByProd.putIfAbsent(prodId, () => []).add(
-                QuoteItemConflictDetail(
-                  itemId: item['id'] as int,
-                  presentationId: pId,
-                  presentationName: (item['specific_name'] as String?) ??
-                      (item['product_name'] as String? ?? ''),
-                  requestedQty: qty,
-                  conversionFactor: factor,
-                  requestedBaseUnits: qty * factor,
-                  cupoMaximo: cupoPerPres[pId],
-                ),
-              );
-            }
-          }
-        }
-      }
-
-      for (final prodId in conflictProdIds) {
-        final pool = sharedStockPerProduct[prodId] ?? 0;
-        final demanded = totalDemandPerSharedProduct[prodId] ?? 0;
-        final items = sharedConflictItemsByProd[prodId] ?? [];
-        String pName = "Producto compartido";
-        final pRow = await db.query('productos', columns: ['nombre'], where: 'id = ?', whereArgs: [prodId]);
-        if (pRow.isNotEmpty) {
-          pName = (pRow.first['nombre'] as String?) ?? pName;
-        }
-        hasIssues = true;
-        canSell = false;
-        sharedConflicts.add(SharedStockConflict(
-          productId: prodId,
-          productName: pName,
-          totalSharedPool: pool,
-          totalRequestedBaseUnits: demanded,
-          excessBaseUnits: demanded - pool,
-          conflictingItems: items,
-        ));
-      }
-
-      for (var item in iRows) {
-        if (item['bundle_id'] != null) {
-          int bId = item['bundle_id'] as int;
-          int qty = item['quantity'] as int;
-          String? itemName = item['product_name'] as String?;
-          
-          final bItems = await db.query('items_paquete', where: 'paquete_id = ?', whereArgs: [bId]);
-          for (var bItem in bItems) {
-            int pId = bItem['presentacion_id'] as int;
-            int reqQty = (bItem['cantidad_requerida'] as int?) ?? 1;
-            int factor = factorPerPres[pId] ?? 1;
-            int totalDeductBase = reqQty * qty * factor;
-            int demandedBase = totalDemandPerPres[pId] ?? totalDeductBase;
-            int currentStock = currentStockPerPres[pId] ?? 0;
-
-            if (!currentStockPerPres.containsKey(pId) || (currentStock == 0 && !factorPerPres.containsKey(pId))) {
-              hasIssues = true;
-              canSell = false;
-              warnings.add(StockWarning(
-                itemId: item['id'] as int,
-                productName: itemName ?? "Paquete",
-                requested: reqQty * qty,
-                available: 0,
-                message: "Un componente del paquete ya no existe en el catálogo.",
-              ));
-            } else if (currentStock < demandedBase) {
-              hasIssues = true;
-              canSell = false;
-              int availableUnits = (currentStock / factor).floor();
-              int reqTotal = (demandedBase / factor).ceil();
-              warnings.add(StockWarning(
-                itemId: item['id'] as int,
-                productName: itemName ?? "Paquete",
-                requested: reqTotal,
-                available: availableUnits,
-                message: "Componente sin stock suficiente (requiere $reqTotal, disponible $availableUnits).",
-              ));
-            }
-          }
-          
-          // --- Validación adicional para bundles (Deep Compare) ---
-          final bRows = await db.query('paquetes', where: 'id = ?', whereArgs: [bId]);
-          if (bRows.isEmpty) {
-            // Bundle eliminado
-            hasIssues = true;
-            canSell = false;
-            bundleChanges.add(BundleChange(
-              itemId: item['id'] as int,
-              bundleId: bId,
-              bundleName: item['product_name'] as String? ?? "Oferta",
-              changes: ["La oferta fue eliminada del catálogo"],
-              isDeleted: true,
-            ));
-            continue;
-          }
-
-          final bundle = bRows.first;
-          bool bundleActive = (bundle['activo'] as int?) == 1;
-
-          if (!bundleActive) {
-            hasIssues = true;
-            canSell = false;
-            bundleChanges.add(BundleChange(
-              itemId: item['id'] as int,
-              bundleId: bId,
-              bundleName: bundle['nombre_paquete'] as String? ?? "Oferta",
-              changes: ["La oferta fue desactivada por el administrador"],
-              isDeactivated: true,
-            ));
-            continue;
-          }
-
-          List<String> detectedChanges = [];
-          bool isBlockingChange = false;
-          
-          String currentName = bundle['nombre_paquete'] as String? ?? "";
-          String savedName = item['product_name'] as String? ?? "";
-          if (currentName.toLowerCase() != savedName.toLowerCase()) {
-            detectedChanges.add("Nombre: \"$savedName\" → \"$currentName\"");
-          }
-
-          double currentPrice = (bundle['precio_venta_total'] as num).toDouble();
-          double appliedPrice = (item['unit_price_applied'] as num).toDouble();
-          bool isManual = item['is_manual_price'] == 1 || item['is_manual_price'] == true;
-          if (!isManual && (appliedPrice - currentPrice).abs() > 0.01) {
-            detectedChanges.add("Precio: ${AppCurrency.format(appliedPrice)} → ${AppCurrency.format(currentPrice)}");
-          }
-
-          String currentType = bundle['tipo_promocion'] as String? ?? "paquete";
-          String? savedSnapshotJson = item['bundle_items_snapshot'] as String?;
-
-          if (savedSnapshotJson != null && savedSnapshotJson.isNotEmpty) {
-            try {
-              final savedSnapshot = jsonDecode(savedSnapshotJson);
-              final savedItems = (savedSnapshot['items'] as List?) ?? [];
-              final currentBundleItems = await db.query('items_paquete', where: 'paquete_id = ?', whereArgs: [bId]);
-
-              if (savedItems.length != currentBundleItems.length) {
-                detectedChanges.add("Composición: ${savedItems.length} productos → ${currentBundleItems.length} productos");
-                isBlockingChange = true;
-              } else {
-                for (var savedItem in savedItems) {
-                  int savedPresId = savedItem['presentacion_id'] as int;
-                  int savedQty = savedItem['cantidad_requerida'] as int;
-                  final match = currentBundleItems.where((ci) => ci['presentacion_id'] == savedPresId).firstOrNull;
-                  if (match == null) {
-                    detectedChanges.add("Se removió un producto de la oferta (ID: $savedPresId)");
-                    isBlockingChange = true;
-                  } else if ((match['cantidad_requerida'] as int? ?? 1) != savedQty) {
-                    detectedChanges.add("Cambió la cantidad de un componente de la oferta");
-                    isBlockingChange = true;
-                  }
-                }
-                for (var current in currentBundleItems) {
-                  int currentPresId = current['presentacion_id'] as int;
-                  if (!savedItems.any((si) => si['presentacion_id'] == currentPresId)) {
-                    detectedChanges.add("Se agregó un nuevo producto a la oferta");
-                    isBlockingChange = true;
-                  }
-                }
-              }
-
-              String? savedType = savedSnapshot['bundle_type'] as String?;
-              if (savedType != null && savedType != currentType) {
-                detectedChanges.add("Tipo: \"$savedType\" → \"$currentType\"");
-                isBlockingChange = true;
-              }
-            } catch (e) {
-              debugPrint("Error parseando snapshot del bundle: $e");
-            }
-          } else {
-            // Si no hay snapshot, igual comparamos descripción por retrocompatibilidad
-            String currentDesc = bundle['descripcion'] as String? ?? "";
-            String? specificName = item['specific_name'] as String?;
-            if (specificName != null && specificName.toLowerCase() != currentDesc.toLowerCase()) {
-               detectedChanges.add("La descripción de la oferta cambió.");
-               isBlockingChange = true;
-            }
-          }
-
-          if (detectedChanges.isNotEmpty) {
-            hasIssues = true;
-            if (isBlockingChange) canSell = false;
-            
-            bundleChanges.add(BundleChange(
-              itemId: item['id'] as int,
-              bundleId: bId,
-              bundleName: currentName,
-              changes: detectedChanges,
-              oldPrice: appliedPrice,
-              newPrice: currentPrice,
-              isCompositionChange: isBlockingChange,
-            ));
-          }
-          continue; 
-        }
-
-        if (item['presentation_id'] == null) continue;
-        int pId = item['presentation_id'] as int;
-        
-        final prRows = await db.query('presentaciones_producto', where: 'id = ?', whereArgs: [pId]);
-        if (prRows.isEmpty) {
-          hasIssues = true;
-          canSell = false;
-          warnings.add(StockWarning(
-            itemId: item['id'] as int,
-            productName: item['product_name'] as String? ?? "Desconocido",
-            requested: item['quantity'] as int,
-            available: 0,
-            message: "Este producto ya no existe en el catálogo.",
-          ));
-          continue; 
-        }
-        
-        final pres = prRows.first;
-        
-        // --- Validación de Nombre y Variante/Presentación ---
-        String? itemName = item['product_name'] as String?;
-        String? realName;
-        final prodRows = await db.query('productos', where: 'id = ?', whereArgs: [item['product_id']]);
-        if (prodRows.isNotEmpty) {
-           realName = prodRows.first['nombre'] as String?;
-        }
-        
-        String? itemSpecific = item['specific_name'] as String?;
-        String? realSpecific = pres['nombre_especifico'] as String?;
-
-        if (itemName != null && realName != null && itemName.toLowerCase() != realName.toLowerCase()) {
-           hasIssues = true;
-           nameChanges.add(NameChange(
-              itemId: item['id'] as int,
-              oldName: itemName,
-              newName: realName,
-              message: "El nombre del producto cambió en el catálogo."
-           ));
-        } else if (itemSpecific != null && realSpecific != null && itemSpecific.toLowerCase() != realSpecific.toLowerCase()) {
-           hasIssues = true;
-           nameChanges.add(NameChange(
-              itemId: item['id'] as int,
-              oldName: "${itemName ?? ''} ($itemSpecific)",
-              newName: "${itemName ?? ''} ($realSpecific)",
-              message: "La presentación o variante cambió en el catálogo."
-           ));
-        }
-
-        // --- Validación de Precios y Ofertas ---
-        double basePrice = (pres['precio_venta_final'] as num).toDouble();
-        double currentPrice = (pres['precio_oferta'] != null && (pres['precio_oferta'] as num) > 0) 
-            ? (pres['precio_oferta'] as num).toDouble() 
-            : basePrice;
-            
-        int currentStock = pres['stock_actual'] as int;
-        
-        bool isManual = item['is_manual_price'] == 1 || item['is_manual_price'] == true;
-        double appliedPrice = (item['unit_price_applied'] as num).toDouble();
-        double originalPrice = (item['original_unit_price'] as num).toDouble();
-        
-        if (!isManual && appliedPrice != currentPrice) {
-          hasIssues = true;
-          
-          String message = "";
-          if (appliedPrice == originalPrice && currentPrice < basePrice) {
-             message = "¡Se activó un descuento en la tienda!";
-          } else if (appliedPrice < originalPrice && currentPrice == basePrice) {
-             message = "El producto ya no está en oferta.";
-          }
-          
-          prices.add(PriceChange(
-            itemId: item['id'] as int,
-            productName: itemName ?? "Desconocido",
-            oldPrice: appliedPrice,
-            newPrice: currentPrice,
-            newBasePrice: basePrice,
-            message: message,
-          ));
-        }
-
-        // --- Validación de stock Factor-Aware y Acumulada ---
-        int factor = factorPerPres[pId] ?? 1;
-        bool isShared = usaSharedStockPerPres[pId] ?? false;
-        int prodId = productIdPerPres[pId] ?? 0;
-        int? cupo = cupoPerPres[pId];
-        int qty = item['quantity'] as int;
-        
-        int demandedBase;
-        int effectiveAvailableStock;
-        
-        if (isShared && prodId > 0) {
-          demandedBase = totalDemandPerSharedProduct[prodId] ?? (qty * factor);
-          effectiveAvailableStock = sharedStockPerProduct[prodId] ?? currentStock;
-        } else {
-          demandedBase = totalDemandPerPres[pId] ?? (qty * factor);
-          effectiveAvailableStock = currentStock;
-        }
-
-        int physicalAvailableUnits = (effectiveAvailableStock / factor).floor();
-        int vendibleAvailableUnits = (cupo != null && isShared)
-            ? physicalAvailableUnits.clamp(0, cupo)
-            : physicalAvailableUnits;
-        
-        if (isShared && prodId > 0) {
-          if (conflictProdIds.contains(prodId)) {
-            // Ya registrado en sharedStockConflicts a nivel de pozo común.
-            // Solo verificamos si individualmente además viola su cupo
-            if (cupo != null && qty > cupo) {
-              hasIssues = true;
-              canSell = false;
-              warnings.add(StockWarning(
-                itemId: item['id'] as int,
-                productName: itemName ?? "Desconocido",
-                requested: qty,
-                available: cupo,
-                message: "La variante tiene un cupo asignado de $cupo disp. (requiere $qty).",
-              ));
-            }
-          } else if (cupo != null && qty > cupo) {
-            hasIssues = true;
-            canSell = false;
-            warnings.add(StockWarning(
-              itemId: item['id'] as int,
-              productName: itemName ?? "Desconocido",
-              requested: qty,
-              available: cupo,
-              message: "La variante tiene un cupo asignado de $cupo disp. (requiere $qty).",
-            ));
-          }
-        } else if (effectiveAvailableStock < demandedBase) {
-          hasIssues = true;
-          canSell = false;
-          int requestedUnits = (demandedBase / factor).ceil();
-          String warningMsg = demandedBase > (qty * factor)
-              ? "Stock insuficiente por demanda acumulada en la lista (requiere $requestedUnits, disponible $physicalAvailableUnits)."
-              : "Stock insuficiente (requiere $requestedUnits, disponible $physicalAvailableUnits).";
-          warnings.add(StockWarning(
-            itemId: item['id'] as int,
-            productName: itemName ?? "Desconocido",
-            requested: requestedUnits,
-            available: vendibleAvailableUnits,
-            message: warningMsg,
-          ));
-        }
-
-        // --- Validación de Unidad de Venta ---
-        String? savedUnit = item['sales_unit'] as String?;
-        String? currentUnit = pres['unidad_venta'] as String?;
-        int currentFactor = (pres['unidades_por_venta'] as int?) ?? 1;
-        // Comparar unidad de venta guardada vs actual en catálogo
-        if (savedUnit != null && currentUnit != null && savedUnit.toLowerCase() != currentUnit.toLowerCase()) {
-          hasIssues = true;
-          canSell = false;
-          unitChanges.add(UnitChange(
-            itemId: item['id'] as int,
-            productName: itemName ?? "Desconocido",
-            oldUnit: savedUnit,
-            newUnit: currentUnit,
-            newFactor: currentFactor,
-            message: "La unidad de venta cambió de \"$savedUnit\" a \"$currentUnit\". Se debe sincronizar antes de vender.",
-          ));
-        }
-      }
-
-      return ValidationResult(
-        hasIssues: hasIssues,
-        canSell: canSell,
-        stockWarnings: warnings,
-        priceChanges: prices,
-        nameChanges: nameChanges,
-        bundleChanges: bundleChanges,
-        unitChanges: unitChanges,
-        sharedStockConflicts: sharedConflicts,
-      );
-    } catch (e) {
-      throw Exception("Error local al validar integridad: $e");
-    }
-  }
+  Future<ValidationResult> validateIntegrity(int quotationId) =>
+      _validateIntegrityImpl(quotationId);
 
   Future<int> saveManualQuotation({
-    required int negocioId, required int usuarioId, 
-    int? id, int? clientId, String? clientName, String? institutionName, String? gradeLevel, String? notas, 
-    String? realClientName, String? realClientPhone, String? realClientDni, String? realClientAddress, String? realClientEmail, String? realClientNotes,
-    required double totalAmount, required double totalSavings, required List<Map<String, dynamic>> items, String status = "DRAFT", String type = "manual",  
+    required int negocioId,
+    required int usuarioId,
+    int? id,
+    int? clientId,
+    String? clientName,
+    String? institutionName,
+    String? gradeLevel,
+    String? notas,
+    String? realClientName,
+    String? realClientPhone,
+    String? realClientDni,
+    String? realClientAddress,
+    String? realClientEmail,
+    String? realClientNotes,
+    required double totalAmount,
+    required double totalSavings,
+    required List<Map<String, dynamic>> items,
+    String status = "DRAFT",
+    String type = "manual",
   }) async {
     if (items.isEmpty) {
       throw ArgumentError("No se puede guardar una cotización sin productos");
@@ -569,47 +145,75 @@ class QuotationService {
       int targetId = id ?? 0;
 
       await db.transaction((txn) async {
-        Map<String, dynamic> qData = {
-          'negocio_id': negocioId, 'creado_por_usuario_id': usuarioId, 'client_id': clientId, 'client_name': clientName,
-          'institution_name': institutionName, 'grade_level': gradeLevel, 'notas': notas,
-          'total_amount': totalAmount, 'total_savings': totalSavings, 'status': status, 'type': type,
-          'is_template': type == 'pack' ? 1 : 0, 'updated_at': DateTime.now().toIso8601String()
+        final Map<String, dynamic> qData = {
+          'negocio_id': negocioId,
+          'creado_por_usuario_id': usuarioId,
+          'client_id': clientId,
+          'client_name': clientName,
+          'institution_name': institutionName,
+          'grade_level': gradeLevel,
+          'notas': notas,
+          'total_amount': totalAmount,
+          'total_savings': totalSavings,
+          'status': status,
+          'type': type,
+          'is_template': type == 'pack' ? 1 : 0,
+          'updated_at': DateTime.now().toIso8601String(),
         };
 
         if (id == null) {
           qData['created_at'] = DateTime.now().toIso8601String();
-          final nextSeqResult = await txn.rawQuery('SELECT COALESCE(MAX(numero_secuencial), 0) + 1 as next_val FROM smart_quotations WHERE negocio_id = ?', [negocioId]);
-          qData['numero_secuencial'] = (nextSeqResult.first['next_val'] as int?) ?? 1;
-          
+          final nextSeqResult = await txn.rawQuery(
+            'SELECT COALESCE(MAX(numero_secuencial), 0) + 1 as next_val FROM smart_quotations WHERE negocio_id = ?',
+            [negocioId],
+          );
+          qData['numero_secuencial'] =
+              (nextSeqResult.first['next_val'] as int?) ?? 1;
+
           targetId = await txn.insert('smart_quotations', qData);
         } else {
-          final current = await txn.query('smart_quotations', columns: ['status'], where: 'id = ?', whereArgs: [id]);
+          final current = await txn.query(
+            'smart_quotations',
+            columns: ['status'],
+            where: 'id = ?',
+            whereArgs: [id],
+          );
           if (current.isNotEmpty && current.first['status'] == 'SOLD') {
-            throw Exception("No se puede modificar una cotización que ya ha sido vendida.");
+            throw Exception(
+              "No se puede modificar una cotización que ya ha sido vendida.",
+            );
           }
-          await txn.update('smart_quotations', qData, where: 'id = ?', whereArgs: [id]);
-          await txn.delete('smart_quotation_items', where: 'quotation_id = ?', whereArgs: [id]); 
+          await txn.update(
+            'smart_quotations',
+            qData,
+            where: 'id = ?',
+            whereArgs: [id],
+          );
+          await txn.delete(
+            'smart_quotation_items',
+            where: 'quotation_id = ?',
+            whereArgs: [id],
+          );
         }
 
-        for (var item in items) {
+        for (final item in items) {
           String? bundleSnapshot;
           if (item['bundle_id'] != null) {
-            final bundleRows = await txn.query('paquetes', where: 'id = ?', whereArgs: [item['bundle_id']]);
-            final bundleItems = await txn.query('items_paquete', where: 'paquete_id = ?', whereArgs: [item['bundle_id']]);
+            final bundleRows = await txn.query(
+              'paquetes',
+              where: 'id = ?',
+              whereArgs: [item['bundle_id']],
+            );
+            final bundleItems = await txn.query(
+              'items_paquete',
+              where: 'paquete_id = ?',
+              whereArgs: [item['bundle_id']],
+            );
             if (bundleRows.isNotEmpty) {
-              final b = bundleRows.first;
-              bundleSnapshot = jsonEncode({
-                'bundle_name': b['nombre_paquete'],
-                'bundle_price': b['precio_venta_total'],
-                'bundle_type': b['tipo_promocion'] ?? 'paquete',
-                'bundle_active': (b['activo'] as int?) == 1,
-                'items': bundleItems.map((bi) => {
-                  'presentacion_id': bi['presentacion_id'],
-                  'producto_id': bi['producto_id'],
-                  'cantidad_requerida': bi['cantidad_requerida'],
-                  'precio_original': bi['precio_original_unitario'],
-                }).toList(),
-              });
+              bundleSnapshot = _encodeBundleSnapshot(
+                bundleRows.first,
+                bundleItems,
+              );
             }
           }
 
@@ -628,201 +232,95 @@ class QuotationService {
             'specific_name': item['specific_name'],
             'sales_unit': item['sales_unit'],
             'image_url': item['image_url'],
-            'is_manual_price': item['is_manual_price'] == true || item['is_manual_price'] == 1 ? 1 : 0,
-            'is_available': 1
+            'is_manual_price':
+                item['is_manual_price'] == true || item['is_manual_price'] == 1
+                ? 1
+                : 0,
+            'is_available': 1,
           });
         }
       });
       return targetId;
-    } catch (e) { throw Exception("Error al guardar cotización manual localmente: $e"); }
+    } catch (e) {
+      throw Exception("Error al guardar cotización manual localmente: $e");
+    }
   }
 
   Future<bool> updateQuotationStatus(int id, String status) async {
     try {
       final db = await dbHelper.database;
-      final currentRows = await db.query('smart_quotations', columns: ['status'], where: 'id = ?', whereArgs: [id]);
+      final currentRows = await db.query(
+        'smart_quotations',
+        columns: ['status'],
+        where: 'id = ?',
+        whereArgs: [id],
+      );
       if (currentRows.isNotEmpty) {
         final currentStatus = currentRows.first['status'] as String?;
         if (currentStatus == 'SOLD') {
-          throw Exception("Una cotización vendida es inmutable y no puede cambiar de estado.");
+          throw Exception(
+            "Una cotización vendida es inmutable y no puede cambiar de estado.",
+          );
         }
       }
-      await db.update('smart_quotations', {'status': status, 'updated_at': DateTime.now().toIso8601String()}, where: 'id = ?', whereArgs: [id]);
-      return true;
-    } catch (e) { throw Exception("Error al actualizar estado local: $e"); }
-  }
-
-  Future<bool> refreshQuotation(int id, {bool fixPrices = true, bool fixStock = false, bool fixNames = false, bool fixBundles = false}) async {
-    try {
-      final db = await dbHelper.database;
-      final currentRows = await db.query('smart_quotations', columns: ['status'], where: 'id = ?', whereArgs: [id]);
-      if (currentRows.isNotEmpty && currentRows.first['status'] == 'SOLD') {
-        throw Exception("No se puede sincronizar ni modificar una cotización vendida.");
-      }
-      final items = await db.query('smart_quotation_items', where: 'quotation_id = ?', whereArgs: [id]);
-      
-      await db.transaction((txn) async {
-        for (var item in items) {
-          if (item['bundle_id'] != null) {
-            final bRows = await txn.query('paquetes', where: 'id = ?', whereArgs: [item['bundle_id']]);
-            if (bRows.isNotEmpty) {
-              final bundle = bRows.first;
-              Map<String, dynamic> updates = {};
-
-              if (fixPrices && item['is_manual_price'] == 0) {
-                double currentPrice = (bundle['precio_venta_total'] as num).toDouble();
-                updates['unit_price_applied'] = currentPrice;
-                updates['original_unit_price'] = currentPrice;
-              }
-
-              if (fixNames) {
-                updates['product_name'] = bundle['nombre_paquete'];
-                updates['specific_name'] = bundle['descripcion'];
-              }
-
-              if (fixStock) {
-                final bItems = await txn.query('items_paquete', where: 'paquete_id = ?', whereArgs: [item['bundle_id']]);
-                int maxBundles = 999999;
-                for (var bItem in bItems) {
-                  int pId = bItem['presentacion_id'] as int;
-                  int reqQty = (bItem['cantidad_requerida'] as int?) ?? 1;
-                  final prRows = await txn.query('presentaciones_producto', where: 'id = ?', whereArgs: [pId]);
-                  if (prRows.isNotEmpty) {
-                    int currentStock = prRows.first['stock_actual'] as int;
-                    if (reqQty > 0) {
-                       int possible = (currentStock / reqQty).floor();
-                       if (possible < maxBundles) maxBundles = possible;
-                    }
-                  } else {
-                    maxBundles = 0;
-                  }
-                }
-                if (maxBundles == 999999) maxBundles = 0;
-                
-                int reqQty = item['quantity'] as int;
-                updates['is_available'] = maxBundles < reqQty ? 0 : 1;
-              }
-
-              if (fixBundles) {
-                updates['product_name'] = bundle['nombre_paquete'];
-                updates['specific_name'] = bundle['descripcion'];
-                updates['unit_price_applied'] = (bundle['precio_venta_total'] as num).toDouble();
-                updates['original_unit_price'] = (bundle['precio_venta_total'] as num).toDouble();
-                updates['image_url'] = bundle['imagen_url'];
-                updates['is_available'] = (bundle['activo'] as int?) == 1 ? 1 : 0;
-                
-                final bundleItems = await txn.query('items_paquete', where: 'paquete_id = ?', whereArgs: [item['bundle_id']]);
-                updates['bundle_items_snapshot'] = jsonEncode({
-                  'bundle_name': bundle['nombre_paquete'],
-                  'bundle_price': bundle['precio_venta_total'],
-                  'bundle_type': bundle['tipo_promocion'] ?? 'paquete',
-                  'bundle_active': (bundle['activo'] as int?) == 1,
-                  'items': bundleItems.map((bi) => {
-                    'presentacion_id': bi['presentacion_id'],
-                    'producto_id': bi['producto_id'],
-                    'cantidad_requerida': bi['cantidad_requerida'],
-                    'precio_original': bi['precio_original_unitario'],
-                  }).toList(),
-                });
-              }
-
-              if (updates.isNotEmpty) {
-                await txn.update('smart_quotation_items', updates, where: 'id = ?', whereArgs: [item['id']]);
-              }
-            } else {
-              if (fixStock || fixBundles) await txn.update('smart_quotation_items', {'is_available': 0}, where: 'id = ?', whereArgs: [item['id']]);
-            }
-            continue;
-          }
-
-          if (item['presentation_id'] != null) {
-            final pres = await txn.query('presentaciones_producto', where: 'id = ?', whereArgs: [item['presentation_id']]);
-            
-            if (pres.isNotEmpty) {
-              final p = pres.first;
-              Map<String, dynamic> updates = {};
-              
-              if (fixPrices && item['is_manual_price'] == 0) {
-                double basePrice = (p['precio_venta_final'] as num).toDouble();
-                double offerPrice = (p['precio_oferta'] != null && (p['precio_oferta'] as num) > 0) 
-                    ? (p['precio_oferta'] as num).toDouble() 
-                    : basePrice;
-                updates['unit_price_applied'] = offerPrice;
-                updates['original_unit_price'] = basePrice;
-                updates['discount_catalog_amount'] = basePrice - offerPrice;
-              }
-              
-              if (fixStock) {
-                int currentStock = p['stock_actual'] as int;
-                int reqQty = item['quantity'] as int;
-                updates['is_available'] = currentStock < reqQty ? 0 : 1;
-              }
-              
-              if (fixNames) {
-                final prod = await txn.query('productos', where: 'id = ?', whereArgs: [item['product_id']]);
-                if (prod.isNotEmpty) {
-                   updates['product_name'] = prod.first['nombre'];
-                   // Obtener nombre de marca vía marca_id (FK)
-                   if (prod.first['marca_id'] != null) {
-                     final marcaRows = await txn.query('marcas', columns: ['nombre'], where: 'id = ?', whereArgs: [prod.first['marca_id']]);
-                     updates['brand_name'] = marcaRows.isNotEmpty ? marcaRows.first['nombre'] : item['brand_name'];
-                   } else {
-                     updates['brand_name'] = item['brand_name'];
-                   }
-                }
-                updates['specific_name'] = p['nombre_especifico'];
-                updates['sales_unit'] = p['unidad_venta'];
-              }
-              
-              if (updates.isNotEmpty) {
-                await txn.update('smart_quotation_items', updates, where: 'id = ?', whereArgs: [item['id']]);
-              }
-            } else {
-              if (fixStock) await txn.update('smart_quotation_items', {'is_available': 0}, where: 'id = ?', whereArgs: [item['id']]);
-            }
-          }
-        }
-        
-        // --- Recalcular Totales ---
-        final updatedItems = await txn.query('smart_quotation_items', where: 'quotation_id = ?', whereArgs: [id]);
-        double newTotalAmount = 0.0;
-        double newTotalSavings = 0.0;
-        
-        for(var item in updatedItems) {
-           double applied = (item['unit_price_applied'] as num).toDouble();
-           double original = (item['original_unit_price'] as num).toDouble();
-           int qty = item['quantity'] as int;
-           
-           newTotalAmount += (applied * qty);
-           newTotalSavings += ((original - applied) * qty);
-        }
-        
-        await txn.update('smart_quotations', {
-           'total_amount': newTotalAmount,
-           'total_savings': newTotalSavings > 0 ? newTotalSavings : 0.0
-        }, where: 'id = ?', whereArgs: [id]);
-        
-      });
+      await db.update(
+        'smart_quotations',
+        {'status': status, 'updated_at': DateTime.now().toIso8601String()},
+        where: 'id = ?',
+        whereArgs: [id],
+      );
       return true;
     } catch (e) {
-      throw Exception("Error local al refrescar cotización: $e");
+      throw Exception("Error al actualizar estado local: $e");
     }
   }
+
+  Future<bool> refreshQuotation(
+    int id, {
+    bool fixPrices = true,
+    bool fixStock = false,
+    bool fixNames = false,
+    bool fixBundles = false,
+  }) => _refreshQuotationImpl(
+    id,
+    fixPrices: fixPrices,
+    fixStock: fixStock,
+    fixNames: fixNames,
+    fixBundles: fixBundles,
+  );
 
   Future<void> hardDeleteQuotation(int id) async {
     try {
       final db = await dbHelper.database;
-      final currentRows = await db.query('smart_quotations', columns: ['status'], where: 'id = ?', whereArgs: [id]);
+      final currentRows = await db.query(
+        'smart_quotations',
+        columns: ['status'],
+        where: 'id = ?',
+        whereArgs: [id],
+      );
       if (currentRows.isNotEmpty && currentRows.first['status'] == 'SOLD') {
-        throw Exception("Una cotización vendida no se puede eliminar; forma parte del historial de ventas.");
+        throw Exception(
+          "Una cotización vendida no se puede eliminar; forma parte del historial de ventas.",
+        );
       }
       await db.transaction((txn) async {
-        await txn.update('ventas', {'cotizacion_id': null}, where: 'cotizacion_id = ?', whereArgs: [id]);
-        await txn.delete('smart_quotation_items', where: 'quotation_id = ?', whereArgs: [id]);
+        await txn.update(
+          'ventas',
+          {'cotizacion_id': null},
+          where: 'cotizacion_id = ?',
+          whereArgs: [id],
+        );
+        await txn.delete(
+          'smart_quotation_items',
+          where: 'quotation_id = ?',
+          whereArgs: [id],
+        );
         await txn.delete('smart_quotations', where: 'id = ?', whereArgs: [id]);
       });
     } catch (e) {
-      throw Exception("Error al eliminar la cotización de la base de datos: $e");
+      throw Exception(
+        "Error al eliminar la cotización de la base de datos: $e",
+      );
     }
   }
 }
