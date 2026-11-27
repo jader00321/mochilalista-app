@@ -84,7 +84,7 @@ Future<Map<String, String>> _prepareIsolatedFixture(
       '  echo package: name=\'com.mochilalista.app\' versionCode=\'$universalCode\' versionName=\'$verName\'\r\n'
       '  echo sdkVersion:\'24\'\r\n'
       '  echo targetSdkVersion:\'36\'\r\n'
-      '  echo native-code: \'arm64-v8a\' \'armeabi-v7a\' \'x86_64\'\r\n'
+      '  echo native-code: \'arm64-v8a\' \'armeabi-v7a\'\r\n'
       ')\r\n'
       'exit /b 0\r\n',
     );
@@ -223,6 +223,8 @@ void main() {
       expect(atpText, contains(fix['armSha']!));
       expect(atpText, contains(_officialSignerSha256));
       expect(atpText, contains('Target SDK: 36 | Min SDK: 24'));
+      expect(atpText, contains('Native Code ABIs: arm64-v8a, armeabi-v7a'));
+      expect(atpText, isNot(contains('x86_64')));
       expect(atpText, contains('SQLite: v36'));
       expect(atpText, contains('application-debuggable AUSENTE'));
       expect(atpText, isNot(contains(_sentinelSecret)));

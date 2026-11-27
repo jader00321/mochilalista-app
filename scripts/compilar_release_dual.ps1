@@ -1,4 +1,4 @@
-﻿# ==============================================================================
+# ==============================================================================
 # MochilaLista - Compilador Dual Oficial Único y Guiado (Universal + ARM64)
 # Plan Maestro 23.5 - Fase 3
 # ==============================================================================
@@ -78,9 +78,9 @@ function Show-UsageHelp {
     Write-Host "========================================================================" -ForegroundColor Cyan
     Write-Host ""
     Write-Host (ConvertTo-Utf8DisplayText "QUÉ GENERA ESTE SCRIPT:") -ForegroundColor White
-    Write-Host (ConvertTo-Utf8DisplayText "  1. APK Universal (~108 MB) -> mochilalista_v<tag>_atp.apk") -ForegroundColor Gray
-    Write-Host (ConvertTo-Utf8DisplayText "     Compatible con cualquier teléfono o tablet Android (arm64-v8a,") -ForegroundColor Gray
-    Write-Host (ConvertTo-Utf8DisplayText "     armeabi-v7a y x86_64). Ideal como respaldo maestro o instalación USB.") -ForegroundColor Gray
+    Write-Host (ConvertTo-Utf8DisplayText "  1. APK Universal (~71 MB) -> mochilalista_v<tag>_atp.apk") -ForegroundColor Gray
+    Write-Host (ConvertTo-Utf8DisplayText "     Compatible con teléfonos y tablets Android ARM físicos (arm64-v8a y") -ForegroundColor Gray
+    Write-Host (ConvertTo-Utf8DisplayText "     armeabi-v7a, sin x86_64). Ideal como respaldo o envío directo (< 100 MB).") -ForegroundColor Gray
     Write-Host (ConvertTo-Utf8DisplayText "  2. APK ARM64 Ligero (~39 MB) -> mochilalista_v<tag>_arm64_atp.apk") -ForegroundColor Gray
     Write-Host (ConvertTo-Utf8DisplayText "     Optimizado para el 99 % de celulares Android modernos (64 bits)") -ForegroundColor Gray
     Write-Host (ConvertTo-Utf8DisplayText "     e ideal para enviar directo por WhatsApp Web (< 100 MB).") -ForegroundColor Gray
@@ -487,10 +487,10 @@ function Test-ApkForensic {
                 -HowToFix (ConvertTo-Utf8DisplayText "Asegúrate de compilar el binario ligero con --split-per-abi y copiar app-arm64-v8a-release.apk.")
         }
     } else {
-        if (-not $abisText.Contains('arm64-v8a')) {
+        if (-not $abisText.Contains('arm64-v8a') -or -not $abisText.Contains('armeabi-v7a') -or $abisText.Contains('x86_64')) {
             Stop-WithGuidance `
-                -WhatFailed ((ConvertTo-Utf8DisplayText "El APK Universal no incluye arm64-v8a (ABIs: ") + $abisText + ").") `
-                -HowToFix (ConvertTo-Utf8DisplayText "Asegúrate de compilar el APK Universal sin --split-per-abi.")
+                -WhatFailed ((ConvertTo-Utf8DisplayText "El APK Universal reporta ABIs inesperadas (se exige arm64-v8a + armeabi-v7a sin x86_64): ") + $abisText) `
+                -HowToFix (ConvertTo-Utf8DisplayText "Compila el APK Universal con --target-platform android-arm64,android-arm y sin --split-per-abi.")
         }
     }
 
@@ -563,7 +563,7 @@ function New-CompanionAtpTechnicalTemplate {
     $univBytesFmt = ([int64]$CertUniv.SizeBytes).ToString('N0', $inv)
     $armBytesFmt = ([int64]$CertArm64.SizeBytes).ToString('N0', $inv)
     $univDisplayAbis = (($CertUniv.Abis -replace "'", '') -replace '\s+', ', ').Trim(', ')
-    if ([string]::IsNullOrWhiteSpace($univDisplayAbis)) { $univDisplayAbis = 'arm64-v8a, armeabi-v7a, x86_64' }
+    if ([string]::IsNullOrWhiteSpace($univDisplayAbis)) { $univDisplayAbis = 'arm64-v8a, armeabi-v7a' }
 
     $atpBulletVer = (ConvertTo-Utf8DisplayText "Versión: ") + "v$($VersionMeta.FullVersion) (Build Code $($VersionMeta.BuildCode) | ARM64 split code $($CertArm64.VersionCode))"
     $atpBulletDate = (ConvertTo-Utf8DisplayText "Fecha de Compilación: ") + $LimaTimestamp
@@ -692,7 +692,7 @@ if ($DryRun) {
     Write-Host ((ConvertTo-Utf8DisplayText "[MODO SIMULACI") + [char]0x00D3 + (ConvertTo-Utf8DisplayText "N --dry-run] Pre-chequeos superados. No se compilará ni escribirá en disco.")) -ForegroundColor Cyan
     Write-Host ""
     Write-Host (ConvertTo-Utf8DisplayText "  [Paso 2/6] Análisis estático : ") -NoNewline; Write-Host $(if ($SkipAnalyze) { ConvertTo-Utf8DisplayText "Omitido por --skip-analyze" } else { "$FlutterCmd analyze --no-pub" }) -ForegroundColor Gray
-    Write-Host (ConvertTo-Utf8DisplayText "  [Paso 3/6] Build Universal   : ") -NoNewline; Write-Host "$FlutterCmd build apk --release --obfuscate --split-debug-info=build/app_symbols --dart-define=PRODUCTION=true" -ForegroundColor Gray
+    Write-Host (ConvertTo-Utf8DisplayText "  [Paso 3/6] Build Universal   : ") -NoNewline; Write-Host "$FlutterCmd build apk --release --target-platform android-arm64,android-arm --obfuscate --split-debug-info=build/app_symbols --dart-define=PRODUCTION=true" -ForegroundColor Gray
     Write-Host (ConvertTo-Utf8DisplayText "             Entrega Universal : ") -NoNewline; Write-Host $UniversalTargetPath -ForegroundColor Gray
     Write-Host (ConvertTo-Utf8DisplayText "  [Paso 4/6] Build ARM64       : ") -NoNewline; Write-Host "$FlutterCmd build apk --release --split-per-abi --obfuscate --split-debug-info=build/app_symbols --dart-define=PRODUCTION=true" -ForegroundColor Gray
     Write-Host (ConvertTo-Utf8DisplayText "             Entrega ARM64     : ") -NoNewline; Write-Host $Arm64TargetPath -ForegroundColor Gray
@@ -746,9 +746,9 @@ if ($VerifyOnly) {
             New-Item -ItemType Directory -Path $symbolsDir -Force | Out-Null
         }
 
-        # [Paso 3/6] Compilación APK Universal
-        Write-Host (ConvertTo-Utf8DisplayText "[Paso 3/6] Compilando APK Universal ofuscado (compatible con todo Android)...") -ForegroundColor Yellow
-        & $FlutterCmd build apk --release --obfuscate --split-debug-info=build/app_symbols --dart-define=PRODUCTION=true
+        # [Paso 3/6] Compilación APK Universal ARM físico
+        Write-Host (ConvertTo-Utf8DisplayText "[Paso 3/6] Compilando APK Universal ARM físico ofuscado (arm64-v8a + armeabi-v7a)...") -ForegroundColor Yellow
+        & $FlutterCmd build apk --release --target-platform android-arm64,android-arm --obfuscate --split-debug-info=build/app_symbols --dart-define=PRODUCTION=true
         if ($LASTEXITCODE -ne 0) {
             Stop-WithGuidance `
                 -WhatFailed ((ConvertTo-Utf8DisplayText "La compilación del APK Universal falló (código ") + $LASTEXITCODE + ").") `

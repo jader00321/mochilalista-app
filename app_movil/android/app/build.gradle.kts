@@ -73,6 +73,23 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            // Sincroniza NDK abiFilters con -Ptarget-platform cuando no se usa --split-per-abi,
+            // evitando empaquetar .so nativos x86_64 en builds ARM fisicos.
+            if (!project.hasProperty("split-per-abi") && project.hasProperty("target-platform")) {
+                val platformToAbi = mapOf(
+                    "android-arm" to "armeabi-v7a",
+                    "android-arm64" to "arm64-v8a",
+                    "android-x64" to "x86_64"
+                )
+                val requestedAbis = (project.property("target-platform") as String)
+                    .split(",")
+                    .mapNotNull { platformToAbi[it.trim()] }
+                    .distinct()
+                if (requestedAbis.isNotEmpty()) {
+                    ndk.abiFilters.clear()
+                    ndk.abiFilters.addAll(requestedAbis)
+                }
+            }
         }
     }
 }

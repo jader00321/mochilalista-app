@@ -40,6 +40,7 @@ Future<Map<String, String>> _prepareIsolatedFixture(
   bool includeDebuggable = false,
   String? signerShaOverride,
   String signerFormat = 'sdk37', // 'sdk37' | 'sdk36'
+  String universalNativeCode = "'arm64-v8a' 'armeabi-v7a'",
 }) async {
   final pubspec = File('${baseDir.path}\\pubspec.yaml')
     ..writeAsStringSync('name: app_movil\nversion: $versionLine\n');
@@ -75,7 +76,7 @@ Future<Map<String, String>> _prepareIsolatedFixture(
       '  echo native-code: \'arm64-v8a\'\r\n'
       ') else (\r\n'
       '  echo package: name=\'com.mochilalista.app\' versionCode=\'$universalCode\' versionName=\'$verName\'\r\n'
-      '  echo native-code: \'arm64-v8a\' \'armeabi-v7a\' \'x86_64\'\r\n'
+      '  echo native-code: $universalNativeCode\r\n'
       ')\r\n'
       '${debuggableLine.isNotEmpty ? 'echo application-debuggable\r\n' : ''}'
       'exit /b 0\r\n',
@@ -154,6 +155,7 @@ void main() {
       expect(dryOut, contains('v9.41.0+85'));
       expect(dryOut, contains('mochilalista_v9.41_atp.apk'));
       expect(dryOut, contains('mochilalista_v9.41_arm64_atp.apk'));
+      expect(dryOut, contains('--target-platform android-arm64,android-arm'));
       expect(dryOut, contains('--obfuscate'));
       expect(dryOut, contains('--split-per-abi'));
       expect(dryOut, isNot(contains('storePassword')));
@@ -161,29 +163,33 @@ void main() {
     });
 
     test(
-        '2. --verify-only --no-pause real sobre los binarios v9.41.0+85 en Biblioteca Oficial',
+        '2. --verify-only --no-pause sobre Biblioteca Oficial valida Universal ARM físico (< 95 MB) o rechaza x86_64 heredado en v9.41 intacto',
         () async {
       const offlineDir = r'C:\Users\vjuli\Documents\v-app-offline apks';
-      final univExists =
-          File('$offlineDir\\mochilalista_v9.41_atp.apk').existsSync();
-      final armExists =
-          File('$offlineDir\\mochilalista_v9.41_arm64_atp.apk').existsSync();
-      if (!univExists || !armExists) {
+      final univFile = File('$offlineDir\\mochilalista_v9.41_atp.apk');
+      final armFile = File('$offlineDir\\mochilalista_v9.41_arm64_atp.apk');
+      if (!univFile.existsSync() || !armFile.existsSync()) {
         return;
       }
 
       final verRes = await _runBat(['--verify-only', '--no-pause']);
-      expect(verRes.exitCode, equals(0),
-          reason: 'STDERR: ${verRes.stderr}\nSTDOUT: ${verRes.stdout}');
-      final out = verRes.stdout.toString();
-      expect(out, contains('[Paso 5/6]'));
-      expect(out, contains('[Paso 6/6]'));
-      expect(out, contains('mochilalista_v9.41_atp.apk'));
-      expect(out, contains('mochilalista_v9.41_arm64_atp.apk'));
-      expect(out, contains('107.73 MB'));
-      expect(out, contains('38.66 MB'));
-      expect(out, contains(_officialSignerSha256));
-      expect(out, contains('CHECKLIST DE SIGUIENTES PASOS'));
+      final out = '${verRes.stdout}\n${verRes.stderr}';
+      if (univFile.lengthSync() > 95 * 1024 * 1024) {
+        expect(verRes.exitCode, isNot(equals(0)),
+            reason:
+                'Universal v9.41 heredado intacto contiene x86_64 y debe ser rechazado por la regla Fase 10.\n$out');
+        expect(out, contains('x86_64'));
+        expect(out, contains('QUÉ FALLÓ:'));
+      } else {
+        expect(verRes.exitCode, equals(0),
+            reason: 'STDERR: ${verRes.stderr}\nSTDOUT: ${verRes.stdout}');
+        expect(out, contains('[Paso 5/6]'));
+        expect(out, contains('[Paso 6/6]'));
+        expect(out, contains('mochilalista_v9.41_atp.apk'));
+        expect(out, contains('mochilalista_v9.41_arm64_atp.apk'));
+        expect(out, contains(_officialSignerSha256));
+        expect(out, contains('CHECKLIST DE SIGUIENTES PASOS'));
+      }
     });
 
     test(
@@ -306,6 +312,45 @@ void main() {
       expect(rogueOut, contains('QUÉ FALLÓ:'));
       expect(rogueOut, contains('CÓMO SOLUCIONARLO:'));
       expect(rogueOut, isNot(contains(_sentinelSecret)));
+
+      // 4E. APK Universal con x86_64 -> aborta exit != 0
+      final dirX86 = Directory('${tempDir.path}\\withX86')..createSync();
+      final envX86 = await _prepareIsolatedFixture(
+        dirX86,
+        versionLine: '9.41.0+85',
+        tag: '9.41',
+        universalCode: 85,
+        arm64Code: 2085,
+        universalNativeCode: "'arm64-v8a' 'armeabi-v7a' 'x86_64'",
+      );
+      final x86Res = await _runBat(
+        ['--verify-only', '--no-pause', '--out-dir', envX86['outDir']!],
+        environment: envX86,
+      );
+      expect(x86Res.exitCode, isNot(equals(0)));
+      final x86Out = '${x86Res.stdout}\n${x86Res.stderr}';
+      expect(x86Out, contains('x86_64'));
+      expect(x86Out, contains('QUÉ FALLÓ:'));
+
+      // 4F. APK Universal sin armeabi-v7a -> aborta exit != 0
+      final dirNoArmV7 = Directory('${tempDir.path}\\missingArmV7')
+        ..createSync();
+      final envNoArmV7 = await _prepareIsolatedFixture(
+        dirNoArmV7,
+        versionLine: '9.41.0+85',
+        tag: '9.41',
+        universalCode: 85,
+        arm64Code: 2085,
+        universalNativeCode: "'arm64-v8a'",
+      );
+      final noArmV7Res = await _runBat(
+        ['--verify-only', '--no-pause', '--out-dir', envNoArmV7['outDir']!],
+        environment: envNoArmV7,
+      );
+      expect(noArmV7Res.exitCode, isNot(equals(0)));
+      final noArmV7Out = '${noArmV7Res.stdout}\n${noArmV7Res.stderr}';
+      expect(noArmV7Out, contains('armeabi-v7a'));
+      expect(noArmV7Out, contains('QUÉ FALLÓ:'));
     });
   });
 }
