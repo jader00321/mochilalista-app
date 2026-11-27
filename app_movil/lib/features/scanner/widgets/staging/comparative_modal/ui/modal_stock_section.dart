@@ -136,8 +136,11 @@ extension _ModalStockSection on _ComparativeUpdateModalState {
                             children: [
                               Text("Nuevo Ingreso Factura", style: TextStyle(fontSize: 10, color: widget.isDark ? Colors.grey[400] : Colors.grey[600], fontWeight: FontWeight.w600)),
                               const SizedBox(height: 4),
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
+                              Wrap(
+                                alignment: WrapAlignment.center,
+                                crossAxisAlignment: WrapCrossAlignment.center,
+                                spacing: 4,
+                                runSpacing: 2,
                                 children: [
                                   SizedBox(
                                     width: 58, 
@@ -158,7 +161,6 @@ extension _ModalStockSection on _ComparativeUpdateModalState {
                                       onChanged: (_) => _onStockBaseManualEdit(),
                                     ),
                                   ),
-                                  const SizedBox(width: 4),
                                   Text("unid. base", style: TextStyle(fontSize: 11, color: widget.isDark ? Colors.grey[400] : Colors.grey[600])),
                                 ],
                               ),
@@ -522,12 +524,14 @@ extension _ModalStockSection on _ComparativeUpdateModalState {
           children: [
             Icon(Icons.sync_alt, size: 14, color: accentColor),
             const SizedBox(width: 4),
-            Text(
-              "Divisores Exactos sugeridos (1 solo toque):",
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.bold,
-                color: widget.isDark ? Colors.grey[300] : Colors.grey[800],
+            Expanded(
+              child: Text(
+                "Divisores Exactos sugeridos (1 solo toque):",
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.bold,
+                  color: widget.isDark ? Colors.grey[300] : Colors.grey[800],
+                ),
               ),
             ),
           ],

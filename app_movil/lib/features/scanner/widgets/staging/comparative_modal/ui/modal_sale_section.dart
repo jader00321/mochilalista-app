@@ -143,31 +143,55 @@ extension _ModalSaleSection on _ComparativeUpdateModalState {
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceAround,
                       children: [
-                        Column(
-                          children: [
-                            Text("Stock Base Total", style: TextStyle(fontSize: 10, color: widget.isDark ? Colors.grey[400] : Colors.grey[600], fontWeight: FontWeight.w600)),
-                            const SizedBox(height: 2),
-                            Text("$totalUnidadesBase unid.", style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: widget.isDark ? Colors.green[300] : Colors.green[800])),
-                          ],
+                        Expanded(
+                          child: Column(
+                            children: [
+                              Text(
+                                "Stock Base Total",
+                                textAlign: TextAlign.center,
+                                style: TextStyle(fontSize: 10, color: widget.isDark ? Colors.grey[400] : Colors.grey[600], fontWeight: FontWeight.w600),
+                              ),
+                              const SizedBox(height: 2),
+                              FittedBox(
+                                fit: BoxFit.scaleDown,
+                                child: Text(
+                                  "$totalUnidadesBase unid.",
+                                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: widget.isDark ? Colors.green[300] : Colors.green[800]),
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
-                        Container(width: 1, height: 28, color: widget.isDark ? Colors.white24 : Colors.black12),
-                        Column(
-                          children: [
-                            Text("Disponible en Venta", style: TextStyle(fontSize: 10, color: widget.isDark ? Colors.grey[400] : Colors.grey[600], fontWeight: FontWeight.w600)),
-                            const SizedBox(height: 2),
-                            Builder(builder: (_) {
-                              String label = _ComparativeUpdateModalState._formatUnitLabel(stockFinal, unidadActiva);
-                              if (sobrante > 0 && stockFinal > 0) {
-                                label += " (+$sobrante sueltas)";
-                              } else if (sobrante > 0 && stockFinal == 0) {
-                                label = "0 $unidadActiva ($sobrante sueltas)";
-                              }
-                              return Text(
-                                label,
-                                style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: widget.isDark ? Colors.blue[300] : Colors.blue[800]),
-                              );
-                            }),
-                          ],
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 8),
+                          child: Container(width: 1, height: 28, color: widget.isDark ? Colors.white24 : Colors.black12),
+                        ),
+                        Expanded(
+                          child: Column(
+                            children: [
+                              Text(
+                                "Disponible en Venta",
+                                textAlign: TextAlign.center,
+                                style: TextStyle(fontSize: 10, color: widget.isDark ? Colors.grey[400] : Colors.grey[600], fontWeight: FontWeight.w600),
+                              ),
+                              const SizedBox(height: 2),
+                              Builder(builder: (_) {
+                                String label = _ComparativeUpdateModalState._formatUnitLabel(stockFinal, unidadActiva);
+                                if (sobrante > 0 && stockFinal > 0) {
+                                  label += " (+$sobrante sueltas)";
+                                } else if (sobrante > 0 && stockFinal == 0) {
+                                  label = "0 $unidadActiva ($sobrante sueltas)";
+                                }
+                                return FittedBox(
+                                  fit: BoxFit.scaleDown,
+                                  child: Text(
+                                    label,
+                                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: widget.isDark ? Colors.blue[300] : Colors.blue[800]),
+                                  ),
+                                );
+                              }),
+                            ],
+                          ),
                         ),
                       ],
                     ),
